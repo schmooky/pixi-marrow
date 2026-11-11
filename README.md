@@ -3,10 +3,23 @@
 A Spine runtime for PixiJS v8 with its own pose core. It plays Spine 4.1, 4.2 and 4.3 skeletons.
 
 <!-- facts:status -->
-Pre-release, milestone M2a. Skeletons of Spine 4.1, 4.2 and 4.3 import and play without a renderer, and their poses equal the official runtimes exactly. Constraints are not solved yet. Nothing renders yet.
+Pre-release, milestone M2b. Skeletons of Spine 4.1, 4.2 and 4.3 load, play and draw in PixiJS v8, and the picture matches the official runtime. Constraints and clipping are not solved yet: a skeleton with constraints plays only with them ignored.
 <!-- /facts:status -->
 
 The plan is in [docs/DESIGN.md](docs/DESIGN.md).
+
+## Use
+
+```ts
+import { MarrowSpine } from 'pixi-marrow';
+
+const hero = await MarrowSpine.load({ skeleton: 'hero.skel', atlas: 'hero.atlas' });
+
+app.stage.addChild(hero);
+hero.play('run', { loop: true });
+```
+
+A skeleton with constraints needs `constraints: 'ignore'` in the load options until constraints are solved. It then plays without them.
 
 ## Goals
 
@@ -21,7 +34,7 @@ The plan is in [docs/DESIGN.md](docs/DESIGN.md).
 <!-- facts:entry-points -->
 | Import | Holds |
 |---|---|
-| `pixi-marrow` | `MarrowError`. The display object arrives with milestone M2b. |
+| `pixi-marrow` | `MarrowSpine`, the display object, with `MarrowAsset`, `Track` and `MarrowError`. Needs `pixi.js`. |
 | `pixi-marrow/core` | `importSkeleton`, `importAtlas`, `createPoseEngine`, the geometry functions, `describeSkeleton` and the model types. No Pixi. Runs in Node. |
 | `pixi-marrow/optimize` | `generateNames` and the `pixi-marrow` command line tool (`info`, `typegen`). Runs in Node. |
 <!-- /facts:entry-points -->

@@ -103,8 +103,12 @@ export function queueEvent(player: Player43, entry: Entry, key: EventKey): void 
     push(player, EVENT, entry, key);
 }
 
+/**
+ * Notes one listener call. The track and the animation are copied now, because the entry goes back
+ * to the pool after its `dispose` call and can then stand for a later entry.
+ */
 function listen(player: Player43, type: PoseEventType, entry: Entry): void {
-    player.listened.push({ type, track: entry.trackIndex, animation: entry.animation });
+    player.listened.push({ type, track: entry.trackIndex, animation: entry.animation, entry });
 }
 
 function free(player: Player43, entry: Entry): void {
@@ -135,7 +139,13 @@ function report(player: Player43, type: number, entry: Entry, key: EventKey | nu
             break;
         default:
             if (key !== null) {
-                player.listened.push({ type: 'event', track: entry.trackIndex, animation: entry.animation, key });
+                player.listened.push({
+                    type: 'event',
+                    track: entry.trackIndex,
+                    animation: entry.animation,
+                    entry,
+                    key,
+                });
             }
     }
 }

@@ -63,6 +63,7 @@ export { BLEND_MODES, BONE_SETUP_STRIDE, INHERIT_MODES } from './model/model';
 export type { EventKey, TimelineData, TimelineKind } from './model/timelines';
 export type {
     PoseEngine,
+    PoseEngineFactory,
     PoseEngineOptions,
     PoseEvent,
     PoseEventType,
@@ -70,7 +71,7 @@ export type {
     TrackField,
     TrackFields,
 } from './pose/engine';
-export { createPoseEngine } from './pose/engine';
+export { createPoseEngine, loadPoseEngine } from './pose/engine';
 export type { AttachmentLookup } from './pose/shared/lookup';
 export { createAttachmentLookup, meshSource } from './pose/shared/lookup';
 export type { PoseState } from './pose/state';

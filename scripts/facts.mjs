@@ -4,13 +4,13 @@
  */
 
 export const STATUS =
-    'Pre-release, milestone M2a. Skeletons of Spine 4.1, 4.2 and 4.3 import and play without a renderer, and their poses equal the official runtimes exactly. Constraints are not solved yet. Nothing renders yet.';
+    'Pre-release, milestone M2b. Skeletons of Spine 4.1, 4.2 and 4.3 load, play and draw in PixiJS v8, and the picture matches the official runtime. Constraints and clipping are not solved yet: a skeleton with constraints plays only with them ignored.';
 
 /** One row per subpath export of packages/pixi-marrow/package.json. */
 export const ENTRY_POINTS = [
     {
         specifier: 'pixi-marrow',
-        holds: '`MarrowError`. The display object arrives with milestone M2b.',
+        holds: '`MarrowSpine`, the display object, with `MarrowAsset`, `Track` and `MarrowError`. Needs `pixi.js`.',
     },
     {
         specifier: 'pixi-marrow/core',

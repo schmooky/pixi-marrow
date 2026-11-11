@@ -6,6 +6,29 @@ A change in this file is a change to the public surface.
 ## pixi-marrow
 
 ```ts
+export declare class MarrowAsset {
+  readonly model: SkeletonModel;
+  readonly atlas: AtlasModel;
+  readonly textures: readonly Texture[];
+  readonly createEngine: PoseEngineFactory;
+  private readonly loaded;
+  private readonly key;
+  private description;
+  private gone;
+  private constructor();
+  get info(): SkeletonInfo;
+  get destroyed(): boolean;
+  static load(options: MarrowLoadOptions): Promise<MarrowAsset>;
+  static from(data: MarrowAssetData): Promise<MarrowAsset>;
+  private static fetch;
+  destroy(): void;
+}
+export interface MarrowAssetData {
+  model: SkeletonModel;
+  atlas: AtlasModel;
+  textures: readonly Texture[];
+  constraints?: "error" | "ignore";
+}
 export declare class MarrowError extends Error {
   override readonly name: string;
   readonly code: MarrowErrorCode;
@@ -14,11 +37,121 @@ export declare class MarrowError extends Error {
   readonly closest: string | undefined;
   constructor(code: MarrowErrorCode, message: string, details: MarrowErrorDetails);
 }
-export type MarrowErrorCode = "invalid-data" | "unsupported-version" | "unsupported-feature";
+export type MarrowErrorCode = "invalid-data" | "unsupported-version" | "unsupported-feature" | "unknown-name";
 export interface MarrowErrorDetails {
   fix: string;
   validNames?: readonly string[];
   closest?: string;
+}
+export interface MarrowEvent<N extends MarrowNames = MarrowNames> {
+  name: N["events"];
+  int: number;
+  float: number;
+  string: string;
+  volume: number;
+  balance: number;
+  time: number;
+}
+export interface MarrowLoadOptions {
+  skeleton: string | Uint8Array | ArrayBuffer | object;
+  atlas: string;
+  textures?: Readonly<Record<string, Texture | string>>;
+  constraints?: "error" | "ignore";
+}
+export interface MarrowNames {
+  animations: string;
+  skins: string;
+  bones: string;
+  slots: string;
+  events: string;
+}
+export declare class MarrowSpine<N extends MarrowNames = MarrowNames> extends Container {
+  readonly asset: MarrowAsset;
+  readonly engine: PoseEngine;
+  private readonly skeletonView;
+  private readonly book;
+  private pending;
+  private spare;
+  private emitting;
+  private ticking;
+  constructor(asset: MarrowAsset, options?: MarrowSpineOptions);
+  static load<N extends MarrowNames = MarrowNames>(options: MarrowLoadOptions & MarrowSpineOptions): Promise<MarrowSpine<N>>;
+  get info(): SkeletonInfo;
+  get stats(): ViewStats;
+  get skin(): N["skins"] | null;
+  set skin(name: N["skins"] | null);
+  get timeScale(): number;
+  set timeScale(value: number);
+  get defaultMix(): number;
+  set defaultMix(seconds: number);
+  get autoUpdate(): boolean;
+  set autoUpdate(value: boolean);
+  setMix(from: N["animations"], to: N["animations"], seconds: number): void;
+  play(name: N["animations"], options?: PlayOptions): Track<N>;
+  queue(name: N["animations"], options?: QueueOptions): Track<N>;
+  stop(options?: StopOptions): void;
+  update(seconds: number): void;
+  override destroy(options?: DestroyOptions): void;
+  private onTick;
+  private animationIndex;
+  private durationOf;
+  private mixOut;
+  private adopt;
+  private absorb;
+  private emitPending;
+  private emitOne;
+  private eventOf;
+}
+export interface MarrowSpineEvents<N extends MarrowNames = MarrowNames> {
+  start: [track: Track<N>];
+  interrupt: [track: Track<N>];
+  end: [track: Track<N>];
+  dispose: [track: Track<N>];
+  complete: [track: Track<N>];
+  event: [event: MarrowEvent<N>, track: Track<N>];
+}
+export interface MarrowSpineOptions {
+  autoUpdate?: boolean;
+}
+export interface PlayOptions {
+  track?: number;
+  loop?: boolean;
+  mix?: number;
+  speed?: number;
+  alpha?: number;
+  reverse?: boolean;
+}
+export interface QueueOptions extends PlayOptions {
+  delay?: number;
+}
+export interface SkeletonInfo {
+  version: SpineVersion;
+  editorVersion: string;
+  bones: string[];
+  slots: string[];
+  skins: string[];
+  events: string[];
+  constraints: {
+    name: string;
+    type: ConstraintData["type"];
+  }[];
+  animations: AnimationInfo[];
+  counts: SkeletonCounts;
+  features: SkeletonFeature[];
+}
+export interface StopOptions {
+  track?: number;
+  mix?: number;
+}
+export interface Track<N extends MarrowNames = MarrowNames> {
+  readonly animation: N["animations"];
+  readonly track: number;
+  loop: boolean;
+  speed: number;
+  alpha: number;
+  readonly time: number;
+  readonly finished: Promise<void>;
+  stop(options?: Pick<StopOptions, "mix">): void;
 }
 ```
 
@@ -163,6 +296,7 @@ export interface IkConstraintData extends ConstraintBase {
 export declare function importAtlas(text: string): AtlasModel;
 export declare function importSkeleton(source: SkeletonSource): Promise<SkeletonModel>;
 export declare const INHERIT_MODES: readonly string[];
+export declare function loadPoseEngine(model: SkeletonModel, options?: PoseEngineOptions): Promise<PoseEngineFactory>;
 export declare const LOCAL_STRIDE = 7;
 export declare class MarrowError extends Error {
   override readonly name: string;
@@ -172,7 +306,7 @@ export declare class MarrowError extends Error {
   readonly closest: string | undefined;
   constructor(code: MarrowErrorCode, message: string, details: MarrowErrorDetails);
 }
-export type MarrowErrorCode = "invalid-data" | "unsupported-version" | "unsupported-feature";
+export type MarrowErrorCode = "invalid-data" | "unsupported-version" | "unsupported-feature" | "unknown-name";
 export interface MarrowErrorDetails {
   fix: string;
   validNames?: readonly string[];
@@ -267,6 +401,7 @@ export interface PoseEngine {
   update(dt: number): void;
   takeEvents(): PoseEvent[];
 }
+export type PoseEngineFactory = () => PoseEngine;
 export interface PoseEngineOptions {
   constraints?: "error" | "ignore";
 }
@@ -274,6 +409,7 @@ export interface PoseEvent {
   type: PoseEventType;
   track: number;
   animation: number;
+  entry: TrackEntry;
   key?: EventKey;
 }
 export type PoseEventType = "start" | "interrupt" | "end" | "dispose" | "complete" | "event";

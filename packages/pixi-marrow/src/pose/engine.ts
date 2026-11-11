@@ -13,6 +13,11 @@ export interface PoseEvent {
     track: number;
     /** The index of the entry's animation in the model, or -1 for the empty animation. */
     animation: number;
+    /**
+     * The entry the event is about. After its `dispose` event an engine may reuse the object for a
+     * later entry, so map it to your own data when the event arrives.
+     */
+    entry: TrackEntry;
     /** For `event`: the key that fired. */
     key?: EventKey;
 }
@@ -121,6 +126,41 @@ export interface PoseEngineOptions {
     constraints?: 'error' | 'ignore';
 }
 
+/** Creates one more pose engine for the model it was loaded for. Synchronous. */
+export type PoseEngineFactory = () => PoseEngine;
+
+/**
+ * Loads the pose engine code for a model's Spine version and returns a factory that creates
+ * engines for that model without waiting. Use it when instances are created synchronously.
+ *
+ * Throws a {@link MarrowError} for a skeleton with constraints, unless `constraints` is `ignore`.
+ *
+ * @example
+ * const createEngine = await loadPoseEngine(model);
+ * const first = createEngine();
+ * const second = createEngine();
+ */
+export async function loadPoseEngine(
+    model: SkeletonModel,
+    options: PoseEngineOptions = {},
+): Promise<PoseEngineFactory> {
+    if (model.constraints.length > 0 && options.constraints !== 'ignore') {
+        const types = [...new Set(model.constraints.map((constraint) => constraint.type))];
+
+        throw new MarrowError('unsupported-feature', `The skeleton has ${types.join(', ')} constraints.`, {
+            fix: 'Constraints arrive with milestone M3. Until then pass { constraints: "ignore" } to play without them.',
+        });
+    }
+    if (model.version === '4.3') {
+        const { createEngine43 } = await import('./v43/index');
+
+        return () => createEngine43(model);
+    }
+    const { createLegacyEngine } = await import('./legacy/index');
+
+    return () => createLegacyEngine(model);
+}
+
 /**
  * Creates a pose engine for a model. The engine for the model's Spine version is loaded on demand:
  * 4.1 and 4.2 share one, 4.3 has its own, because the official runtimes mix animations differently.
@@ -134,14 +174,5 @@ export interface PoseEngineOptions {
  * console.log(engine.state.world.subarray(0, 6));
  */
 export async function createPoseEngine(model: SkeletonModel, options: PoseEngineOptions = {}): Promise<PoseEngine> {
-    if (model.constraints.length > 0 && options.constraints !== 'ignore') {
-        const types = [...new Set(model.constraints.map((constraint) => constraint.type))];
-
-        throw new MarrowError('unsupported-feature', `The skeleton has ${types.join(', ')} constraints.`, {
-            fix: 'Constraints arrive with milestone M3. Until then pass { constraints: "ignore" } to play without them.',
-        });
-    }
-    if (model.version === '4.3') return (await import('./v43/index')).createEngine43(model);
-
-    return (await import('./legacy/index')).createLegacyEngine(model);
+    return (await loadPoseEngine(model, options))();
 }

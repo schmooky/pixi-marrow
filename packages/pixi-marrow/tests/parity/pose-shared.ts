@@ -207,54 +207,74 @@ interface OfficialEntry {
     shortestRotation: boolean;
 }
 
-/** Wraps official track entries as the read-only entries of the engine interface, and back. */
+/** A read-only entry of the engine interface that reads an official track entry. */
+function viewOf(entry: OfficialEntry, animationIndex: (animation: object | null) => number): TrackEntry {
+    return {
+        get trackIndex() {
+            return entry.trackIndex;
+        },
+        get animation() {
+            return animationIndex(entry.animation);
+        },
+        get loop() {
+            return entry.loop;
+        },
+        get delay() {
+            return entry.delay;
+        },
+        get trackTime() {
+            return entry.trackTime;
+        },
+        get trackEnd() {
+            return entry.trackEnd;
+        },
+        get timeScale() {
+            return entry.timeScale;
+        },
+        get alpha() {
+            return entry.alpha;
+        },
+        get mixTime() {
+            return entry.mixTime;
+        },
+        get mixDuration() {
+            return entry.mixDuration;
+        },
+        get reverse() {
+            return entry.reverse;
+        },
+        get shortestRotation() {
+            return entry.shortestRotation;
+        },
+    };
+}
+
+/**
+ * Wraps official track entries as the read-only entries of the engine interface, and back.
+ *
+ * The official core pools its entry objects: after `dispose` an object is handed out again for
+ * a later entry. A view stands for one use of an object. `view` gives the view of the use that
+ * is going on and makes it at the first sight of the object, which is the `start` call of the
+ * listener or the return of the call that made the entry. `release` ends the use at `dispose`.
+ */
 export function entryViews<E extends OfficialEntry>(animationIndex: (animation: object | null) => number) {
     const officials = new WeakMap<TrackEntry, E>();
+    const inUse = new Map<E, TrackEntry>();
 
     return {
         view(entry: E): TrackEntry {
-            const view: TrackEntry = {
-                get trackIndex() {
-                    return entry.trackIndex;
-                },
-                get animation() {
-                    return animationIndex(entry.animation);
-                },
-                get loop() {
-                    return entry.loop;
-                },
-                get delay() {
-                    return entry.delay;
-                },
-                get trackTime() {
-                    return entry.trackTime;
-                },
-                get trackEnd() {
-                    return entry.trackEnd;
-                },
-                get timeScale() {
-                    return entry.timeScale;
-                },
-                get alpha() {
-                    return entry.alpha;
-                },
-                get mixTime() {
-                    return entry.mixTime;
-                },
-                get mixDuration() {
-                    return entry.mixDuration;
-                },
-                get reverse() {
-                    return entry.reverse;
-                },
-                get shortestRotation() {
-                    return entry.shortestRotation;
-                },
-            };
+            let view = inUse.get(entry);
 
-            officials.set(view, entry);
+            if (view === undefined) {
+                view = viewOf(entry, animationIndex);
+                officials.set(view, entry);
+                inUse.set(entry, view);
+            }
 
             return view;
+        },
+        release(entry: E): void {
+            inUse.delete(entry);
         },
         official(view: TrackEntry): E {
             const entry = officials.get(view);
@@ -279,9 +299,11 @@ export function animationIndexer(animations: readonly object[]): (animation: obj
 
 /**
  * Records the calls of the official listener, in the order they come. `listener` goes to
- * `AnimationState.addListener`.
+ * `AnimationState.addListener`. An event names its entry by the view of the official entry the
+ * listener got.
  */
 export function eventRecorder<E extends OfficialEntry, V>(
+    views: { view(entry: E): TrackEntry; release(entry: E): void },
     animationIndex: (animation: object | null) => number,
     key: (event: V) => EventKey,
 ) {
@@ -289,20 +311,33 @@ export function eventRecorder<E extends OfficialEntry, V>(
     const record =
         (type: PoseEventType) =>
         (entry: E): void => {
-            events.push({ type, track: entry.trackIndex, animation: animationIndex(entry.animation) });
+            const animation = animationIndex(entry.animation);
+
+            events.push({ type, track: entry.trackIndex, animation, entry: views.view(entry) });
         };
+    const dispose = record('dispose');
 
     return {
         listener: {
             start: record('start'),
             interrupt: record('interrupt'),
             end: record('end'),
-            dispose: record('dispose'),
+            dispose(entry: E): void {
+                dispose(entry);
+                // the official core puts the object back into its pool after this call
+                views.release(entry);
+            },
             complete: record('complete'),
             event(entry: E, event: V): void {
                 const animation = animationIndex(entry.animation);
 
-                events.push({ type: 'event', track: entry.trackIndex, animation, key: key(event) });
+                events.push({
+                    type: 'event',
+                    track: entry.trackIndex,
+                    animation,
+                    entry: views.view(entry),
+                    key: key(event),
+                });
             },
         },
         take(): PoseEvent[] {

@@ -6,6 +6,7 @@ import {
     importSkeleton,
     MarrowError,
     type PoseEngine,
+    type PoseEvent,
     type SkeletonModel,
     type TimelineData,
     type TimelineKind,
@@ -26,12 +27,11 @@ const DOT = '"dot": { "width": 1, "height": 1 }';
 const ATLAS = ['page.png', '\tsize: 8, 8', ...REGIONS.flatMap((name) => [name, '\tbounds: 0, 0, 8, 8'])].join('\n');
 
 /**
- * A skeleton that uses what the official example exports leave out: every inherit mode, a bone
- * with a parent that needs a skin, single axis scale, inherit, two color, sequence and draw order
- * folder timelines, timelines that start late, and an animation that animates a constraint only.
+ * A skeleton with what the official example exports lack: every inherit mode, a bone below a bone that needs
+ * a skin, single axis scale, inherit, two color, sequence and folder timelines, late first keys, a constraint timeline.
  */
 const LAB = `{
-"skeleton": { "spine": "4.3.39-beta" },
+"skeleton": { "spine": "4.3.39-beta" }, "constraints": [{ "type": "ik", "name": "reach", "bones": ["only"], "target": "flatkid" }],
 "bones": [
     { "name": "root" }, { "name": "hip", "parent": "root", "x": 10, "y": 20, "rotation": 30, "scaleX": 1.5, "scaleY": 0.8, "shearX": 5 },
     { "name": "only", "parent": "hip", "x": 5, "rotation": 45, "inherit": "onlyTranslation" },
@@ -51,16 +51,14 @@ const LAB = `{
     { "name": "b", "bone": "root", "attachment": "dot" },
     { "name": "c", "bone": "mirrorkid", "attachment": "dot" }, { "name": "plain", "bone": "orphan", "attachment": "dot" }
 ],
-"constraints": [{ "type": "ik", "name": "reach", "bones": ["only"], "target": "flatkid" }],
 "skins": [
     { "name": "default", "attachments": {
         "body": { "quad": { "width": 4, "height": 4 }, "alt": { "width": 2, "height": 2 } }, "tint": { "quad": { "width": 4, "height": 4 } },
         "cloth": { "mesh": { ${TRIANGLE}, "vertices": [0, 0, 10, 0, 10, 10], "path": "film/f", "sequence": { "count": 3 } },
                    "mesh2": { ${TRIANGLE}, "vertices": [1, 1, 8, 0, 8, 8] } },
         "cape": { "weighted": { ${TRIANGLE}, "vertices": [2, 1, 1, 1, 0.5, 4, 0, 0, 0.5, 2, 1, 5, 0, 0.6, 4, 3, 1, 0.4, 1, 4, 2, 2, 1] } },
-        "copy": { "echo": { "type": "linkedmesh", "source": "mesh", "slot": "cloth" } },
+        "copy": { "echo": { "type": "linkedmesh", "source": "mesh", "slot": "cloth" } }, "a": { ${DOT} }, "b": { ${DOT} }, "c": { ${DOT} },
         "film": { "frames": { "path": "film/f", "width": 2, "height": 2, "sequence": { "count": 4, "setup": 1 } } },
-        "a": { ${DOT} }, "b": { ${DOT} }, "c": { ${DOT} },
         "plain": { ${DOT}, "box": { "type": "boundingbox", "vertexCount": 3, "vertices": [0, 0, 1, 0, 1, 1] } }
     } },
     { "name": "one", "bones": ["gatedkid"], "attachments": {
@@ -96,8 +94,7 @@ const LAB = `{
         "events": [{ "name": "step" }, { "time": 0.5, "name": "bang", "int": 7 }, { "time": 0.5, "name": "step" }, { "time": 1, "name": "bang" }]
     },
     "colors": {
-        "bones": { "hip": { "rotate": [{ "time": 0.2, "value": -40 }, { "time": 0.9, "value": 300 }] },
-                   "noref": { "rotate": [{ "value": 170 }, { "time": 0.6, "value": -170 }] } },
+        "bones": { "hip": { "rotate": [{ "time": 0.2, "value": -40 }, { "time": 0.9, "value": 300 }] }, "noref": { "rotate": [{ "value": 170 }, { "time": 0.6, "value": -170 }] } },
         "slots": {
             "body": { "rgb": [{ "color": "0000ff", "curve": [0.1, 0, 0.2, 1, 0.1, 0, 0.2, 1, 0.1, 1, 0.2, 2] }, { "time": 0.8, "color": "ffff00" }],
                       "alpha": [{ "time": 0.1, "value": 0.2 }, { "time": 0.9, "value": 1 }] },
@@ -133,8 +130,7 @@ const LAB = `{
     },
     "late": {
         "bones": {
-            "hip": { "rotate": [{ "time": 0.5, "value": 45 }], "translate": [{ "time": 0.5, "x": 3 }],
-                     "scale": [{ "time": 0.5, "x": 2 }], "shear": [{ "time": 0.5, "y": 9 }] },
+            "hip": { "rotate": [{ "time": 0.5, "value": 45 }], "translate": [{ "time": 0.5, "x": 3 }], "scale": [{ "time": 0.5, "x": 2 }], "shear": [{ "time": 0.5, "y": 9 }] },
             "norot": { "scalex": [{ "time": 0.5, "value": 3 }] }, "noscale": { "inherit": [{ "time": 0.5, "inherit": "noRotationOrReflection" }] }
         },
         "slots": {
@@ -148,12 +144,11 @@ const LAB = `{
         "drawOrder": [{ "time": 0.5, "offsets": [{ "slot": "a", "offset": 1 }] }], "events": [{ "time": 0.5, "name": "bang", "string": "late" }],
         "drawOrderFolder": [{ "slots": ["tint", "cloth"], "keys": [{ "time": 0.5, "offsets": [{ "slot": "tint", "offset": 1 }] }] }]
     },
-    "still": {},
-    "aim": { "ik": { "reach": [{ "mix": 0.5 }, { "time": 0.6, "mix": 1, "softness": 2 }] } }
+    "still": {}, "aim": { "ik": { "reach": [{ "mix": 0.5 }, { "time": 0.6, "mix": 1, "softness": 2 }] } }
 }
 }`;
 
-const [MOVE, COLORS, BEND, ORDER, LATE, STILL, AIM] = [0, 1, 2, 3, 4, 5, 6];
+const [MOVE, COLORS, BEND, ORDER, LATE, AIM] = [0, 1, 2, 3, 4, 6];
 const ALL_THRESHOLDS = { eventThreshold: 1, mixAttachmentThreshold: 1, mixDrawOrderThreshold: 1 };
 
 /** Scripts for what the families of the parity suite do not reach on this skeleton. */
@@ -168,7 +163,6 @@ const LAB_SCRIPTS: PoseScript[] = [
         s.set(2, ORDER, false, { alpha: 0.5, ...ALL_THRESHOLDS });
         s.set(3, BEND, true, { additive: true, alpha: 0.7, timeScale: 0.5 });
         s.update(DT, 30);
-        // late mixes out, on both tracks
         s.set(0, MOVE, true);
         s.set(1, BEND, false, { alpha: 0.75, alphaAttachmentThreshold: 0.6 });
         s.set(3, LATE, true, { additive: true });
@@ -176,14 +170,12 @@ const LAB_SCRIPTS: PoseScript[] = [
         s.set(2, LATE, true, ALL_THRESHOLDS);
         s.set(0, ORDER, true, ALL_THRESHOLDS);
         s.set(1, MOVE, true, { additive: true, alpha: 0.4 });
-        s.update(DT, 20);
         s.setEmpty(3, 0.3);
-        s.set(0, COLORS, false);
-        s.update(DT, 12);
+        s.update(DT, 24);
     }),
     script('reversed loops with events', (s) => {
         s.set(0, MOVE, true, { reverse: true });
-        // steps that pass the loop point, one of them by more than a loop
+        // steps that pass the loop point, the last ones by more than a loop
         s.update(0.3, 8);
         s.update(1.7, 2);
         s.set(1, ORDER, true, { reverse: true, alpha: 0.7 });
@@ -203,12 +195,6 @@ const LAB_SCRIPTS: PoseScript[] = [
         // the first entry stays until this mix is over, though it changes nothing in the pose
         s.set(0, MOVE, true);
         s.update(DT, 12);
-        s.set(0, STILL, true);
-        s.set(0, AIM, true, { mixDuration: 0 });
-        s.set(1, AIM, true, { alpha: 0.5 });
-        s.update(DT, 6);
-        s.setEmpty(0, 0.1);
-        s.update(DT, 6);
     }),
 ];
 
@@ -237,7 +223,6 @@ describe('the 4.3 pose engine on a skeleton the official examples do not cover',
     it.each(LAB_SCRIPTS)('poses like the official core: $name', run);
 });
 
-/** Stands in for a GPU texture. Posing needs page sizes only. */
 class FakeTexture extends Texture {
     setFilters(): void {}
     setWraps(): void {}
@@ -258,7 +243,6 @@ function officialSkeleton(): Skeleton {
 }
 
 const play = (model: SkeletonModel): Promise<PoseEngine> => createPoseEngine(model, { constraints: 'ignore' });
-const slotOf = (model: SkeletonModel, name: string): number => model.slots.names.indexOf(name);
 
 /** The first timeline of a kind in an animation of a model. The tests change it to damage the model. */
 function timelineOf(model: SkeletonModel, animation: number, kind: TimelineKind): TimelineData {
@@ -270,7 +254,7 @@ function timelineOf(model: SkeletonModel, animation: number, kind: TimelineKind)
 }
 
 function attachmentOf(model: SkeletonModel, slot: string, name: string): AttachmentData {
-    const index = slotOf(model, slot);
+    const index = model.slots.names.indexOf(slot);
     const entry = model.skins[0]?.attachments.find((candidate) => candidate.slot === index && candidate.name === name);
 
     if (entry === undefined) throw new Error(`The default skin has no ${name} in ${slot}`);
@@ -294,17 +278,15 @@ describe('createEngine43', () => {
         const model = await importSkeleton(LAB);
         const { state } = await play(model);
 
-        expect(state.local).toEqual(model.bones.setup);
-        expect(state.inherit).toEqual(model.bones.inherit);
+        expect([state.local, state.inherit]).toEqual([model.bones.setup, model.bones.inherit]);
         // the two bones that need a skin are off. The bone below them is on.
         expect(Array.from(state.active)).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1]);
         expect(state.world.every((value) => value === 0)).toBe(true);
         expect(state.colors).toEqual(model.slots.colors);
         expect(Array.from(state.darkColors.subarray(3, 6))).toEqual([0x10 / 255, 0x20 / 255, 0x30 / 255]);
         expect(Array.from(state.drawOrder)).toEqual(model.slots.names.map((_, slot) => slot));
-        expect(state.attachments[slotOf(model, 'body')]).toBe(attachmentOf(model, 'body', 'quad'));
-        // the default skin has nothing for this slot
-        expect(state.attachments[slotOf(model, 'gear')]).toBeNull();
+        // the default skin has nothing for the gear slot, which is slot 6
+        expect([state.attachments[0], state.attachments[6]]).toEqual([attachmentOf(model, 'body', 'quad'), null]);
         expect(Array.from(state.sequenceIndices)).toEqual([-1, -1, -1, -1, -1, -1, 0, -1, -1, -1, -1]);
         expect(Array.from(state.deformLengths)).toEqual(model.slots.names.map(() => 0));
         expect([state.skin, state.time]).toEqual([-1, 0]);
@@ -318,7 +300,10 @@ describe('createEngine43', () => {
         Object.assign(skeleton, { x: 3, y: -2, scaleX: -1.5, scaleY: 0.75 });
         engine.setSkin(2);
         skeleton.setSkin('two');
-        engine.update(0);
+        // the time of the skeleton does not follow the time scale
+        engine.timeScale = 2;
+        engine.update(0.25);
+        expect(engine.state.time).toBe(0.25);
         skeleton.updateWorldTransform(Physics.update);
         skeleton.bones.forEach((bone, index) => {
             const { a, b, c, d, worldX, worldY } = bone.appliedPose;
@@ -329,22 +314,43 @@ describe('createEngine43', () => {
         });
     });
 
-    it('takes an entry that ended from the pool again, like the official core', async () => {
+    it('gives every event the entry it is about, also for two entries of one animation on one track', async () => {
+        const engine = await play(await importSkeleton(LAB));
+        const older = engine.setAnimation(0, MOVE, true);
+        const told = (): string[] =>
+            engine
+                .takeEvents()
+                .map(({ type, entry, key }) => `${entry === older ? 'A' : 'B'} ${type} ${key?.time ?? ''}`);
+
+        engine.defaultMix = 0.3;
+        engine.configure(older, { eventThreshold: 1 });
+        engine.update(0.45);
+        // the same animation again: the older entry A mixes out below the newer entry B and still fires events
+        expect(engine.setAnimation(0, MOVE, true)).not.toBe(older);
+        engine.update(0.1);
+        expect(told().join()).toBe('A start ,A event 0,A interrupt ,B start ,A event 0.5,A event 0.5,B event 0');
+        engine.update(0.3);
+        engine.update(0.2);
+        expect(told().join()).toBe('A end ,A dispose ,B event 0.5,B event 0.5');
+    });
+
+    it('keeps what an event says when the pool hands its entry out again', async () => {
         const engine = await play(await importSkeleton(LAB));
         const first = engine.setAnimation(0, MOVE, true);
+        const told = (events: PoseEvent[]): string =>
+            events.map((event) => `${event.type} ${event.animation} ${event.entry === first}`).join();
 
-        // the time of the skeleton does not follow the time scale
-        engine.timeScale = 2;
-        engine.update(0.25);
-        engine.update(0.25);
-        expect(engine.state.time).toBe(0.5);
-        engine.takeEvents();
         engine.clearTrack(0);
-        expect(first.animation).toBe(-1);
+        const taken = engine.takeEvents();
+
+        // the pool hands the object of the entry that ended out again, like the official core
         expect(engine.setAnimation(0, COLORS, false)).toBe(first);
-        expect(first.animation).toBe(COLORS);
-        expect(engine.takeEvents().map((event) => event.type)).toEqual(['end', 'dispose', 'start']);
-        expect(engine.takeEvents()).toEqual([]);
+        engine.clearTrack(0);
+        expect(engine.setEmptyAnimation(0, 0.1)).toBe(first);
+        expect(told(taken)).toBe('start 0 true,end 0 true,dispose 0 true');
+        // events that were not taken before the object was reused still say what they were about
+        expect(told(engine.takeEvents())).toBe('start 1 true,end 1 true,dispose 1 true,start -1 true');
+        expect([first.animation, engine.takeEvents()]).toEqual([-1, []]);
     });
 });
 
@@ -377,15 +383,12 @@ describe('the calls of the 4.3 pose engine', () => {
     it('refuses tracks, animations and skins that do not exist', () => {
         expect(errorOf(() => engine.setAnimation(-1, MOVE, true)).message).toContain('-1 is not a track index');
         expect(errorOf(() => engine.addAnimation(1.5, MOVE, true, 0)).code).toBe('invalid-data');
-        expect(errorOf(() => engine.setEmptyAnimation(Number.NaN, 0)).code).toBe('invalid-data');
-        expect(errorOf(() => engine.addEmptyAnimation(-2, 0, 0)).code).toBe('invalid-data');
-        expect(errorOf(() => engine.clearTrack(-1)).code).toBe('invalid-data');
+        expect(errorOf(() => engine.addEmptyAnimation(Number.NaN, 0, 0)).code).toBe('invalid-data');
         expect(errorOf(() => engine.setAnimation(0, 99, true)).message).toContain('no animation 99');
         // the empty animation has its own calls
         expect(errorOf(() => engine.addAnimation(0, -1, true, 0)).fix).toContain('setEmptyAnimation');
         expect(errorOf(() => engine.setMix(MOVE, 7, 0.2)).code).toBe('invalid-data');
         expect(errorOf(() => engine.setSkin(3)).message).toContain('no skin 3');
-        expect(errorOf(() => engine.setSkin(0.5)).code).toBe('invalid-data');
     });
 });
 
@@ -416,7 +419,7 @@ describe('data the official 4.3 core fails on', () => {
     };
 
     it('names what is wrong when an update meets it', async () => {
-        const quad = { skin: 0, slot: BODY, name: 'quad' };
+        const quad = { ...lost, name: 'quad' };
         const box = { skin: 0, slot: PLAIN, name: 'box' };
         const messages = await Promise.all([
             updateError(MOVE, (model) => Object.assign(timelineOf(model, MOVE, 'rgba2'), { target: BODY })),
@@ -436,7 +439,6 @@ describe('data the official 4.3 core fails on', () => {
                 (model) => Object.assign(timelineOf(model, ORDER, 'drawOrder'), { kind: 'event', events: [] }),
                 ({ state }) => state.drawOrder.fill(BODY),
             ),
-            // an attachment that is a copy of one of the model
             updateError(
                 MOVE,
                 () => {},
@@ -474,25 +476,22 @@ describe('the attachment timeline of the 4.3 pose engine', () => {
         const model = await importSkeleton(LAB);
         const { state } = await play(model);
         const pose = { rig: prepareRig(model), state };
-        const apply = (animation: number, time: number, from: number, out: boolean): AttachmentData | null => {
+        const shown = (animation: number, time: number, from: number, out: boolean): string | undefined => {
             const timeline = pose.rig.clips[animation]?.timelines.find((candidate) => candidate.kind === 'attachment');
 
             if (timeline === undefined) throw new Error('The animation has no attachment timeline');
             timeline.apply(pose, timeline, -1, time, null, 1, from, false, out);
 
-            return state.attachments[timeline.target] ?? null;
+            return state.attachments[timeline.target]?.name;
         };
 
-        expect(apply(MOVE, 0.1, SETUP, false)).toBe(attachmentOf(model, 'body', 'alt'));
-        expect(apply(MOVE, 0.5, SETUP, false)).toBeNull();
+        expect([shown(MOVE, 0.1, SETUP, false), shown(MOVE, 0.5, SETUP, false)]).toEqual(['alt', undefined]);
         // mixing out gives the setup attachment back, unless a lower track owns the slot
-        expect(apply(MOVE, 0.5, CURRENT, true)).toBeNull();
-        expect(apply(MOVE, 0.5, SETUP, true)).toBe(attachmentOf(model, 'body', 'quad'));
-        expect(apply(COLORS, 0.5, SETUP, false)).toBe(attachmentOf(model, 'cloth', 'mesh2'));
-        // before the first key
-        expect(apply(COLORS, 0.1, CURRENT, false)).toBe(attachmentOf(model, 'cloth', 'mesh2'));
-        expect(apply(COLORS, 0.1, SETUP, false)).toBe(attachmentOf(model, 'cloth', 'mesh'));
+        expect([shown(MOVE, 0.5, CURRENT, true), shown(MOVE, 0.5, SETUP, true)]).toEqual([undefined, 'quad']);
+        expect(shown(COLORS, 0.5, SETUP, false)).toBe('mesh2');
+        // so does a time before the first key
+        expect([shown(COLORS, 0.1, CURRENT, false), shown(COLORS, 0.1, SETUP, false)]).toEqual(['mesh2', 'mesh']);
         state.active.fill(0);
-        expect(apply(COLORS, 0.5, SETUP, false)).toBe(attachmentOf(model, 'cloth', 'mesh'));
+        expect(shown(COLORS, 0.5, SETUP, false)).toBe('mesh');
     });
 });

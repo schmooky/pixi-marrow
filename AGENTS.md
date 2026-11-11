@@ -7,7 +7,7 @@ Instructions for AI coding agents and for people working in this repo. Read it b
 pixi-marrow is a Spine runtime for PixiJS v8. It has its own pose core and its own render path, and it plays Spine 4.1, 4.2 and 4.3 skeletons. The plan, the classes and the milestones are in `docs/DESIGN.md`.
 
 <!-- facts:status -->
-Pre-release, milestone M2a. Skeletons of Spine 4.1, 4.2 and 4.3 import and play without a renderer, and their poses equal the official runtimes exactly. Constraints are not solved yet. Nothing renders yet.
+Pre-release, milestone M2b. Skeletons of Spine 4.1, 4.2 and 4.3 load, play and draw in PixiJS v8, and the picture matches the official runtime. Constraints and clipping are not solved yet: a skeleton with constraints plays only with them ignored.
 <!-- /facts:status -->
 
 ```
@@ -27,7 +27,7 @@ Entry points:
 <!-- facts:entry-points -->
 | Import | Holds |
 |---|---|
-| `pixi-marrow` | `MarrowError`. The display object arrives with milestone M2b. |
+| `pixi-marrow` | `MarrowSpine`, the display object, with `MarrowAsset`, `Track` and `MarrowError`. Needs `pixi.js`. |
 | `pixi-marrow/core` | `importSkeleton`, `importAtlas`, `createPoseEngine`, the geometry functions, `describeSkeleton` and the model types. No Pixi. Runs in Node. |
 | `pixi-marrow/optimize` | `generateNames` and the `pixi-marrow` command line tool (`info`, `typegen`). Runs in Node. |
 <!-- /facts:entry-points -->
@@ -56,7 +56,9 @@ A file imports only from its own layer or the layers above it in this table. `pn
 | api | `src/api` | The display object and handles |
 | features | `src/bake`, `src/debug`, `src/perf`, `src/optimize` | Optional entry points |
 
-`base`, `model`, `formats`, `pose`, `geometry` and `optimize` have files today. The others arrive with their milestones.
+`base`, `model`, `formats`, `pose`, `geometry`, `render`, `api` and `optimize` have files today. The others arrive with their milestones.
+
+`src/render` turns a pose into Pixi meshes (`SkeletonView`). `src/api` is the public display object (`MarrowSpine`) on top of a pose engine and a view.
 
 `src/pose` has two engines behind one interface: `legacy` plays 4.1 and 4.2 skeletons, `v43` plays 4.3 skeletons. The official runtimes mix animations differently, so they do not share a player.
 
@@ -98,6 +100,14 @@ pnpm check
 ```
 
 It runs every gate. First lint, the prose check, typecheck, the source rules and the facts check. Then tests with coverage, the build, the API snapshot, the publish contents check, the size check and the dead code check. CI runs the same steps.
+
+A change to `src/render`, `src/api` or the shaders also needs the pixel check, which is not part of `pnpm check` because it needs Google Chrome:
+
+```bash
+pnpm check:render
+```
+
+It draws rigs with pixi-marrow and with the official Pixi runtime in headless Chrome, on WebGL2 and WebGPU, and compares the pixels. Images of failing cases land in `.shots/render/`.
 
 Library changes need a changeset. Run `pnpm changeset`.
 

@@ -28,6 +28,23 @@
     "cloud-pot",
     "diamond-pro"
   ],
+  "render": {
+    "rigs": [
+      "speedy-ess",
+      "dragon-ess",
+      "spineboy-pro",
+      "raptor-pro",
+      "goblins-pro",
+      "mix-and-match-pro",
+      "chibi-stickers",
+      "coin-pro",
+      "alien-pro",
+      "tank-pro",
+      "powerup-pro",
+      "diamond-pro"
+    ],
+    "pma": ["spineboy-pro", "coin-pro"]
+  },
   "files": [
     {
       "version": "4.1",
@@ -43,6 +60,24 @@
       "atlas": {
         "path": "examples/spineboy/export/spineboy.atlas",
         "sha256": "fdc4bbc4be5f1a638fa0ff384271007b1f2df72855dd80b4b239bcfe8a4ac31e"
+      },
+      "images": [
+        {
+          "path": "examples/spineboy/export/spineboy.png",
+          "sha256": "96c55a06237f1b7475cd1287a26ebc71644324f42984ac0ccd2d112c43bd135a"
+        }
+      ],
+      "pma": {
+        "atlas": {
+          "path": "examples/spineboy/export/spineboy-pma.atlas",
+          "sha256": "d67e56e6b9a353d4cc9bd42d7140208ea3aa403f2e1d8e8e4d85149f0d34a521"
+        },
+        "images": [
+          {
+            "path": "examples/spineboy/export/spineboy-pma.png",
+            "sha256": "8f34aacb646e10f68764032cbb7da9040a66575d4d5d42540410d7921b869076"
+          }
+        ]
       }
     },
     {
@@ -59,7 +94,13 @@
       "atlas": {
         "path": "examples/raptor/export/raptor.atlas",
         "sha256": "c12e21c7fbc0f0bf955afc90e438883f215d9ba8846519c0408233a0182ee35c"
-      }
+      },
+      "images": [
+        {
+          "path": "examples/raptor/export/raptor.png",
+          "sha256": "597a01dbb1660cda9a8a5f11a9c0b94e628c4a9bc288f6aabad98f5804b919be"
+        }
+      ]
     },
     {
       "version": "4.1",
@@ -75,7 +116,13 @@
       "atlas": {
         "path": "examples/goblins/export/goblins.atlas",
         "sha256": "ce34e2a58bdcf3bbae376752ad7042e89d3b6e98ce8fdb65f8333700c5cb9a23"
-      }
+      },
+      "images": [
+        {
+          "path": "examples/goblins/export/goblins.png",
+          "sha256": "e4ee04501b6af6872fab91e5868233859b6da68ed454025f379f214e78813ead"
+        }
+      ]
     },
     {
       "version": "4.1",
@@ -107,7 +154,13 @@
       "atlas": {
         "path": "examples/tank/export/tank.atlas",
         "sha256": "34f821250be2ed50566760d7f755a77ee1e2bc84c475aec909e6d027d8ed49e8"
-      }
+      },
+      "images": [
+        {
+          "path": "examples/tank/export/tank.png",
+          "sha256": "d1f7064b2ffd9c71e3b28c6c1e23ce1dc10f13734bbb140252390f93dd786804"
+        }
+      ]
     },
     {
       "version": "4.1",
@@ -155,6 +208,24 @@
       "atlas": {
         "path": "examples/coin/export/coin.atlas",
         "sha256": "3078c4eb8a0692eea6d36b15645480dea27f1bf76d29ccd0af17ca28539d6ede"
+      },
+      "images": [
+        {
+          "path": "examples/coin/export/coin.png",
+          "sha256": "7596896c3f18f8e785e838176741400cec9a13ef98fa11ae68402088a8b94b24"
+        }
+      ],
+      "pma": {
+        "atlas": {
+          "path": "examples/coin/export/coin-pma.atlas",
+          "sha256": "2022347ba31e906f611e6eb8076fe86fa8f06c8c749b338573f8379746ef04bd"
+        },
+        "images": [
+          {
+            "path": "examples/coin/export/coin-pma.png",
+            "sha256": "1a559d85206be0e085b0be2c234182e03999befba66ed591ae2add04199703ad"
+          }
+        ]
       }
     },
     {
@@ -187,7 +258,13 @@
       "atlas": {
         "path": "examples/alien/export/alien.atlas",
         "sha256": "e2caebe912b3847fa06196e82a5aaa35dc23784ea5d47f6299d1bc3b846ca074"
-      }
+      },
+      "images": [
+        {
+          "path": "examples/alien/export/alien.png",
+          "sha256": "38a842c9b4e4dc25969fd4d794599c1b1972be3fd9d36adfd8d4b5711336e922"
+        }
+      ]
     },
     {
       "version": "4.1",
@@ -203,7 +280,13 @@
       "atlas": {
         "path": "examples/powerup/export/powerup.atlas",
         "sha256": "071c0facb2ed1681b553c057e5af01a3994d5c1e3fce24c1036df05ea9fdd569"
-      }
+      },
+      "images": [
+        {
+          "path": "examples/powerup/export/powerup.png",
+          "sha256": "33b81216ba76b2ac0e20fe73ce743567e374828a6d9e86ad3075b8cad2268302"
+        }
+      ]
     },
     {
       "version": "4.1",
@@ -219,7 +302,13 @@
       "atlas": {
         "path": "examples/mix-and-match/export/mix-and-match.atlas",
         "sha256": "4193d0ef0e747ad1fcd272cc89e0297516ca08e753aaeae1f28f65802c3d1d6c"
-      }
+      },
+      "images": [
+        {
+          "path": "examples/mix-and-match/export/mix-and-match.png",
+          "sha256": "8dd44837cee82a54d2cf9a77d0fa7c135bb5c4e763174e71128ccbd66b11274c"
+        }
+      ]
     },
     {
       "version": "4.1",
@@ -235,7 +324,33 @@
       "atlas": {
         "path": "examples/dragon/export/dragon.atlas",
         "sha256": "36eb530bd3dd85417e0f681928151e338c962d77881084ab1d05a6a724e16f37"
-      }
+      },
+      "images": [
+        {
+          "path": "examples/dragon/export/dragon.png",
+          "sha256": "f81654bc14a5d02cbfea1f71c18ad868efba84869a5945b20a9cd09de94f34d8"
+        },
+        {
+          "path": "examples/dragon/export/dragon_2.png",
+          "sha256": "2a2e3664e30511f2a1bcfbfdc0ec49996cc7f287fd4cae7571e400098a22450b"
+        },
+        {
+          "path": "examples/dragon/export/dragon_3.png",
+          "sha256": "30fa472f192d46b7a598379ab4205d38a51ce3e207d5ef98ab08a7b136793638"
+        },
+        {
+          "path": "examples/dragon/export/dragon_4.png",
+          "sha256": "5119616a1d2520ccd33b02dd69e7bf50a5e563bd38499e769076c52c27938aeb"
+        },
+        {
+          "path": "examples/dragon/export/dragon_5.png",
+          "sha256": "d8601dbe4af9b1497e71097405d64d1442597d711d36687f9a5ef8297c26fc86"
+        },
+        {
+          "path": "examples/dragon/export/dragon_6.png",
+          "sha256": "6f15c83cfa558303ed79e31eefd8714b6b56c25454ed8de9565970d18bc12283"
+        }
+      ]
     },
     {
       "version": "4.1",
@@ -267,7 +382,13 @@
       "atlas": {
         "path": "examples/speedy/export/speedy.atlas",
         "sha256": "db682ec8452968e695052b94e9e48edaadbb75c70b66b9bddde46d486766387f"
-      }
+      },
+      "images": [
+        {
+          "path": "examples/speedy/export/speedy.png",
+          "sha256": "2ae63f4f018085a0df89cd0d88b7a79bf8bff57002345b387d818bb06c286cce"
+        }
+      ]
     },
     {
       "version": "4.1",
@@ -283,7 +404,49 @@
       "atlas": {
         "path": "examples/chibi-stickers/export/chibi-stickers.atlas",
         "sha256": "668d5e5c3c3e3ef8f2584280391023d6abb808fdeb883ecc2fc95ea053c98221"
-      }
+      },
+      "images": [
+        {
+          "path": "examples/chibi-stickers/export/chibi-stickers.png",
+          "sha256": "2e72991815a37a7ff4e23f10974ddafbab528c36082eb7b98474bd7024f4cf4d"
+        },
+        {
+          "path": "examples/chibi-stickers/export/chibi-stickers_2.png",
+          "sha256": "aea5ca4b29eccc3346480e25792b7e0c4a9398fc231e5412a42c152ef0b71634"
+        },
+        {
+          "path": "examples/chibi-stickers/export/chibi-stickers_3.png",
+          "sha256": "dfa57be9bf38533a4017c8c31e066f99121351b59568c5fb40c51c93aecf026d"
+        },
+        {
+          "path": "examples/chibi-stickers/export/chibi-stickers_4.png",
+          "sha256": "9de31bfdfec753a796c8c536d78b4dd75afdb5c4e28ba17de6740a2553896c15"
+        },
+        {
+          "path": "examples/chibi-stickers/export/chibi-stickers_5.png",
+          "sha256": "1d79528bddf16a87404c8fd9216f301db6d5d2109b0290b906213c7a9ccfb276"
+        },
+        {
+          "path": "examples/chibi-stickers/export/chibi-stickers_6.png",
+          "sha256": "0bec745d4072436657077e3e8106c21734d2adbb6464c1d27c5b67a67ffd130a"
+        },
+        {
+          "path": "examples/chibi-stickers/export/chibi-stickers_7.png",
+          "sha256": "4b99c7966418377c7bd580decb8383ebfe156f1bb2ae463d3991b2b8ced84a44"
+        },
+        {
+          "path": "examples/chibi-stickers/export/chibi-stickers_8.png",
+          "sha256": "fbcdff9fb9fdf76ecdbda79e116c2eb4f273c56d9aee2bb3131154b45572db69"
+        },
+        {
+          "path": "examples/chibi-stickers/export/chibi-stickers_9.png",
+          "sha256": "0706dbb8e8d3651ca92349def3ab4da7797dcaa89fea3e0e1c04c6fe0a71e8c5"
+        },
+        {
+          "path": "examples/chibi-stickers/export/chibi-stickers_10.png",
+          "sha256": "d6ac92f7bba82a2c9b4a88af27b4111adb31ef00fd73b8f32ff7ab63e717e670"
+        }
+      ]
     },
     {
       "version": "4.2",
@@ -299,6 +462,24 @@
       "atlas": {
         "path": "examples/spineboy/export/spineboy.atlas",
         "sha256": "fc90c2a604c14bb3ae1a81f9c950660863a41654cb29c869423a86e127fa75ae"
+      },
+      "images": [
+        {
+          "path": "examples/spineboy/export/spineboy.png",
+          "sha256": "071a6adec73378eebd802a047d274deefe11abee3ce689a1e71acb4cb41e331e"
+        }
+      ],
+      "pma": {
+        "atlas": {
+          "path": "examples/spineboy/export/spineboy-pma.atlas",
+          "sha256": "a53dd09fa8d304b395062c0a35a4c3952e979dda00e74b9cd95a5bc264cd6d5d"
+        },
+        "images": [
+          {
+            "path": "examples/spineboy/export/spineboy-pma.png",
+            "sha256": "eb8a9b9f105517acda7ab5c9961f6c487a6bc2ac28a6a123f6303a6af805dd3f"
+          }
+        ]
       }
     },
     {
@@ -315,7 +496,13 @@
       "atlas": {
         "path": "examples/raptor/export/raptor.atlas",
         "sha256": "60499dd637481439aa6ce89003358e69e9f558b4d8f305537c34ab44857e3056"
-      }
+      },
+      "images": [
+        {
+          "path": "examples/raptor/export/raptor.png",
+          "sha256": "a8131da0a9132540962082dfdb95c44c10612862448b69ba2c87318353f6fbca"
+        }
+      ]
     },
     {
       "version": "4.2",
@@ -331,7 +518,13 @@
       "atlas": {
         "path": "examples/goblins/export/goblins.atlas",
         "sha256": "61223fbbf73a0b4118d8aa65db4a9b76b6989cc2f25a174a98a8c47ffa815191"
-      }
+      },
+      "images": [
+        {
+          "path": "examples/goblins/export/goblins.png",
+          "sha256": "76edbd78ee10fa487121d53dbb100e2647c096162f72eb493299e542da38952c"
+        }
+      ]
     },
     {
       "version": "4.2",
@@ -363,7 +556,13 @@
       "atlas": {
         "path": "examples/tank/export/tank.atlas",
         "sha256": "bcaafa241f51c58db0172734b3257def51fe8000673101b1363d098e42862b51"
-      }
+      },
+      "images": [
+        {
+          "path": "examples/tank/export/tank.png",
+          "sha256": "a0e6136583054ef86c8221ffebde45e33903b1814ab8bb78e4c021a830992a8b"
+        }
+      ]
     },
     {
       "version": "4.2",
@@ -411,6 +610,24 @@
       "atlas": {
         "path": "examples/coin/export/coin.atlas",
         "sha256": "9b394c85aef916a4cdaf95b7abfb714e2c2def9b71568db7d546e90f7bebc092"
+      },
+      "images": [
+        {
+          "path": "examples/coin/export/coin.png",
+          "sha256": "a8672983ade9a0b360125dda63f0d2a0166fc2d7b909044d01ae744918fb4c14"
+        }
+      ],
+      "pma": {
+        "atlas": {
+          "path": "examples/coin/export/coin-pma.atlas",
+          "sha256": "76f2fb5f8c24edd8cd3b0a42a210c865718f9495e6ffbc74f707dc747c220163"
+        },
+        "images": [
+          {
+            "path": "examples/coin/export/coin-pma.png",
+            "sha256": "1c5a5ce66318dce35513a204350da1a08cf778252276e07e99ff75334cd3b9d3"
+          }
+        ]
       }
     },
     {
@@ -443,7 +660,13 @@
       "atlas": {
         "path": "examples/alien/export/alien.atlas",
         "sha256": "96bf02edf1006e6501d98b8ea992b6fc1fe945a1e07e26a79e5493b7f6408673"
-      }
+      },
+      "images": [
+        {
+          "path": "examples/alien/export/alien.png",
+          "sha256": "25b7efecde799b3cd26271bdecfebb802ed4d964c9968697c4225b6f20494065"
+        }
+      ]
     },
     {
       "version": "4.2",
@@ -459,7 +682,13 @@
       "atlas": {
         "path": "examples/powerup/export/powerup.atlas",
         "sha256": "7e4c3a8a7a99a7d5e21f67010fb1ac6c25560ee4f4327489817356626edf7cb1"
-      }
+      },
+      "images": [
+        {
+          "path": "examples/powerup/export/powerup.png",
+          "sha256": "e53af73f5c60e38052903dd222c2e985fc46aedd67c6b545664afee4d634fa33"
+        }
+      ]
     },
     {
       "version": "4.2",
@@ -475,7 +704,13 @@
       "atlas": {
         "path": "examples/mix-and-match/export/mix-and-match.atlas",
         "sha256": "4692316d11bd4e6f1c1e4aad02ad5a6f2132af1be21d9c55459c57122de084dc"
-      }
+      },
+      "images": [
+        {
+          "path": "examples/mix-and-match/export/mix-and-match.png",
+          "sha256": "3516b29d3afd64f0083ff95c50342abfca28f25f3ef9b770aaa46a5659e6ecdd"
+        }
+      ]
     },
     {
       "version": "4.2",
@@ -491,7 +726,29 @@
       "atlas": {
         "path": "examples/dragon/export/dragon.atlas",
         "sha256": "8df24066ed9b9c15f818d11f8bc059148bcca641b691bc1789502eebba6aa042"
-      }
+      },
+      "images": [
+        {
+          "path": "examples/dragon/export/dragon.png",
+          "sha256": "e9db7a87e2092757f25b8e2fac5357d591e77a1d97c6aa9e1810d869913c8d2d"
+        },
+        {
+          "path": "examples/dragon/export/dragon_2.png",
+          "sha256": "f7c7ac053e0012aa835222268a556f1d52a2643ab8aa9b7c9c2c279d29817b6f"
+        },
+        {
+          "path": "examples/dragon/export/dragon_3.png",
+          "sha256": "751d9bb33837a429a939d09ff7c93da435e0fa5430e6b474f94b1690c05ad19b"
+        },
+        {
+          "path": "examples/dragon/export/dragon_4.png",
+          "sha256": "e73c866abcf700dd5a17c8667d9160d1001862dfcec7024ff880448f58a8cfab"
+        },
+        {
+          "path": "examples/dragon/export/dragon_5.png",
+          "sha256": "8c0cc09d949059d8b64d7b41a950597ea3f1079e128843a9c3ec4fa9f81155fc"
+        }
+      ]
     },
     {
       "version": "4.2",
@@ -523,7 +780,13 @@
       "atlas": {
         "path": "examples/speedy/export/speedy.atlas",
         "sha256": "097935faba50aae2f26c35ba13dbe3f91de7403ee296e6163e986c2aa451be6f"
-      }
+      },
+      "images": [
+        {
+          "path": "examples/speedy/export/speedy.png",
+          "sha256": "d8b8b24dd8ae36ebafe02b1328071268084c95a6a22a56ab1b05eea64ce1694b"
+        }
+      ]
     },
     {
       "version": "4.2",
@@ -539,7 +802,49 @@
       "atlas": {
         "path": "examples/chibi-stickers/export/chibi-stickers.atlas",
         "sha256": "10c79bd5631566859b6fee1b2e2f2365fa6e72ab8370bae6c897fc263f32b80a"
-      }
+      },
+      "images": [
+        {
+          "path": "examples/chibi-stickers/export/chibi-stickers.png",
+          "sha256": "1c0e9ad98b44f4414cd72c9aa8b7f9deb91851272b220243843383963a138bb7"
+        },
+        {
+          "path": "examples/chibi-stickers/export/chibi-stickers_2.png",
+          "sha256": "8e0d31a5b7013eee9db1131d1a9f8475a3f2aa06c49e95d8782e13863c272e52"
+        },
+        {
+          "path": "examples/chibi-stickers/export/chibi-stickers_3.png",
+          "sha256": "a618703c1d33839e802dfe81558d71790eeeafb5cba64d95f7b5781cec26039a"
+        },
+        {
+          "path": "examples/chibi-stickers/export/chibi-stickers_4.png",
+          "sha256": "13e951f561827099e5599afcccfda1a73be2e816b864cfc1969991b2734b2a48"
+        },
+        {
+          "path": "examples/chibi-stickers/export/chibi-stickers_5.png",
+          "sha256": "75299d55104ca1a0fb308ea07c6ae306e4b78afa1c3d03cfbaa2e29d3d99df8b"
+        },
+        {
+          "path": "examples/chibi-stickers/export/chibi-stickers_6.png",
+          "sha256": "5fd38caacba0039ba42d0ec3af578fa09cb2c0c7237b44bf67a0ad1b693b1e4f"
+        },
+        {
+          "path": "examples/chibi-stickers/export/chibi-stickers_7.png",
+          "sha256": "5cffce4704f54d5fafb07295de6f90d9c733526d7baa36bf91681b93bb63f5c7"
+        },
+        {
+          "path": "examples/chibi-stickers/export/chibi-stickers_8.png",
+          "sha256": "ea8cacce900119adf7e9868b88a2b113582ccebd46a175112bdefdc6ce18aab6"
+        },
+        {
+          "path": "examples/chibi-stickers/export/chibi-stickers_9.png",
+          "sha256": "f07948ce1d8feb6e776dbeb1c57c3730247a146db9f145130de049f41b637e89"
+        },
+        {
+          "path": "examples/chibi-stickers/export/chibi-stickers_10.png",
+          "sha256": "1b3d499c1f8b9439ae602e220b87559aae12e328cbf280d88598ea663dc7ab39"
+        }
+      ]
     },
     {
       "version": "4.2",
@@ -619,6 +924,24 @@
       "atlas": {
         "path": "examples/spineboy/export/spineboy.atlas",
         "sha256": "fbd452640df513d637e0a34d21c1d3ea4edb27f57bd1856ffd5530b16ee83d00"
+      },
+      "images": [
+        {
+          "path": "examples/spineboy/export/spineboy.png",
+          "sha256": "ab874448a224f8a92188e133735062c86e5f93eb7286b0fc37c5d39864e6569f"
+        }
+      ],
+      "pma": {
+        "atlas": {
+          "path": "examples/spineboy/export/spineboy-pma.atlas",
+          "sha256": "b04b98b6ac9e28ee1cf660e4d96d6c7df21fbd5d47aa2382c84865ff18795db8"
+        },
+        "images": [
+          {
+            "path": "examples/spineboy/export/spineboy-pma.png",
+            "sha256": "47bab0de0518a5b7daa829d953439972c5d43b78fc31b40e1557a2ed625a00b5"
+          }
+        ]
       }
     },
     {
@@ -635,7 +958,13 @@
       "atlas": {
         "path": "examples/raptor/export/raptor.atlas",
         "sha256": "fb6e8532cb7665542b54ab661d0cadffe0171fcfe6b192595cd6ab622b08d8e6"
-      }
+      },
+      "images": [
+        {
+          "path": "examples/raptor/export/raptor.png",
+          "sha256": "c2fcb6ac6c363f5b37f622feb727aed64fbd0205897a7ba8b6b45f8a091ab125"
+        }
+      ]
     },
     {
       "version": "4.3",
@@ -651,7 +980,13 @@
       "atlas": {
         "path": "examples/goblins/export/goblins.atlas",
         "sha256": "7245bf918b1d661d9502bf35aff39ae73541b27285fab1df983bd8e6cda5dc0a"
-      }
+      },
+      "images": [
+        {
+          "path": "examples/goblins/export/goblins.png",
+          "sha256": "bfdd68e30d633094ba2292d15df604f4acd168d236be3ca35f69505e591b5ba3"
+        }
+      ]
     },
     {
       "version": "4.3",
@@ -683,7 +1018,13 @@
       "atlas": {
         "path": "examples/tank/export/tank.atlas",
         "sha256": "003a119ec915ae5130582ba9100aa1ca37049727050d18c334261299f5d81cc5"
-      }
+      },
+      "images": [
+        {
+          "path": "examples/tank/export/tank.png",
+          "sha256": "52d92e423b47152c4611fac5c54ee07593a710cb6342fa2dd3ec72ee9b70576d"
+        }
+      ]
     },
     {
       "version": "4.3",
@@ -731,6 +1072,24 @@
       "atlas": {
         "path": "examples/coin/export/coin.atlas",
         "sha256": "661de942a6b4873697aa56dc5ffe489675f1310c56cb65b5fff7649d5adb157f"
+      },
+      "images": [
+        {
+          "path": "examples/coin/export/coin.png",
+          "sha256": "a299ecc5936018891c79c9e25d5783672e8e711aeb8fedf82164054698127e7f"
+        }
+      ],
+      "pma": {
+        "atlas": {
+          "path": "examples/coin/export/coin-pma.atlas",
+          "sha256": "e444eb249bb138660267cbdabcf691e880edafe5c8d79b43f577c22f3db53f8c"
+        },
+        "images": [
+          {
+            "path": "examples/coin/export/coin-pma.png",
+            "sha256": "c56a15cef462016a6e45489905414ffdcfc3ea4f50d609295039e4b486f400ef"
+          }
+        ]
       }
     },
     {
@@ -763,7 +1122,13 @@
       "atlas": {
         "path": "examples/alien/export/alien.atlas",
         "sha256": "bb7ad7274dbd6b66e5d99f22cdfea93f3b9ee61ff1275d0d1cee6af936b1f5f2"
-      }
+      },
+      "images": [
+        {
+          "path": "examples/alien/export/alien.png",
+          "sha256": "eff4a9339a1817dcf58e5a518a2c6194d281f5dfa796f1fbf9f4bc2492ba281f"
+        }
+      ]
     },
     {
       "version": "4.3",
@@ -779,7 +1144,13 @@
       "atlas": {
         "path": "examples/powerup/export/powerup.atlas",
         "sha256": "5addcdff456719d02765d4183a2bf306add01aef314742a9b5191ac450b973e3"
-      }
+      },
+      "images": [
+        {
+          "path": "examples/powerup/export/powerup.png",
+          "sha256": "54d03c3ea7aedeb3aeedb211cdcbd59840d5e1c9765ebad55312ac7fd906c83b"
+        }
+      ]
     },
     {
       "version": "4.3",
@@ -795,7 +1166,13 @@
       "atlas": {
         "path": "examples/mix-and-match/export/mix-and-match.atlas",
         "sha256": "007ec7f89d88cf84e3ce52f3a2577d234eed85d19e285689ad7a610623ab77d5"
-      }
+      },
+      "images": [
+        {
+          "path": "examples/mix-and-match/export/mix-and-match.png",
+          "sha256": "35bf4e48926d9fdc9d8cc44f1bb8d85c590a8b6f7086c0c154838013c7ce4f0d"
+        }
+      ]
     },
     {
       "version": "4.3",
@@ -811,7 +1188,33 @@
       "atlas": {
         "path": "examples/dragon/export/dragon.atlas",
         "sha256": "c8be402248245417c109d310d8cb56f9461caa160f153a3442c991abe3d520ae"
-      }
+      },
+      "images": [
+        {
+          "path": "examples/dragon/export/dragon.png",
+          "sha256": "d76b4d3b679ccf0dfe3f2e906fea90a8c8df3c65d3c74d583dd1ae0bf189c52b"
+        },
+        {
+          "path": "examples/dragon/export/dragon_2.png",
+          "sha256": "0930a8fc2670004a33e03b34a4bb4b88e171015180fbe669e295564a1c208f5b"
+        },
+        {
+          "path": "examples/dragon/export/dragon_3.png",
+          "sha256": "d6bf79a5cbbf6fbd51fbcb6b4d8ee84ceac9f358c8d49c143b096d2c3abbafdd"
+        },
+        {
+          "path": "examples/dragon/export/dragon_4.png",
+          "sha256": "d8ab74187ba30dbd3a74ba3d691887635eeee2f08520b2711318e6783fa11423"
+        },
+        {
+          "path": "examples/dragon/export/dragon_5.png",
+          "sha256": "6d79752b1dbd34abc5726ed77df70080854d564ac6b4121a34b43159bd8948b8"
+        },
+        {
+          "path": "examples/dragon/export/dragon_6.png",
+          "sha256": "0540147e5d03284e85b55ad6a3dbafc2e59006cb3441f63de98ba2aba6b57627"
+        }
+      ]
     },
     {
       "version": "4.3",
@@ -843,7 +1246,13 @@
       "atlas": {
         "path": "examples/speedy/export/speedy.atlas",
         "sha256": "8e2af1da3ce98198fcfbf5d8f01261186e039a965467852833cd207c0c230606"
-      }
+      },
+      "images": [
+        {
+          "path": "examples/speedy/export/speedy.png",
+          "sha256": "933b29ff5f90623b465d55e627309fa4bc8dedde5d26eb1ffdc31eb338c9eabf"
+        }
+      ]
     },
     {
       "version": "4.3",
@@ -859,7 +1268,53 @@
       "atlas": {
         "path": "examples/chibi-stickers/export/chibi-stickers.atlas",
         "sha256": "e8609249909788d2c3ccdf8404c346f9c1e0e98a764fa15bed101acd17f8f7b0"
-      }
+      },
+      "images": [
+        {
+          "path": "examples/chibi-stickers/export/chibi-stickers.png",
+          "sha256": "00eb71f6c6b005956cde903036e163a50ad6abe1292cdb5327f99838cb76b81b"
+        },
+        {
+          "path": "examples/chibi-stickers/export/chibi-stickers_2.png",
+          "sha256": "f1c9b4df76c384c2ea9c29e150a0272844731b88dcbe829973658a3349e1bfc5"
+        },
+        {
+          "path": "examples/chibi-stickers/export/chibi-stickers_3.png",
+          "sha256": "c460e6c08093f5c83e3e527518b1fae8191b600d9064c08f7fc5c3248347eb96"
+        },
+        {
+          "path": "examples/chibi-stickers/export/chibi-stickers_4.png",
+          "sha256": "61af121670355c66fd5fd3f7fa74cf1cb913236fe8e7a5903f2dde187de223a9"
+        },
+        {
+          "path": "examples/chibi-stickers/export/chibi-stickers_5.png",
+          "sha256": "48a88eea4140bef9c187893618543b6e8bfdeb6af35744a21b646558eb45cd85"
+        },
+        {
+          "path": "examples/chibi-stickers/export/chibi-stickers_6.png",
+          "sha256": "318456c4b2e358f06690c906b325124eec52ce3587b4944ed3c6c9dfe293f697"
+        },
+        {
+          "path": "examples/chibi-stickers/export/chibi-stickers_7.png",
+          "sha256": "6c9bde7f04757e48d4ff8555bbc240c91e07ed747f97610899283912e8eeb199"
+        },
+        {
+          "path": "examples/chibi-stickers/export/chibi-stickers_8.png",
+          "sha256": "2a02271ac51d44586c075a1169b12e20897a37f437c82a5fecc0152c8b9eaa30"
+        },
+        {
+          "path": "examples/chibi-stickers/export/chibi-stickers_9.png",
+          "sha256": "5c257c82008b137252c55800de12ff7023fe7288fbc2b69121a4ce200737c890"
+        },
+        {
+          "path": "examples/chibi-stickers/export/chibi-stickers_10.png",
+          "sha256": "97af1a8c3925e0bd3dc2a85b577287a269c260c6cc1d8058d2f15a8825b8588e"
+        },
+        {
+          "path": "examples/chibi-stickers/export/chibi-stickers_11.png",
+          "sha256": "c1cde5ab1f8922f50f3eef5be52d603b1a4cf93fb152337f2309a9483ae5f4b4"
+        }
+      ]
     },
     {
       "version": "4.3",
@@ -939,7 +1394,13 @@
       "atlas": {
         "path": "examples/diamond/export/diamond.atlas",
         "sha256": "e7add52d9a6811997a487d56b48d98c8722a8c95d12b1b11c4c70bb9fc762c8f"
-      }
+      },
+      "images": [
+        {
+          "path": "examples/diamond/export/diamond.png",
+          "sha256": "1c645ddf719e925c4e000c4759228f9ea20ff52f7f9a2fc0b0424b87f9eaa96b"
+        }
+      ]
     }
   ]
 }

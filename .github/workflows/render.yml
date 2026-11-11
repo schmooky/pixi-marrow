@@ -1,0 +1,67 @@
+name: Render check
+
+# Draws the fixture rigs with pixi-marrow and with the official Pixi runtime in headless Chrome and
+# compares the pixels (scripts/check-render.mjs, pnpm check:render).
+#
+# This is not a step of CI. The runners have no GPU, so Chrome draws WebGL2 in software, and the
+# tolerances of the check were measured on a GPU. Until some runs here have shown that they hold,
+# the check runs on demand and once a week, and blocks no PR.
+#
+# The job runs on windows, where Chrome draws on WARP, the software Direct3D 11 that the render
+# check of pixi-silk runs on. It asks for WebGL2 only.
+#
+# There is no ubuntu job. Chrome on Linux draws on SwiftShader, and there the comparison is too
+# noisy for these tolerances. Measured on macOS with the flags --use-gl=angle
+# --use-angle=swiftshader --enable-unsafe-swiftshader: two official instances still give the same
+# picture, but ours against official differs by up to 20 where a GPU gives 4, and up to 1% of the
+# pixels of a frame are over 1. One sprite of a frame sits a fraction of a pixel away, which a
+# coarse vertex grid would explain.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 4 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: render-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  render:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Fixture cache
+        uses: actions/cache@v6
+        with:
+          path: fixtures/.cache
+          key: fixtures-${{ runner.os }}-${{ hashFiles('fixtures/manifest.json') }}
+
+      - name: Build library
+        run: pnpm build
+
+      - name: Render check on Direct3D 11 (WARP)
+        # downloads missing fixtures first. CHROME_ARGS replaces the launch flags of the check
+        env:
+          CHROME_PATH: C:\Program Files\Google\Chrome\Application\chrome.exe
+          CHROME_ARGS: --use-gl=angle --use-angle=d3d11-warp --ignore-gpu-blocklist --enable-gpu
+        run: pnpm check:render --renderer=webgl
+
+      - name: Images of the failing cases and of one frame per rig
+        uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: render-shots
+          path: .shots/render/
+          include-hidden-files: true
+          if-no-files-found: ignore

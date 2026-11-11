@@ -1,5 +1,5 @@
 /** Why a {@link MarrowError} was thrown. Stable across releases, so code can branch on it. */
-export type MarrowErrorCode = 'invalid-data' | 'unsupported-version' | 'unsupported-feature';
+export type MarrowErrorCode = 'invalid-data' | 'unsupported-version' | 'unsupported-feature' | 'unknown-name';
 
 /** What a {@link MarrowError} carries besides its message. */
 export interface MarrowErrorDetails {
