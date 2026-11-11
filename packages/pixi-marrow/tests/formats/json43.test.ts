@@ -5,6 +5,7 @@ import { differences } from '../parity/compare';
 import { officialModel } from '../parity/model-official';
 
 const f32 = (...values: number[]): Float32Array => Float32Array.from(values);
+const f64 = (...values: number[]): Float64Array => Float64Array.from(values);
 const i16 = (...values: number[]): Int16Array => Int16Array.from(values);
 
 /** An atlas with every region of the skeleton below. The official core needs it to load the file. */
@@ -16,7 +17,7 @@ const RIG = `{
 "skeleton": { "spine": "4.3.39-beta", "hash": "h", "x": 1, "y": 2, "width": 3, "height": 4 },
 "bones": [
     { "name": "root" },
-    { "name": "arm", "parent": "root", "length": 5, "x": 1, "y": 2, "rotation": 90, "scaleX": 2, "shearY": 5,
+    { "name": "arm", "parent": "root", "length": 5.5, "x": 1.1, "y": 2, "rotation": 90, "scaleX": 2, "shearY": 5,
       "inherit": "noScale", "skin": true },
     { "name": "hand", "parent": "arm", "inherit": "OnlyTranslation" }
 ],
@@ -29,7 +30,7 @@ const RIG = `{
 ],
 "constraints": [
     { "type": "ik", "name": "reach", "bones": ["arm"], "target": "hand", "scaleY": "uniform", "bendPositive": false },
-    { "type": "transform", "name": "copy", "bones": ["hand"], "source": "root", "x": 2, "mixX": 0.5,
+    { "type": "transform", "name": "copy", "bones": ["hand"], "source": "root", "x": 2.2, "mixX": 0.5,
       "properties": { "rotate": { "offset": 1, "to": { "x": { "max": 3 }, "y": {} } }, "x": {} } },
     { "type": "path", "name": "rail", "bones": ["arm"], "slot": "front", "spacingMode": "percent" },
     { "type": "physics", "name": "sway", "bone": "hand", "fps": 30, "mass": 4, "scaleY": "volume" },
@@ -48,7 +49,7 @@ const RIG = `{
             "copy": { "type": "linkedmesh", "source": "quad", "width": 7, "height": 8 }
         },
         "front": {
-            "rail": { "type": "path", "vertexCount": 6, "lengths": [4], "closed": true,
+            "rail": { "type": "path", "vertexCount": 6, "lengths": [4.4], "closed": true,
                       "vertices": [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5] },
             "pin": { "type": "point", "x": 1, "rotation": 30 },
             "mask": { "type": "clipping", "end": "top", "vertexCount": 3, "vertices": [0, 0, 1, 0, 1, 1], "convex": true },
@@ -135,11 +136,13 @@ describe('importJson43', () => {
         expect(model).toMatchObject({ version: '4.3', editorVersion: '4.3.39-beta', hash: 'h', x: 1, y: 2, width: 3 });
         expect(model.referenceScale).toBe(100);
         expect(model.bones.parents).toEqual(i16(-1, 0, 1));
-        expect(model.bones.setup.slice(7, 14)).toEqual(f32(1, 2, 90, 2, 1, 0, 5));
+        // setup values keep the full precision of the file
+        expect(model.bones.setup.slice(7, 14)).toEqual(f64(1.1, 2, 90, 2, 1, 0, 5));
+        expect(model.bones.lengths).toEqual(f64(0, 5.5, 0));
         expect(model.bones.inherit).toEqual(Uint8Array.of(0, 3, 1));
         expect(model.bones.skinRequired).toEqual(Uint8Array.of(0, 1, 0));
-        expect(model.slots.colors.slice(0, 8)).toEqual(f32(1, 1, 1, 1, 1, 0, 0, 128 / 255));
-        expect(model.slots.darkColors).toEqual(f32(0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0));
+        expect(model.slots.colors.slice(0, 8)).toEqual(f64(1, 1, 1, 1, 1, 0, 0, 128 / 255));
+        expect(model.slots.darkColors).toEqual(f64(0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0));
         expect(model.slots.hasDark).toEqual(Uint8Array.of(0, 1, 0, 0));
         expect(model.slots.attachments).toEqual([null, 'box', null, null]);
         expect(model.slots.blendModes).toEqual(Uint8Array.of(0, 3, 0, 0));
@@ -153,7 +156,7 @@ describe('importJson43', () => {
         expect(reach).toMatchObject({ type: 'ik', bones: i16(1), target: 2, scaleYMode: 'uniform', bendDirection: -1 });
         // a mix is 0 unless a mapping writes its property. The Y mix falls back to the X mix
         expect(copy).toMatchObject({ mixRotate: 0, mixX: 0.5, mixY: 0.5, mixScaleX: 0, mixScaleY: 0, mixShearY: 0 });
-        expect(copy).toMatchObject({ offsets: f32(0, 2, 0, 0, 0, 0), localSource: false, clamp: false });
+        expect(copy).toMatchObject({ offsets: f64(0, 2.2, 0, 0, 0, 0), localSource: false, clamp: false });
         // the source property `x` feeds nothing, so it is dropped
         expect(copy).toMatchObject({
             properties: [
@@ -203,11 +206,16 @@ describe('importJson43', () => {
         // the official parser gives a linked mesh the size of its source
         expect(copy).toMatchObject({ parent: source, timelineAttachment: source, width: 0, height: 0, hullLength: 0 });
         expect(copy).toMatchObject({ vertices: f32(), regionUVs: f32(), triangles: Uint16Array.of(), bones: null });
-        expect(frames).toMatchObject({ type: 'region', name: 'walk', path: 'walk/frame', color: f32(1, 1, 1, 1) });
+        expect(frames).toMatchObject({ type: 'region', name: 'walk', path: 'walk/frame', color: f64(1, 1, 1, 1) });
         expect(frames).toMatchObject({ scaleX: 1, sequence: { count: 4, start: 1, digits: 2, setupIndex: 0 } });
         expect(mask).toMatchObject({ type: 'clipping', endSlot: 3, convex: true, inverse: false });
         expect(pin).toEqual({ type: 'point', name: 'pin', x: 1, y: 0, rotation: 30 });
-        expect(rail).toMatchObject({ closed: true, constantSpeed: true, lengths: f32(4, 0), worldVerticesLength: 12 });
+        expect(rail).toMatchObject({
+            closed: true,
+            constantSpeed: true,
+            lengths: f64(4.4, 0),
+            worldVerticesLength: 12,
+        });
         // `far` has its own timelines, so its source lists no slot for it
         expect(far).toMatchObject({ parent: { skin: 0, slot: 1, name: 'skinned' }, timelineAttachment: null });
     });

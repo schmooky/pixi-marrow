@@ -96,7 +96,7 @@ function readTransform41(state: ImportState, name: string): TransformConstraintD
     const source = readIndex(state, state.boneCount, 'bone');
     const local = input.readBoolean();
     const relative = input.readBoolean();
-    const offsets = new Float32Array(6);
+    const offsets = new Float64Array(6);
 
     for (let i = 0; i < 6; i++) offsets[i] = input.readFloat();
     const mixRotate = input.readFloat();
@@ -132,7 +132,7 @@ function readTransform42(state: ImportState, name: string): TransformConstraintD
     const bones = readBoneList(state);
     const source = readIndex(state, state.boneCount, 'bone');
     const flags = input.readByte();
-    const offsets = new Float32Array(6);
+    const offsets = new Float64Array(6);
 
     // rotation, x, y, scaleX and scaleY sit behind bits 8 to 128 of the first byte
     for (let i = 0; i < 5; i++) offsets[i] = optional(input, (flags & (8 << i)) !== 0, 0);

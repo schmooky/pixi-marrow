@@ -115,7 +115,7 @@ function readTransform(
         additive: map.additive ?? false,
         clamp: map.clamp ?? false,
         properties,
-        offsets: Float32Array.of(
+        offsets: Float64Array.of(
             map.rotation ?? 0,
             map.x ?? 0,
             map.y ?? 0,

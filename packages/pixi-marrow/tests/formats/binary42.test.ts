@@ -291,11 +291,26 @@ describe.each(['4.1', '4.2'] as const)('importBinary42 with a %s file', (version
         expect(model.skins.map((skin) => skin.name)).toEqual(['default', 'alt']);
         expect(model.animations[0]?.timelines.map((timeline) => timeline.kind)).toContain('deform');
     });
+
+    it('keeps setup values as the 64-bit numbers the official core holds', async () => {
+        const model = await importSkeleton(SYNTHETIC[version]());
+        const quad = model.skins[0]?.attachments.find((entry) => entry.name === 'quad')?.attachment;
+        const mesh = model.skins[0]?.attachments.find((entry) => entry.name === 'mesh')?.attachment;
+
+        expect(model.bones.setup).toBeInstanceOf(Float64Array);
+        expect(model.bones.lengths).toEqual(Float64Array.of(10, 20));
+        // a color byte divided by 255 in 64-bit arithmetic, without rounding to 32 bits
+        expect(model.slots.colors[0]).toBe(0x11 / 255);
+        expect(model.slots.darkColors).toEqual(Float64Array.of(0, 0, 0, 0x11 / 255, 0x22 / 255, 0x33 / 255));
+        expect(quad).toMatchObject({ type: 'region', color: Float64Array.of(1, 0, 0, 0x80 / 255) });
+        expect(mesh).toMatchObject({ type: 'mesh', color: Float64Array.of(1, 1, 1, 1) });
+        expect(model.constraints[1]).toMatchObject({ type: 'transform', offsets: expect.any(Float64Array) });
+    });
 });
 
-/** The sections of an animation, in file order. 4.1 files have no physics section. */
 /** The 4.2 flag byte of a mesh that stores a sequence. */
 const MESH_WITH_SEQUENCE = 2 | 64;
+/** The sections of an animation, in file order. 4.1 files have no physics section. */
 const SECTIONS = ['slot', 'bone', 'ik', 'transform', 'path', 'physics', 'attachment', 'drawOrder', 'event'];
 
 /** A file up to the inherit mode of its first bone. It has no strings. */

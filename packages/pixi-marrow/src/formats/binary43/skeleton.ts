@@ -57,8 +57,8 @@ export function readBones(input: BinaryInput, nonessential: boolean): BoneTable 
     const count = input.readInt(true);
     const names: string[] = [];
     const parents = new Int16Array(count);
-    const setup = new Float32Array(count * BONE_SETUP_STRIDE);
-    const lengths = new Float32Array(count);
+    const setup = new Float64Array(count * BONE_SETUP_STRIDE);
+    const lengths = new Float64Array(count);
     const inherit = new Uint8Array(count);
     const skinRequired = new Uint8Array(count);
 
@@ -96,8 +96,8 @@ export function readSlots(input: BinaryInput, boneCount: number, nonessential: b
     const count = input.readInt(true);
     const names: string[] = [];
     const bones = new Int16Array(count);
-    const colors = new Float32Array(count * 4);
-    const darkColors = new Float32Array(count * 3);
+    const colors = new Float64Array(count * 4);
+    const darkColors = new Float64Array(count * 3);
     const hasDark = new Uint8Array(count);
     const attachments: (string | null)[] = [];
     const blendModes = new Uint8Array(count);

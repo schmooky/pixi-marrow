@@ -7,7 +7,7 @@ Instructions for AI coding agents and for people working in this repo. Read it b
 pixi-marrow is a Spine runtime for PixiJS v8. It has its own pose core and its own render path, and it plays Spine 4.1, 4.2 and 4.3 skeletons. The plan, the classes and the milestones are in `docs/DESIGN.md`.
 
 <!-- facts:status -->
-Pre-release, milestone M1. Skeleton and atlas files of Spine 4.1, 4.2 and 4.3 import into a model that matches the official runtimes. Nothing renders yet.
+Pre-release, milestone M2a. Skeletons of Spine 4.1, 4.2 and 4.3 import and play without a renderer, and their poses equal the official runtimes exactly. Constraints are not solved yet. Nothing renders yet.
 <!-- /facts:status -->
 
 ```
@@ -27,8 +27,8 @@ Entry points:
 <!-- facts:entry-points -->
 | Import | Holds |
 |---|---|
-| `pixi-marrow` | `MarrowError`. The display object arrives with milestone M2. |
-| `pixi-marrow/core` | `importSkeleton`, `importAtlas`, `describeSkeleton`, `sniffSkeleton` and the model types. No Pixi. Runs in Node. |
+| `pixi-marrow` | `MarrowError`. The display object arrives with milestone M2b. |
+| `pixi-marrow/core` | `importSkeleton`, `importAtlas`, `createPoseEngine`, the geometry functions, `describeSkeleton` and the model types. No Pixi. Runs in Node. |
 | `pixi-marrow/optimize` | `generateNames` and the `pixi-marrow` command line tool (`info`, `typegen`). Runs in Node. |
 <!-- /facts:entry-points -->
 
@@ -56,7 +56,9 @@ A file imports only from its own layer or the layers above it in this table. `pn
 | api | `src/api` | The display object and handles |
 | features | `src/bake`, `src/debug`, `src/perf`, `src/optimize` | Optional entry points |
 
-`base`, `model`, `formats` and `optimize` have files today. The others arrive with their milestones.
+`base`, `model`, `formats`, `pose`, `geometry` and `optimize` have files today. The others arrive with their milestones.
+
+`src/pose` has two engines behind one interface: `legacy` plays 4.1 and 4.2 skeletons, `v43` plays 4.3 skeletons. The official runtimes mix animations differently, so they do not share a player.
 
 `src/formats` has one folder per reader: `json42` and `binary42` read 4.1 and 4.2 files, `json43` and `binary43` read 4.3 files. `shared` holds what they have in common.
 
@@ -87,6 +89,7 @@ A file imports only from its own layer or the layers above it in this table. `pn
 | Add your own fixture | Put the skeleton and its atlas into `fixtures/local/`. |
 | Add an error code | Extend `MarrowErrorCode` in `src/base/errors.ts` and throw it with a `fix`. |
 | Accept a size change | Run `pnpm size:update`. |
+| Accept a change in bytes per instance | Run `pnpm memory:update`. |
 
 ## 6. Before you say done
 

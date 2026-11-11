@@ -3,7 +3,7 @@
 A Spine runtime for PixiJS v8 with its own pose core. It plays Spine 4.1, 4.2 and 4.3 skeletons.
 
 <!-- facts:status -->
-Pre-release, milestone M1. Skeleton and atlas files of Spine 4.1, 4.2 and 4.3 import into a model that matches the official runtimes. Nothing renders yet.
+Pre-release, milestone M2a. Skeletons of Spine 4.1, 4.2 and 4.3 import and play without a renderer, and their poses equal the official runtimes exactly. Constraints are not solved yet. Nothing renders yet.
 <!-- /facts:status -->
 
 The plan is in [docs/DESIGN.md](docs/DESIGN.md).
@@ -21,8 +21,8 @@ The plan is in [docs/DESIGN.md](docs/DESIGN.md).
 <!-- facts:entry-points -->
 | Import | Holds |
 |---|---|
-| `pixi-marrow` | `MarrowError`. The display object arrives with milestone M2. |
-| `pixi-marrow/core` | `importSkeleton`, `importAtlas`, `describeSkeleton`, `sniffSkeleton` and the model types. No Pixi. Runs in Node. |
+| `pixi-marrow` | `MarrowError`. The display object arrives with milestone M2b. |
+| `pixi-marrow/core` | `importSkeleton`, `importAtlas`, `createPoseEngine`, the geometry functions, `describeSkeleton` and the model types. No Pixi. Runs in Node. |
 | `pixi-marrow/optimize` | `generateNames` and the `pixi-marrow` command line tool (`info`, `typegen`). Runs in Node. |
 <!-- /facts:entry-points -->
 

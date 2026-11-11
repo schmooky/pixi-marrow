@@ -73,8 +73,9 @@ export function readBones(state: ImportState): BoneTable {
     const count = readCount(state, 'bones');
     const names: string[] = [];
     const parents = new Int16Array(count);
-    const setup = new Float32Array(count * BONE_SETUP_STRIDE);
-    const lengths = new Float32Array(count);
+    // 64-bit, like the numbers the official bone data holds
+    const setup = new Float64Array(count * BONE_SETUP_STRIDE);
+    const lengths = new Float64Array(count);
     const inherit = new Uint8Array(count);
     const skinRequired = new Uint8Array(count);
 
@@ -118,8 +119,8 @@ export function readSlots(state: ImportState): SlotTable {
     const count = readCount(state, 'slots');
     const names: string[] = [];
     const bones = new Int16Array(count);
-    const colors = new Float32Array(count * 4);
-    const darkColors = new Float32Array(count * 3);
+    const colors = new Float64Array(count * 4);
+    const darkColors = new Float64Array(count * 3);
     const hasDark = new Uint8Array(count);
     const attachments: (string | null)[] = [];
     const blendModes = new Uint8Array(count);

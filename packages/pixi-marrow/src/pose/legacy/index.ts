@@ -1,0 +1,139 @@
+import { MarrowError } from '../../base/errors';
+import type { SkeletonModel } from '../../model/model';
+import type { PoseEngine, PoseEvent, TrackEntry, TrackFields } from '../engine';
+import { createPoseState, type PoseState } from '../state';
+import { applyTracks } from './apply';
+import { configureEntry, LegacyEntry } from './entry';
+import {
+    addAnimation,
+    addEmptyAnimation,
+    clearTrack,
+    clearTracks,
+    LegacyPlayer,
+    setAnimation,
+    setEmptyAnimation,
+    setMix,
+} from './player';
+import { clipOf, type Rig, rigOf } from './rig';
+import { initPose, setBonesToSetupPose, setSkin, setSlotsToSetupPose } from './skeleton';
+import { updateTracks } from './update';
+import { updateWorldTransforms } from './world';
+
+/** The pose engine for 4.1 and 4.2: the official `AnimationState` and `Skeleton` of those versions in one object. */
+class LegacyEngine implements PoseEngine {
+    readonly state: PoseState;
+    private readonly rig: Rig;
+    private readonly player: LegacyPlayer;
+
+    constructor(rig: Rig, pose: PoseState) {
+        this.rig = rig;
+        this.state = pose;
+        this.player = new LegacyPlayer(rig, pose);
+    }
+
+    get timeScale(): number {
+        return this.player.timeScale;
+    }
+
+    set timeScale(value: number) {
+        this.player.timeScale = value;
+    }
+
+    get defaultMix(): number {
+        return this.player.defaultMix;
+    }
+
+    set defaultMix(value: number) {
+        this.player.defaultMix = value;
+    }
+
+    setMix(from: number, to: number, duration: number): void {
+        setMix(this.player, from, to, duration);
+    }
+
+    setAnimation(track: number, animation: number, loop: boolean): TrackEntry {
+        return setAnimation(this.player, track, clipOf(this.rig, animation), loop);
+    }
+
+    addAnimation(track: number, animation: number, loop: boolean, delay: number): TrackEntry {
+        return addAnimation(this.player, track, clipOf(this.rig, animation), loop, delay);
+    }
+
+    setEmptyAnimation(track: number, mixDuration: number): TrackEntry {
+        return setEmptyAnimation(this.player, track, mixDuration);
+    }
+
+    addEmptyAnimation(track: number, mixDuration: number, delay: number): TrackEntry {
+        return addEmptyAnimation(this.player, track, mixDuration, delay);
+    }
+
+    configure(entry: TrackEntry, fields: TrackFields): void {
+        if (!(entry instanceof LegacyEntry)) {
+            throw new MarrowError('invalid-data', 'The track entry was not made by a 4.1 or 4.2 pose engine.', {
+                fix: 'Pass an entry that setAnimation or addAnimation of this engine returned.',
+            });
+        }
+        configureEntry(entry, fields, this.rig.v41);
+    }
+
+    clearTrack(track: number): void {
+        clearTrack(this.player, track);
+    }
+
+    clearTracks(): void {
+        clearTracks(this.player);
+    }
+
+    setSkin(skin: number): void {
+        setSkin(this.rig, this.state, skin);
+    }
+
+    setupPose(): void {
+        setBonesToSetupPose(this.rig, this.state);
+        setSlotsToSetupPose(this.rig, this.state);
+    }
+
+    setupPoseBones(): void {
+        setBonesToSetupPose(this.rig, this.state);
+    }
+
+    setupPoseSlots(): void {
+        setSlotsToSetupPose(this.rig, this.state);
+    }
+
+    update(dt: number): void {
+        updateTracks(this.player, dt);
+        // the skeleton time exists from 4.2 on
+        if (!this.rig.v41) this.state.time += dt;
+        applyTracks(this.player);
+        updateWorldTransforms(this.rig.model.bones, this.state, this.rig.v41);
+    }
+
+    takeEvents(): PoseEvent[] {
+        const events = this.player.events;
+
+        this.player.events = [];
+
+        return events;
+    }
+}
+
+/**
+ * Creates the pose engine for a Spine 4.1 or 4.2 skeleton. It is a port of the official 4.2
+ * runtime, with the 4.1 formulas where the two differ. The pose starts as the setup pose without a skin.
+ *
+ * Constraints are not applied and timelines that animate constraints are skipped.
+ *
+ * @example
+ * const engine = createLegacyEngine(await importSkeleton(bytes));
+ * engine.setAnimation(0, 0, true);
+ * engine.update(1 / 60);
+ */
+export function createLegacyEngine(model: SkeletonModel): PoseEngine {
+    const rig = rigOf(model);
+    const pose = createPoseState(model);
+
+    initPose(rig, pose);
+
+    return new LegacyEngine(rig, pose);
+}

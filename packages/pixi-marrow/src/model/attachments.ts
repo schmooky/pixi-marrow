@@ -48,7 +48,7 @@ export interface RegionAttachmentData {
     width: number;
     height: number;
     /** r, g, b, a. */
-    color: Float32Array;
+    color: Float64Array;
     sequence: SequenceData | null;
 }
 
@@ -64,7 +64,7 @@ export interface MeshAttachmentData extends VertexData {
     /** The texture region name in the atlas. */
     path: string;
     /** r, g, b, a. */
-    color: Float32Array;
+    color: Float64Array;
     /** The size of the image in the editor. 0 when the file does not store it. */
     width: number;
     height: number;
@@ -99,7 +99,7 @@ export interface PathAttachmentData extends VertexData {
     closed: boolean;
     constantSpeed: boolean;
     /** The length up to the end of each curve. */
-    lengths: Float32Array;
+    lengths: Float64Array;
 }
 
 /** A point and a rotation that follow a bone. */

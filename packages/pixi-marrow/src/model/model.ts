@@ -9,6 +9,10 @@ import type { TimelineData } from './timelines';
  * The model is a faithful import, not a conversion. A 4.1 file keeps its 4.1 constraint fields,
  * and the pose core decides later how to solve them. Lengths are in file units, without a scale.
  *
+ * Setup values that the official runtime keeps as 64-bit numbers are stored in `Float64Array`,
+ * so a pose can equal the official one exactly. Bulk vertex and timeline data is 32-bit, as in the
+ * official runtime.
+ *
  * Editor-only data is not imported: bone colors and icons, mesh edges, skin colors, colors of
  * attachments that are never drawn, and the image and audio paths.
  */
@@ -60,8 +64,8 @@ export interface BoneTable {
     /** The parent bone index, or -1 for a root bone. */
     parents: Int16Array;
     /** The setup pose. Per bone, in this order, x, y, rotation, scaleX, scaleY, shearX, shearY. */
-    setup: Float32Array;
-    lengths: Float32Array;
+    setup: Float64Array;
+    lengths: Float64Array;
     /** An index into {@link INHERIT_MODES}. 4.1 calls this the transform mode. */
     inherit: Uint8Array;
     /** 1 when the bone is active only while a skin that lists it is active. */
@@ -75,9 +79,9 @@ export interface SlotTable {
     /** The bone index of each slot. */
     bones: Int16Array;
     /** The setup color. Per slot r, g, b, a. */
-    colors: Float32Array;
+    colors: Float64Array;
     /** The setup dark color for two color tint. Per slot r, g, b. Read it only where hasDark is 1. */
-    darkColors: Float32Array;
+    darkColors: Float64Array;
     hasDark: Uint8Array;
     /** The name of the setup attachment of each slot, or null. */
     attachments: (string | null)[];

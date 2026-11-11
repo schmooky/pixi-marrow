@@ -58,8 +58,8 @@ export interface AttachmentSite {
     user: string;
 }
 
-function readColor(hex: string | undefined): Float32Array {
-    const color = Float32Array.of(1, 1, 1, 1);
+function readColor(hex: string | undefined): Float64Array {
+    const color = Float64Array.of(1, 1, 1, 1);
 
     if (hex) writeHexColor(hex, color, 0);
 
@@ -179,7 +179,7 @@ function readPath(map: JsonAttachment, name: string, site: AttachmentSite): Path
         throw invalid(`${user} has ${vertexCount} vertices. A path has three vertices per point.`);
     }
     // the official parser makes one length per curve, and the list grows when the file holds more
-    const lengths = new Float32Array(Math.max(vertexCount / 3, source.length));
+    const lengths = new Float64Array(Math.max(vertexCount / 3, source.length));
 
     lengths.set(source);
 

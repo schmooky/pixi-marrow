@@ -62,18 +62,10 @@ const ENTRIES: Record<TimelineKind, number> = {
     slider: 2,
     sliderMix: 2,
 };
-/** The official classes of these kinds do not extend CurveTimeline. */
-const UNCURVED = new Set<TimelineKind>([
-    'attachment',
-    'sequence',
-    'event',
-    'drawOrder',
-    'drawOrderFolder',
-    'inherit',
-    'physicsConstraintReset',
-]);
 const SLOT_KINDS = new Set<TimelineKind>(['rgba', 'rgb', 'alpha', 'rgba2', 'rgb2', 'attachment', 'deform', 'sequence']);
 const NO_TARGET = new Set<TimelineKind>(['event', 'drawOrder', 'drawOrderFolder']);
+/** The official classes of these kinds do not extend CurveTimeline. */
+const UNCURVED = new Set<TimelineKind>([...NO_TARGET, 'attachment', 'sequence', 'inherit', 'physicsConstraintReset']);
 /** The floats of one bezier curve in an official `curves` array. */
 const BEZIER_SIZE = 18;
 /** The order of the constraint kinds in the one list of a 4.1 or 4.2 model. */
@@ -393,12 +385,12 @@ describe('the official timeline classes', () => {
 });
 
 /** A hand-written 4.3 skeleton with the slots a, b and c on one bone and the given default skin. */
-function synthetic(attachments: object): RigFiles {
+function synthetic(attachments: object, more: object = {}): RigFiles {
     const slots = ['a', 'b', 'c'].map((name) => ({ name, bone: 'root' }));
     const skins = [{ name: 'default', attachments }];
 
     return {
-        skeleton: JSON.stringify({ skeleton: { spine: '4.3.00' }, bones: [{ name: 'root' }], slots, skins }),
+        skeleton: JSON.stringify({ skeleton: { spine: '4.3.00' }, bones: [{ name: 'root' }], slots, skins, ...more }),
         atlas: ['page.png', 'size: 8,8', 'filter: Linear,Linear', 'm', 'bounds: 0,0,4,4', ''].join('\n'),
     };
 }
@@ -436,6 +428,27 @@ describe('the timeline slots of a 4.3 attachment', () => {
         const files = synthetic({ a: { r: region }, b: { l: linked('r', { sequence: { count: 0 } }) } });
 
         expect(() => officialModel('4.3', files)).toThrow('timeline slots');
+    });
+});
+
+describe('the 64-bit setup values of a JSON skeleton', () => {
+    it('are the official numbers, not rounded to 32 bits', () => {
+        // 0.1 and 0.2 are no 32-bit floats. The color byte 33 is 51 / 255, which is 0.2.
+        const bones = [{ name: 'root', x: 0.1, length: 0.1 }];
+        const slots = [{ name: 'a', bone: 'root', color: '33333333', dark: '333333' }];
+        const constraints = [{ type: 'transform', name: 't', bones: ['root'], source: 'root', x: 0.1 }];
+        const path = { type: 'path', vertexCount: 3, vertices: [0, 0, 1, 1, 2, 2], lengths: [0.1] };
+        const skin = { a: { p: path, r: { path: 'm', width: 4, height: 4, color: '33333333' } } };
+        const model = officialModel('4.3', synthetic(skin, { bones, slots, constraints }));
+        const fifths = Float64Array.of(0.2, 0.2, 0.2, 0.2);
+        const attachments = model.skins.flatMap((entries) => entries.attachments.map((entry) => entry.attachment));
+
+        expect(model.bones.setup[0]).toBe(0.1);
+        expect(model.bones.lengths).toEqual(Float64Array.of(0.1));
+        expect(model.slots.colors).toEqual(fifths);
+        expect(model.slots.darkColors).toEqual(fifths.slice(1));
+        expect(model.constraints).toMatchObject([{ offsets: Float64Array.of(0, 0.1, 0, 0, 0, 0) }]);
+        expect(attachments).toMatchObject([{ lengths: Float64Array.of(0.1) }, { color: fifths }]);
     });
 });
 

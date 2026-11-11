@@ -70,8 +70,8 @@ export function readBones(root: JsonRoot, version: Json42Version): BoneSet {
         count,
         names: [],
         parents: new Int16Array(count),
-        setup: new Float32Array(count * BONE_SETUP_STRIDE),
-        lengths: new Float32Array(count),
+        setup: new Float64Array(count * BONE_SETUP_STRIDE),
+        lengths: new Float64Array(count),
         inherit: new Uint8Array(count),
         skinRequired: new Uint8Array(count),
     };
@@ -117,13 +117,13 @@ export function readSlots(root: JsonRoot, bones: NameIndex, version: Json42Versi
 
     requireAtMost(count, MAX_INDEX, 'The number of slots');
     const index = new Map<string, number>();
-    const dark = new Float32Array(4);
+    const dark = new Float64Array(4);
     const table: SlotTable = {
         count,
         names: [],
         bones: new Int16Array(count),
-        colors: new Float32Array(count * 4).fill(1),
-        darkColors: new Float32Array(count * 3),
+        colors: new Float64Array(count * 4).fill(1),
+        darkColors: new Float64Array(count * 3),
         hasDark: new Uint8Array(count),
         attachments: [],
         blendModes: new Uint8Array(count),
