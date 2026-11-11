@@ -1,0 +1,3 @@
+#!/usr/bin/env sh
+# lint, format and import order of the staged files only (fix with: pnpm lint:fix)
+pnpm exec biome check --staged --no-errors-on-unmatched --files-ignore-unknown=true

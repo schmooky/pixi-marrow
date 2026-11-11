@@ -1,0 +1,11 @@
+{
+  // The library source as tsdown compiles it: oxc emits each module's .d.ts on its own,
+  // which needs explicit types on everything exported (isolatedDeclarations).
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "isolatedDeclarations": true,
+    "declaration": true,
+    "stripInternal": true
+  },
+  "include": ["src"]
+}

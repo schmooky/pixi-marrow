@@ -1,0 +1,20 @@
+{
+  "everything": {
+    "gzip": 184
+  },
+  "core (everything)": {
+    "gzip": 3193
+  },
+  "core (sniffSkeleton)": {
+    "gzip": 806
+  },
+  "core (importSkeleton)": {
+    "gzip": 1157
+  },
+  "core (importAtlas)": {
+    "gzip": 1251
+  },
+  "optimize (generateNames)": {
+    "gzip": 537
+  }
+}

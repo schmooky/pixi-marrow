@@ -1,0 +1,116 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true,
+    "defaultBranch": "main"
+  },
+  "files": {
+    "includes": ["**", "!!**/dist", "!!**/coverage", "!!fixtures/.cache", "!!fixtures/local", "!!.claude"]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 4,
+    "lineWidth": 120,
+    "lineEnding": "lf"
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "semicolons": "always",
+      "trailingCommas": "all",
+      "arrowParentheses": "always"
+    }
+  },
+  "json": {
+    "formatter": {
+      "indentWidth": 2
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "correctness": {
+        "noUndeclaredDependencies": "error"
+      },
+      "suspicious": {
+        "noExplicitAny": "error",
+        "useIterableCallbackReturn": {
+          "level": "error",
+          "options": { "checkForEach": false }
+        }
+      },
+      "style": {
+        "noNonNullAssertion": "error",
+        "useNodejsImportProtocol": "error"
+      },
+      "complexity": {
+        "noExcessiveCognitiveComplexity": {
+          "level": "error",
+          "options": { "maxAllowedComplexity": 20 }
+        }
+      }
+    }
+  },
+  "assist": {
+    "enabled": true,
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["packages/pixi-marrow/src/**"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noConsole": {
+              "level": "error",
+              "options": { "allow": ["warn", "error"] }
+            }
+          },
+          "performance": {
+            "noReExportAll": "error",
+            "noNamespaceImport": "error"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/pixi-marrow/src/formats/**"],
+      "linter": {
+        "rules": {
+          "complexity": {
+            "noExcessiveCognitiveComplexity": {
+              "level": "error",
+              "options": { "maxAllowedComplexity": 35 }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["**/tests/**", "**/*.test.ts"],
+      "linter": {
+        "domains": {
+          "test": "recommended"
+        }
+      }
+    },
+    {
+      "includes": ["scripts/**"],
+      "linter": {
+        "rules": {
+          "complexity": {
+            "noExcessiveCognitiveComplexity": "off"
+          }
+        }
+      }
+    }
+  ]
+}

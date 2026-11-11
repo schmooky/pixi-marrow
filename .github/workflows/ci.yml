@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Lint and format (Biome)
+        # lint rules, formatting and import order. Annotates the PR diff.
+        run: pnpm exec biome ci --reporter=github --reporter=default .
+
+      - name: Writing style
+        # plain ASCII punctuation, no filler words, short sentences in the docs
+        run: pnpm lint:prose
+
+      - name: Commit message lint
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        run: pnpm exec commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }} --verbose
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Source rules
+        # layer imports, file size, casts
+        run: pnpm check:source
+
+      - name: Generated facts are current
+        run: pnpm check:facts
+
+      - name: Fixture cache
+        uses: actions/cache@v6
+        with:
+          path: fixtures/.cache
+          key: fixtures-${{ hashFiles('fixtures/manifest.json') }}
+
+      - name: Test with coverage
+        # downloads missing fixtures first, then runs unit tests and the parity suite
+        run: pnpm test:coverage
+
+      - name: Build library
+        run: pnpm build
+
+      - name: Public API snapshot
+        run: pnpm check:api
+
+      - name: Publish contents
+        run: pnpm check:publish-contents
+
+      - name: Bundle size
+        run: pnpm size:check
+
+      - name: Dead code
+        run: pnpm check:dead
+
+  changeset-gate:
+    # Library source changed but no changeset added. Escape hatch: the `skip-changeset` label.
+    if: >-
+      github.event_name == 'pull_request'
+      && !contains(github.event.pull_request.labels.*.name, 'skip-changeset')
+      && github.head_ref != 'changeset-release/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Require a changeset for library changes
+        run: |
+          base="${{ github.event.pull_request.base.sha }}"
+          head="${{ github.event.pull_request.head.sha }}"
+          if git diff --name-only "$base" "$head" -- 'packages/pixi-marrow/src/**' 'packages/pixi-marrow/package.json' | grep -q .; then
+            added=$(git diff --name-only --diff-filter=A "$base" "$head" -- '.changeset/*.md' | grep -vE '(^|/)README\.md$' || true)
+            if [ -z "$added" ]; then
+              echo "::error::This PR changes packages/pixi-marrow but adds no .changeset/*.md. Run 'pnpm changeset' or add the 'skip-changeset' label."
+              exit 1
+            fi
+          fi
