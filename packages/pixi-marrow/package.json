@@ -1,0 +1,78 @@
+{
+  "name": "pixi-marrow",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A Spine runtime for PixiJS v8 with its own pose core. Plays Spine 4.1, 4.2 and 4.3 skeletons. Pre-release: nothing to render yet.",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./core": {
+      "types": "./dist/core.d.ts",
+      "default": "./dist/core.js"
+    },
+    "./optimize": {
+      "types": "./dist/optimize.d.ts",
+      "default": "./dist/optimize.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "pixi-marrow": "./bin/pixi-marrow.mjs"
+  },
+  "files": [
+    "dist",
+    "bin",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "test": "node ../../scripts/fixtures.mjs && vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "node ../../scripts/fixtures.mjs && vitest run --coverage",
+    "parity:ref": "node ../../scripts/fixtures.mjs && vitest run --config vitest.report.config.ts",
+    "typecheck": "tsc && tsc -p tsconfig.tests.json && tsc -p tsconfig.build.json",
+    "prepack": "node ../../scripts/stage-package-files.mjs",
+    "postpack": "node ../../scripts/stage-package-files.mjs --clean"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/core": "^0.18.5",
+    "@types/node": "^24.0.0",
+    "@vitest/coverage-v8": "^5.1.0",
+    "publint": "^0.3.24",
+    "spine-core-4.1": "npm:@esotericsoftware/spine-core@4.1.55",
+    "spine-core-4.2": "npm:@esotericsoftware/spine-core@4.2.120",
+    "spine-core-4.3": "npm:@esotericsoftware/spine-core@4.3.13",
+    "tsdown": "^0.23.7",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
+  },
+  "author": "schmooky",
+  "homepage": "https://github.com/schmooky/pixi-marrow",
+  "bugs": {
+    "url": "https://github.com/schmooky/pixi-marrow/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/schmooky/pixi-marrow.git",
+    "directory": "packages/pixi-marrow"
+  },
+  "keywords": [
+    "pixi",
+    "pixijs",
+    "pixi.js",
+    "spine",
+    "skeletal-animation",
+    "runtime",
+    "webgl",
+    "webgpu",
+    "typescript"
+  ]
+}

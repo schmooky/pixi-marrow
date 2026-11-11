@@ -1,0 +1,945 @@
+{
+  "repository": "EsotericSoftware/spine-runtimes",
+  "commits": {
+    "4.1": "77a5db0ec6d16331f5efbaa7662bba9355bd3424",
+    "4.2": "5cb78e77d3711ddcd80c7bd043bb11cf70fcc88c",
+    "4.3": "405f43295b5832e86d9df3a80beb6bc9df772312"
+  },
+  "rigs": [
+    "spineboy-pro",
+    "raptor-pro",
+    "goblins-pro",
+    "stretchyman-pro",
+    "tank-pro",
+    "vine-pro",
+    "owl-pro",
+    "coin-pro",
+    "hero-pro",
+    "alien-pro",
+    "powerup-pro",
+    "mix-and-match-pro",
+    "dragon-ess",
+    "windmill-ess",
+    "speedy-ess",
+    "chibi-stickers",
+    "celestial-circus-pro",
+    "sack-pro",
+    "snowglobe-pro",
+    "cloud-pot",
+    "diamond-pro"
+  ],
+  "files": [
+    {
+      "version": "4.1",
+      "rig": "spineboy-pro",
+      "json": {
+        "path": "examples/spineboy/export/spineboy-pro.json",
+        "sha256": "b7222ce40837f30ca08b05e5d5b2d00927f306fe2526a64db353e34df699b179"
+      },
+      "skel": {
+        "path": "examples/spineboy/export/spineboy-pro.skel",
+        "sha256": "7104c7e8f45d3ce9af8fdcb7d50d95ab8cbbdddfda9e273e893845f6a234245c"
+      },
+      "atlas": {
+        "path": "examples/spineboy/export/spineboy.atlas",
+        "sha256": "fdc4bbc4be5f1a638fa0ff384271007b1f2df72855dd80b4b239bcfe8a4ac31e"
+      }
+    },
+    {
+      "version": "4.1",
+      "rig": "raptor-pro",
+      "json": {
+        "path": "examples/raptor/export/raptor-pro.json",
+        "sha256": "3bc76571fd696cc1efe0ce4e281062b69b2c0613b33a19457b3e359a1ea634c5"
+      },
+      "skel": {
+        "path": "examples/raptor/export/raptor-pro.skel",
+        "sha256": "9c3ab8c1c02d8a1883aa1b4d9295548757bda154e7e0cfdbb86de99725b7295b"
+      },
+      "atlas": {
+        "path": "examples/raptor/export/raptor.atlas",
+        "sha256": "c12e21c7fbc0f0bf955afc90e438883f215d9ba8846519c0408233a0182ee35c"
+      }
+    },
+    {
+      "version": "4.1",
+      "rig": "goblins-pro",
+      "json": {
+        "path": "examples/goblins/export/goblins-pro.json",
+        "sha256": "cded8764828cf63a389c9b0db7aa8afc3c345826999055192e89b0098d47d5d1"
+      },
+      "skel": {
+        "path": "examples/goblins/export/goblins-pro.skel",
+        "sha256": "52be8b44cb55a74e973c3a65d660952fb8c308350b487bfa1a1e27ce59b19bd3"
+      },
+      "atlas": {
+        "path": "examples/goblins/export/goblins.atlas",
+        "sha256": "ce34e2a58bdcf3bbae376752ad7042e89d3b6e98ce8fdb65f8333700c5cb9a23"
+      }
+    },
+    {
+      "version": "4.1",
+      "rig": "stretchyman-pro",
+      "json": {
+        "path": "examples/stretchyman/export/stretchyman-pro.json",
+        "sha256": "1f33f98515cec7027d9384ba8920d97c23edfb8d72039778cad0ceb48bb38cca"
+      },
+      "skel": {
+        "path": "examples/stretchyman/export/stretchyman-pro.skel",
+        "sha256": "3ee5064aea78235a0083984ad6086764c40a1ad30b08f256df58be73d42bc898"
+      },
+      "atlas": {
+        "path": "examples/stretchyman/export/stretchyman.atlas",
+        "sha256": "64e91f4c76a3a9d9acc1a67f5a458bc917c8c7d4c57fc7a4c055aaadcecb8fc7"
+      }
+    },
+    {
+      "version": "4.1",
+      "rig": "tank-pro",
+      "json": {
+        "path": "examples/tank/export/tank-pro.json",
+        "sha256": "97556dc8ede2b6e5a902a5865da135ebeb574662f06430f68586078ab52a8224"
+      },
+      "skel": {
+        "path": "examples/tank/export/tank-pro.skel",
+        "sha256": "5294476878a76c7ef2049bf0b86f70b78b5f8cc646cde30b3d37cefdbca732ac"
+      },
+      "atlas": {
+        "path": "examples/tank/export/tank.atlas",
+        "sha256": "34f821250be2ed50566760d7f755a77ee1e2bc84c475aec909e6d027d8ed49e8"
+      }
+    },
+    {
+      "version": "4.1",
+      "rig": "vine-pro",
+      "json": {
+        "path": "examples/vine/export/vine-pro.json",
+        "sha256": "c710527b5898e65d30c07526d34b1991c2f5a7611cfa5b64405c51c3e7505bf1"
+      },
+      "skel": {
+        "path": "examples/vine/export/vine-pro.skel",
+        "sha256": "5f9d0a806cf42d18ebb25a34343c031760e90c8660a769bd2e07c3eab204ef44"
+      },
+      "atlas": {
+        "path": "examples/vine/export/vine.atlas",
+        "sha256": "34dfdf9ef931040a15a89f005434062bef659db27a3a00116332a888a99dfa3c"
+      }
+    },
+    {
+      "version": "4.1",
+      "rig": "owl-pro",
+      "json": {
+        "path": "examples/owl/export/owl-pro.json",
+        "sha256": "79b0906fa8bb99e1d26d504483b0830b3bd3034b5888cf0eb0aa5518a9886986"
+      },
+      "skel": {
+        "path": "examples/owl/export/owl-pro.skel",
+        "sha256": "6fe94816fa6f4f1c55bd2befb2fa82863370931ccd2667fadcc146f8eb9fa88f"
+      },
+      "atlas": {
+        "path": "examples/owl/export/owl.atlas",
+        "sha256": "cbe034e0f2098d799630bf500e739b997ab8d70113fae96c2073b95ae29ccee1"
+      }
+    },
+    {
+      "version": "4.1",
+      "rig": "coin-pro",
+      "json": {
+        "path": "examples/coin/export/coin-pro.json",
+        "sha256": "18f3b6f1a8ca303e2386854ebf8b1b553f1ca05bfe9372c67d16258c354e3eb8"
+      },
+      "skel": {
+        "path": "examples/coin/export/coin-pro.skel",
+        "sha256": "bb10e903b93cbf5eef843d208574549ea9f90c451bc9a8afda0c05b2de69534d"
+      },
+      "atlas": {
+        "path": "examples/coin/export/coin.atlas",
+        "sha256": "3078c4eb8a0692eea6d36b15645480dea27f1bf76d29ccd0af17ca28539d6ede"
+      }
+    },
+    {
+      "version": "4.1",
+      "rig": "hero-pro",
+      "json": {
+        "path": "examples/hero/export/hero-pro.json",
+        "sha256": "4d0733cf284783b19c41bb923f37a053aa3f39ada1b962f62ef046cf856aaf4b"
+      },
+      "skel": {
+        "path": "examples/hero/export/hero-pro.skel",
+        "sha256": "12b0b4a317deaed2d9871d1abaa900cab77e7b350f1c2b6934c8184814e7d17b"
+      },
+      "atlas": {
+        "path": "examples/hero/export/hero.atlas",
+        "sha256": "c102f0a6196d01fc974d7d51e17f04b87bda9b4168fe575a54ae45b37b06080a"
+      }
+    },
+    {
+      "version": "4.1",
+      "rig": "alien-pro",
+      "json": {
+        "path": "examples/alien/export/alien-pro.json",
+        "sha256": "4b77677427787c53b61e0a3f6041322684ecacdf6f3c7f15d6f7ced687ceb04c"
+      },
+      "skel": {
+        "path": "examples/alien/export/alien-pro.skel",
+        "sha256": "a4ab87a90dc4d704d5e08ccd478726e5e497d37898fd84c9e2179b359cbf0e13"
+      },
+      "atlas": {
+        "path": "examples/alien/export/alien.atlas",
+        "sha256": "e2caebe912b3847fa06196e82a5aaa35dc23784ea5d47f6299d1bc3b846ca074"
+      }
+    },
+    {
+      "version": "4.1",
+      "rig": "powerup-pro",
+      "json": {
+        "path": "examples/powerup/export/powerup-pro.json",
+        "sha256": "22bb008fdd0637fcce699bac933ddf941f19e3654327f2536c5dd72c9f5c0c61"
+      },
+      "skel": {
+        "path": "examples/powerup/export/powerup-pro.skel",
+        "sha256": "5a0d0ad6203b1bf6dccc35294021b0141bdea9b9fa982fe80e7ee2dfa14fc186"
+      },
+      "atlas": {
+        "path": "examples/powerup/export/powerup.atlas",
+        "sha256": "071c0facb2ed1681b553c057e5af01a3994d5c1e3fce24c1036df05ea9fdd569"
+      }
+    },
+    {
+      "version": "4.1",
+      "rig": "mix-and-match-pro",
+      "json": {
+        "path": "examples/mix-and-match/export/mix-and-match-pro.json",
+        "sha256": "fc01c830502f42c05005eab6beab56a5da568d9be6145fa4e72427dc2b0144ff"
+      },
+      "skel": {
+        "path": "examples/mix-and-match/export/mix-and-match-pro.skel",
+        "sha256": "48d3f3194022b32035b6e000bd879dcb5259b156af9aab0e6ee49f5f0f81726a"
+      },
+      "atlas": {
+        "path": "examples/mix-and-match/export/mix-and-match.atlas",
+        "sha256": "4193d0ef0e747ad1fcd272cc89e0297516ca08e753aaeae1f28f65802c3d1d6c"
+      }
+    },
+    {
+      "version": "4.1",
+      "rig": "dragon-ess",
+      "json": {
+        "path": "examples/dragon/export/dragon-ess.json",
+        "sha256": "4deebf960c91cb24ce0809c5cdc2457de83955ed5dc4934662f30328cab24d85"
+      },
+      "skel": {
+        "path": "examples/dragon/export/dragon-ess.skel",
+        "sha256": "ae074cde518035c897bae2a17696f55e2ac1290fc95cbde4c259a8a771d782aa"
+      },
+      "atlas": {
+        "path": "examples/dragon/export/dragon.atlas",
+        "sha256": "36eb530bd3dd85417e0f681928151e338c962d77881084ab1d05a6a724e16f37"
+      }
+    },
+    {
+      "version": "4.1",
+      "rig": "windmill-ess",
+      "json": {
+        "path": "examples/windmill/export/windmill-ess.json",
+        "sha256": "013b0fbbd88b92668945018a0790d75a5006ad5be4a8f5e009f4cab04d3b0836"
+      },
+      "skel": {
+        "path": "examples/windmill/export/windmill-ess.skel",
+        "sha256": "315a96785f30b83323feec09465ba2ed18283cff6d51d4b8815fd93dbbd6dd93"
+      },
+      "atlas": {
+        "path": "examples/windmill/export/windmill.atlas",
+        "sha256": "3ea113ceebdaf1226e0cd48ac2726c5bee665f365ae9f3b4e3c330b51d13ee40"
+      }
+    },
+    {
+      "version": "4.1",
+      "rig": "speedy-ess",
+      "json": {
+        "path": "examples/speedy/export/speedy-ess.json",
+        "sha256": "a1ab6a59cd2fd1c278140185840342e0306a0b5db17703a1a321417c942ec3a2"
+      },
+      "skel": {
+        "path": "examples/speedy/export/speedy-ess.skel",
+        "sha256": "22fda2518e2b3d69523974a3cf9297e5f121920789eb8d58024aa61ee77f0616"
+      },
+      "atlas": {
+        "path": "examples/speedy/export/speedy.atlas",
+        "sha256": "db682ec8452968e695052b94e9e48edaadbb75c70b66b9bddde46d486766387f"
+      }
+    },
+    {
+      "version": "4.1",
+      "rig": "chibi-stickers",
+      "json": {
+        "path": "examples/chibi-stickers/export/chibi-stickers.json",
+        "sha256": "12e8a0411ec9cb89e4a5106a3a6c85bcc4cf4e22183e6332f0cf7e11641c01fd"
+      },
+      "skel": {
+        "path": "examples/chibi-stickers/export/chibi-stickers.skel",
+        "sha256": "317e0ed0d54d09a767f5cae3b222c5d155aa9e327a70cddef688dacdb8950645"
+      },
+      "atlas": {
+        "path": "examples/chibi-stickers/export/chibi-stickers.atlas",
+        "sha256": "668d5e5c3c3e3ef8f2584280391023d6abb808fdeb883ecc2fc95ea053c98221"
+      }
+    },
+    {
+      "version": "4.2",
+      "rig": "spineboy-pro",
+      "json": {
+        "path": "examples/spineboy/export/spineboy-pro.json",
+        "sha256": "488face411ddfad77ee3239b29431deb574d73f4feca7eca541452ad24bb6bfc"
+      },
+      "skel": {
+        "path": "examples/spineboy/export/spineboy-pro.skel",
+        "sha256": "1345de0e8e4729559f39060ed614429b21ab39bfc09ed2e1f58fcf054a8b5925"
+      },
+      "atlas": {
+        "path": "examples/spineboy/export/spineboy.atlas",
+        "sha256": "fc90c2a604c14bb3ae1a81f9c950660863a41654cb29c869423a86e127fa75ae"
+      }
+    },
+    {
+      "version": "4.2",
+      "rig": "raptor-pro",
+      "json": {
+        "path": "examples/raptor/export/raptor-pro.json",
+        "sha256": "b4dfddb8f288da8be49b7b95956355293e7339b93e8f909283cb102181f8a8a0"
+      },
+      "skel": {
+        "path": "examples/raptor/export/raptor-pro.skel",
+        "sha256": "db8e756bc1814a2ace08eb6bc78bc0a6660f2267970b0549444f6138c3e6dc65"
+      },
+      "atlas": {
+        "path": "examples/raptor/export/raptor.atlas",
+        "sha256": "60499dd637481439aa6ce89003358e69e9f558b4d8f305537c34ab44857e3056"
+      }
+    },
+    {
+      "version": "4.2",
+      "rig": "goblins-pro",
+      "json": {
+        "path": "examples/goblins/export/goblins-pro.json",
+        "sha256": "64321cf1cc5864d9c23bb92bc355b9f7f80f61710de413a2bf65e94c734a3472"
+      },
+      "skel": {
+        "path": "examples/goblins/export/goblins-pro.skel",
+        "sha256": "9fb1f92ad04dda866e0bd654301987a6d3c1d6a172a80e54cabee71ae941d883"
+      },
+      "atlas": {
+        "path": "examples/goblins/export/goblins.atlas",
+        "sha256": "61223fbbf73a0b4118d8aa65db4a9b76b6989cc2f25a174a98a8c47ffa815191"
+      }
+    },
+    {
+      "version": "4.2",
+      "rig": "stretchyman-pro",
+      "json": {
+        "path": "examples/stretchyman/export/stretchyman-pro.json",
+        "sha256": "58d87bbcfbd6122ea24084eade48d7285b44f04f28789efc3f7802bb095a815a"
+      },
+      "skel": {
+        "path": "examples/stretchyman/export/stretchyman-pro.skel",
+        "sha256": "01c411476f94a843627ac80a56c77ad95dc664554d512462f705a6dc22b4b0a1"
+      },
+      "atlas": {
+        "path": "examples/stretchyman/export/stretchyman.atlas",
+        "sha256": "64e91f4c76a3a9d9acc1a67f5a458bc917c8c7d4c57fc7a4c055aaadcecb8fc7"
+      }
+    },
+    {
+      "version": "4.2",
+      "rig": "tank-pro",
+      "json": {
+        "path": "examples/tank/export/tank-pro.json",
+        "sha256": "5035512282471b046711f6bd4d853fd7376321b9bca6cc35588554515af3558c"
+      },
+      "skel": {
+        "path": "examples/tank/export/tank-pro.skel",
+        "sha256": "b4bb4fd8a6d6386bdfafa2a4cce443cdfd1a81a5e54720c5a9c7af7caf313601"
+      },
+      "atlas": {
+        "path": "examples/tank/export/tank.atlas",
+        "sha256": "bcaafa241f51c58db0172734b3257def51fe8000673101b1363d098e42862b51"
+      }
+    },
+    {
+      "version": "4.2",
+      "rig": "vine-pro",
+      "json": {
+        "path": "examples/vine/export/vine-pro.json",
+        "sha256": "4186a992f79d73e79d677f25bfeb9db9bd26b97c288088f4530d7bedca497a6c"
+      },
+      "skel": {
+        "path": "examples/vine/export/vine-pro.skel",
+        "sha256": "d0e8aa8b891ec0465019d436e38997586dee1e5701a033f4e7a2109ff629dfa8"
+      },
+      "atlas": {
+        "path": "examples/vine/export/vine.atlas",
+        "sha256": "34dfdf9ef931040a15a89f005434062bef659db27a3a00116332a888a99dfa3c"
+      }
+    },
+    {
+      "version": "4.2",
+      "rig": "owl-pro",
+      "json": {
+        "path": "examples/owl/export/owl-pro.json",
+        "sha256": "212580fa874e45ebe3a926f04d5a151871aa0be41f04bfd283a7633a9731f45a"
+      },
+      "skel": {
+        "path": "examples/owl/export/owl-pro.skel",
+        "sha256": "4a1e6239ec748bb62e654db7a29f2c12769052d4158230d61c7b97c17232f5da"
+      },
+      "atlas": {
+        "path": "examples/owl/export/owl.atlas",
+        "sha256": "29354987fecbaa2a0e96d03f6d2eba4aa515933d7cae248c7edab8c6308562cf"
+      }
+    },
+    {
+      "version": "4.2",
+      "rig": "coin-pro",
+      "json": {
+        "path": "examples/coin/export/coin-pro.json",
+        "sha256": "cc9b13d9a2fc4af455dac45c538ced90713939696433bf87b564b60d39f16008"
+      },
+      "skel": {
+        "path": "examples/coin/export/coin-pro.skel",
+        "sha256": "8d412e8ab9e156bc78d9602cf32b9cd5b5d6fae7ea982feccb514f56352ed6f8"
+      },
+      "atlas": {
+        "path": "examples/coin/export/coin.atlas",
+        "sha256": "9b394c85aef916a4cdaf95b7abfb714e2c2def9b71568db7d546e90f7bebc092"
+      }
+    },
+    {
+      "version": "4.2",
+      "rig": "hero-pro",
+      "json": {
+        "path": "examples/hero/export/hero-pro.json",
+        "sha256": "90ef8f2557b52ef79eec51df897d8a3163c63b8974acd7de91e1e43a6737dd16"
+      },
+      "skel": {
+        "path": "examples/hero/export/hero-pro.skel",
+        "sha256": "087d9ecd711ec5ff4ace7a39f079f5ce5ed94fb90ef23d41145ae5ed9d7d8c41"
+      },
+      "atlas": {
+        "path": "examples/hero/export/hero.atlas",
+        "sha256": "990000c558a98886119ea4030c2c5dbc4c3ada29736cbc95a15b7404f42312f3"
+      }
+    },
+    {
+      "version": "4.2",
+      "rig": "alien-pro",
+      "json": {
+        "path": "examples/alien/export/alien-pro.json",
+        "sha256": "545f25116a16a65cd20d3fd3bafceb469bda6c08273c507c7c3cb8b9e330ac00"
+      },
+      "skel": {
+        "path": "examples/alien/export/alien-pro.skel",
+        "sha256": "df50138c7fee5580f142672f6c4fa4c9f60e19ac728517ce7571e81c86c2f240"
+      },
+      "atlas": {
+        "path": "examples/alien/export/alien.atlas",
+        "sha256": "96bf02edf1006e6501d98b8ea992b6fc1fe945a1e07e26a79e5493b7f6408673"
+      }
+    },
+    {
+      "version": "4.2",
+      "rig": "powerup-pro",
+      "json": {
+        "path": "examples/powerup/export/powerup-pro.json",
+        "sha256": "4ec937e37fa29f26de6bb581c6ad827525a995cb977f18e1343afb1afc3e068f"
+      },
+      "skel": {
+        "path": "examples/powerup/export/powerup-pro.skel",
+        "sha256": "3a6dfd6d870ffba10d6d0140cb3a3c0ea4ac615b1a7e68c849972b661c45c4df"
+      },
+      "atlas": {
+        "path": "examples/powerup/export/powerup.atlas",
+        "sha256": "7e4c3a8a7a99a7d5e21f67010fb1ac6c25560ee4f4327489817356626edf7cb1"
+      }
+    },
+    {
+      "version": "4.2",
+      "rig": "mix-and-match-pro",
+      "json": {
+        "path": "examples/mix-and-match/export/mix-and-match-pro.json",
+        "sha256": "9460fc8b603e2a8ca722f3aa140c3f21c6878194b9424c4f0b22a7758f6cd327"
+      },
+      "skel": {
+        "path": "examples/mix-and-match/export/mix-and-match-pro.skel",
+        "sha256": "d4e522ac8a2940a45a75eb1aa03ae476ef43d94381ae70829c4a9bfee742a8b4"
+      },
+      "atlas": {
+        "path": "examples/mix-and-match/export/mix-and-match.atlas",
+        "sha256": "4692316d11bd4e6f1c1e4aad02ad5a6f2132af1be21d9c55459c57122de084dc"
+      }
+    },
+    {
+      "version": "4.2",
+      "rig": "dragon-ess",
+      "json": {
+        "path": "examples/dragon/export/dragon-ess.json",
+        "sha256": "d75aff09995e1e7001c095db00fc95a7dab28ace96826882611a95d27e61c36a"
+      },
+      "skel": {
+        "path": "examples/dragon/export/dragon-ess.skel",
+        "sha256": "ab115198f90a3dc92af194b697186434b94b11692f5cf9cfd88de03006d1240f"
+      },
+      "atlas": {
+        "path": "examples/dragon/export/dragon.atlas",
+        "sha256": "8df24066ed9b9c15f818d11f8bc059148bcca641b691bc1789502eebba6aa042"
+      }
+    },
+    {
+      "version": "4.2",
+      "rig": "windmill-ess",
+      "json": {
+        "path": "examples/windmill/export/windmill-ess.json",
+        "sha256": "5318502889a1dbdb8dd8954d2f49c955ac49edc3539c32da9328a79c2754101e"
+      },
+      "skel": {
+        "path": "examples/windmill/export/windmill-ess.skel",
+        "sha256": "f0b96b4c4da180d57d8bf8d50a69670a458e57d63fea26ba2a3ed0d54c65e632"
+      },
+      "atlas": {
+        "path": "examples/windmill/export/windmill.atlas",
+        "sha256": "374d702b7ca5d04c481fe9585dcd8cf4a2d951129cba26da45ea4c3f3b78917b"
+      }
+    },
+    {
+      "version": "4.2",
+      "rig": "speedy-ess",
+      "json": {
+        "path": "examples/speedy/export/speedy-ess.json",
+        "sha256": "586a51572c465974a9fc30ca13b063f9d523957d33c91525b17e1d9364f18720"
+      },
+      "skel": {
+        "path": "examples/speedy/export/speedy-ess.skel",
+        "sha256": "a51bcca015189c741c1b8160be8d5678dfaa1bad2819740672ab3b434281d7c8"
+      },
+      "atlas": {
+        "path": "examples/speedy/export/speedy.atlas",
+        "sha256": "097935faba50aae2f26c35ba13dbe3f91de7403ee296e6163e986c2aa451be6f"
+      }
+    },
+    {
+      "version": "4.2",
+      "rig": "chibi-stickers",
+      "json": {
+        "path": "examples/chibi-stickers/export/chibi-stickers.json",
+        "sha256": "9d4125c494f06dd1032c47d419b3f78c055ac911c1c377e69122700568050cd8"
+      },
+      "skel": {
+        "path": "examples/chibi-stickers/export/chibi-stickers.skel",
+        "sha256": "2d49d460ea9b6a7a38c93e1479725cd30b922270dce78911a67bba4836a3120d"
+      },
+      "atlas": {
+        "path": "examples/chibi-stickers/export/chibi-stickers.atlas",
+        "sha256": "10c79bd5631566859b6fee1b2e2f2365fa6e72ab8370bae6c897fc263f32b80a"
+      }
+    },
+    {
+      "version": "4.2",
+      "rig": "celestial-circus-pro",
+      "json": {
+        "path": "examples/celestial-circus/export/celestial-circus-pro.json",
+        "sha256": "9c948436017c8086cfbc3be67c170f3f873b689673b7c7a1995dcbbbb0eff1d6"
+      },
+      "skel": {
+        "path": "examples/celestial-circus/export/celestial-circus-pro.skel",
+        "sha256": "a502c6d1ff8acbdab30870d0190052dfdf63e9610b81f3b49ab353c2d7e68167"
+      },
+      "atlas": {
+        "path": "examples/celestial-circus/export/celestial-circus.atlas",
+        "sha256": "6473faf0c6d7d7cd037d86e6e10ef9d6624adc881f3bd997538624d9a406163e"
+      }
+    },
+    {
+      "version": "4.2",
+      "rig": "sack-pro",
+      "json": {
+        "path": "examples/sack/export/sack-pro.json",
+        "sha256": "09865ef0f10063db3080b7d528769b186b1cad22f0b7c3ba4e830c0918e111cc"
+      },
+      "skel": {
+        "path": "examples/sack/export/sack-pro.skel",
+        "sha256": "0004418fd6eb095c27bbc72dc2553f10323389fa3ae5a2fc73b75899547ae665"
+      },
+      "atlas": {
+        "path": "examples/sack/export/sack.atlas",
+        "sha256": "f25b09f24311ceec48e6015502dee9d612afc58b9af7c201836e1fa09146f6c6"
+      }
+    },
+    {
+      "version": "4.2",
+      "rig": "snowglobe-pro",
+      "json": {
+        "path": "examples/snowglobe/export/snowglobe-pro.json",
+        "sha256": "fd173c83ac518abc29ff2dbfd9d7496ec85e9d94062afb2339bbbc777ec4e546"
+      },
+      "skel": {
+        "path": "examples/snowglobe/export/snowglobe-pro.skel",
+        "sha256": "279fc2cd7222ad23e8b7c29a3d160d2af812d21577809f81952cadd0ee2b64c1"
+      },
+      "atlas": {
+        "path": "examples/snowglobe/export/snowglobe.atlas",
+        "sha256": "8b7dec2fd462e52ec20e38549c3322a86e27da0bc0ecc0ae6239446fd6daa463"
+      }
+    },
+    {
+      "version": "4.2",
+      "rig": "cloud-pot",
+      "json": {
+        "path": "examples/cloud-pot/export/cloud-pot.json",
+        "sha256": "5b138843568507c1ef53fa23bfa6c198432e1499d678ba5d6b30c5dda2363274"
+      },
+      "skel": {
+        "path": "examples/cloud-pot/export/cloud-pot.skel",
+        "sha256": "50a06589f844223f9f23344f78d45f3c03bd86caff8a3b61125a963c38ff5f75"
+      },
+      "atlas": {
+        "path": "examples/cloud-pot/export/cloud-pot.atlas",
+        "sha256": "0fa5e25e321d99ae607c374d29950080e351517c8b874c858d69e0c56669a0e3"
+      }
+    },
+    {
+      "version": "4.3",
+      "rig": "spineboy-pro",
+      "json": {
+        "path": "examples/spineboy/export/spineboy-pro.json",
+        "sha256": "24ccffc13e334e721dfd427ee2b8aea05c25b59167b5fb0bb0f9685e11d2a7d3"
+      },
+      "skel": {
+        "path": "examples/spineboy/export/spineboy-pro.skel",
+        "sha256": "e10de3f2473a37139c3ad1fda14e84b29ef401475ec9fa2129e7d2a311088845"
+      },
+      "atlas": {
+        "path": "examples/spineboy/export/spineboy.atlas",
+        "sha256": "fbd452640df513d637e0a34d21c1d3ea4edb27f57bd1856ffd5530b16ee83d00"
+      }
+    },
+    {
+      "version": "4.3",
+      "rig": "raptor-pro",
+      "json": {
+        "path": "examples/raptor/export/raptor-pro.json",
+        "sha256": "2ba9fe06007bc7b44d412bdb5722b1cd8b5fbcd0f7a263ae1aa957a555e9742a"
+      },
+      "skel": {
+        "path": "examples/raptor/export/raptor-pro.skel",
+        "sha256": "796a673fc1d0246bcd3673853e44a4e1b25d8fe2e146f4daa20d7eb402d8c726"
+      },
+      "atlas": {
+        "path": "examples/raptor/export/raptor.atlas",
+        "sha256": "fb6e8532cb7665542b54ab661d0cadffe0171fcfe6b192595cd6ab622b08d8e6"
+      }
+    },
+    {
+      "version": "4.3",
+      "rig": "goblins-pro",
+      "json": {
+        "path": "examples/goblins/export/goblins-pro.json",
+        "sha256": "f45b7a36097c60692e78fef20626103eab0532e3e40701fb29438e9d75dfa057"
+      },
+      "skel": {
+        "path": "examples/goblins/export/goblins-pro.skel",
+        "sha256": "1263fa3083fbfc4a26cb9145033acedcd0540a99bb211258dc4f2ce10a056629"
+      },
+      "atlas": {
+        "path": "examples/goblins/export/goblins.atlas",
+        "sha256": "7245bf918b1d661d9502bf35aff39ae73541b27285fab1df983bd8e6cda5dc0a"
+      }
+    },
+    {
+      "version": "4.3",
+      "rig": "stretchyman-pro",
+      "json": {
+        "path": "examples/stretchyman/export/stretchyman-pro.json",
+        "sha256": "ff2670687913945c09d400068adcd35b3392bde6917709d845fbc9045675fdb4"
+      },
+      "skel": {
+        "path": "examples/stretchyman/export/stretchyman-pro.skel",
+        "sha256": "d3d312f9597fb1bd1a3168f0f2965937d669279e44d9b89f4b67ac9f4966d634"
+      },
+      "atlas": {
+        "path": "examples/stretchyman/export/stretchyman.atlas",
+        "sha256": "3ed15c23b620523e2cfb75f57b76997178430a47a3d9902b1aaef25c73b04f21"
+      }
+    },
+    {
+      "version": "4.3",
+      "rig": "tank-pro",
+      "json": {
+        "path": "examples/tank/export/tank-pro.json",
+        "sha256": "93916fbb35825b14ba4dbf3823a126d847f7980a4f7dcfec22004d898e9eadd5"
+      },
+      "skel": {
+        "path": "examples/tank/export/tank-pro.skel",
+        "sha256": "f6565814bd520b06446584375ddf3ed42640e758be09d2646477321ab526aeca"
+      },
+      "atlas": {
+        "path": "examples/tank/export/tank.atlas",
+        "sha256": "003a119ec915ae5130582ba9100aa1ca37049727050d18c334261299f5d81cc5"
+      }
+    },
+    {
+      "version": "4.3",
+      "rig": "vine-pro",
+      "json": {
+        "path": "examples/vine/export/vine-pro.json",
+        "sha256": "cfb7b608a784eb9e5d0167691236b5a536e03872ed8b01293400d554f0847fc7"
+      },
+      "skel": {
+        "path": "examples/vine/export/vine-pro.skel",
+        "sha256": "d76d6285e8dd22c329dd29ae465c7b1e924828ffbcc97f2b0e0b63ef89069c69"
+      },
+      "atlas": {
+        "path": "examples/vine/export/vine.atlas",
+        "sha256": "34dfdf9ef931040a15a89f005434062bef659db27a3a00116332a888a99dfa3c"
+      }
+    },
+    {
+      "version": "4.3",
+      "rig": "owl-pro",
+      "json": {
+        "path": "examples/owl/export/owl-pro.json",
+        "sha256": "b07decdac61fc26d08217ce317e014cec947ccf1cbe527f61db150f72310525b"
+      },
+      "skel": {
+        "path": "examples/owl/export/owl-pro.skel",
+        "sha256": "38c78e78505c86322f7aad5d98ebfb7ad42ce52dde511b1e9650d7c2d9136358"
+      },
+      "atlas": {
+        "path": "examples/owl/export/owl.atlas",
+        "sha256": "28ee1d480b668d2011b68a06b952b436efd02d1d2115133d5c9a2b3a42a86d1f"
+      }
+    },
+    {
+      "version": "4.3",
+      "rig": "coin-pro",
+      "json": {
+        "path": "examples/coin/export/coin-pro.json",
+        "sha256": "9e76b564681db8908529ef9af9be1822437bc788c20c0ca54fe3f59792d269b6"
+      },
+      "skel": {
+        "path": "examples/coin/export/coin-pro.skel",
+        "sha256": "3aecaa73a3e9c1470db6c48572f5c33e1e2ead885eae81ee8face7716ad8ed8c"
+      },
+      "atlas": {
+        "path": "examples/coin/export/coin.atlas",
+        "sha256": "661de942a6b4873697aa56dc5ffe489675f1310c56cb65b5fff7649d5adb157f"
+      }
+    },
+    {
+      "version": "4.3",
+      "rig": "hero-pro",
+      "json": {
+        "path": "examples/hero/export/hero-pro.json",
+        "sha256": "4a73da375a15a407995b43313effaf5b0a8ffcc147aa3e31e9cd2033cd32aa2f"
+      },
+      "skel": {
+        "path": "examples/hero/export/hero-pro.skel",
+        "sha256": "0c1208bea4ff5b0737ba2c2916acf199279612484c83ea6bddc0e87d824b7add"
+      },
+      "atlas": {
+        "path": "examples/hero/export/hero.atlas",
+        "sha256": "628caf52dc01b3bd98c97d6441325a0d53466ac5f650ec54dc5a25479cc08333"
+      }
+    },
+    {
+      "version": "4.3",
+      "rig": "alien-pro",
+      "json": {
+        "path": "examples/alien/export/alien-pro.json",
+        "sha256": "e4f75389c005114611918a3f1fdd94ecc3a84dfadb41a691f6220a01d12c02e7"
+      },
+      "skel": {
+        "path": "examples/alien/export/alien-pro.skel",
+        "sha256": "ef5b1df3c71f02c96d6b4f56a90119412f7c82c36fcfe22f45a66504eacb7bab"
+      },
+      "atlas": {
+        "path": "examples/alien/export/alien.atlas",
+        "sha256": "bb7ad7274dbd6b66e5d99f22cdfea93f3b9ee61ff1275d0d1cee6af936b1f5f2"
+      }
+    },
+    {
+      "version": "4.3",
+      "rig": "powerup-pro",
+      "json": {
+        "path": "examples/powerup/export/powerup-pro.json",
+        "sha256": "d87839b806bee6e808c02729734c9dfe0c1e8c6142204fbe6fa8349564a92209"
+      },
+      "skel": {
+        "path": "examples/powerup/export/powerup-pro.skel",
+        "sha256": "171e7d30736c362ce121b1e768390f29d10e4f057e61928c47ba2c1c081f8128"
+      },
+      "atlas": {
+        "path": "examples/powerup/export/powerup.atlas",
+        "sha256": "5addcdff456719d02765d4183a2bf306add01aef314742a9b5191ac450b973e3"
+      }
+    },
+    {
+      "version": "4.3",
+      "rig": "mix-and-match-pro",
+      "json": {
+        "path": "examples/mix-and-match/export/mix-and-match-pro.json",
+        "sha256": "1fafbad502ead66ed40e8eb2ce656beaa467397c8057add0028dc9a6ce96ccd6"
+      },
+      "skel": {
+        "path": "examples/mix-and-match/export/mix-and-match-pro.skel",
+        "sha256": "7a6035028be1857e0336ed50c0225d571ef568b8922644c685a95750a588dcc0"
+      },
+      "atlas": {
+        "path": "examples/mix-and-match/export/mix-and-match.atlas",
+        "sha256": "007ec7f89d88cf84e3ce52f3a2577d234eed85d19e285689ad7a610623ab77d5"
+      }
+    },
+    {
+      "version": "4.3",
+      "rig": "dragon-ess",
+      "json": {
+        "path": "examples/dragon/export/dragon-ess.json",
+        "sha256": "fc69483454b7b8c2fd6f2c4b6286604c97b2ba5c617834a336878f6c8b9d3ce4"
+      },
+      "skel": {
+        "path": "examples/dragon/export/dragon-ess.skel",
+        "sha256": "fdcafafb3bf5a10843f7cdfb42981075550b9932683466c79585b38c5039a527"
+      },
+      "atlas": {
+        "path": "examples/dragon/export/dragon.atlas",
+        "sha256": "c8be402248245417c109d310d8cb56f9461caa160f153a3442c991abe3d520ae"
+      }
+    },
+    {
+      "version": "4.3",
+      "rig": "windmill-ess",
+      "json": {
+        "path": "examples/windmill/export/windmill-ess.json",
+        "sha256": "a463d00539277f064723b5e5527739bd66ca454f698fdc26d02946dcd4f60bfe"
+      },
+      "skel": {
+        "path": "examples/windmill/export/windmill-ess.skel",
+        "sha256": "dc78130401ab271b5f62e074c3502bcd8e5c9fa7336b85242a80f8c86bf66e6d"
+      },
+      "atlas": {
+        "path": "examples/windmill/export/windmill.atlas",
+        "sha256": "6226932d03c81f2475897605ed801e3afe7ebc2dd0b26841d1cb62429c2b7a9d"
+      }
+    },
+    {
+      "version": "4.3",
+      "rig": "speedy-ess",
+      "json": {
+        "path": "examples/speedy/export/speedy-ess.json",
+        "sha256": "7c747f1af2de8cec7d973d37d5310e163f07f5acf1ac8c8be64dd1f31f2e2262"
+      },
+      "skel": {
+        "path": "examples/speedy/export/speedy-ess.skel",
+        "sha256": "351550da7e8aefe7a4bcd14e580dde29aa4a8d50bfbafe37315ca8fc4b006f14"
+      },
+      "atlas": {
+        "path": "examples/speedy/export/speedy.atlas",
+        "sha256": "8e2af1da3ce98198fcfbf5d8f01261186e039a965467852833cd207c0c230606"
+      }
+    },
+    {
+      "version": "4.3",
+      "rig": "chibi-stickers",
+      "json": {
+        "path": "examples/chibi-stickers/export/chibi-stickers.json",
+        "sha256": "591f69af04414ef348d2df5b1446a9a8a4f7f91c153e5aee0193ecdbc9e1a046"
+      },
+      "skel": {
+        "path": "examples/chibi-stickers/export/chibi-stickers.skel",
+        "sha256": "7d4b3c712d1db52776206e08a163eb95d1112a0e96813483f44feac1e0918eec"
+      },
+      "atlas": {
+        "path": "examples/chibi-stickers/export/chibi-stickers.atlas",
+        "sha256": "e8609249909788d2c3ccdf8404c346f9c1e0e98a764fa15bed101acd17f8f7b0"
+      }
+    },
+    {
+      "version": "4.3",
+      "rig": "celestial-circus-pro",
+      "json": {
+        "path": "examples/celestial-circus/export/celestial-circus-pro.json",
+        "sha256": "ecc0a436669b7a8e7c1e2f51f4b25c5f9fcd603bd77d3568eb9ea595495a3268"
+      },
+      "skel": {
+        "path": "examples/celestial-circus/export/celestial-circus-pro.skel",
+        "sha256": "36c12d009db0d70a60d48844c871b78997cb45234cc260b76c3e623996cdb361"
+      },
+      "atlas": {
+        "path": "examples/celestial-circus/export/celestial-circus.atlas",
+        "sha256": "aa84d948bf73c2b82e310abc27f6431d6bf3d9ed03e1eadcbc0dabad9b396d92"
+      }
+    },
+    {
+      "version": "4.3",
+      "rig": "sack-pro",
+      "json": {
+        "path": "examples/7-anticipation/export/sack-pro.json",
+        "sha256": "d4f5beb6bf0c0f3efb82cb0e1521048b787a7d2cde6a36ec1f1461d70c2cca97"
+      },
+      "skel": {
+        "path": "examples/7-anticipation/export/sack-pro.skel",
+        "sha256": "d0c68b03154fdfdef36f00ee9995a3b66ce1e71074bb7cbb6eccf8a5d8f3f057"
+      },
+      "atlas": {
+        "path": "examples/7-anticipation/export/7-anticipation.atlas",
+        "sha256": "b8b5e388a6021c3ec389eee23f68efb4fd80c4b6dca926dc9bf26f0ca8e548b6"
+      }
+    },
+    {
+      "version": "4.3",
+      "rig": "snowglobe-pro",
+      "json": {
+        "path": "examples/snowglobe/export/snowglobe-pro.json",
+        "sha256": "dcb03251baf8e29d85cfd3ced21099774f39045a7258c1cd53488476dc651a82"
+      },
+      "skel": {
+        "path": "examples/snowglobe/export/snowglobe-pro.skel",
+        "sha256": "8f78137ebea5c33e2a36518371f22df4b16dfcc3e3577054d19c6ab5a1208cfd"
+      },
+      "atlas": {
+        "path": "examples/snowglobe/export/snowglobe.atlas",
+        "sha256": "5e9c1cef310713577aff6f124c8d0716c315faec068133daaa3ddf8cee5b699c"
+      }
+    },
+    {
+      "version": "4.3",
+      "rig": "cloud-pot",
+      "json": {
+        "path": "examples/cloud-pot/export/cloud-pot.json",
+        "sha256": "b0ff731b48d65628d90f04b1596770d84352b014757116a0aad5f59421152f8c"
+      },
+      "skel": {
+        "path": "examples/cloud-pot/export/cloud-pot.skel",
+        "sha256": "a6062d6cd7acb00c495bc4a7a319c175d0b345cfbe1172b6d67e4ffb5fefab1c"
+      },
+      "atlas": {
+        "path": "examples/cloud-pot/export/cloud-pot.atlas",
+        "sha256": "d659c6eb9df5c423aafa7ebce56a3974a119addf932ab98cff848443afcd6351"
+      }
+    },
+    {
+      "version": "4.3",
+      "rig": "diamond-pro",
+      "json": {
+        "path": "examples/diamond/export/diamond-pro.json",
+        "sha256": "0e98cd65a615a686a3ad9992bc545264034580ecce266ec204fdaecd7268d27a"
+      },
+      "skel": {
+        "path": "examples/diamond/export/diamond-pro.skel",
+        "sha256": "ed8fd15c0f65ebda2fd6ae9d0405608a9fabc105ec2b4289cbc2f47d018a3e0f"
+      },
+      "atlas": {
+        "path": "examples/diamond/export/diamond.atlas",
+        "sha256": "e7add52d9a6811997a487d56b48d98c8722a8c95d12b1b11c4c70bb9fc762c8f"
+      }
+    }
+  ]
+}

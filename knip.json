@@ -1,0 +1,13 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "workspaces": {
+    ".": {
+      "entry": ["scripts/*.mjs"],
+      "project": ["scripts/**/*.mjs"]
+    },
+    "packages/pixi-marrow": {
+      "entry": ["src/index.ts", "src/core.ts", "src/optimize.ts", "tests/**/*.test.ts"],
+      "project": ["src/**/*.ts", "tests/**/*.ts"]
+    }
+  }
+}

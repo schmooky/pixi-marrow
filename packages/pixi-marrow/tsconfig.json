@@ -1,0 +1,9 @@
+{
+  // The library source. No Node types: the runtime must not reach for Node globals.
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "allowImportingTsExtensions": true
+  },
+  "include": ["src"]
+}

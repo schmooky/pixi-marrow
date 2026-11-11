@@ -1,0 +1,50 @@
+{
+  "name": "pixi-marrow-workspace",
+  "private": true,
+  "version": "0.0.0",
+  "description": "pixi-marrow monorepo: a Spine runtime for PixiJS v8 with its own pose core.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "packageManager": "pnpm@10.32.1",
+  "scripts": {
+    "build": "pnpm --filter pixi-marrow build",
+    "typecheck": "pnpm --filter pixi-marrow typecheck",
+    "test": "pnpm --filter pixi-marrow test",
+    "test:coverage": "pnpm --filter pixi-marrow test:coverage",
+    "lint": "biome check . && pnpm lint:prose",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "lint:prose": "node scripts/check-prose.mjs",
+    "fixtures": "node scripts/fixtures.mjs",
+    "fixtures:refresh": "node scripts/fixtures.mjs --refresh",
+    "parity:ref": "pnpm --filter pixi-marrow parity:ref",
+    "facts": "node scripts/gen-facts.mjs",
+    "check:facts": "node scripts/gen-facts.mjs --check",
+    "check:source": "node scripts/check-source.mjs",
+    "check:api": "node scripts/check-api.mjs",
+    "api:update": "node scripts/check-api.mjs --update",
+    "check:publish-contents": "node scripts/check-publish-contents.mjs",
+    "check:dead": "knip",
+    "size": "node scripts/size-check.mjs",
+    "size:check": "node scripts/size-check.mjs --check",
+    "size:update": "node scripts/size-check.mjs --update",
+    "check": "pnpm lint && pnpm typecheck && pnpm check:source && pnpm check:facts && pnpm test:coverage && pnpm build && pnpm check:api && pnpm check:publish-contents && pnpm size:check && pnpm check:dead",
+    "changeset": "changeset",
+    "changeset:status": "changeset status",
+    "version-packages": "changeset version && pnpm install --lockfile-only",
+    "commitlint": "commitlint --edit",
+    "prepare": "husky || true"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.14",
+    "@changesets/changelog-github": "^1.0.1",
+    "@changesets/cli": "^3.0.2",
+    "@commitlint/cli": "^21.2.2",
+    "@commitlint/config-conventional": "^21.2.2",
+    "husky": "^9.1.7",
+    "knip": "^6.45.1",
+    "rolldown": "^1.3.2"
+  }
+}
