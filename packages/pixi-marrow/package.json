@@ -43,14 +43,20 @@
     "prepack": "node ../../scripts/stage-package-files.mjs",
     "postpack": "node ../../scripts/stage-package-files.mjs --clean"
   },
+  "peerDependencies": {
+    "pixi.js": "^8.16.0"
+  },
   "devDependencies": {
     "@arethetypeswrong/core": "^0.18.5",
     "@types/node": "^24.0.0",
     "@vitest/coverage-v8": "^5.1.0",
+    "pixi.js": "^8.22.0",
     "publint": "^0.3.24",
     "spine-core-4.1": "npm:@esotericsoftware/spine-core@4.1.55",
     "spine-core-4.2": "npm:@esotericsoftware/spine-core@4.2.120",
     "spine-core-4.3": "npm:@esotericsoftware/spine-core@4.3.13",
+    "spine-pixi-4.2": "npm:@esotericsoftware/spine-pixi-v8@4.2.120",
+    "spine-pixi-4.3": "npm:@esotericsoftware/spine-pixi-v8@4.3.13",
     "tsdown": "^0.23.7",
     "typescript": "^7.0.2",
     "vitest": "^5.1.0"

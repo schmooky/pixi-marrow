@@ -1,9 +1,9 @@
 import { Physics, SequenceTimeline, Skeleton, Slider } from 'spine-core-4.3';
 import { describe, expect, it } from 'vitest';
-import type { PoseEvent } from '../../src/core';
+import type { PoseEvent, TrackEntry } from '../../src/core';
 import { loadPoseRig } from './pose-official';
 import { readData43, shieldTimelineSlots } from './pose-official43';
-import { officialSubject, runScript, type Subject } from './pose-run';
+import { NO_SCRIPT_ENTRY, officialSubject, runScript, type Subject } from './pose-run';
 import { DT, type PoseScript, script } from './pose-script';
 import { SCRIPT_FAMILIES } from './pose-scripts';
 import { createAudit, type PoseDriver } from './pose-shared';
@@ -139,16 +139,89 @@ describe('the comparison', () => {
         const first = sides();
         const second = sides();
         const none = withEvents(first.actual, () => []);
+        // the runner takes the events after every call. Clearing two tracks reports four in one go.
         const reversed = withEvents(second.actual, (events) => events.reverse());
         const twoTracks = script('two tracks', (s) => {
-            s.set(0, 0, true);
-            s.set(1, 0, true);
-            s.update(DT, 2);
+            s.set(0, 0, false);
+            s.set(1, 0, false);
+            s.update(DT);
+            s.clearTracks();
+            s.update(DT);
         });
 
         // the first update reports at least the start of the entry
         expect(runScript(loop, none, first.expected)).toMatch(/update 1 of 6.*\n {4}events: length 0, expected [1-9]$/);
-        expect(runScript(twoTracks, reversed, second.expected)).toContain('events[0].track: 1, expected 0');
+        expect(runScript(twoTracks, reversed, second.expected)).toMatch(/\n {4}events\[\d\]\.track: 1, expected 0/);
+    });
+
+    it('reports an event that names another entry, and one that names an entry no call made', () => {
+        const plain = sides();
+        const first = sides();
+        const second = sides();
+        const replace = script('replace', (s) => {
+            s.set(0, 0, true);
+            s.update(DT, 2);
+            // reports the interrupt of the first entry, then the start of the second
+            s.set(0, 0, false);
+            s.update(DT, 2);
+        });
+        // the interrupt names the entry that starts
+        const swapped = withEvents(first.actual, (events) => {
+            const started = events.find((event) => event.type === 'start');
+
+            return events.map((event) =>
+                event.type === 'interrupt' && started ? { ...event, entry: started.entry } : event,
+            );
+        });
+        // the interrupt names a copy of its entry: an object no call returned
+        const copied = withEvents(second.actual, (events) =>
+            events.map((event) => (event.type === 'interrupt' ? { ...event, entry: { ...event.entry } } : event)),
+        );
+
+        expect(runScript(replace, plain.actual, plain.expected)).toBeNull();
+        expect(runScript(replace, swapped, first.expected)).toMatch(
+            /step 4 of 4, update 1 of 2.*\n {4}events\[0\]\.entry: 1, expected 0$/,
+        );
+        expect(runScript(replace, copied, second.expected)).toMatch(
+            new RegExp(`update 1 of 2.*\\n {4}events\\[0\\]\\.entry: "${NO_SCRIPT_ENTRY}", expected 0$`),
+        );
+    });
+
+    it('gives an entry object a new number when an engine hands it out again', () => {
+        const { actual, expected } = sides();
+        // every entry of this side is the same object, as from an engine with a pool of one
+        let pooled: TrackEntry | undefined;
+        const reuse = (made: TrackEntry): TrackEntry => {
+            pooled = pooled === undefined ? { ...made } : Object.assign(pooled, { ...made });
+
+            return pooled;
+        };
+        const driver: PoseDriver = new Proxy(actual.driver, {
+            get(target, key) {
+                if (key === 'setAnimation') {
+                    return (track: number, animation: number, isLoop: boolean) =>
+                        reuse(target.setAnimation(track, animation, isLoop));
+                }
+                if (key === 'takeEvents') {
+                    return () => target.takeEvents().map((event) => ({ ...event, entry: pooled ?? event.entry }));
+                }
+
+                return Reflect.get(target, key);
+            },
+        });
+        // one entry at a time: each is disposed before the next call makes one
+        const turns = script('one entry after another', (s) => {
+            s.set(0, 0, false);
+            s.update(DT);
+            s.clearTracks();
+            s.set(0, 0, false);
+            s.update(DT);
+            s.clearTracks();
+            s.set(0, 0, true);
+            s.update(DT, 2);
+        });
+
+        expect(runScript(turns, { driver, read: actual.read }, expected)).toBeNull();
     });
 
     it('reports a wrong field of a new track entry at the call that made it', () => {

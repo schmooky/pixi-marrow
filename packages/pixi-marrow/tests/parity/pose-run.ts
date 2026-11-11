@@ -187,16 +187,83 @@ function call(driver: PoseDriver, op: ScriptOp, entries: TrackEntry[]): TrackEnt
     return undefined;
 }
 
-const frame = (subject: Subject) => ({ ...subject.read(), events: subject.driver.takeEvents() });
+/** What an event names when no script call made its entry on that side, or when the entry was disposed before. */
+export const NO_SCRIPT_ENTRY = 'an entry no script call made';
+
+const ENTRY_CALLS: readonly ScriptOp['op'][] = ['set', 'add', 'setEmpty', 'addEmpty'];
+
+/** One side while a script runs: its entries, by the number of the entry call that made them. */
+interface Side {
+    subject: Subject;
+    /** The entry each entry call returned, in call order. `configure` picks from it. */
+    entries: TrackEntry[];
+    /**
+     * The number of the entry call behind every entry object in use. Entry objects differ on the
+     * two sides, the numbers do not. An engine may hand an object out again after its `dispose`
+     * event, so that event ends the number of the object and the next entry call gives it a new one.
+     */
+    ordinals: Map<TrackEntry, number>;
+    /** The events since the last comparison. They name their entry by its number. */
+    events: object[];
+}
+
+const sideOf = (subject: Subject): Side => ({ subject, entries: [], ordinals: new Map(), events: [] });
+
+/**
+ * Takes the events of a side and names their entries by number, right after every call, while
+ * the entry objects still stand for the entries the events are about. `created` is the entry the
+ * call made: its `start` event comes before the call returns it.
+ */
+function collect(side: Side, created?: TrackEntry): void {
+    const ordinal = side.entries.length - 1;
+
+    for (const { entry, ...event } of side.subject.driver.takeEvents()) {
+        if (entry === created && !side.ordinals.has(entry)) side.ordinals.set(entry, ordinal);
+        side.events.push({ ...event, entry: side.ordinals.get(entry) ?? NO_SCRIPT_ENTRY });
+        if (event.type === 'dispose') side.ordinals.delete(entry);
+    }
+    if (created !== undefined) side.ordinals.set(created, ordinal);
+}
+
+const frame = (side: Side) => ({ ...side.subject.read(), events: side.events });
+
+/** One update on both sides. Returns where the poses or the events since the last update differ. */
+function updateBoth(ours: Side, theirs: Side, dt: number): string[] {
+    ours.subject.driver.update(dt);
+    theirs.subject.driver.update(dt);
+    collect(ours);
+    collect(theirs);
+    const lines = differences(frame(ours), frame(theirs));
+
+    if (lines.length === 0) {
+        ours.events = [];
+        theirs.events = [];
+    }
+
+    return lines;
+}
+
+/** One other call on both sides. Returns where the entries it made or changed differ. */
+function callBoth(ours: Side, theirs: Side, op: ScriptOp): string[] {
+    const mine = call(ours.subject.driver, op, ours.entries);
+    const official = call(theirs.subject.driver, op, theirs.entries);
+    const creates = ENTRY_CALLS.includes(op.op);
+
+    collect(ours, creates ? mine : undefined);
+    collect(theirs, creates ? official : undefined);
+
+    return mine && official ? differences({ entry: entryFields(mine) }, { entry: entryFields(official) }) : [];
+}
 
 /**
  * Runs a script on both sides. After every update the poses and the events must be equal, and
- * after every entry call the fields of the two entries. Returns null, or a message that names the
- * script, the step and the first differences as `path: actual, expected ...` lines.
+ * after every entry call the fields of the two entries. Events compare in order, with the entry
+ * of each as the number of the script call that made it. Returns null, or a message that names
+ * the script, the step and the first differences as `path: actual, expected ...` lines.
  */
 export function runScript(script: PoseScript, actual: Subject, expected: Subject): string | null {
-    const actualEntries: TrackEntry[] = [];
-    const expectedEntries: TrackEntry[] = [];
+    const ours = sideOf(actual);
+    const theirs = sideOf(expected);
     let updates = 0;
     let where = 'before the first call';
     const failure = (lines: string[]): string =>
@@ -205,37 +272,26 @@ export function runScript(script: PoseScript, actual: Subject, expected: Subject
     try {
         for (const [index, op] of script.ops.entries()) {
             const step = `step ${index + 1} of ${script.ops.length}`;
+            const times = op.op === 'update' ? op.times : 1;
 
-            if (op.op === 'update') {
-                for (let i = 0; i < op.times; i++) {
-                    where = `${step}, update ${i + 1} of ${op.times} by ${op.dt} (update ${++updates} of the script)`;
-                    actual.driver.update(op.dt);
-                    expected.driver.update(op.dt);
-                    const lines = differences(frame(actual), frame(expected));
+            for (let i = 0; i < times; i++) {
+                where =
+                    op.op === 'update'
+                        ? `${step}, update ${i + 1} of ${times} by ${op.dt} (update ${++updates} of the script)`
+                        : `${step}, ${describeOp(op)}`;
+                const lines = op.op === 'update' ? updateBoth(ours, theirs, op.dt) : callBoth(ours, theirs, op);
 
-                    if (lines.length > 0) return failure(lines);
-                }
-                continue;
+                if (lines.length > 0) return failure(lines);
             }
-            where = `${step}, ${describeOp(op)}`;
-            const ours = call(actual.driver, op, actualEntries);
-            const theirs = call(expected.driver, op, expectedEntries);
-            const lines =
-                ours && theirs ? differences({ entry: entryFields(ours) }, { entry: entryFields(theirs) }) : [];
-
-            if (lines.length > 0) return failure(lines);
         }
         where = 'after the last call';
         // the last calls can report events too
-        const lines = differences({ events: actual.driver.takeEvents() }, { events: expected.driver.takeEvents() });
+        const lines = differences({ events: ours.events }, { events: theirs.events });
 
         return lines.length > 0 ? failure(lines) : null;
     } catch (error) {
-        throw new Error(
-            `script "${script.name}", ${where}: ${error instanceof Error ? error.message : String(error)}`,
-            {
-                cause: error,
-            },
-        );
+        const message = error instanceof Error ? error.message : String(error);
+
+        throw new Error(`script "${script.name}", ${where}: ${message}`, { cause: error });
     }
 }

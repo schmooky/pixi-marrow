@@ -93,10 +93,10 @@ function createDriver(shared: Shared, options: DriverOptions): OfficialDriver {
     const bare = new Skeleton(data);
     const stateData = new AnimationStateData(data);
     const state = new AnimationState(stateData);
-    const recorder = eventRecorder<TrackEntry, Event>(shared.animationIndex, (event) =>
+    const entries = entryViews<TrackEntry>(shared.animationIndex);
+    const recorder = eventRecorder<TrackEntry, Event>(entries, shared.animationIndex, (event) =>
         eventKey(event, shared.eventIndex(event.data)),
     );
-    const entries = entryViews<TrackEntry>(shared.animationIndex);
     const pose = createPose(skeleton.bones.length, skeleton.slots.length);
     const animation = (index: number) => {
         const found = data.animations[index];

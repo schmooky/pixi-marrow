@@ -5,9 +5,13 @@
  * fixtures/manifest.json. Files land in fixtures/.cache/<version>/ and are not committed.
  * Every file is checked against the SHA-256 in the manifest.
  *
+ * The rigs named in `render.rigs` also get the page images of their atlas, for the render check
+ * (scripts/check-render.mjs). The rigs in `render.pma` get the premultiplied atlas and its images
+ * as well. An image lands next to its atlas, under the file name the atlas refers to.
+ *
  *   (no flag)   download what is missing or changed
  *   --refresh   rebuild the manifest's file list from the upstream trees at the pinned commits,
- *               for the rig names in `rigs`, and record new hashes
+ *               for the rig names in `rigs` and `render`, and record new hashes
  *
  * Your own rigs do not go through this script: drop them into fixtures/local/.
  *
@@ -61,8 +65,40 @@ function atlasFor(paths, skeletonPath, rig) {
     return byName[0] ?? (atlases.length === 1 ? atlases[0] : undefined);
 }
 
+/** The page image names of an atlas: the first line, and every first line after an empty one. */
+function pageNames(atlasText) {
+    const lines = atlasText.split(/\r?\n/).map((line) => line.trim());
+
+    return lines.filter((line, i) => line !== '' && (i === 0 || lines[i - 1] === ''));
+}
+
+/** Fetches one upstream file into the cache and gives its manifest record. */
+async function record(version, path) {
+    const bytes = await get(`${RAW}/${manifest.commits[version]}/${path}`, false);
+
+    mkdirSync(join(cacheDir, version), { recursive: true });
+    writeFileSync(cachePath(version, path), bytes);
+
+    return { record: { path, sha256: sha256(bytes) }, bytes };
+}
+
+/** The records of the page images of an atlas. They sit in the folder of the atlas upstream. */
+async function recordImages(version, paths, atlasPath, atlasBytes) {
+    const images = [];
+
+    for (const name of pageNames(new TextDecoder().decode(atlasBytes))) {
+        const path = `${dirname(atlasPath)}/${name}`;
+
+        if (!paths.includes(path)) throw new Error(`${atlasPath} at ${version} names ${name}, which is not upstream`);
+        images.push((await record(version, path)).record);
+    }
+
+    return images;
+}
+
 async function refresh() {
     const files = [];
+    const render = manifest.render ?? { rigs: [], pma: [] };
 
     for (const version of Object.keys(manifest.commits)) {
         const paths = await examplePaths(version);
@@ -75,13 +111,22 @@ async function refresh() {
             // a rig that a version does not have is skipped, not an error
             if (!json || !skel || !atlas) continue;
             const entry = { version, rig };
+            const bytes = {};
 
             for (const [kind, path] of Object.entries({ json, skel, atlas })) {
-                const bytes = await get(`${RAW}/${manifest.commits[version]}/${path}`, false);
+                const fetched = await record(version, path);
 
-                entry[kind] = { path, sha256: sha256(bytes) };
-                mkdirSync(join(cacheDir, version), { recursive: true });
-                writeFileSync(cachePath(version, path), bytes);
+                entry[kind] = fetched.record;
+                bytes[kind] = fetched.bytes;
+            }
+            if (render.rigs.includes(rig)) entry.images = await recordImages(version, paths, atlas, bytes.atlas);
+            if (render.pma.includes(rig)) {
+                const pmaPath = atlas.replace(/\.atlas$/, '-pma.atlas');
+
+                if (!paths.includes(pmaPath)) throw new Error(`${rig} at ${version} has no ${basename(pmaPath)}`);
+                const pma = await record(version, pmaPath);
+
+                entry.pma = { atlas: pma.record, images: await recordImages(version, paths, pmaPath, pma.bytes) };
             }
             files.push(entry);
         }
@@ -91,13 +136,21 @@ async function refresh() {
     console.log(`fixtures: manifest rebuilt with ${files.length} rigs`);
 }
 
+/** Every file of a manifest entry: the skeletons and the atlas, then what the render check adds. */
+const entryFiles = (entry) => [
+    entry.json,
+    entry.skel,
+    entry.atlas,
+    ...(entry.images ?? []),
+    ...(entry.pma ? [entry.pma.atlas, ...entry.pma.images] : []),
+];
+
 async function download() {
     let fetched = 0;
     let total = 0;
 
     for (const entry of manifest.files) {
-        for (const kind of ['json', 'skel', 'atlas']) {
-            const { path, sha256: expected } = entry[kind];
+        for (const { path, sha256: expected } of entryFiles(entry)) {
             const target = cachePath(entry.version, path);
 
             total++;
@@ -119,6 +172,6 @@ try {
     await (process.argv.includes('--refresh') ? refresh() : download());
 } catch (error) {
     console.error(`fixtures: ${error.message}`);
-    console.error('The parity suite needs these files. Check the network, then run: pnpm fixtures');
+    console.error('The parity suite and the render check need these files. Check the network, then run: pnpm fixtures');
     process.exit(1);
 }

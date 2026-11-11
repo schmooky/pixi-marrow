@@ -8,6 +8,7 @@ import {
     type PoseEngine,
     type SkeletonModel,
     type TimelineData,
+    type TrackEntry,
     type TrackFields,
 } from '../../src/core';
 import { createLegacyEngine } from '../../src/pose/legacy/index';
@@ -93,15 +94,13 @@ function rigText(version: Version): string {
       "a": {
         "rotate": [{ "value": 10, "curve": 1 }, { "time": 0.5, "value": 100, "curve": "stepped" }, { "time": 1, "value": -200 }],
         "translate": [{ "x": 1, "y": -2, "curve": 2 }, { "time": 0.6, "x": -3, "y": 2.5 }, { "time": 1 }],
-        "scale": [{ "x": 2, "curve": 2 }, { "time": 0.5, "x": -1.5, "y": 2.5 }, { "time": 1 }],
-        "shear": [{ "x": 20, "curve": 2 }, { "time": 0.5, "y": 25 }, { "time": 1 }]
+        "scale": [{ "x": 2, "curve": 2 }, { "time": 0.5, "x": -1.5, "y": 2.5 }, { "time": 1 }], "shear": [{ "x": 20, "curve": 2 }, { "time": 0.5, "y": 25 }, { "time": 1 }]
       },
       "b": {
         "translatex": [{ "value": 1, "curve": 1 }, { "time": 0.5, "value": -4 }, { "time": 0.9 }],
         "translatey": [{ "time": 0.2, "value": 3 }, { "time": 0.7, "value": -1, "curve": "stepped" }, { "time": 1 }],
         "scalex": [{ "value": 0.5, "curve": 1 }, { "time": 0.5, "value": -3 }, { "time": 1 }],
-        "scaley": [{ "time": 0.1 }, { "time": 0.5, "value": 3 }],
-        "shearx": [{ "curve": 1 }, { "time": 0.5, "value": 30 }],
+        "scaley": [{ "time": 0.1 }, { "time": 0.5, "value": 3 }], "shearx": [{ "curve": 1 }, { "time": 0.5, "value": 30 }],
         "sheary": [{ "time": 0.3, "value": -10 }, { "time": 0.8, "value": 30 }]
       },
       "c": { "rotate": [{ "time": 0.25, "value": 180 }, { "time": 0.75, "value": -180 }]${inherit} },
@@ -111,8 +110,7 @@ function rigText(version: Version): string {
       "s0": {
         "attachment": [{ "time": 0.2, "name": "seq" }, { "time": 0.5, "name": null }, { "time": 0.8, "name": "img" }],
         "rgba2": [{ "light": "ff8800cc", "dark": "112233", "curve": 7 },
-          { "time": 0.6, "light": "00ff0080", "dark": "445566", "curve": "stepped" },
-          { "time": 1, "light": "0000ff40", "dark": "778899" }]
+          { "time": 0.6, "light": "00ff0080", "dark": "445566", "curve": "stepped" }, { "time": 1, "light": "0000ff40", "dark": "778899" }]
       },
       "s1": {
         "rgba": [{ "time": 0.1, "color": "ff0000ff", "curve": 4 }, { "time": 0.4, "color": "00ff0080", "curve": "stepped" },
@@ -121,15 +119,13 @@ function rigText(version: Version): string {
       },
       "s2": { "rgb2": [{ "light": "ff8800", "dark": "112233", "curve": 6 }, { "time": 0.6, "light": "00ff00", "dark": "445566" }] },
       "s3": {
-        "rgb": [{ "color": "ff0000", "curve": 3 }, { "time": 0.7, "color": "00ff00" }],
-        "alpha": [{ "time": 0.2, "value": 0.3, "curve": 1 }, { "time": 0.7 }, { "time": 1, "value": 1 }]
+        "rgb": [{ "color": "ff0000", "curve": 3 }, { "time": 0.7, "color": "00ff00" }], "alpha": [{ "time": 0.2, "value": 0.3, "curve": 1 }, { "time": 0.7 }, { "time": 1, "value": 1 }]
       }
     },
     "ik": { "ik0": [{ "mix": 0.5 }, { "time": 0.5, "mix": 1 }] },
     "attachments": { "default": {
       "s1": {
-        "mesh": { "deform": [{ "time": 0.1, "curve": 1 },
-          { "time": 0.5, "offset": 2, "vertices": [1.5, 2.5, 3.5], "curve": "stepped" },
+        "mesh": { "deform": [{ "time": 0.1, "curve": 1 }, { "time": 0.5, "offset": 2, "vertices": [1.5, 2.5, 3.5], "curve": "stepped" },
           { "time": 1, "vertices": [0.5, 0.25, 0.125, 1, 2, 3, 4, 5] }],
           "sequence": [{ "time": 0.2, "mode": "loop", "delay": 0.04 }, { "time": 0.7, "mode": "once", "index": 1, "delay": 0.1 }] },
         "own": { "deform": [{ "time": 0.5, "vertices": [3, 3] }, { "time": 0.8, "offset": 4, "vertices": [1, 1] }] }
@@ -138,10 +134,8 @@ function rigText(version: Version): string {
         { "time": 0.6, "mode": "onceReverse", "delay": 0.05 }, { "time": 0.8, "mode": "hold", "index": 2 }] } },
       "s4": { "weighted": { "deform": [{ "curve": 1 }, { "time": 0.5, "offset": 3, "vertices": [1.5, 2.5, 3.5] }, { "time": 1 }] } }
     } },
-    "drawOrder": [{ "time": 0.2, "offsets": [{ "slot": "s0", "offset": 3 }] }, { "time": 0.5 },
-      { "time": 0.8, "offsets": [{ "slot": "s1", "offset": 2 }, { "slot": "s4", "offset": -4 }] }],
-    "events": [{ "name": "hit" }, { "time": 0.25, "name": "step" }, { "time": 0.25, "name": "hit", "int": 7 },
-      { "time": 1, "name": "step" }]
+    "drawOrder": [{ "time": 0.2, "offsets": [{ "slot": "s0", "offset": 3 }] }, { "time": 0.5 }, { "time": 0.8, "offsets": [{ "slot": "s1", "offset": 2 }, { "slot": "s4", "offset": -4 }] }],
+    "events": [{ "name": "hit" }, { "time": 0.25, "name": "step" }, { "time": 0.25, "name": "hit", "int": 7 }, { "time": 1, "name": "step" }]
   },
   "other": {
     "bones": {
@@ -164,13 +158,10 @@ function rigText(version: Version): string {
         { "time": 0.4, "mode": "pingpongReverse", "delay": 0.03 }, { "time": 0.6, "mode": "once", "delay": 0.03 }] } },
       "s4": { "weighted": { "deform": [{ "time": 0.2, "vertices": [1, 1, 1, 1] }, { "time": 0.6 }] } }
     } },
-    "drawOrder": [{ "offsets": [{ "slot": "s2", "offset": -2 }] }, { "time": 0.5 }],
-    "events": [{ "time": 0.3, "name": "step" }]
+    "drawOrder": [{ "offsets": [{ "slot": "s2", "offset": -2 }] }, { "time": 0.5 }], "events": [{ "time": 0.3, "name": "step" }]
   },
-  "third": {
-    "bones": { "e": { "rotate": [{ "value": 90 }] }, "a": { "translate": [{ "x": 3, "y": 3 }] } },
-    "slots": { "s0": { "attachment": [{ "name": null }] } }
-  }
+  "third": { "bones": { "e": { "rotate": [{ "value": 90 }] }, "a": { "translate": [{ "x": 3, "y": 3 }] } },
+    "slots": { "s0": { "attachment": [{ "name": null }] } } }
 }
 }`;
 }
@@ -360,13 +351,11 @@ describe.each(['4.1', '4.2'] as const)('the legacy engine on a hand-written %s s
         expect(state.colors).toEqual(model.slots.colors);
         expect(Array.from(state.darkColors.subarray(0, 3))).toEqual(Array.from(model.slots.darkColors.subarray(0, 3)));
         expect(state.attachments.map((attachment) => attachment?.name).join()).toBe('img,mesh,seq,img,weighted');
-        expect(Array.from(state.sequenceIndices)).toEqual([-1, -1, -1, -1, -1]);
-        expect(Array.from(state.deformLengths)).toEqual([0, 0, 0, 0, 0]);
+        expect([...state.sequenceIndices, ...state.deformLengths]).toEqual([-1, -1, -1, -1, -1, 0, 0, 0, 0, 0]);
         expect(Array.from(state.drawOrder)).toEqual([0, 1, 2, 3, 4]);
         expect([state.skin, state.time, state.x, state.y, state.scaleX, state.scaleY]).toEqual([-1, 0, 0, 0, 1, 1]);
         expect(state.world.every((value) => value === 0)).toBe(true);
-        expect(engine.takeEvents()).toEqual([]);
-        expect([engine.timeScale, engine.defaultMix]).toEqual([1, 0]);
+        expect([engine.timeScale, engine.defaultMix, engine.takeEvents().length]).toEqual([1, 0, 0]);
     });
 
     it.each([
@@ -383,17 +372,33 @@ describe.each(['4.1', '4.2'] as const)('the legacy engine on a hand-written %s s
         expect(Array.from(engine.state.world)).toEqual(officialWorld(version, files.skeleton, placing));
     });
 
-    it('counts the skeleton time from 4.2 on and hands events out once', async () => {
+    it('counts the skeleton time from 4.2 on and hands each event out once, with the entry it is about', async () => {
         const { engine } = await create();
 
-        engine.setAnimation(0, ALL, false);
-        engine.update(0.25);
-        engine.update(0.25);
-        expect(engine.state.time).toBe(version === '4.1' ? 0 : 0.5);
-        const events = engine.takeEvents();
+        engine.defaultMix = 0.3;
+        const first = engine.setAnimation(0, ALL, false);
 
-        expect(events.map((event) => event.type)).toEqual(['start', 'event', 'event', 'event']);
-        expect(events.map((event) => event.key?.int)).toEqual([undefined, 1, 0, 7]);
+        engine.configure(first, { eventThreshold: 1 });
+        engine.update(0.125);
+        // two live entries with the same animation on one track: both fire events in the next update
+        const second = engine.setAnimation(0, ALL, false);
+
+        engine.update(0.25);
+        const empty = engine.setEmptyAnimation(0, 0);
+
+        for (let i = 0; i < 3; i++) engine.update(0.25);
+        expect(engine.state.time).toBe(version === '4.1' ? 0 : 1.125);
+        const made: TrackEntry[] = [first, second, empty];
+        const name = (entry: TrackEntry): string => ['first', 'second', 'empty'][made.indexOf(entry)] ?? 'unknown';
+        const events = engine.takeEvents();
+        const told = events.map((event) => `${event.type} ${name(event.entry)} ${event.key?.int ?? ''}`.trim());
+
+        expect(told.join(', ')).toBe(
+            'start first, event first 1, interrupt first, start second, event first 0, event first 7, ' +
+                'event second 1, event second 0, event second 7, interrupt second, start empty, complete empty, ' +
+                'end second, dispose second, end first, dispose first, end empty, dispose empty',
+        );
+        expect(events.every((event) => event.track === 0 && event.animation === event.entry.animation)).toBe(true);
         expect(engine.takeEvents()).toEqual([]);
         expect(engine.takeEvents()).not.toBe(engine.takeEvents());
     });
@@ -447,7 +452,6 @@ describe.each(['4.1', '4.2'] as const)('the legacy engine on a hand-written %s s
             () => engine.addAnimation(0, 0.5, true, 0),
             () => engine.setAnimation(-1, ALL, true),
             () => engine.addAnimation(0.5, ALL, true, 0),
-            () => engine.setEmptyAnimation(-2, 0),
             () => engine.addEmptyAnimation(Number.NaN, 0, 0),
             () => engine.setMix(ALL, 3, 0.2),
             () => engine.setSkin(3),

@@ -46,9 +46,12 @@ export class LegacyPlayer {
     }
 }
 
-/** Records one listener call. The official queue calls listeners in the order the calls were queued. */
+/**
+ * Records one listener call. The official queue calls listeners in the order the calls were
+ * queued. The event carries the entry it is about: the object the call that made the entry returned.
+ */
 function emit(player: LegacyPlayer, type: PoseEventType, entry: LegacyEntry): void {
-    player.events.push({ type, track: entry.trackIndex, animation: entry.animation });
+    player.events.push({ type, track: entry.trackIndex, animation: entry.animation, entry });
 }
 
 /** The official `queue.start`. */
@@ -76,7 +79,7 @@ export function queueComplete(player: LegacyPlayer, entry: LegacyEntry): void {
 
 /** The official `queue.event`. */
 export function queueEvent(player: LegacyPlayer, entry: LegacyEntry, key: EventKey): void {
-    player.events.push({ type: 'event', track: entry.trackIndex, animation: entry.animation, key });
+    player.events.push({ type: 'event', track: entry.trackIndex, animation: entry.animation, entry, key });
 }
 
 /** The official `clearNext`: disposes every entry queued after `entry`. */

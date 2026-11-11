@@ -20,6 +20,9 @@ fixtures/local/
 packages/*/README.md
 packages/*/LICENSE
 
+# Images of the render check, written by scripts/check-render.mjs
+.shots/
+
 .env
 .env.*
 !.env.example
