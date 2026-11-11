@@ -61,20 +61,45 @@ export interface AtlasPage {
   repeatY: boolean;
   pma: boolean;
 }
+export interface AtlasRegion {
+  page: number;
+  pageWidth: number;
+  pageHeight: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  offsetX: number;
+  offsetY: number;
+  originalWidth: number;
+  originalHeight: number;
+  degrees: number;
+  u: number;
+  v: number;
+  u2: number;
+  v2: number;
+}
 export type AttachmentData = RegionAttachmentData | MeshAttachmentData | BoundingBoxAttachmentData | PathAttachmentData | PointAttachmentData | ClippingAttachmentData;
+export interface AttachmentLookup {
+  readonly defaultSkin: number;
+  get(skin: number, slot: number, name: string): AttachmentData | undefined;
+  find(activeSkin: number, slot: number, name: string): AttachmentData | undefined;
+  resolve(ref: AttachmentRef): AttachmentData | undefined;
+}
 export interface AttachmentRef {
   skin: number;
   slot: number;
   name: string;
 }
+export declare function attachmentRegions(atlas: AtlasModel, attachment: RegionAttachmentData | MeshAttachmentData): Int32Array;
 export declare const BLEND_MODES: readonly string[];
 export declare const BONE_SETUP_STRIDE = 7;
 export interface BoneTable {
   count: number;
   names: string[];
   parents: Int16Array;
-  setup: Float32Array;
-  lengths: Float32Array;
+  setup: Float64Array;
+  lengths: Float64Array;
   inherit: Uint8Array;
   skinRequired: Uint8Array;
 }
@@ -89,12 +114,19 @@ export interface ClippingAttachmentData extends VertexData {
   convex: boolean;
   inverse: boolean;
 }
+export declare function computeMeshUVs(region: AtlasRegion, regionUVs: FloatArray, out: FloatArray, offset?: number, stride?: number): void;
+export declare function computeRegionOffsets(version: SpineVersion, attachment: RegionAttachmentData, region: AtlasRegion, out: FloatArray, offset?: number, stride?: number): void;
+export declare function computeRegionUVs(region: AtlasRegion, out: FloatArray, offset?: number, stride?: number): void;
+export declare function computeRegionWorldVertices(offsets: FloatArray, offsetsStart: number, world: Float64Array, bone: number, out: FloatArray, offset?: number, stride?: number): void;
+export declare function computeWorldVertices(data: VertexData, world: Float64Array, bone: number, deform: Float64Array, deformLength: number, out: FloatArray, offset?: number, stride?: number, start?: number, count?: number): void;
 export interface ConstraintBase {
   name: string;
   skinRequired: boolean;
   order?: number;
 }
 export type ConstraintData = IkConstraintData | TransformConstraintData | PathConstraintData | PhysicsConstraintData | SliderConstraintData;
+export declare function createAttachmentLookup(model: SkeletonModel): AttachmentLookup;
+export declare function createPoseEngine(model: SkeletonModel, options?: PoseEngineOptions): Promise<PoseEngine>;
 export declare function describeSkeleton(model: SkeletonModel): SkeletonInfo;
 export interface EventData {
   name: string;
@@ -114,6 +146,8 @@ export interface EventKey {
   volume: number;
   balance: number;
 }
+export declare function findRegion(atlas: AtlasModel, path: string): number;
+export type FloatArray = Float32Array | Float64Array;
 export interface IkConstraintData extends ConstraintBase {
   type: "ik";
   bones: Int16Array;
@@ -129,6 +163,7 @@ export interface IkConstraintData extends ConstraintBase {
 export declare function importAtlas(text: string): AtlasModel;
 export declare function importSkeleton(source: SkeletonSource): Promise<SkeletonModel>;
 export declare const INHERIT_MODES: readonly string[];
+export declare const LOCAL_STRIDE = 7;
 export declare class MarrowError extends Error {
   override readonly name: string;
   readonly code: MarrowErrorCode;
@@ -147,7 +182,7 @@ export interface MeshAttachmentData extends VertexData {
   type: "mesh";
   name: string;
   path: string;
-  color: Float32Array;
+  color: Float64Array;
   width: number;
   height: number;
   regionUVs: Float32Array;
@@ -158,12 +193,13 @@ export interface MeshAttachmentData extends VertexData {
   timelineSlots?: Int16Array;
   sequence: SequenceData | null;
 }
+export declare function meshSource(lookup: AttachmentLookup, mesh: MeshAttachmentData): MeshAttachmentData;
 export interface PathAttachmentData extends VertexData {
   type: "path";
   name: string;
   closed: boolean;
   constantSpeed: boolean;
-  lengths: Float32Array;
+  lengths: Float64Array;
 }
 export interface PathConstraintData extends ConstraintBase {
   type: "path";
@@ -212,6 +248,57 @@ export interface PointAttachmentData {
   y: number;
   rotation: number;
 }
+export interface PoseEngine {
+  readonly state: PoseState;
+  timeScale: number;
+  defaultMix: number;
+  setMix(from: number, to: number, duration: number): void;
+  setAnimation(track: number, animation: number, loop: boolean): TrackEntry;
+  addAnimation(track: number, animation: number, loop: boolean, delay: number): TrackEntry;
+  setEmptyAnimation(track: number, mixDuration: number): TrackEntry;
+  addEmptyAnimation(track: number, mixDuration: number, delay: number): TrackEntry;
+  configure(entry: TrackEntry, fields: TrackFields): void;
+  clearTrack(track: number): void;
+  clearTracks(): void;
+  setSkin(skin: number): void;
+  setupPose(): void;
+  setupPoseBones(): void;
+  setupPoseSlots(): void;
+  update(dt: number): void;
+  takeEvents(): PoseEvent[];
+}
+export interface PoseEngineOptions {
+  constraints?: "error" | "ignore";
+}
+export interface PoseEvent {
+  type: PoseEventType;
+  track: number;
+  animation: number;
+  key?: EventKey;
+}
+export type PoseEventType = "start" | "interrupt" | "end" | "dispose" | "complete" | "event";
+export interface PoseState {
+  readonly model: SkeletonModel;
+  x: number;
+  y: number;
+  scaleX: number;
+  scaleY: number;
+  skin: number;
+  time: number;
+  readonly local: Float64Array;
+  readonly inherit: Uint8Array;
+  readonly active: Uint8Array;
+  readonly world: Float64Array;
+  readonly colors: Float64Array;
+  readonly darkColors: Float64Array;
+  readonly attachments: (AttachmentData | null)[];
+  readonly sequenceIndices: Int32Array;
+  readonly deform: Float64Array[];
+  readonly deformLengths: Int32Array;
+  readonly drawOrder: Int16Array;
+}
+export declare function poseStateBytes(state: PoseState): number;
+export declare function readRegion(atlas: AtlasModel, region: number): AtlasRegion;
 export interface RegionAttachmentData {
   type: "region";
   name: string;
@@ -223,9 +310,10 @@ export interface RegionAttachmentData {
   rotation: number;
   width: number;
   height: number;
-  color: Float32Array;
+  color: Float64Array;
   sequence: SequenceData | null;
 }
+export declare function resolveSequenceIndex(sequence: SequenceData | null, index: number): number;
 export type ScaleYMode = "none" | "uniform" | "volume";
 export interface SequenceData {
   count: number;
@@ -233,6 +321,7 @@ export interface SequenceData {
   digits: number;
   setupIndex: number;
 }
+export declare function sequencePath(path: string, sequence: SequenceData | null, index: number): string;
 export interface SkeletonCounts {
   bones: number;
   slots: number;
@@ -313,8 +402,8 @@ export interface SlotTable {
   count: number;
   names: string[];
   bones: Int16Array;
-  colors: Float32Array;
-  darkColors: Float32Array;
+  colors: Float64Array;
+  darkColors: Float64Array;
   hasDark: Uint8Array;
   attachments: (string | null)[];
   blendModes: Uint8Array;
@@ -336,6 +425,22 @@ export interface TimelineData {
   folderSlots?: Int16Array;
 }
 export type TimelineKind = "rotate" | "translate" | "translateX" | "translateY" | "scale" | "scaleX" | "scaleY" | "shear" | "shearX" | "shearY" | "inherit" | "rgba" | "rgb" | "alpha" | "rgba2" | "rgb2" | "attachment" | "deform" | "sequence" | "event" | "drawOrder" | "drawOrderFolder" | "ikConstraint" | "transformConstraint" | "pathConstraintPosition" | "pathConstraintSpacing" | "pathConstraintMix" | "physicsConstraintInertia" | "physicsConstraintStrength" | "physicsConstraintDamping" | "physicsConstraintMass" | "physicsConstraintWind" | "physicsConstraintGravity" | "physicsConstraintMix" | "physicsConstraintReset" | "slider" | "sliderMix";
+export interface TrackEntry {
+  readonly trackIndex: number;
+  readonly animation: number;
+  readonly loop: boolean;
+  readonly delay: number;
+  readonly trackTime: number;
+  readonly trackEnd: number;
+  readonly timeScale: number;
+  readonly alpha: number;
+  readonly mixTime: number;
+  readonly mixDuration: number;
+  readonly reverse: boolean;
+  readonly shortestRotation: boolean;
+}
+export type TrackField = "loop" | "delay" | "trackTime" | "trackEnd" | "timeScale" | "alpha" | "mixTime" | "mixDuration" | "reverse" | "shortestRotation" | "eventThreshold" | "animationStart" | "animationEnd" | "animationLast" | "holdPrevious" | "mixBlend" | "attachmentThreshold" | "drawOrderThreshold" | "mixAttachmentThreshold" | "alphaAttachmentThreshold" | "mixDrawOrderThreshold" | "additive" | "keepHold";
+export type TrackFields = Partial<Record<TrackField, number | boolean | string>>;
 export interface TransformConstraintData extends ConstraintBase {
   type: "transform";
   bones: Int16Array;
@@ -346,7 +451,7 @@ export interface TransformConstraintData extends ConstraintBase {
   mixScaleX: number;
   mixScaleY: number;
   mixShearY: number;
-  offsets: Float32Array;
+  offsets: Float64Array;
   relative?: boolean;
   local?: boolean;
   localSource?: boolean;
@@ -372,6 +477,7 @@ export interface VertexData {
   bones: Int16Array | null;
   worldVerticesLength: number;
 }
+export declare const WORLD_STRIDE = 6;
 ```
 
 ## pixi-marrow/optimize

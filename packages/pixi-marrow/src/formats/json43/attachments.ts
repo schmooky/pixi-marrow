@@ -35,8 +35,8 @@ export interface LinkedMesh {
     inheritTimelines: boolean;
 }
 
-function readColor(hex: string | undefined): Float32Array {
-    const color = Float32Array.of(1, 1, 1, 1);
+function readColor(hex: string | undefined): Float64Array {
+    const color = Float64Array.of(1, 1, 1, 1);
 
     if (hex) writeHexColor(hex, color, 0);
 
@@ -181,7 +181,7 @@ function readPath(map: JsonPath, name: string, user: string, ctx: ImportContext)
     const vertexCount = map.vertexCount ?? 0;
     const fileLengths = requireList(map.lengths, `The length list of ${user}`);
     // one length per curve. The official parser sizes the list by the vertex count first
-    const lengths = new Float32Array(Math.max(Math.ceil(vertexCount / 3), fileLengths.length));
+    const lengths = new Float64Array(Math.max(Math.ceil(vertexCount / 3), fileLengths.length));
 
     lengths.set(fileLengths);
 

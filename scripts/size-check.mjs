@@ -32,6 +32,8 @@ const IMPORTS = {
     'core (importSkeleton)': ['importSkeleton', ['pixi.js'], '/core'],
     // reading an atlas does not pull in the skeleton readers. The marker is a message of theirs
     'core (importAtlas)': ['importAtlas', ['pixi.js', 'JSON cannot be parsed'], '/core'],
+    // the pose engine of one Spine version loads on demand, like the readers
+    'core (createPoseEngine)': ['createPoseEngine', ['pixi.js'], '/core'],
     'optimize (generateNames)': ['generateNames', ['pixi.js'], '/optimize'],
 };
 

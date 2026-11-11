@@ -4,7 +4,7 @@
  *
  * - Layers. A file imports only from its own layer or the layers below it:
  *   base, model, formats, pose, geometry, render, api, then the feature folders.
- * - The headless core (base, model, formats, pose and src/core.ts) never imports pixi.js.
+ * - The headless core (base, model, formats, pose, geometry and src/core.ts) never imports pixi.js.
  * - No runtime dependencies. The source imports nothing from npm except pixi.js. The official
  *   Spine cores are for tests. Node built-ins are allowed in src/optimize only.
  * - Size. No source or test file is longer than 500 lines.
@@ -21,7 +21,7 @@ const pkgDir = join(root, 'packages/pixi-marrow');
 const srcDir = join(pkgDir, 'src');
 const LAYERS = ['base', 'model', 'formats', 'pose', 'geometry', 'render', 'api'];
 const FEATURES = ['bake', 'debug', 'perf', 'optimize'];
-const HEADLESS = ['base', 'model', 'formats', 'pose'];
+const HEADLESS = ['base', 'model', 'formats', 'pose', 'geometry'];
 const MAX_LINES = 500;
 const CASTS = [
     [/\bas any\b/, '`as any`'],

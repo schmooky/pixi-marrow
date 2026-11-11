@@ -87,7 +87,7 @@ function rigText(version: Version): string {
       "plain": { "name": "img", "width": 1, "height": 1 }
     },
     "s2": {
-      "path": { "type": "path", "vertexCount": 6, "vertices": [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5], "lengths": [1.5, 2.5],
+      "path": { "type": "path", "vertexCount": 6, "vertices": [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5], "lengths": [1.1, 2.5],
         "closed": true, "constantSpeed": false },
       "wpath": { "type": "path", "vertexCount": 3, "vertices": [1, 1, 1, 2, 1, 1, 0, 3, 4, 1, 1, 2, 5, 6, 1], "lengths": [9] },
       "box": { "type": "boundingbox", "vertexCount": 3, "vertices": [0, 0, 1, 0, 1, 1] },
@@ -240,6 +240,26 @@ describe.each(['4.1', '4.2'] as const)('importJson42 on a hand-written %s skelet
         expect(kinds.has('inherit')).toBe(version === '4.2');
         expect(kinds.has('physicsConstraintReset')).toBe(version === '4.2');
         expect(Array.from(model.bones.inherit)).toEqual([0, 3, 1, 2, 4]);
+    });
+
+    it('keeps setup values as the 64-bit numbers of the file', () => {
+        const { bones, slots, constraints, skins } = model;
+        const find = (name: string) => skins[0]?.attachments.find((entry) => entry.name === name)?.attachment;
+        const transform = constraints.find(({ name }) => name === 't1');
+        const [region, mesh, path] = [find('img'), find('mesh'), find('path')];
+        const color = (...bytes: number[]): Float64Array => Float64Array.from(bytes, (byte) => byte / 255);
+
+        // a value that went through 32 bits would not equal the number in the file
+        expect(bones.setup.slice(7, 14)).toEqual(Float64Array.of(1.1, 2.2, 33.3, 1.5, 0.7, 3, 4));
+        expect(bones.lengths).toEqual(Float64Array.of(0, 3.3, 0, 0, 0));
+        expect(slots.colors.slice(0, 8)).toEqual(color(255, 128, 64, 192, 51, 102, 153, 255));
+        expect(slots.darkColors.slice(0, 3)).toEqual(color(16, 32, 48));
+        expect(transform?.type === 'transform' && transform.offsets).toEqual(
+            Float64Array.of(1.1, 2.2, 3.3, 0.4, 0.5, 6.6),
+        );
+        expect(region?.type === 'region' && region.color).toEqual(color(170, 187, 204, 221));
+        expect(mesh?.type === 'mesh' && mesh.color).toEqual(color(17, 34, 51, 68));
+        expect(path?.type === 'path' && path.lengths).toEqual(Float64Array.of(1.1, 2.5));
     });
 
     it('keeps the shearY mix of the first key on every key of a 4.1 transform timeline', () => {

@@ -9,6 +9,18 @@ export { importAtlas } from './formats/atlas';
 export { importSkeleton } from './formats/import';
 export type { SkeletonSniff, SkeletonSource } from './formats/sniff';
 export { sniffSkeleton } from './formats/sniff';
+export type { AtlasRegion } from './geometry/atlas-regions';
+export {
+    attachmentRegions,
+    findRegion,
+    readRegion,
+    resolveSequenceIndex,
+    sequencePath,
+} from './geometry/atlas-regions';
+export { computeMeshUVs } from './geometry/mesh';
+export type { FloatArray } from './geometry/read';
+export { computeRegionOffsets, computeRegionUVs, computeRegionWorldVertices } from './geometry/region';
+export { computeWorldVertices } from './geometry/vertices';
 export type { AtlasCustomField, AtlasFilter, AtlasModel, AtlasPage } from './model/atlas';
 export { ATLAS_FILTERS, ATLAS_REGION_STRIDE } from './model/atlas';
 export type {
@@ -49,3 +61,17 @@ export type {
 } from './model/model';
 export { BLEND_MODES, BONE_SETUP_STRIDE, INHERIT_MODES } from './model/model';
 export type { EventKey, TimelineData, TimelineKind } from './model/timelines';
+export type {
+    PoseEngine,
+    PoseEngineOptions,
+    PoseEvent,
+    PoseEventType,
+    TrackEntry,
+    TrackField,
+    TrackFields,
+} from './pose/engine';
+export { createPoseEngine } from './pose/engine';
+export type { AttachmentLookup } from './pose/shared/lookup';
+export { createAttachmentLookup, meshSource } from './pose/shared/lookup';
+export type { PoseState } from './pose/state';
+export { LOCAL_STRIDE, poseStateBytes, WORLD_STRIDE } from './pose/state';

@@ -93,7 +93,7 @@ function readTransform(input: BinaryInput, name: string, boneCount: number): Tra
     const source = readIndex(input, boneCount, 'bone');
     const flags = input.readUnsignedByte();
     const properties: TransformFrom[] = [];
-    const offsets = new Float32Array(6);
+    const offsets = new Float64Array(6);
     const mixes = [0, 0, 0, 0, 0, 0];
 
     for (let i = 0, n = flags >> 5; i < n; i++) properties.push(readTransformFrom(input));

@@ -4,7 +4,7 @@ import { describeSkeleton } from '../../src/model/info';
 import type { SkeletonModel } from '../../src/model/model';
 import type { TimelineData, TimelineKind } from '../../src/model/timelines';
 
-const WHITE = Float32Array.of(1, 1, 1, 1);
+const WHITE = Float64Array.of(1, 1, 1, 1);
 
 const region = (name: string): RegionAttachmentData => ({
     type: 'region',
@@ -57,8 +57,8 @@ function model(overrides: Partial<SkeletonModel> = {}): SkeletonModel {
             count: 2,
             names: ['root', 'arm'],
             parents: Int16Array.of(-1, 0),
-            setup: new Float32Array(14),
-            lengths: new Float32Array(2),
+            setup: new Float64Array(14),
+            lengths: new Float64Array(2),
             inherit: new Uint8Array(2),
             skinRequired: new Uint8Array(2),
         },
@@ -66,8 +66,8 @@ function model(overrides: Partial<SkeletonModel> = {}): SkeletonModel {
             count: 3,
             names: ['body', 'glow', 'hand'],
             bones: Int16Array.of(0, 0, 1),
-            colors: new Float32Array(12).fill(1),
-            darkColors: new Float32Array(9),
+            colors: new Float64Array(12).fill(1),
+            darkColors: new Float64Array(9),
             hasDark: new Uint8Array(3),
             attachments: ['body', null, 'hand'],
             blendModes: new Uint8Array(3),
@@ -235,7 +235,7 @@ describe('describeSkeleton', () => {
                                     name: 'rail',
                                     closed: false,
                                     constantSpeed: true,
-                                    lengths: new Float32Array(1),
+                                    lengths: new Float64Array(1),
                                     vertices: new Float32Array(12),
                                     bones: null,
                                     worldVerticesLength: 12,

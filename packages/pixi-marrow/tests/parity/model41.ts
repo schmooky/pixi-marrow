@@ -31,6 +31,7 @@ import {
     boneOrSlotIndex,
     boneTable,
     clippingData,
+    doubles,
     drawOrders,
     eventData,
     eventKey,
@@ -162,7 +163,7 @@ export function legacyTransform<B>(c: LegacyTransform<B>, bone: (data: B) => num
         mixScaleX: c.mixScaleX,
         mixScaleY: c.mixScaleY,
         mixShearY: c.mixShearY,
-        offsets: floats(offsets),
+        offsets: doubles(offsets),
         relative: c.relative,
         local: c.local,
     };

@@ -180,23 +180,23 @@ describe('colors', () => {
     it('reads hex strings like the official Color', () => {
         for (const hex of ['ff8000', 'ff800040', '#0a141e28', '00000000']) {
             const official = new Color().setFromString(hex);
-            const ours = new Float32Array(4);
+            const ours = new Float64Array(4);
 
             writeHexColor(hex, ours, 0);
-            expect(ours).toEqual(Float32Array.of(official.r, official.g, official.b, official.a));
+            expect(ours).toEqual(Float64Array.of(official.r, official.g, official.b, official.a));
         }
     });
 
     it('reads packed integers like the official Color', () => {
         const official = new Color();
-        const ours = new Float32Array(4);
+        const ours = new Float64Array(4);
 
         Color.rgba8888ToColor(official, 0xff804020 | 0);
         writeRgba8888(0xff804020 | 0, ours, 0);
-        expect(ours).toEqual(Float32Array.of(official.r, official.g, official.b, official.a));
+        expect(ours).toEqual(Float64Array.of(official.r, official.g, official.b, official.a));
 
         Color.rgb888ToColor(official, 0x102030);
         writeRgb888(0x102030, ours, 0);
-        expect(ours.subarray(0, 3)).toEqual(Float32Array.of(official.r, official.g, official.b));
+        expect(ours.subarray(0, 3)).toEqual(Float64Array.of(official.r, official.g, official.b));
     });
 });

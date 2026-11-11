@@ -1,4 +1,5 @@
 import { MarrowError } from '../../base/errors';
+import { writeHexColor } from '../shared/color';
 
 const EXPORT_FIX = 'Export the skeleton again from the Spine editor.';
 
@@ -148,15 +149,10 @@ export function enumIndex(all: readonly string[], value: string, what: string): 
 }
 
 /**
- * Reads a hex color as r, g, b, a in double precision, the way the official `Color.setFromString`
- * does. Curves are computed from these numbers before they are stored as floats.
+ * Reads the hex color of a timeline key as r, g, b, a in double precision. Throws when the key has none.
+ * Curves are computed from these numbers before they are stored as floats.
  */
 export function readHexColor(hex: string | undefined, out: Float64Array, offset: number, what: string): void {
     if (typeof hex !== 'string') throw invalid(`${what} has no color.`);
-    const digits = hex.charAt(0) === '#' ? hex.slice(1) : hex;
-
-    out[offset] = Number.parseInt(digits.slice(0, 2), 16) / 255;
-    out[offset + 1] = Number.parseInt(digits.slice(2, 4), 16) / 255;
-    out[offset + 2] = Number.parseInt(digits.slice(4, 6), 16) / 255;
-    out[offset + 3] = digits.length !== 8 ? 1 : Number.parseInt(digits.slice(6, 8), 16) / 255;
+    writeHexColor(hex, out, offset);
 }

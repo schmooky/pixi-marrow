@@ -22,18 +22,21 @@ const TYPE_POINT = 5;
 const TYPE_CLIPPING = 6;
 const WHITE = 0xffffffff;
 
-/** Reads `count` floats. A count with a fraction rounds up, as the official read loop does. */
-function readFloats(input: BinaryInput, count: number): Float32Array {
-    const out = new Float32Array(Math.max(0, Math.ceil(count)));
-
+/** Fills an array with floats from the file. */
+function fill<T extends Float32Array | Float64Array>(input: BinaryInput, out: T): T {
     for (let i = 0; i < out.length; i++) out[i] = input.readFloat();
 
     return out;
 }
 
+/** Reads `count` floats. */
+function readFloats(input: BinaryInput, count: number): Float32Array {
+    return fill(input, new Float32Array(Math.max(0, count)));
+}
+
 /** Reads the color of a drawn attachment. Without the flag the color is white. */
-function readColor(input: BinaryInput, stored: boolean): Float32Array {
-    const color = new Float32Array(4);
+function readColor(input: BinaryInput, stored: boolean): Float64Array {
+    const color = new Float64Array(4);
 
     writeRgba8888(stored ? input.readInt32() : WHITE, color, 0);
 
@@ -200,7 +203,8 @@ function readLinkedMesh(state: ImportState, flags: number, name: string): MeshAt
 
 function readPath(state: ImportState, flags: number, name: string): PathAttachmentData {
     const vertices = readVertices(state, (flags & 64) !== 0);
-    const lengths = readFloats(state.input, vertices.worldVerticesLength / 6);
+    // one length per curve. A count with a fraction rounds up, as the official read loop does
+    const lengths = fill(state.input, new Float64Array(Math.max(0, Math.ceil(vertices.worldVerticesLength / 6))));
 
     skipColor(state);
 

@@ -83,7 +83,7 @@ function readTransform(map: JsonTransformConstraint, i: number, bones: NameIndex
         source: resolve(bones, map.target, 'bone', user),
         local: pick(map.local, false),
         relative: pick(map.relative, false),
-        offsets: Float32Array.of(
+        offsets: Float64Array.of(
             pick(map.rotation, 0),
             pick(map.x, 0),
             pick(map.y, 0),

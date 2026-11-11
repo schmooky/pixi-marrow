@@ -60,7 +60,7 @@ export interface TransformConstraintData extends ConstraintBase {
     mixScaleY: number;
     mixShearY: number;
     /** Six offsets in this order, rotation, x, y, scaleX, scaleY, shearY. */
-    offsets: Float32Array;
+    offsets: Float64Array;
     /** 4.1 and 4.2 only. */
     relative?: boolean;
     /** 4.1 and 4.2 only. */

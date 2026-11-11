@@ -20,6 +20,7 @@
     "fixtures": "node scripts/fixtures.mjs",
     "fixtures:refresh": "node scripts/fixtures.mjs --refresh",
     "parity:ref": "pnpm --filter pixi-marrow parity:ref",
+    "memory:update": "pnpm --filter pixi-marrow memory:update",
     "facts": "node scripts/gen-facts.mjs",
     "check:facts": "node scripts/gen-facts.mjs --check",
     "check:source": "node scripts/check-source.mjs",

@@ -23,6 +23,8 @@ import {
  */
 
 export const floats = (values: ArrayLike<number>): Float32Array => Float32Array.from(values);
+/** A copy of official 64-bit numbers as they are, with no rounding to 32 bits on the way. */
+export const doubles = (values: ArrayLike<number>): Float64Array => Float64Array.from(values);
 export const shorts = (values: ArrayLike<number>): Int16Array => Int16Array.from(values);
 /** 0 where the official loader left a number undefined or null. */
 export const orZero = (value: number | null | undefined): number => value ?? 0;
@@ -70,7 +72,7 @@ interface BoneRow {
 }
 
 export function boneTable(rows: readonly BoneRow[]): BoneTable {
-    const setup = new Float32Array(rows.length * BONE_SETUP_STRIDE);
+    const setup = new Float64Array(rows.length * BONE_SETUP_STRIDE);
 
     rows.forEach(({ pose }, i) => {
         const values = [pose.x, pose.y, pose.rotation, pose.scaleX, pose.scaleY, pose.shearX, pose.shearY];
@@ -83,7 +85,7 @@ export function boneTable(rows: readonly BoneRow[]): BoneTable {
         names: rows.map((row) => row.name),
         parents: shorts(rows.map((row) => row.parent)),
         setup,
-        lengths: floats(rows.map((row) => row.length)),
+        lengths: doubles(rows.map((row) => row.length)),
         inherit: Uint8Array.from(rows.map((row) => row.inherit)),
         skinRequired: Uint8Array.from(rows.map((row) => (row.skinRequired ? 1 : 0))),
     };
@@ -100,8 +102,8 @@ interface SlotRow {
 }
 
 export function slotTable(rows: readonly SlotRow[]): SlotTable {
-    const colors = new Float32Array(rows.length * 4);
-    const darkColors = new Float32Array(rows.length * 3);
+    const colors = new Float64Array(rows.length * 4);
+    const darkColors = new Float64Array(rows.length * 3);
 
     rows.forEach(({ color, darkColor }, i) => {
         colors.set([color.r, color.g, color.b, color.a], i * 4);
@@ -204,7 +206,7 @@ export function sequenceData(sequence: OfficialSequence | null): SequenceData | 
     };
 }
 
-const rgba = (color: OfficialColor): Float32Array => Float32Array.of(color.r, color.g, color.b, color.a);
+const rgba = (color: OfficialColor): Float64Array => Float64Array.of(color.r, color.g, color.b, color.a);
 
 interface OfficialRegion {
     name: string;
@@ -291,7 +293,7 @@ export function pathData(a: OfficialPath): PathAttachmentData {
         name: a.name,
         closed: a.closed,
         constantSpeed: a.constantSpeed,
-        lengths: floats(a.lengths),
+        lengths: doubles(a.lengths),
         ...vertexData(a),
     };
 }

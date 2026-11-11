@@ -8,6 +8,8 @@ Change from draft 2: memory is a goal of the same weight as speed (section 8.6).
 
 Change with M1: the model is a faithful import with no conversion between versions (sections 5.2 and 10). Milestone M1 is built.
 
+Change with M2a: there are two pose engines, one for 4.1 and 4.2 and one for 4.3, because the official runtimes mix animations differently (section 5.3). Pose numbers are 64-bit and parity is exact, not within a tolerance (section 15). M2 is split into M2a, which is built, and M2b.
+
 This document is the plan. Every performance number in it is an estimate until the benchmark measures it. Section 0 lists what has been verified.
 
 ## 0. Verified facts this design rests on
@@ -193,9 +195,23 @@ Limits of the model today: indices are 16-bit. A file with more than 32,767 bone
 
 ### 5.3 Pose
 
+Built in M2a, without constraints:
+
+| Piece | Responsibility |
+|---|---|
+| `PoseState` | Per instance, in typed arrays: local pose (7 numbers per bone), inherit mode, bone activity, world transforms (6 numbers per bone), slot colors and dark colors, sequence index, deform and draw order. The numbers are 64-bit. |
+| `PoseEngine` | The interface of a pose engine. It mirrors the official `AnimationState` and `Skeleton` calls: tracks, queue, mixing, skins, setup pose, update, events. |
+| `createPoseEngine` | Picks the engine for the model's version and loads it on demand. |
+| `src/pose/legacy` | The engine for 4.1 and 4.2. Their differences are branches on the version. |
+| `src/pose/v43` | The engine for 4.3. The official 4.3 runtime mixes animations with other arguments in every timeline, so it cannot share the 4.1 and 4.2 player. |
+| `createAttachmentLookup`, `meshSource` | Find attachments by skin, slot and name, and the mesh that owns the geometry of a linked mesh. |
+
+Timelines that animate constraints are not applied yet, but they still count in the mixing bookkeeping, as in the official player. Dropping them changes when mixed-out entries end.
+
+Planned for the later milestones:
+
 | Class | Responsibility |
 |---|---|
-| `PoseState` | Per instance, all typed arrays: local and applied transforms, world matrices (6 floats per bone), slot colors, attachment ids, sequence index, deform pool, draw order, constraint values, physics state, change flags. |
 | `AnimationPlayer` | Tracks, queue, mixing, hold logic, events. The counterpart of the official `AnimationState`. |
 | `TrackState` | One entry: animation, times, loop, alpha, mix, timeline modes, keyframe cursors. |
 | `TimelineKernels` | One function per timeline kind. Reads frames, writes into `PoseState`. |
@@ -546,7 +562,9 @@ The pose core is only as good as its proof. The parity suite is built before the
 | Allocation | Node | A played loop allocates nothing after warm-up |
 | Docs examples | Node and Chrome | Every example compiles and renders |
 
-Tolerance: pose values are stored as 32-bit floats and the official JavaScript core computes in 64-bit. Small differences are expected. Physics accumulates them, so it gets its own, wider tolerance and its state may be kept in 64-bit.
+No tolerance: pose values are 64-bit, like the numbers of the official JavaScript core, and the engines port its arithmetic in the same order. Pose parity is exact equality. The one bounded difference is in mesh UVs of JSON files, where the model stores `regionUVs` in 32-bit and the official reader keeps 64-bit. The largest difference seen is 5.96e-8, far below one texel.
+
+The pose suite as built: 5,508 scripts and 165,298 compared updates over 117 rigs, in 18 seconds. A run of the official core against itself gives zero differences, and a change of one unit in the last place on either side is reported.
 
 Fixtures: 57 official example rigs across 4.1, 4.2 and 4.3, each as JSON and binary, listed in `fixtures/manifest.json` at pinned commits with a hash per file. They are downloaded on demand and not committed, because the licence of the example assets has not been read. Your own rigs go into `fixtures/local/`, which is not committed either.
 
@@ -558,7 +576,8 @@ One finding from building the suite: the official binary readers ignore the offs
 |---|---|---|
 | M0 Scaffold and parity suite | Repo and gates from section 12. Facts file with generated blocks. Parity suite that loads fixtures into the three official cores. The docs site, the llms files and the skills wait for M2, when there is an API to document. | Built 2026-11-11. `pnpm check` passes locally. `pnpm parity:ref` prints reference poses for all 114 fixtures. CI has not run yet: there is no remote. |
 | M1 Model | `SkeletonModel`, JSON and binary importers for 4.1 to 4.3, atlas importer, `describeSkeleton`, `generateNames` and the command line tool | Built 2026-11-11. Model parity on all 114 fixtures and atlas parity on all 57 atlases, with exact equality. Hand-written skeletons cover the timeline kinds the fixtures lack. Every feature is imported, even those not yet solved. Not done: a memory baseline, which waits for instances in M2. |
-| M2 First frames | Pose: bone transforms, timelines, player with mixing, skins, deform, sequences, cursors, typed arrays. Render: CPU skinning, mesh mode, premultiplied pipeline, additive in batch, pages in one draw, stable plan, hidden slots. | Pose and pixel parity on fixtures without constraints. Rigs with constraints fail with the typed error. |
+| M2a Pose, headless | Pose engines for 4.1 and 4.2 and for 4.3: bone transforms, every timeline that does not animate a constraint, tracks, queue, mixing, events, skins, deform, sequences. Geometry kernel: vertex positions and UVs. Memory baseline. | Built 2026-11-11. Pose parity is exact on all 114 fixtures and 3 hand-written rigs. Geometry parity is exact on all fixtures, with the one bounded case for JSON mesh UVs. A rig with constraints throws the typed error unless it is played with constraints ignored. Not done: keyframe cursors, which wait for M5 with the other skipping work. |
+| M2b First frames | Render: Pixi pipe, CPU skinning into buffers, mesh mode, premultiplied pipeline, additive in batch, pages in one draw, stable plan, hidden slots. The display object and its API. | Pixel parity with the official Pixi runtime on fixtures without constraints, in WebGL2 and WebGPU. |
 | M3 Constraints and overdraw | Pose: IK, transform, path, clipping. Render: tight meshes, sidecar, covered slots, stencil clipping, perf report. | Parity on constraint fixtures. Benchmark shows fewer shaded pixels and draw ranges. |
 | M4 Complete | Physics, sliders, generalized transform constraints, additive tracks. Perf probes. spine-benchmark A/B against the official runtime. | Parity on every fixture for 4.1 to 4.3. First published numbers per device class. |
 | M5 Pose skipping | Constant folding, needed set, timeline skipping, path cache, shared pose, sleep | Optimization parity passes. A/B shows the gain. |
@@ -600,6 +619,6 @@ Open, each with a recommendation the design assumes:
 2. WebGPU from M2, not added later.
 3. Display class name: `MarrowSpine`, in line with `SilkGraphics`.
 4. Default preset: `exact`.
-5. Pose values stored as 32-bit floats.
+5. Pose values are 64-bit on the CPU, so parity with the official core is exact. Copies for the GPU are 32-bit. Settled in M2a. A pose costs 1 to 26 KB per instance on the fixtures.
 6. Unported features fail loudly with a typed error. No silent fallback.
 7. Fixtures: your rigs in a private folder outside the public repo until you say otherwise.

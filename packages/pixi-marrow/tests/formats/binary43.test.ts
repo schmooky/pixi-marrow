@@ -368,6 +368,21 @@ describe('importBinary43', () => {
         expect(new Set(types).size).toBe(6);
     });
 
+    it('keeps setup values as the 64-bit numbers the official reader holds', () => {
+        const model = importBinary43(skeleton(false));
+        const entries = model.skins[0]?.attachments ?? [];
+        const [image, path] = ['img', 'path'].map((name) => entries.find((entry) => entry.name === name)?.attachment);
+
+        expect(model.bones.setup.slice(0, 7)).toEqual(Float64Array.of(1, 2, 30, 1.5, 0.5, 10, -10));
+        expect(model.bones.lengths).toEqual(Float64Array.of(50, 50, 50));
+        // a color byte divided by 255 has more digits than a 32-bit float holds
+        expect(model.slots.colors.slice(0, 4)).toEqual(Float64Array.of(1, 128 / 255, 64 / 255, 192 / 255));
+        expect(model.slots.darkColors.slice(3, 6)).toEqual(Float64Array.of(16 / 255, 32 / 255, 48 / 255));
+        expect(image).toMatchObject({ type: 'region', color: Float64Array.of(128 / 255, 1, 0, 1) });
+        expect(path).toMatchObject({ type: 'path', lengths: Float64Array.of(1.5, 3) });
+        expect(model.constraints[1]).toMatchObject({ offsets: Float64Array.of(11, 0, 12, 0, 0, 13) });
+    });
+
     it('keeps the timeline slots of a mesh, and leaves the field out when it has none', () => {
         const [first, second] = importBinary43(skeleton(false)).skins;
         const mesh = first?.attachments.find((entry) => entry.name === 'mesh')?.attachment;

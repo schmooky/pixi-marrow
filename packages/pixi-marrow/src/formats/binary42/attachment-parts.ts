@@ -25,16 +25,16 @@ export const ATTACHMENT_TYPE = {
 /** The color the 4.2 format leaves out of the file: opaque white. */
 export const WHITE = 0xffffffff;
 
-/** Turns a 32-bit RGBA value into r, g, b, a floats. */
-export function rgba(value: number): Float32Array {
-    const color = new Float32Array(4);
+/** Turns a 32-bit RGBA value into r, g, b, a, each a channel byte divided by 255 in 64-bit arithmetic. */
+export function rgba(value: number): Float64Array {
+    const color = new Float64Array(4);
 
     writeRgba8888(value, color, 0);
 
     return color;
 }
 
-/** Reads `count` floats. */
+/** Reads `count` floats into a 32-bit array, for vertices and texture coordinates. */
 export function readFloats(input: BinaryInput, count: number): Float32Array {
     const values = new Float32Array(count);
 
@@ -181,8 +181,10 @@ export function path(
     if (!Number.isInteger(lengthCount)) {
         throw invalid(`The path ${name} has a vertex count that is not a multiple of 3.`);
     }
-    const lengths = readFloats(state.input, lengthCount);
+    // 64-bit, like the numbers the official path attachment holds
+    const lengths = new Float64Array(lengthCount);
 
+    for (let i = 0; i < lengthCount; i++) lengths[i] = state.input.readFloat();
     skipEditorColor(state);
 
     return { type: 'path', name, closed, constantSpeed, lengths, ...geometry };
