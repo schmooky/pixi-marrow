@@ -1,4 +1,5 @@
 import { type MeshAdaptor, MeshPipe, type Renderer } from 'pixi.js';
+import { watchContext } from './context-watch';
 
 /*
  * The pipe Pixi draws a mesh with, for a renderer that has none.
@@ -30,14 +31,15 @@ function adaptorOf(renderer: Renderer): MeshAdaptor | undefined {
 }
 
 /**
- * Makes sure a renderer can draw meshes: gives it Pixi's mesh pipe when it has none. A view in
- * the mesh mode calls it before every frame, through `onRender` of its container. For a renderer
- * that has the pipe, that is one read of a property.
+ * Makes sure a renderer can draw the meshes of a view: gives it Pixi's mesh pipe when it has
+ * none, and makes it say when its WebGL context is lost, see `context-watch.ts`. A view in the
+ * mesh mode calls it before the first frame a renderer draws of it.
  *
  * @example
- * container.onRender = linkMeshPipe;
+ * container.onRender = (renderer) => linkMeshPipe(renderer);
  */
 export function linkMeshPipe(renderer: Renderer): void {
+    watchContext(renderer);
     // the type says that every renderer has the pipe. One that was created before `Mesh` loaded has not
     if (renderer.renderPipes.mesh !== undefined) return;
     const adaptor = adaptorOf(renderer);

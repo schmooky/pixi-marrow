@@ -362,6 +362,8 @@ Limits, stated:
 
 The batched mode relies on these parts inside Pixi, checked against the source of 8.16.0 and 8.23.0. The `Batcher` base class and the fields of a batch element. `renderPipes.batch` and the protocol of a render pipe. `Container.onRender` and `ViewContainer`. The bind layout of the batch adaptors and `renderer.limits.maxBatchableTextures`. The official runtime builds on the same parts.
 
+Both modes rely on two more parts for a lost context, see 8.7. The `prerender` runner of a renderer. `Container.isRenderable`, which Pixi's mesh pipe asks right before it draws a mesh.
+
 ### 7.3 Stable plan
 
 The template holds a vertex range for every attachment that can appear in the active skins. Showing, hiding or reordering slots changes which ranges the index buffer points at. Vertex data does not move. A skin change extends or rebuilds the template.
@@ -550,6 +552,19 @@ Measured, not assumed:
 - Since M5 the static arrays of a layout are shared by the instances of a model, skin and set of cuts. One view shader serves every view of the same pages, and one mask shader every mask. tank-pro in mesh mode went from 188 to 131 KB per instance. An instance of coin-pro went from 33 to 16.5 KB.
 - The bench reads the heap on a fresh page per reading since M5, twice in opposite order. The two readings differ by 0.4 percent at most.
 - The spine-benchmark A/B reports heap and GPU memory next to frame time.
+
+### 8.7 A WebGL context that is lost and restored
+
+A browser can take the WebGL context of a page away and give it back. Safari on iOS does that to tabs in the background. Pixi keeps its `Application` alive and makes its GPU resources again when the context is back. The runtime follows two rules.
+
+- It does nothing for its buffers, and that is enough. After a restore Pixi gives every buffer a new GPU buffer, and a new one uploads its whole array at its first draw. The arrays in memory are complete at every moment. So the stretches that wait for an upload, the reach of an index range and the skip for an unchanged pose stay right. A skeleton at rest comes back without an upload of its own.
+- It draws no skeleton while the context is lost. Pixi cannot compile a program that it first uses without a context. Version 8.16 of pixi.js throws out of the render then. Version 8.23 logs the error and never sets the uniforms of that program again. What draws with it stays invisible after the restore. The shaders of the runtime are made on demand, so a skeleton that first appears while the context is away brings such a program. The pipe of the batched mode runs no batch then, and the meshes of the mesh mode say that they are not renderable. The first draw with the new context compiles the programs.
+
+Cost: a renderer asks its context once per render, not once per skeleton. The root import grew by 107 bytes to 28.99 kB gzip. Measured with `pnpm bench:ab --scene=rest` on the bench machine, 200 instances on WebGL2, the build before against the build after. In the mesh mode the update takes 0.025 to 0.040 ms on both builds. The CPU part of a frame takes 0.090 to 0.330 ms, equal within one step of the clock, which is 0.005 ms. In the batched mode the update takes 0.020 to 0.050 ms on both builds, and they differ by less than the runs of one build do. No run uploads a byte.
+
+The last step of `pnpm check:render` measures the picture, see `scripts/render/restore-check.mjs`. Nine cases run in both modes on pixi.js 8.16.0 and 8.23.0, in Chrome on WebGL2. Five cases rest or play: a skeleton at rest, one that plays, a clip at rest, a clip that plays, and eight instances of one asset. Two have attached containers, at rest and playing. Two have a skeleton that is first drawn without a context. Every pixel of five frames after the restore equals a run that kept its context. Without the second rule the last two cases fail on both versions, and the other seven pass.
+
+Not covered: the loss of a WebGPU device, real phones, and display objects of Pixi's own that are first drawn without a context. Those have the same trouble inside Pixi.
 
 ## 9. Public API sketch
 

@@ -125,6 +125,8 @@ A change to the render path also runs on the lowest pixi.js the package allows: 
 
 The pixel check ends with a game check: cases from a bundle made as a game makes one, with named imports and the tree shaken. Pixi registers pipes when modules load, so code that loads on demand must not count on a pipe the game never imported.
 
+Its last step takes the WebGL context of a running game away and gives it back, in both render modes. The frames after the restore must equal the frames of a run that kept its context. `node scripts/render/restore-check.mjs` runs that step alone.
+
 `apps/site` is the docs site: `pnpm site:dev`, `pnpm site:build`. It is the one real bundle in the repo. Build it after a change to what loads on demand. `fixtures/bzzz` holds the symbol rigs of a real slot game: they run in the parity suite like the official examples.
 
 A change that may cost or save time needs a measurement. `pnpm bench:ab` runs pixi-marrow against the official Pixi runtime in headless Chrome: CPU time, frame time, draw calls and heap per instance. `--scene=rest`, `little`, `mixed` and `moved` measure skeletons that stand still or move little. `pnpm bench:ab --mode=overdraw` compares tight meshes on and off. It prints the spread between runs: a difference inside the spread is not a result. It measures this one machine, not phones.

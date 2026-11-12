@@ -77,6 +77,11 @@ export interface StageOptions {
     antialias?: boolean;
     /** The most textures a batch can hold. Default 16. */
     maxTextures?: number;
+    /**
+     * Gives the renderer a WebGL context that is lost while `lost` is true. The stage then tells
+     * the listeners of `prerender` before every frame, as a renderer of Pixi does.
+     */
+    context?: { lost: boolean };
 }
 
 /** The render group system of Pixi, with its render method in reach. */
@@ -97,11 +102,22 @@ export function createStage(options: StageOptions = {}): Stage {
     let started = false;
     let noting = true;
     const pipes: Record<string, unknown> = {};
+    const { context } = options;
+    /** What asked to hear of every render. Kept for a stage with a context only. */
+    const before: { prerender(): void }[] = [];
     const fake = {
         roundPixels: options.roundPixels ?? false,
         renderPipes: pipes,
         limits: { maxBatchableTextures: options.maxTextures ?? 16 },
-        runners: { destroy: { add: () => undefined }, prerender: { add: () => undefined } },
+        ...(context === undefined ? {} : { gl: { isContextLost: (): boolean => context.lost } }),
+        runners: {
+            destroy: { add: () => undefined },
+            prerender: {
+                add(item: { prerender(): void }): void {
+                    if (context !== undefined) before.push(item);
+                },
+            },
+        },
         renderTarget: { renderTarget: { colorTextures: [{ antialias: options.antialias ?? false }] } },
         globalUniforms: { start: () => undefined, push: () => undefined, pop: () => undefined },
     };
@@ -196,6 +212,7 @@ export function createStage(options: StageOptions = {}): Stage {
         render(note = true): void {
             noting = note;
             counts.draws.length = 0;
+            for (let i = 0; i < before.length; i++) before[i]?.prerender();
             system.draw(frame);
         },
     };

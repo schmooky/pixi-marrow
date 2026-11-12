@@ -1,4 +1,5 @@
 import { type Bounds, Buffer, BufferUsage, Mesh, type Shader } from 'pixi.js';
+import { contextLost } from './context-watch';
 import { MeasuredGeometry } from './measured-geometry';
 import { STATIC_STRIDE } from './template';
 
@@ -10,6 +11,22 @@ export interface VertexBuffers {
     readonly statics: Buffer;
     /** The light color per vertex, and with dark colors the dark color after it. */
     readonly colors: Buffer;
+}
+
+/**
+ * A Pixi mesh of the mesh mode: a draw range or a clip mask. Pixi asks a mesh right before it
+ * draws it whether it can be drawn. This one says no while the WebGL context of the renderer is
+ * lost, see `context-watch.ts`.
+ *
+ * @example
+ * const mesh = new RangeMesh({ geometry, shader: createMaskShader() });
+ * console.log(mesh.isRenderable); // true, unless the browser took the context
+ */
+export class RangeMesh extends Mesh<MeasuredGeometry, Shader> {
+    /** Whether Pixi draws the mesh: it is visible, and the renderer has its context. */
+    override get isRenderable(): boolean {
+        return !contextLost() && super.isRenderable;
+    }
 }
 
 /**
@@ -30,7 +47,7 @@ export function createRangeMesh(
     shader: Shader,
     indices: Uint16Array | Uint32Array,
     label: string,
-): { mesh: Mesh<MeasuredGeometry, Shader>; buffer: Buffer } {
+): { mesh: RangeMesh; buffer: Buffer } {
     const buffer = new Buffer({
         data: indices,
         label: 'marrow-indices',
@@ -55,5 +72,5 @@ export function createRangeMesh(
         measure,
     );
 
-    return { mesh: new Mesh({ geometry, shader, label }), buffer };
+    return { mesh: new RangeMesh({ geometry, shader, label }), buffer };
 }
