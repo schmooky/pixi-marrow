@@ -4,6 +4,7 @@ import { resolveSequenceIndex } from '../../src/geometry/atlas-regions';
 import { syntheticRig } from '../geometry/synthetic';
 import {
     createRig,
+    drawPose,
     expectKernel,
     loadRig,
     play,
@@ -98,7 +99,7 @@ describe('sequences', () => {
 
         if (drawn === undefined) throw new Error('the flame is visible');
         state.sequenceIndices[flame] = 2;
-        rig.view.update(state);
+        drawPose(rig.view, state);
         const after = Array.from(vertexData(rig.view).statics);
         const changed = after.flatMap((value, at) => (Object.is(value, before[at]) ? [] : [Math.floor(at / 3)]));
 
@@ -110,7 +111,7 @@ describe('sequences', () => {
         );
         // back to the setup region: the same numbers as at the start
         state.sequenceIndices[flame] = -1;
-        rig.view.update(state);
+        drawPose(rig.view, state);
         expect(Array.from(vertexData(rig.view).statics)).toEqual(before);
         expect(rig.view.stats.uvUploads).toBe(2);
     });

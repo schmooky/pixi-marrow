@@ -3,7 +3,7 @@
  * readings. What a function here prints it also returns as data, for the JSON file of the run.
  */
 import { addMemory, describeEmpty, describeSplit } from './heap.mjs';
-import { changesAgainstOff, combine, printAb, printOverdraw, quantile, summarize } from './table.mjs';
+import { changesAgainstOff, combine, ms, print, printAb, printOverdraw, quantile, summarize } from './table.mjs';
 
 /** A frame is bound by fill when a quarter of the pixels takes less than this share of the time. */
 const FILL_BOUND = 0.6;
@@ -116,4 +116,90 @@ export function reportOverdraw(blocks, { counts, runs, names }) {
 
         return fill;
     });
+}
+
+/**
+ * The line that says what a subject of a run is: its rigs, what they play and what they are
+ * measured against.
+ *
+ * @param versions The versions of the runtimes, as the JSON file of a run holds them.
+ * @param mode `ab` or `overdraw`.
+ */
+export function describeSubject(subject, versions, mode) {
+    const plays = [subject.plans]
+        .flat()
+        .map((plan) => {
+            const [sequence] = plan.sequences;
+            const { bones, slots, meshVertices } = plan.counts;
+            const what = `${sequence.animation}${sequence.skin ? ` (${sequence.skin})` : ''}`;
+
+            return `${plan.id} plays ${what}, ${bones} bones, ${slots} slots, ${meshVertices} mesh vertices`;
+        })
+        .join('. ');
+    const { rig } = subject;
+    const solves = [rig.physics && 'physics', rig.slider && 'a slider'].filter(Boolean).join(' and ');
+    const against =
+        mode === 'ab'
+            ? `against spine-pixi-v8 ${versions[`spine-pixi-v8 for ${subject.official}`]}`
+            : `${subject.counts.join(' and ')} instances cover the canvas`;
+
+    return (
+        `${mode === 'ab' ? `scene ${subject.scene}. ` : ''}${plays}, ${against}` +
+        `${solves ? `. Has ${solves}: like for like only when both sides solve it` : ''}` +
+        `${subject.note ? `. In this scene it ${subject.note}` : ''}`
+    );
+}
+
+/**
+ * Prints the scenes of a run side by side: per renderer and rig one row per scene, with the
+ * update, the CPU time and the frame of ours and of the official runtime, and the uploads.
+ * The last column is the update of ours as a share of its update in the scene `play`.
+ *
+ * @param result What the bench writes to its JSON file.
+ */
+export function reportScenes(result) {
+    const pair = (a, b, text) => `${a ? text(a) : 'n/a'} and ${b ? text(b) : 'n/a'}`;
+
+    console.log('bench: the scenes side by side, medians over the runs, ours and official');
+    for (const { renderer, rigs } of result.renderers) {
+        const rows = [
+            [
+                'rig',
+                'scene',
+                'n',
+                'update ms',
+                'cpu ms',
+                'frame ms',
+                'uploads per frame',
+                'KB per frame',
+                'update of play',
+            ],
+        ];
+
+        for (const rig of rigs) {
+            const group = rig.summary?.at(-1);
+            const play = rigs.find((it) => it.id === rig.id && it.scene === 'play')?.summary?.at(-1);
+
+            if (!group?.ours) continue;
+            const { ours, official } = group;
+            const share =
+                play?.ours && rig.scene !== 'play'
+                    ? `${((100 * ours.update.median) / play.ours.update.median).toFixed(1)}%`
+                    : '';
+
+            rows.push([
+                rig.id.length > 28 ? `${rig.id.slice(0, 25)}...` : rig.id,
+                rig.scene,
+                group.instances,
+                pair(ours, official, (side) => ms(side.update.median)),
+                pair(ours, official, (side) => ms(side.cpu.median)),
+                pair(ours, official, (side) => ms(side.frame.median)),
+                pair(ours.uploads, official?.uploads, (runs) => runs.median.toFixed(1)),
+                pair(ours.uploadBytes, official?.uploadBytes, (runs) => (runs.median / 1024).toFixed(1)),
+                share,
+            ]);
+        }
+        console.log(`  ${renderer}`);
+        print(rows, [0, 1]);
+    }
 }

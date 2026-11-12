@@ -119,12 +119,18 @@ export class LegacyTimeline {
     readonly target: number;
     /** Floats per key in `frames`. */
     readonly entries: number;
+
     readonly frames: Float32Array;
     /** Empty for kinds that do not interpolate. */
     readonly curves: Float32Array;
     readonly ids: readonly number[];
     /** `K_ATTACHMENT`: the attachment name of each key. */
     readonly attachmentNames: readonly (string | null)[];
+    /**
+     * `K_ATTACHMENT`: the attachment each key shows in a skin, found when the timeline is first
+     * applied to a skeleton that wears the skin. The place of a skin is its index plus one.
+     */
+    readonly shown: (readonly (AttachmentData | null)[] | undefined)[];
     /** `K_DEFORM` and `K_SEQUENCE`: the attachment that is animated. */
     readonly attachment: AttachmentData | null;
     /** `K_SEQUENCE`: the region count of the attachment's sequence, or -1 when it has none. */
@@ -140,10 +146,12 @@ export class LegacyTimeline {
         this.kind = kind;
         this.target = target;
         this.entries = entries;
+
         this.frames = parts.frames;
         this.curves = parts.curves ?? NO_FLOATS;
         this.ids = parts.ids;
         this.attachmentNames = parts.attachmentNames ?? [];
+        this.shown = [];
         this.attachment = parts.attachment ?? null;
         this.sequenceCount = parts.sequenceCount ?? -1;
         this.vertices = parts.vertices ?? [];
@@ -162,4 +170,8 @@ export interface Clip {
     readonly timelines: readonly LegacyTimeline[];
     /** Every property id a timeline of the animation sets: the official `timelineIds`. */
     readonly ids: ReadonlySet<number>;
+    /** True when every timeline gives the same result at every time from `stillFrom` on: the animation is a pose. */
+    readonly still: boolean;
+    /** The latest first key of the timelines. Before it a timeline gives the setup value, not its key. */
+    readonly stillFrom: number;
 }

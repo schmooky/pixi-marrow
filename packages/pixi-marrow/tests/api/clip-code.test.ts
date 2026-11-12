@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { MarrowSpine } from '../../src/index';
-import { batchClipper } from '../../src/render/clip-code';
+import { clipCode } from '../../src/render/clip-code';
 import { createStage } from '../render/batch-stage';
 import { FRAME, fixtureAsset } from './helpers';
 
@@ -24,7 +24,7 @@ describe('the code that clips in a batch', () => {
         expect(asset.info.features).not.toContain('clipping');
         spine.update(FRAME);
         expect(spine.stats.renderMode).toBe('batched');
-        expect(batchClipper()).toBeUndefined();
+        expect(clipCode()).toBeUndefined();
     });
 
     it('is there once an asset with a clipping attachment has loaded, and its clips stay in the batch', async () => {
@@ -36,7 +36,7 @@ describe('the code that clips in a batch', () => {
         made.push(...spines);
         if (spine === undefined) throw new Error('no spine');
         expect(asset.info.features).toContain('clipping');
-        expect(batchClipper()).toBeDefined();
+        expect(clipCode()).toBeDefined();
         for (const item of spines) {
             item.play('animation', { loop: true });
             stage.root.addChild(item);

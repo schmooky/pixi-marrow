@@ -1,6 +1,7 @@
 import { Shader, Texture, TextureSource } from 'pixi.js';
 import { describe, expect, it } from 'vitest';
-import { createViewShader, MAX_PAGES } from '../../src/render/shader';
+import { createViewShader } from '../../src/render/shader';
+import { MAX_PAGES } from '../../src/render/template';
 
 /*
  * Shaders do not compile in Node. These tests hold the contract with Pixi that can be read from

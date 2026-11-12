@@ -1,6 +1,7 @@
 import type { AttachmentData } from '../../model/attachments';
 import type { EventKey } from '../../model/timelines';
 import { LOCAL_STRIDE } from '../state';
+import { eventsReverse, queueEvents } from './apply-events';
 import {
     ALPHA,
     ALPHA_HOLD,
@@ -15,7 +16,7 @@ import {
 } from './curves';
 import type { Entry } from './entry';
 import { animationsChanged } from './hold';
-import { drain, type Player43, queueComplete, queueEvent } from './player';
+import { drain, type Player43 } from './player';
 import { setSlotAttachment, setupAttachment } from './slots';
 import { applyTimeline } from './timelines';
 import { applyRelative } from './timelines-bone';
@@ -27,7 +28,6 @@ import {
     type Pose43,
     ROLE_ATTACHMENT,
     ROLE_DRAW_ORDER,
-    ROLE_EVENT,
     ROLE_ROTATE,
     SETUP,
     type Timeline43,
@@ -162,106 +162,24 @@ function applyRotateTimeline(
     local[index] = r1 + Number(rotations[i]) * alpha;
 }
 
-/** True when the entry completed its animation, or a loop of it, since it was last applied. */
-function completed(entry: Entry): boolean {
-    if (!entry.loop) {
-        return Number(SHARED[ANIMATION_TIME]) >= entry.animationEnd && entry.animationLast < entry.animationEnd;
-    }
-    const duration = entry.animationEnd - entry.animationStart;
-
-    if (duration === 0) return true;
-    const cycles = Math.floor(entry.trackTime / duration);
-
-    return cycles > 0 && cycles > Math.floor(entry.trackLast / duration);
-}
-
 /**
- * The official `queueEvents`: queues the events an entry fired and its `complete` call, in order.
- * The animation time of the entry is read from `SHARED`.
+ * Notes the bones that the timelines of an entry pose: the next update has to pose them again.
+ * While updates pose every bone anyway, nothing is noted.
  */
-function queueEvents(player: Player43, entry: Entry): void {
-    const { animationStart, animationEnd, reverse } = entry;
-    const events = player.fired;
-    const n = events.length;
-    let i = 0;
+function noteBones(pose: Pose43, entry: Entry): void {
+    if (pose.solve.busy > 0) return;
+    const { bones } = entry.clip;
+    const { fresh } = pose;
 
-    if (n > 0) {
-        const duration = animationEnd - animationStart;
-        const split = reverse ? duration - (entry.trackLast % duration) : entry.trackLast % duration;
-
-        // the events before the animation completed
-        for (; i < n; i++) {
-            const event = events[i];
-
-            if (event === undefined || event.time < split !== reverse) break;
-            if (event.time >= animationStart && event.time <= animationEnd) queueEvent(player, entry, event);
-        }
-    }
-    if (completed(entry)) queueComplete(player, entry);
-    // the events after it
-    for (; i < n; i++) {
-        const event = events[i];
-
-        if (event !== undefined && event.time >= animationStart && event.time <= animationEnd) {
-            queueEvent(player, entry, event);
-        }
-    }
-    if (n > 0) events.length = 0;
-}
-
-function pushEvent(events: EventKey[], timeline: Timeline43, index: number): void {
-    const event = timeline.events[index];
-
-    if (event !== undefined) events.push(event);
-}
-
-/**
- * The events of one event timeline that a reversed entry passed between two applies. The two
- * times are read from `SHARED`: the time of the last apply at `VALUES`, the time of this one after it.
- */
-function reversedEvents(events: EventKey[], timeline: Timeline43): void {
-    const frames = timeline.frames;
-    const frameCount = frames.length;
-    const from = Number(SHARED[VALUES]);
-    const to = Number(SHARED[VALUES + 1]);
-    let i = 0;
-
-    if (from >= to) {
-        for (; i < frameCount; i++) {
-            const time = Number(frames[i]);
-
-            if (time < to) continue;
-            if (time >= from) break;
-            pushEvent(events, timeline, i);
-        }
-
-        return;
-    }
-    // the animation looped: from the last apply down to 0, then from the end down to this apply
-    for (; i < frameCount && !(Number(frames[i]) >= from); i++) pushEvent(events, timeline, i);
-    i = 0;
-    while (i < frameCount && !(Number(frames[i]) >= to)) i++;
-    for (; i < frameCount; i++) pushEvent(events, timeline, i);
-}
-
-/** The official `eventsReverse`: collects the events of an entry that plays in reverse. */
-function eventsReverse(player: Player43, entry: Entry): void {
-    const { duration, timelines } = entry.clip;
-
-    for (let i = 0; i < timelines.length; i++) {
-        const timeline = timelines[i];
-
-        if (timeline?.role !== ROLE_EVENT) continue;
-        SHARED[VALUES] = duration - entry.animationLast;
-        SHARED[VALUES + 1] = duration - Number(SHARED[ANIMATION_TIME]);
-        reversedEvents(player.fired, timeline);
-    }
+    for (let i = 0; i < bones.length; i++) fresh[Number(bones[i])] = 1;
 }
 
 /** Applies an entry on track 0 at full alpha: every timeline replaces the setup pose. */
 function applyFromSetup(player: Player43, entry: Entry, events: EventKey[] | null): void {
     const pose = player.pose;
     const timelines = entry.clip.timelines;
+
+    noteBones(pose, entry);
 
     for (let i = 0, n = timelines.length; i < n; i++) {
         const timeline = timelines[i];
@@ -283,6 +201,7 @@ function applyMixed(player: Player43, entry: Entry, events: EventKey[] | null): 
     const firstFrame = !shortestRotation && entry.rotationCount !== count << 1;
 
     if (firstFrame) entry.sizeRotations(count << 1);
+    noteBones(pose, entry);
     for (let i = 0; i < count; i++) {
         const timeline = timelines[i];
 
@@ -348,6 +267,7 @@ function applyMixedOut(
     const alphaMix = Number(SHARED[ALPHA_MIX]);
 
     if (firstFrame) from.sizeRotations(count << 1);
+    noteBones(pose, from);
     from.totalAlpha = 0;
     for (let i = 0; i < count; i++) {
         const timeline = timelines[i];
@@ -441,8 +361,13 @@ function applyMixingFrom(player: Player43, to: Entry, from: Entry): void {
     from.nextTrackLast = from.trackTime;
 }
 
-/** Applies the current entry of a track, after the entries it mixes from. */
-function applyCurrent(player: Player43, current: Entry, track: number): void {
+/**
+ * Applies the current entry of a track, after the entries it mixes from. Returns true when the
+ * entry alone replaced the setup pose: it is on track 0 at full alpha and mixes from nothing.
+ * Such an apply writes the same pose again when it is repeated at the same time.
+ */
+function applyCurrent(player: Player43, current: Entry, track: number): boolean {
+    const mixing = current.mixingFrom !== null;
     let alpha = current.alpha;
 
     if (current.mixingFrom) {
@@ -450,12 +375,59 @@ function applyCurrent(player: Player43, current: Entry, track: number): void {
         alpha *= current.mixed;
     } else if (current.trackTime >= current.trackEnd && !current.next) alpha = 0;
     const events = current.reverse ? null : player.fired;
+    const replaces = track === 0 && alpha === 1;
 
     setTimes(current);
     SHARED[ALPHA] = alpha;
-    if (track === 0 && alpha === 1) applyFromSetup(player, current, events);
+    player.restedTime = Number(SHARED[TIME]);
+    player.restedTrack = current.trackTime;
+    if (replaces) applyFromSetup(player, current, events);
     else applyMixed(player, current, events);
     finish(player, current);
+
+    return replaces && !mixing;
+}
+
+/** This apply has timelines to run. */
+const APPLY = 0;
+/** No track has an entry to apply. */
+const NOTHING = 1;
+/** The one entry to apply would write the pose it wrote last time. */
+const REPEAT = 2;
+
+/**
+ * Says whether this apply would write the pose the last apply left, so that no timeline has to
+ * run: one of `APPLY`, `NOTHING` and `REPEAT`. It repeats when the one entry to apply is the one
+ * that replaced the setup pose last time, at the same time, and nothing else has changed the
+ * pose since. The times of that entry are in `SHARED` then.
+ */
+function restsAsApplied(player: Player43): number {
+    const tracks = player.tracks;
+    let only: Entry | null = null;
+
+    for (let i = 0, n = tracks.length; i < n; i++) {
+        const current = tracks[i];
+
+        if (!current || current.delay > 0) continue;
+        if (i !== 0) return APPLY;
+        only = current;
+    }
+    if (only === null) return NOTHING;
+    if (only !== player.rested || player.pose.solve.dirty || only.mixingFrom !== null) return APPLY;
+    if (only.alpha !== 1 || (only.trackTime >= only.trackEnd && !only.next)) return APPLY;
+    // an entry that moved on and is not at its end is at another time: no need to work the time out twice
+    const playing = only.loop
+        ? only.animationEnd > only.animationStart
+        : only.trackTime < only.animationEnd - only.animationStart;
+
+    if (playing && only.trackTime !== player.restedTrack) return APPLY;
+    setTimes(only);
+    const time = Number(SHARED[TIME]);
+
+    if (Number(SHARED[ANIMATION_TIME]) !== only.animationLast || time !== player.restedTime) return APPLY;
+
+    // a reversed entry is applied at another time than its last time: a physics reset timeline can fire there
+    return only.clip.resets && time !== only.animationLast ? APPLY : REPEAT;
 }
 
 /** Gives a slot its setup attachment back when its attachment was set for deform timelines only. */
@@ -468,17 +440,38 @@ function restoreSetupAttachments(player: Player43): void {
     }
 }
 
-/** The official `AnimationState.apply`: poses the skeleton with the entries of every track. */
+/**
+ * The official `AnimationState.apply`: poses the skeleton with the entries of every track.
+ *
+ * An apply that would write the pose the last one left runs no timeline. It still does what the
+ * official apply does to the entry: it fires its `complete` and keeps its times. The pose is
+ * marked as changed whenever a timeline ran.
+ */
 export function applyTracks(player: Player43): void {
     const tracks = player.tracks;
+    let applied = 0;
+    let replaced = false;
 
     if (player.animationsChanged) animationsChanged(player);
+    const rest = restsAsApplied(player);
+
+    if (rest !== APPLY) {
+        // no event timeline fires at the time of the last apply: the entry has its times to keep and its `complete`
+        if (rest === REPEAT && player.rested !== null) finish(player, player.rested);
+        drain(player);
+
+        return;
+    }
     for (let i = 0, n = tracks.length; i < n; i++) {
         const current = tracks[i];
 
-        if (current && !(current.delay > 0)) applyCurrent(player, current, i);
+        if (!current || current.delay > 0) continue;
+        replaced = applyCurrent(player, current, i);
+        applied++;
     }
     restoreSetupAttachments(player);
     player.unkeyedState += 2;
+    player.rested = applied === 1 && replaced ? (tracks[0] ?? null) : null;
+    if (applied > 0) player.pose.solve.dirty = true;
     drain(player);
 }

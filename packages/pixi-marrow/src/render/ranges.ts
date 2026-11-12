@@ -7,14 +7,17 @@ import {
     Mesh,
     type Shader,
     type TextureSource,
+    VERSION,
 } from 'pixi.js';
 import { i16, i32 } from '../geometry/read';
+import { uploadsStretch } from './batch-upload';
 import { ClipMask } from './clip-mask';
 import type { ClipShape } from './clip-shape';
 import { MeasuredGeometry } from './measured-geometry';
 import { u8, u16 } from './read';
-import { createMaskShader, createViewShader, MAX_PAGES, releaseShader } from './shader';
-import { STATIC_STRIDE, type Template } from './template';
+import { createMaskShader, createViewShader, releaseShader } from './shader';
+import { MAX_PAGES, STATIC_STRIDE, type Template } from './template';
+import { NO_CLIP } from './visible';
 
 /*
  * The draw ranges of one skeleton instance. A range is one Pixi mesh with its own index buffer.
@@ -34,7 +37,18 @@ import { STATIC_STRIDE, type Template } from './template';
  * their blend modes and their clip groups are therefore the same with and without skipped slots:
  * a change of the covered slots rewrites index data and nothing else. That matters when it
  * happens while Pixi draws, where the list of meshes can no longer change.
+ *
+ * The index buffer of a range is zero past the indices the range draws, on the GPU too: a Pixi
+ * without `Geometry.indexCount` draws the whole buffer, and zeros are triangles without area. A
+ * range therefore knows how far the GPU can hold other indices, see `DrawRange.held`, and every
+ * upload reaches that far.
  */
+
+/**
+ * Whether a buffer of this Pixi uploads at once when it is told that it changed. An older Pixi
+ * uploads a WebGL buffer when its geometry is bound, and keeps the size it was told last alone.
+ */
+const AT_ONCE = uploadsStretch(Buffer.prototype.update, VERSION);
 
 /** The vertex buffers every range reads. */
 interface VertexBuffers {
@@ -61,9 +75,6 @@ export interface DrawRangesOptions {
     readonly measure: () => Bounds;
 }
 
-/** The clip of a visible entry that no clipping attachment cuts. */
-export const NO_CLIP = -1;
-
 /** The Pixi blend mode of a range for a slot blend mode. Normal and additive inherit from the container. */
 const PIXI_BLEND: readonly BLEND_MODES[] = ['inherit', 'inherit', 'multiply', 'screen'];
 
@@ -78,8 +89,15 @@ interface DrawRange {
     readonly mesh: Mesh<MeasuredGeometry, Shader>;
     readonly buffer: Buffer;
     indices: Uint16Array | Uint32Array;
-    /** Indices the range draws. The rest of the index buffer is zero: triangles without area. */
+    /** Indices the range draws. The rest of the index array is zero: triangles without area. */
     count: number;
+    /**
+     * How many indices from the start of the buffer can be other than zero on the GPU. An upload
+     * reaches this far, so that what the array has zeroed since is zero there too. It is the
+     * count of the last upload where Pixi uploads at once. Where an upload waits for the next
+     * draw and a later, shorter one would replace it, it is the most the buffer ever held.
+     */
+    held: number;
     /** The slot blend mode the mesh is set to. Additive counts as normal. */
     blend: number;
     /** The group of 8 pages the shader of the mesh samples. */
@@ -170,10 +188,13 @@ export class DrawRanges {
         for (const range of this.all) {
             const fits = range.indices.length >= this.capacity && range.indices instanceof Uint32Array === this.wide;
 
+            // the GPU keeps the indices of the layout before, until the next upload of the range zeroes them
             if (fits) range.indices.fill(0, 0, range.count);
             else {
                 range.indices = this.createIndices();
                 range.buffer.data = range.indices;
+                // Pixi uploads the new array whole. Where that waits for a draw, the next upload must not be shorter
+                range.held = AT_ONCE ? 0 : range.indices.length;
             }
             range.count = 0;
             this.bytes += range.indices.byteLength;
@@ -320,8 +341,8 @@ export class DrawRanges {
      * uploads. Returns how many indices the range draws.
      */
     private close(range: DrawRange, written: number): number {
-        // what changed: the new indices, and the old ones past them that are zero now
-        const changed = Math.max(written, range.count);
+        // what the GPU must get: the new indices, and zeros over every index it can hold past them
+        const changed = Math.max(written, range.held, EMPTY_RANGE);
         // a count of 0 would make Pixi draw the whole buffer
         const drawn = Math.max(written, EMPTY_RANGE);
 
@@ -329,7 +350,9 @@ export class DrawRanges {
         range.count = written;
         // Pixi draws this many indices. A Pixi without `indexCount` draws all, and the rest is zero.
         range.mesh.geometry.indexCount = drawn;
-        range.buffer.update(Math.max(changed, EMPTY_RANGE) * range.indices.BYTES_PER_ELEMENT);
+        range.buffer.update(changed * range.indices.BYTES_PER_ELEMENT);
+        // an upload that waits for a draw can be replaced by the next one, which must then reach as far
+        range.held = AT_ONCE ? written : Math.max(written, range.held);
         range.mesh.visible = true;
 
         return drawn;
@@ -427,7 +450,7 @@ export class DrawRanges {
             measure,
         );
         const mesh = new Mesh({ geometry, shader: this.shader(group), label: 'marrow-range' });
-        const range: DrawRange = { mesh, buffer, indices, count: 0, blend: 0, group, build: 0 };
+        const range: DrawRange = { mesh, buffer, indices, count: 0, held: 0, blend: 0, group, build: 0 };
 
         if (parent === undefined) {
             container.addChildAt(mesh, this.childIndex(this.position, true));

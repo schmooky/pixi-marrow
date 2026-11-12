@@ -7,7 +7,7 @@ Instructions for AI coding agents and for people working in this repo. Read it b
 pixi-marrow is a Spine runtime for PixiJS v8. It has its own pose core and its own render path, and it plays Spine 4.1, 4.2 and 4.3 skeletons. The plan, the classes and the milestones are in `docs/DESIGN.md`.
 
 <!-- facts:status -->
-Pre-release, milestone M5. Skeletons of Spine 4.1, 4.2 and 4.3 load, play and draw in PixiJS v8 with every constraint solved: IK, transform, path, physics and sliders. The poses equal the official cores to the bit, and the picture matches the official Pixi runtime. Small skeletons share draw calls.
+Pre-release, milestone M6. Skeletons of Spine 4.1, 4.2 and 4.3 load, play and draw in PixiJS v8 with every constraint solved: IK, transform, path, physics and sliders. The poses equal the official cores to the bit, and the picture matches the official Pixi runtime. Small skeletons share draw calls, and a skeleton at rest costs close to nothing.
 <!-- /facts:status -->
 
 ```
@@ -83,6 +83,8 @@ Every constraint is solved: IK, transform, path, physics and sliders. A slider o
 - The two render modes each pass the pixel check against the official runtime. They are not equal to each other to the bit, and the pixel check bounds their difference.
 - A change of draw order, visibility, attachment or color never makes Pixi rebuild the instructions of a render group. Data is rewritten in place.
 - Nothing is registered with Pixi at import. The package has no side effects.
+- Work follows change. A pose state has a version and stamps per bone and slot. A value never changes without its stamp, and the parity suite checks that. Code that writes a pose array calls `touchPose` or sets the stamps.
+- Nothing is skipped because nobody looks at it. A skip is allowed only where the result is known to be the same bits.
 - Never fail silently. Unsupported data throws `MarrowError` with a code, the cause and the fix.
 - Source files stay under 500 lines. No `as any`, no double casts, no TypeScript suppression comments.
 - Public symbols have TSDoc with a one-line summary and an `@example`.
@@ -119,7 +121,9 @@ It draws rigs with pixi-marrow and with the official Pixi runtime in headless Ch
 
 A frame that fails against the official runtime is drawn again, moved by a fraction of a pixel, and fails only when it fails at both places. The two runtimes place vertices in different code, so a vertex on a subpixel boundary can round two ways. A defect stays wrong after the move.
 
-A change that may cost or save time needs a measurement. `pnpm bench:ab` runs pixi-marrow against the official Pixi runtime in headless Chrome: CPU time, frame time, draw calls and heap per instance. `pnpm bench:ab --mode=overdraw` compares tight meshes on and off. It prints the spread between runs: a difference inside the spread is not a result. It measures this one machine, not phones.
+A change to the render path also runs on the lowest pixi.js the package allows: `pnpm check:render --pixi=8.16.0`. Versions 8.16.0 and 8.21.0 are installed for that.
+
+A change that may cost or save time needs a measurement. `pnpm bench:ab` runs pixi-marrow against the official Pixi runtime in headless Chrome: CPU time, frame time, draw calls and heap per instance. `--scene=rest`, `little`, `mixed` and `moved` measure skeletons that stand still or move little. `pnpm bench:ab --mode=overdraw` compares tight meshes on and off. It prints the spread between runs: a difference inside the spread is not a result. It measures this one machine, not phones.
 
 Library changes need a changeset. Run `pnpm changeset`.
 

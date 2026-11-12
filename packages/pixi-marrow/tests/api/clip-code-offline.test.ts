@@ -1,40 +1,52 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { MarrowSpine } from '../../src/index';
-import { batchClipper, loadBatchClipper } from '../../src/render/clip-code';
-import { FRAME, fixtureAsset } from './helpers';
+import { describe, expect, it, vi } from 'vitest';
+import { MarrowError } from '../../src/index';
+import { clipCode, loadClipCode } from '../../src/render/clip-code';
+import { loadFamily } from '../render/batch-check';
+import { clipAttachment } from '../render/clip-check';
+import { createRig, drawPose, slotIndex } from '../render/rig';
+import { fixtureAsset, fixtureFiles } from './helpers';
 
 /*
- * The code that clips in a batch is a chunk of its own, and a chunk can fail to load. An asset
- * still loads then, and a clip draws as in the mesh mode.
+ * The code that clips is a chunk of its own, and a chunk can fail to load. A skeleton with a
+ * clipping attachment cannot be drawn without it, so its asset does not load then.
  */
 
 vi.mock('../../src/render/batch-clip', () => {
     throw new Error('the chunk did not load');
 });
 
-describe('an asset whose code for clips in a batch did not load', () => {
-    const made: MarrowSpine[] = [];
+describe('a chunk with the code that clips that does not load', () => {
+    it('fails the load of an asset with a clipping attachment, with an error that says what to do', async () => {
+        const failed = fixtureAsset('4.2/coin-pro.skel');
 
-    afterEach(() => {
-        for (const spine of made.splice(0)) spine.destroy();
+        await expect(failed).rejects.toBeInstanceOf(MarrowError);
+        await expect(failed).rejects.toMatchObject({
+            code: 'invalid-data',
+            fix: 'Check the network, and that the bundler wrote the chunks of pixi-marrow next to its entry and the server sends them.',
+        });
+        await expect(failed).rejects.toThrow(/The chunk of pixi-marrow with the code that clips did not load: /);
+        expect(clipCode()).toBeUndefined();
+        // every call tries again
+        await expect(loadClipCode()).rejects.toBeInstanceOf(MarrowError);
+        await expect(loadFamily('4.2/coin-pro.skel')).rejects.toBeInstanceOf(MarrowError);
     });
 
-    it('draws a clip with meshes and a stencil mask, and its report says why', async () => {
-        const asset = await fixtureAsset('4.2/coin-pro.skel');
-        const spine = new MarrowSpine(asset, { autoUpdate: false, renderMode: 'batched' });
+    it('leaves an asset without a clipping attachment alone', async () => {
+        const asset = await fixtureAsset('4.2/speedy-ess.skel');
 
-        made.push(spine);
-        expect(batchClipper()).toBeUndefined();
-        spine.play('animation', { loop: true });
-        for (let frame = 0; frame < 40; frame++) spine.update(FRAME);
-        expect(spine.stats).toMatchObject({ renderMode: 'mesh', clips: 1, maskDraws: 2 });
-        expect((await spine.perf.report())[0]).toEqual({
-            feature: 'renderMode',
-            value: 'mesh',
-            reason: 'the option renderMode is "batched", and a clipping attachment cuts a visible slot while the code that clips in a batch is not loaded: the clip draws with meshes and a stencil mask. It has draw calls of its own, and the GPU places its vertices',
+        expect(asset.info.features).not.toContain('clipping');
+    });
+
+    it('makes a view throw that meets a clip, and not before', async () => {
+        const rig = await createRig(fixtureFiles('4.2/speedy-ess.skel'), undefined, {
+            options: () => ({ renderMode: 'batched' }),
         });
-        // the next asset asks again, and a load that fails never rejects
-        await expect(loadBatchClipper()).resolves.toBeUndefined();
-        expect(batchClipper()).toBeUndefined();
+        const { state } = rig.engine;
+
+        rig.engine.update(0);
+        drawPose(rig.view, state);
+        state.attachments[slotIndex(rig, 'head')] = clipAttachment('clip', -1, [-900, -900, 900, -900, 0, 900]);
+        expect(() => drawPose(rig.view, state)).toThrow(MarrowError);
+        expect(() => drawPose(rig.view, state)).toThrow(/the code that clips is not loaded/);
     });
 });

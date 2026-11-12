@@ -1,7 +1,8 @@
 /*
  * Browser entry of scripts/bench/ab.mjs. It creates one renderer with its canvas on the page,
- * loads one rig into the runtimes and measures blocks. A block is some instances of one side on
- * the stage, a warm-up, then frames that are timed one by one.
+ * loads the rigs of one subject into the runtimes and measures blocks. A block is some instances
+ * of one side on the stage, a warm-up, then frames that are timed one by one. What the instances
+ * do while they are timed is the scene of the block, see scripts/bench/scene.js.
  *
  * A timed frame has three parts. The update is everything a runtime does on the CPU when it is
  * asked to advance every instance by 1/60 second. The submit is `renderer.render(stage)`: the
@@ -27,11 +28,11 @@
  * does after it has loaded a rig: scripts/bench/heap.mjs says why.
  */
 import { triangleArea } from '../render/buffers.js';
-import { countModes, readMode } from '../render/mode.js';
-import { BACKGROUNDS, countDraws, coverage, createStudio } from '../render/pixels.js';
+import { describeModes } from '../render/mode.js';
+import { BACKGROUNDS, countDraws, countUploads, coverage, createStudio } from '../render/pixels.js';
 import { describe, timerStep, waiter } from './device.js';
 import { probeMemory, readMemory, settle } from './memory.js';
-import { layoutCover, layoutGrid, populate } from './scene.js';
+import { buildScene, layoutCover, layoutGrid } from './scene.js';
 import { officialSide, oursSide } from './sides.js';
 
 /** Seconds every instance advances per frame. */
@@ -45,9 +46,14 @@ const EMPTY_FRAMES = 400;
 
 const message = (error) => (error instanceof Error ? `${error.name}: ${error.message}` : String(error));
 
-/** Plays frames that are not timed: buffers get their size and the code gets compiled. */
-async function warmUp(env, objects, frames) {
+/**
+ * Plays frames that are not timed: buffers get their size and the code gets compiled.
+ *
+ * @param tick What the scene does before the update of every frame, or null.
+ */
+async function warmUp(env, objects, frames, tick = null) {
     for (let frame = 0; frame < frames; frame++) {
+        if (tick) tick();
         for (const object of objects) object.update(DT);
         env.renderer.render(env.stage);
         await env.finish();
@@ -56,22 +62,27 @@ async function warmUp(env, objects, frames) {
 
 /**
  * Times frames. Per frame: the update of every object, the submit of the frame, the wait for the
- * GPU, and the draw calls the GPU interface saw. Nothing is allocated between two readings of
- * the clock. On WebGL the wait is a blocking call, on WebGPU a promise of the device queue.
+ * GPU, the draw calls the GPU interface saw and the buffer uploads. Nothing is allocated between
+ * two readings of the clock. On WebGL the wait is a blocking call, on WebGPU a promise of the
+ * device queue.
  *
  * A sample is the mean of `group` frames that follow each other. The clock of a page steps by
  * 0.005 ms at best, and one small instance updates in a few such steps. Over a group the steps
  * of the clock average out.
  *
- * @returns Per sample: the milliseconds of the update, the submit and the wait of one frame, and
- * the most draw calls a frame of the group took.
+ * @param tick What the scene does before the update of every frame, or null. Its time counts as
+ * update: it is what an application does to its skeletons in that frame.
+ * @returns Per sample: the milliseconds of the update, the submit and the wait of one frame, the
+ * most draw calls a frame of the group took, and the buffer uploads and their bytes per frame.
  */
-async function timeFrames(env, objects, samples, group) {
-    const { renderer, stage, draws, device, wait } = env;
+async function timeFrames(env, objects, samples, group, tick = null) {
+    const { renderer, stage, draws, uploads, device, wait } = env;
     const update = new Float64Array(samples);
     const submit = new Float64Array(samples);
     const waits = new Float64Array(samples);
     const calls = new Uint32Array(samples);
+    const uploaded = new Float64Array(samples);
+    const uploadedBytes = new Float64Array(samples);
     const count = objects.length;
 
     for (let sample = 0; sample < samples; sample++) {
@@ -80,9 +91,12 @@ async function timeFrames(env, objects, samples, group) {
         let waiting = 0;
         let most = 0;
 
+        uploads.calls = 0;
+        uploads.bytes = 0;
         for (let frame = 0; frame < group; frame++) {
             const start = performance.now();
 
+            if (tick !== null) tick();
             for (let i = 0; i < count; i++) objects[i].update(DT);
             const updated = performance.now();
 
@@ -103,6 +117,8 @@ async function timeFrames(env, objects, samples, group) {
         submit[sample] = submitting / group;
         waits[sample] = waiting / group;
         calls[sample] = most;
+        uploaded[sample] = uploads.calls / group;
+        uploadedBytes[sample] = uploads.bytes / group;
     }
 
     return {
@@ -110,6 +126,8 @@ async function timeFrames(env, objects, samples, group) {
         submit: Array.from(submit),
         wait: Array.from(waits),
         calls: Array.from(calls),
+        uploads: Array.from(uploaded),
+        uploadBytes: Array.from(uploadedBytes),
     };
 }
 
@@ -125,6 +143,8 @@ async function timeEmptyFrames(env) {
     let stalled = 0;
 
     await warmUp(env, [], 30);
+    env.uploads.calls = 0;
+    env.uploads.bytes = 0;
     for (let frame = 0; frame < EMPTY_FRAMES; frame++) {
         const start = performance.now();
 
@@ -147,6 +167,9 @@ async function timeEmptyFrames(env) {
         p95: sorted[Math.floor(sorted.length * 0.95)],
         max: sorted[sorted.length - 1],
         busy: stalled / total,
+        // what a frame uploads with nothing on the stage: on WebGPU the uniforms of the stage
+        uploads: env.uploads.calls / EMPTY_FRAMES,
+        uploadBytes: env.uploads.bytes / EMPTY_FRAMES,
     };
 }
 
@@ -160,25 +183,6 @@ async function proveDrawn(env) {
     } finally {
         stage.scale.set(1);
     }
-}
-
-/**
- * The render mode some display objects of ours drew in, as the runtime reports it: `mesh` or
- * `batched` when all agree, `mixed` when they do not, null when the runtime reports no mode.
- * `counts` says how many objects reported which mode, where the runtime has `stats.renderMode`.
- */
-async function describeModes(objects) {
-    const counts = countModes(objects);
-
-    if (counts.unknown < objects.length) {
-        const named = ['mesh', 'batched'].filter((mode) => counts[mode] > 0);
-
-        return { renderMode: named.length === 1 && counts.unknown === 0 ? named[0] : 'mixed', counts };
-    }
-    // without the field the row of the report of the first object stands for all of them
-    const [first] = objects;
-
-    return { renderMode: first ? (await readMode(first)).mode : null, counts: null };
 }
 
 /**
@@ -207,45 +211,42 @@ async function describeOurs(env, objects, scale) {
 }
 
 /**
- * One block: creates the instances of one side, warms up, times the frames and destroys the
- * instances. It reads no memory: the stage still holds what the block before it drew, see
- * scripts/bench/heap.mjs.
+ * One block: creates the instances of one side in the scene of the job, warms up, times the
+ * frames and destroys the instances. It reads no memory: the stage still holds what the block
+ * before it drew, see scripts/bench/heap.mjs.
  *
  * @param job.runtime `ours` or `official`: the runtime that draws the block.
+ * @param job.scene What the instances do, see scripts/bench/scene.js. Default `play`.
  * @param job.instances How many display objects are on the stage.
  * @param job.frames How many samples are timed, and `job.group` how many frames make a sample.
  * @param job.options Options for a display object of ours, the render mode among them.
  */
 async function runBlock(env, job) {
-    const { renderer, stage, plan } = env;
-    const side = env.sides[job.runtime];
-    const create = env.factories[job.runtime];
-    const objects = [];
+    let scene = null;
 
-    if (!side || !create) return { error: `the page has no ${job.runtime} runtime` };
+    if (!env.sides[job.runtime] || !env.loaded[0]?.factories[job.runtime]) {
+        return { error: `the page has no ${job.runtime} runtime` };
+    }
     try {
-        objects.push(...populate(env, side, create, job.instances, job.options));
-        const scale = layoutGrid(objects, plan.frame, renderer.width, renderer.height);
+        scene = buildScene(env, job);
+        const { objects, tick } = scene;
 
-        await warmUp(env, objects, job.warmup);
+        await warmUp(env, objects, job.warmup, tick);
         // the garbage of the warm-up goes before the clock starts. A few frames bring the loop back to its pace
         await settle();
-        await warmUp(env, objects, 5);
-        const timed = await timeFrames(env, objects, job.frames, job.group ?? 1);
+        await warmUp(env, objects, 5, tick);
+        const timed = await timeFrames(env, objects, job.frames, job.group ?? 1, tick);
         const covered = await proveDrawn(env);
 
         return {
             ...timed,
             covered,
-            ours: job.runtime === 'ours' ? await describeOurs(env, objects, scale) : null,
+            ours: job.runtime === 'ours' ? await describeOurs(env, objects, scene.scale) : null,
         };
     } catch (error) {
         return { error: message(error) };
     } finally {
-        for (const object of objects) {
-            stage.removeChild(object);
-            object.destroy();
-        }
+        scene?.dispose();
         await settle();
     }
 }
@@ -253,7 +254,7 @@ async function runBlock(env, job) {
 /**
  * The memory of the instances of a job: creates them, plays the warm-up and reads how much the
  * heap and the page grew. The instances stay on the stage, so that the Node side can ask Chrome
- * what is alive. This must be the first thing a page does after `loadRig`, see
+ * what is alive. This must be the first thing a page does after `loadRigs`, see
  * scripts/bench/heap.mjs.
  *
  * A job of 0 instances is an empty block: the same steps with nothing on the stage. What it reads
@@ -264,20 +265,19 @@ async function runBlock(env, job) {
  * arrays, and `ours` the render mode the instances drew in.
  */
 async function hold(env, job) {
-    const side = env.sides[job.runtime];
-    const create = env.factories[job.runtime];
-    const objects = [];
-
-    if (!side || !create) return { error: `the page has no ${job.runtime} runtime` };
+    if (!env.sides[job.runtime] || !env.loaded[0]?.factories[job.runtime]) {
+        return { error: `the page has no ${job.runtime} runtime` };
+    }
     try {
-        // The stage still holds the instance that `loadRig` played. Some empty frames let go of
+        // The stage still holds the instance that `loadRigs` played. Some empty frames let go of
         // what an empty frame can let go of, before the first reading and not between the two
         await warmUp(env, [], 10);
         await settle();
         const before = await readMemory(env.memory);
 
-        objects.push(...populate(env, side, create, job.instances, job.options));
-        if (objects.length > 0) layoutGrid(objects, env.plan.frame, env.renderer.width, env.renderer.height);
+        // the instances stay on the stage: the scene is not taken away
+        const { objects } = buildScene(env, { ...job, scene: 'play' });
+
         await warmUp(env, objects, job.warmup);
         await settle();
         const after = await readMemory(env.memory);
@@ -315,8 +315,6 @@ async function hold(env, job) {
  */
 async function runTurns(env, job) {
     const { renderer, stage } = env;
-    const side = env.sides.ours;
-    const create = env.factories.ours;
     const sets = [];
     const turns = [];
     const show = (turn) => {
@@ -329,10 +327,16 @@ async function runTurns(env, job) {
 
     try {
         for (const setting of job.settings) {
-            const objects = populate(env, side, create, job.instances, setting.options);
-            const scale = layoutCover(objects, env.plan.frame, renderer.width, renderer.height);
+            const scene = buildScene(env, {
+                runtime: 'ours',
+                scene: 'play',
+                instances: job.instances,
+                options: setting.options,
+            });
+            const { plan } = env.loaded[0];
+            const scale = layoutCover(scene.objects, plan.frame, renderer.width, renderer.height);
 
-            sets.push({ objects, scale });
+            sets.push({ objects: scene.objects, scale, dispose: scene.dispose });
             turns.push(turnOf(setting.name, sets.at(-1), 1));
         }
         turns.push(turnOf('quarter', sets[0], 0.5));
@@ -363,41 +367,43 @@ async function runTurns(env, job) {
         return { error: message(error) };
     } finally {
         stage.scale.set(1);
-        for (const set of sets) {
-            for (const object of set.objects) {
-                stage.removeChild(object);
-                object.destroy();
-            }
-        }
+        for (const set of sets) set.dispose();
         await settle();
     }
 }
 
 /**
- * Loads the files of a rig into every runtime of the page. One instance of each is then played
- * and drawn for a few frames, so that shaders, textures and what an asset shares between its
- * instances exist before the first memory reading.
+ * Loads the files of some rigs into every runtime of the page. One instance of each is then
+ * played and drawn for a few frames, so that shaders, textures and what an asset shares between
+ * its instances exist before anything is measured.
+ *
+ * @param plans The plan of one rig, or of several for a scene that mixes rigs.
+ * @param mesh True when instances of ours on this page ask for the mesh mode by name.
  */
-async function loadRig(env, plan) {
-    const [sequence] = plan.sequences;
+async function loadRigs(env, plans, mesh = false) {
+    env.loaded = [];
+    for (const plan of [plans].flat()) {
+        const [sequence] = plan.sequences;
+        const factories = {};
 
-    env.plan = plan;
-    for (const [name, side] of Object.entries(env.sides)) {
-        const url = (file) => `/fixtures/${name}/${plan.version}/${file}`;
-        const create = await side.load({ skeleton: url(plan.files.skel), atlas: url(plan.files.atlas) });
-        const object = create();
+        for (const [name, side] of Object.entries(env.sides)) {
+            const url = (file) => `/fixtures/${name}/${plan.version}/${file}`;
+            const create = await side.load({ skeleton: url(plan.files.skel), atlas: url(plan.files.atlas), mesh });
+            const object = create();
 
-        env.factories[name] = create;
-        env.stage.addChild(object);
-        try {
-            if (sequence.skin) side.setSkin(object, sequence.skin);
-            side.play(object, sequence.animation);
-            layoutGrid([object], plan.frame, env.renderer.width, env.renderer.height);
-            await warmUp(env, [object], PRIME_FRAMES);
-        } finally {
-            env.stage.removeChild(object);
-            object.destroy();
+            factories[name] = create;
+            env.stage.addChild(object);
+            try {
+                if (sequence.skin) side.setSkin(object, sequence.skin);
+                side.play(object, sequence.animation);
+                layoutGrid([object], () => plan.frame, env.renderer.width, env.renderer.height);
+                await warmUp(env, [object], PRIME_FRAMES);
+            } finally {
+                env.stage.removeChild(object);
+                object.destroy();
+            }
         }
+        env.loaded.push({ plan, factories });
     }
     await settle();
 }
@@ -414,6 +420,7 @@ export async function start({ PIXI, loadOurs, loadOfficial }) {
     const preference = params.get('renderer') === 'webgpu' ? 'webgpu' : 'webgl';
     const version = params.get('official');
     const draws = countDraws();
+    const uploads = countUploads();
     // which step failed: a runtime that does not load is a finding, a missing renderer is not
     let step = 'load';
 
@@ -441,6 +448,7 @@ export async function start({ PIXI, loadOurs, loadOfficial }) {
             renderer,
             stage: new PIXI.Container(),
             draws,
+            uploads,
             device,
             wait,
             // the same wait outside the timed frames
@@ -450,8 +458,8 @@ export async function start({ PIXI, loadOurs, loadOfficial }) {
             },
             studio: createStudio(PIXI, renderer, PROOF_SIZE, draws),
             sides,
-            factories: {},
-            plan: null,
+            // the rigs of the page, each with its plan and with a function per side that creates an instance
+            loaded: [],
             memory: null,
         };
 
@@ -468,7 +476,7 @@ export async function start({ PIXI, loadOurs, loadOfficial }) {
             emptyFrame,
             memory: env.memory,
             dt: DT,
-            load: (plan) => loadRig(env, plan),
+            load: (plans, mesh) => loadRigs(env, plans, mesh),
             block: (job) => runBlock(env, job),
             turns: (job) => runTurns(env, job),
             hold: (job) => hold(env, job),

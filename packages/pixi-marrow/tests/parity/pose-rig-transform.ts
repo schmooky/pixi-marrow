@@ -10,6 +10,7 @@ import {
     madeRig,
     type RigParts,
 } from './pose-rig-kit';
+import { wakeTransform } from './pose-rig-wake';
 
 /*
  * A rig made for transform constraints. The official examples have them from world to world
@@ -296,6 +297,7 @@ function parts(version: SpineVersion): RigParts {
         animations: {
             drive: drive(),
             other: other(version),
+            wake: wakeTransform(),
             // one key at time 0: an animation without a length
             still: {
                 bones: { src: { rotate: [{ value: -60 }], scale: [{ x: 0.8, y: 1.6 }] } },

@@ -16,6 +16,7 @@ import {
 import type { AttachmentRef, PhysicsMode, TrackField } from '../../src/core';
 import { attachmentRefs, eventKey, indexer, skinEntries, timelineKind } from './model-shared';
 import type { RigFiles } from './official';
+import { describeAnimation } from './pose-info';
 import {
     animationIndexer,
     COMMON_FLAGS,
@@ -216,11 +217,7 @@ export function loadPose42(files: RigFiles): OfficialPoseRig {
             bones: data.bones.length,
             slots: data.slots.length,
             skins: data.skins.length,
-            animations: data.animations.map(({ name, duration, timelines }) => ({
-                name,
-                duration,
-                events: timelines.some((timeline) => timelineKind(timeline) === 'event'),
-            })),
+            animations: data.animations.map((animation) => describeAnimation(animation, timelineKind)),
             physics: data.physicsConstraints.length,
             sliders: 0,
         },

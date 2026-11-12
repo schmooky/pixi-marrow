@@ -4,7 +4,7 @@ import { MarrowError } from '../../src/base/errors';
 import { createMaskShader, releaseShader } from '../../src/render/shader';
 import { clipAttachment, clipGroups, expectClips, maskShape } from './clip-check';
 import { settle, WINDOW } from './heap';
-import { loadRig, meshes, play, type Rig, readDrawn, slotIndex, step, vertexData } from './rig';
+import { drawPose, loadRig, meshes, play, type Rig, readDrawn, slotIndex, step, vertexData } from './rig';
 
 /*
  * What a clip costs and when: nothing while no clipping attachment is shown, one small upload
@@ -36,7 +36,7 @@ async function clipped(polygon: readonly number[] = QUAD): Promise<Rig> {
 
     step(rig, 0);
     rig.engine.state.attachments[slotIndex(rig, 'gun')] = clipAttachment('clip', slotIndex(rig, 'head'), polygon);
-    rig.view.update(rig.engine.state);
+    drawPose(rig.view, rig.engine.state);
 
     return rig;
 }
@@ -77,7 +77,7 @@ describe('a skeleton that shows no clipping attachment', () => {
         const before = stats.bufferBytes;
 
         state.attachments[gun] = clipAttachment('clip', slotIndex(rig, 'head'), QUAD);
-        rig.view.update(state);
+        drawPose(rig.view, state);
         expect(stats).toMatchObject({ clips: 1, maskDraws: 2, drawCalls: 5, maskUploads: 1 });
         const [group] = clipGroups(rig.view);
         const withClip = stats.bufferBytes;
@@ -85,7 +85,7 @@ describe('a skeleton that shows no clipping attachment', () => {
         // the mask and two more ranges, each with an index buffer
         expect(withClip).toBeGreaterThan(before);
         state.attachments[gun] = image;
-        for (let frame = 0; frame < 5; frame++) rig.view.update(state);
+        for (let frame = 0; frame < 5; frame++) drawPose(rig.view, state);
         // one draw call again, no upload for the mask, and nothing was freed
         expect(stats).toMatchObject({ clips: 0, maskDraws: 0, drawCalls: 1, maskUploads: 1 });
         expect(clipGroups(rig.view)).toEqual([]);
@@ -95,7 +95,7 @@ describe('a skeleton that shows no clipping attachment', () => {
         readDrawn(rig);
         // the clip again: the same container and the same mask
         state.attachments[gun] = clipAttachment('clip', slotIndex(rig, 'head'), QUAD);
-        rig.view.update(state);
+        drawPose(rig.view, state);
         expect(clipGroups(rig.view)[0]?.container).toBe(group?.container);
         expect(clipGroups(rig.view)[0]?.mask).toBe(group?.mask);
         expect(stats.bufferBytes).toBe(withClip);
@@ -116,7 +116,7 @@ describe('a clip mask', () => {
         // the bone of the clip moves: the polygon follows, the triangles and the ranges stay
         for (let frame = 1; frame <= 10; frame++) {
             state.world[bone + 4] = (state.world[bone + 4] ?? 0) + 3;
-            rig.view.update(state);
+            drawPose(rig.view, state);
             expectClips(rig);
         }
         expect(stats).toMatchObject({ maskUploads: 11, maskRebuilds: 1, indexRebuilds: 2, drawCalls: 5 });
@@ -126,7 +126,7 @@ describe('a clip mask', () => {
         // the bone is mirrored: the polygon turns around and gets new triangles
         state.world[bone] = -(state.world[bone] ?? 0);
         state.world[bone + 2] = -(state.world[bone + 2] ?? 0);
-        rig.view.update(state);
+        drawPose(rig.view, state);
         expectClips(rig);
         expect(stats).toMatchObject({ maskUploads: 12, maskRebuilds: 2, indexRebuilds: 2 });
     });
@@ -148,7 +148,7 @@ describe('a clip mask', () => {
         }).flat();
 
         state.attachments[gun] = clipAttachment('star', head, large);
-        rig.view.update(state);
+        drawPose(rig.view, state);
         expectClips(rig);
         // 4 vertices and 6 indices became 40 and 114. The ranges did not change
         expect(stats.bufferBytes - small).toBe((corners - 4) * 8 + (114 - 6) * 2);
@@ -159,7 +159,7 @@ describe('a clip mask', () => {
         const arrays = buffers.map((buffer) => buffer.data);
 
         state.attachments[gun] = clipAttachment('quad', head, QUAD);
-        rig.view.update(state);
+        drawPose(rig.view, state);
         expectClips(rig);
         expect(stats.bufferBytes).toBe(grown);
         // the polygon keeps its array. The triangles are the six numbers of the quad, in their own array
@@ -185,7 +185,7 @@ describe('a clip mask', () => {
         // a deform gives every pose its own shape: the triangles are cut for the pose
         state.attachments[gun] = clipAttachment('bent', head, CONCAVE);
         deform(CONCAVE.map((value, at) => (at === 4 ? value + 30 : value)));
-        rig.view.update(state);
+        drawPose(rig.view, state);
         expectClips(rig);
         const own = indexBuffer?.data;
 
@@ -193,13 +193,13 @@ describe('a clip mask', () => {
         expect(own?.length).toBe(12);
         expect(stats.maskRebuilds).toBe(2);
         // the same triangles again: nothing uploads
-        rig.view.update(state);
+        drawPose(rig.view, state);
         expect(indexBuffer?.data).toBe(own);
         expect(stats.maskRebuilds).toBe(2);
         // a deformed quad fits the array. The indices it does not use are triangles without area
         state.attachments[gun] = clipAttachment('quad', head, QUAD);
         deform(QUAD);
-        rig.view.update(state);
+        drawPose(rig.view, state);
         expectClips(rig);
         expect(indexBuffer?.data).toBe(own);
         expect(Array.from(own ?? []).slice(6)).toEqual(new Array(6).fill(0));
@@ -207,14 +207,14 @@ describe('a clip mask', () => {
         expect(stats.maskRebuilds).toBe(3);
         // without the deform the quad is the same shape in every pose and has triangles to share
         state.deformLengths[gun] = 0;
-        rig.view.update(state);
+        drawPose(rig.view, state);
         expectClips(rig);
         expect(indexBuffer?.data).not.toBe(own);
         expect(indexBuffer?.data.length).toBe(6);
         expect(stats.maskRebuilds).toBe(4);
         // and back: the array of its own still holds the quad, and uploads again
         deform(QUAD);
-        rig.view.update(state);
+        drawPose(rig.view, state);
         expectClips(rig);
         expect(indexBuffer?.data).toBe(own);
         expect(stats.maskRebuilds).toBe(5);
@@ -277,13 +277,13 @@ describe('a clipping attachment that cannot clip', () => {
 
         state.attachments[gun] = clipAttachment('two-points', -1, [0, 0, 10, 10]);
         for (let i = 0; i < 3; i++) {
-            expect(() => rig.view.update(state)).toThrow(MarrowError);
-            expect(() => rig.view.update(state)).toThrow('The clipping attachment "two-points" has 2 vertices');
+            expect(() => drawPose(rig.view, state)).toThrow(MarrowError);
+            expect(() => drawPose(rig.view, state)).toThrow('The clipping attachment "two-points" has 2 vertices');
         }
         // nothing was drawn differently
         expect(rig.view.stats).toMatchObject({ indexRebuilds, clips: 0, maskDraws: 0 });
         state.attachments[gun] = image;
-        expect(() => rig.view.update(state)).not.toThrow();
+        expect(() => drawPose(rig.view, state)).not.toThrow();
         readDrawn(rig);
     });
 });
@@ -322,7 +322,7 @@ describe('memory', () => {
                 state.colors[(torso ?? 0) * 4 + 3] = i % 5 === 0 ? 0 : 1;
                 state.drawOrder[at] = eye ?? 0;
                 state.drawOrder[to] = torso ?? 0;
-                rig.view.update(state);
+                drawPose(rig.view, state);
             };
             const arrays = (): unknown[] => [
                 vertexData(rig.view).positions,

@@ -1,11 +1,11 @@
 import { Container, Texture } from 'pixi.js';
 import { describe, expect, it } from 'vitest';
-import { SEARCH_LAST } from '../../src/render/cover';
+import { SEARCH_LAST } from '../../src/render/cover-search';
 import { drawsPlain } from '../../src/render/gate';
 import { type CoverSlot, coverFiles, coverRig, framesUntilCovered, moveSlot, opaqueSquares } from './cover-rig';
 import { cutView, drawnIndices, pageTextures } from './cuts';
 import { settle, WINDOW } from './heap';
-import { createRig, meshes, step } from './rig';
+import { createRig, meshes, redraw, step } from './rig';
 
 /** A small slot behind a big one: the small one is covered. */
 const BEHIND: readonly CoverSlot[] = [
@@ -49,7 +49,7 @@ describe('covered slots and the alpha of the display object', () => {
         const stage = new Container();
         const { stats } = rig.view;
         const covered = (): number => {
-            step(rig, 0);
+            redraw(rig);
 
             return stats.coveredSlots;
         };
@@ -81,7 +81,7 @@ describe('covered slots and the alpha of the display object', () => {
         const { stats } = rig.view;
 
         stage.addChild(rig.view.container);
-        step(rig, 0);
+        redraw(rig);
         const children = [...rig.view.container.children];
         const shown = meshes(rig.view);
 
@@ -111,7 +111,7 @@ describe('covered slots and the alpha of the display object', () => {
         const stage = new Container();
 
         stage.addChild(rig.view.container);
-        step(rig, 0);
+        redraw(rig);
         stage.blendMode = 'screen';
         rig.view.beforeDraw(false);
         expect(rig.view.stats).toMatchObject({ coveredSlots: 0, indices: 12 });
@@ -121,11 +121,11 @@ describe('covered slots and the alpha of the display object', () => {
         const rig = await coverRig(BEHIND);
         const { stats } = rig.view;
 
-        step(rig, 0);
+        redraw(rig);
         expect(stats.coveredSlots).toBe(1);
         rig.view.beforeDraw(true);
         expect(stats).toMatchObject({ coveredSlots: 0, indices: 12, templateBuilds: 2 });
-        step(rig, 0);
+        redraw(rig);
         expect(stats).toMatchObject({ coveredSlots: 0, templateBuilds: 2 });
     });
 
@@ -147,7 +147,7 @@ describe('covered slots and the alpha of the display object', () => {
 
         if (source === undefined) throw new Error('the atlas has a page');
         step(white, 0);
-        step(rig, 0);
+        redraw(rig);
         expect(white.view.stats.coveredSlots).toBe(0);
         expect(rig.view.stats.coveredSlots).toBe(1);
         // a draw that skips a slot looks at the page textures first, and lays the quads out again
@@ -177,7 +177,7 @@ describe('the cost of the test', () => {
             // in and out of the rectangles, and the middle slot in and out of the big one
             moveSlot(rig, 'a', i % 4 === 0 ? 200 : 0, 0);
             moveSlot(rig, 'mid', i % 6 < 3 ? 0 : 150, 0);
-            step(rig, 0);
+            redraw(rig);
             rig.view.beforeDraw(false);
         };
 

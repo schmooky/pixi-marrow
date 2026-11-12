@@ -2,7 +2,7 @@ import type { Texture, TextureSource } from 'pixi.js';
 import type { AtlasModel } from '../model/atlas';
 import type { SkeletonModel } from '../model/model';
 import type { AtlasOutlines } from '../model/outlines';
-import { sharedTriangleBytes } from '../render/cuts';
+import { cutCode } from '../render/cut-code';
 
 /*
  * Byte counts for `perf.memory()`. Only typed arrays, GPU buffers and textures are counted: their
@@ -59,7 +59,9 @@ function modelBytes(model: object): number {
  * console.log(sharedBytes(asset.model, asset.atlas, asset.outlines));
  */
 export function sharedBytes(model: SkeletonModel, atlas: AtlasModel, outlines: AtlasOutlines | undefined): number {
-    return modelBytes(model) + modelBytes(atlas) + (outlines === undefined ? 0 : sharedTriangleBytes(outlines));
+    return (
+        modelBytes(model) + modelBytes(atlas) + (outlines === undefined ? 0 : (cutCode()?.triangleBytes(outlines) ?? 0))
+    );
 }
 
 /** The bytes of one texture source on the GPU: 4 per pixel, for every mip level it has. */

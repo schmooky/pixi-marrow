@@ -14,6 +14,8 @@ import {
     pathAttachment,
     type RigParts,
 } from './pose-rig-kit';
+import { longConstraints } from './pose-rig-long';
+import { wakeOrder } from './pose-rig-wake';
 
 /*
  * A rig made for the order of constraints: each one reads what the ones before it left. A
@@ -240,7 +242,13 @@ function parts(version: SpineVersion): RigParts {
         slots: [slot('rail', 'shin'), slot('line', 'hip'), slot('capeLine', 'cape1')],
         constraints: constraintLists(version, constraints(version), true),
         skins: skins(all),
-        animations: { main: main(version), slide: slide(), still: still(version) },
+        animations: {
+            main: main(version),
+            slide: slide(),
+            long: longConstraints(version),
+            wake: wakeOrder(version),
+            still: still(version),
+        },
     };
 }
 

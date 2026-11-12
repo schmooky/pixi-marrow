@@ -56,3 +56,22 @@ export function countModes(spines) {
 
     return counts;
 }
+
+/**
+ * The render mode some display objects of ours drew in, as the runtime reports it: `mesh` or
+ * `batched` when all agree, `mixed` when they do not, null when the runtime reports no mode.
+ * `counts` says how many objects reported which mode, where the runtime has `stats.renderMode`.
+ */
+export async function describeModes(objects) {
+    const counts = countModes(objects);
+
+    if (counts.unknown < objects.length) {
+        const named = ['mesh', 'batched'].filter((mode) => counts[mode] > 0);
+
+        return { renderMode: named.length === 1 && counts.unknown === 0 ? named[0] : 'mixed', counts };
+    }
+    // without the field the row of the report of the first object stands for all of them
+    const [first] = objects;
+
+    return { renderMode: first ? (await readMode(first)).mode : null, counts: null };
+}

@@ -1,12 +1,10 @@
 import { LOCAL_STRIDE, WORLD_STRIDE } from '../state';
 import { updateLocalTransform } from './bone-pose';
-import { solveIk } from './ik';
 import { COS_QUARTER, DEG_RAD, NORMAL, QUARTER, SIN_QUARTER } from './math';
-import { solvePath } from './path';
-import { solvePhysics } from './physics';
-import { solveSlider } from './slider';
+import { nextStamp, solveConstraint } from './solve-step';
+import { poseChanged } from './solve-tight';
+import type { Solve43 } from './solver-types';
 import { keepLeaks, resetApplied } from './split';
-import { solveTransform } from './transform';
 import type { Pose43 } from './types';
 import { updateBoneWorld } from './world';
 
@@ -23,61 +21,49 @@ import { updateBoneWorld } from './world';
  * module and not through arguments.
  */
 
-/** Solves one constraint of the update cache. */
-function solveConstraint(pose: Pose43, index: number): void {
-    const plan = pose.rig.solver.plans[index];
-
-    if (plan === undefined) return;
-    switch (plan.type) {
-        case 'ik':
-            solveIk(pose, plan);
-            break;
-        case 'transform':
-            solveTransform(pose, plan);
-            break;
-        case 'path':
-            solvePath(pose, plan);
-            break;
-        case 'physics':
-            solvePhysics(pose, plan);
-            break;
-        case 'slider':
-            solveSlider(pose, plan);
-            break;
-    }
-}
-
-/**
- * The official `skeleton._update++`: a new number that marks what this update has done. The
- * marks are bytes, so the numbers run from 1 to 255. Before they start over every mark is cleared,
- * and no mark of an older update can pass for one of this update.
- */
-function nextStamp(pose: Pose43): number {
-    const { solve } = pose;
-
-    if (solve.stamp === 255) {
-        solve.worldStamps.fill(0);
-        solve.localStamps.fill(0);
-        solve.stamp = 0;
-    }
-    solve.stamp++;
-
-    return solve.stamp;
-}
-
-/**
- * The official `Skeleton.updateWorldTransform`: resets every applied pose to the animated pose,
- * then runs the update cache. That computes the world transform of every active bone and solves
- * the active constraints, in the official order. Physics constraints run in the mode of
- * `Solve43.physicsMode`.
+/*
+ * Two ways to run the update cache.
  *
- * `PoseState.world` holds the result. `PoseState.local` is not changed. A bone that is not active
- * keeps the world transform it had. `pose` is the animated pose of the engine.
+ * The close way looks at what changes: it leaves out bones whose inputs stayed, and it compares
+ * what it computes with what was there. Its stamps are tight. The look costs time for every bone
+ * that is posed, which pays while most of the skeleton stays as it is.
+ *
+ * The plain way poses every bone and stamps every bone. It costs what an engine without stamps
+ * costs. An update the close way counts the bones that changed. When they are more than one in
+ * `BUSY_SHARE`, the next updates go the plain way: see `BUSY`. Then one goes the close way again.
+ */
+
+/**
+ * How many updates in a row pose every bone without a look, once a large part of the skeleton
+ * moves. The numbers are for the first time, the second time in a row, and from then on. One
+ * update that moves everything, as a new place does, costs two such updates and not thirty.
+ */
+const BUSY = [2, 8, 30];
+
+/** More than one bone in this many has to change in an update for the next ones to pose every bone. */
+const BUSY_SHARE = 3;
+
+/** The same for an update that follows updates the plain way: it takes less to stay than to start. */
+const BUSY_STAY = 4;
+
+/**
+ * Ends the updates that pose every bone without a look. Nothing was noted in them, so the next
+ * update poses every bone once more and compares.
+ */
+export function leaveBusy(solve: Solve43): void {
+    solve.busy = 0;
+    solve.force = true;
+    solve.stale = true;
+}
+
+/**
+ * Runs the update cache the plain way: every bone is posed. `stamp` is the mark of this update,
+ * 0 when no constraint is active.
  *
  * The official `Inherit.Normal` of a bone with a parent, which nearly every bone has, is computed
  * in the loop itself. As a function of its own it is too long for V8 to inline.
  */
-export function updateWorld(pose: Pose43): void {
+function poseAll(pose: Pose43, stamp: number): void {
     const { state, solve } = pose;
     const { cache, cacheLength, worldStamps, localStamps, inherit } = solve;
     const { world } = state;
@@ -85,14 +71,7 @@ export function updateWorld(pose: Pose43): void {
     // with no constraint active every active bone is in the cache once, after its parents, and reads its animated pose
     const plain = solve.solved === 0;
     const local = plain ? state.local : solve.local;
-    let stamp = 0;
 
-    if (solve.split !== null) resetApplied(pose);
-    if (!plain) {
-        // the official reset cache, for every bone. A bone without a constrained pose reads its animated pose.
-        stamp = nextStamp(pose);
-        local.set(state.local);
-    }
     for (let i = 0; i < cacheLength; i++) {
         const item = Number(cache[i]);
 
@@ -154,5 +133,65 @@ export function updateWorld(pose: Pose43): void {
         world[o + 2] = pc * la + pd * lc;
         world[o + 3] = pc * lb + pd * ld;
     }
-    if (solve.split !== null) keepLeaks(pose);
+}
+
+/** Gives every bone the pending version as its stamp. For a short list a loop beats a call to `fill`. */
+function stampAll(boneStamps: Uint32Array, pending: number): void {
+    if (boneStamps.length > 64) boneStamps.fill(pending);
+    else for (let i = 0; i < boneStamps.length; i++) boneStamps[i] = pending;
+}
+
+/**
+ * The official `Skeleton.updateWorldTransform`: resets every applied pose to the animated pose,
+ * then runs the update cache. That computes the world transform of every active bone and solves
+ * the active constraints, in the official order. Physics constraints run in the mode of
+ * `Solve43.physicsMode`.
+ *
+ * `PoseState.world` holds the result. `PoseState.local` is not changed. A bone that is not active
+ * keeps the world transform it had. `pose` is the animated pose of the engine.
+ *
+ * The bones that changed get the pending version as their stamp. While a large part of the
+ * skeleton moves, every bone gets it. When a stamp moved, the version of the pose state is the
+ * pending one afterwards, and the function returns true. The pose counts as solved from here on:
+ * `Solve43.dirty` is false until something changes what an update reads.
+ */
+export function updateWorld(pose: Pose43): boolean {
+    const { state, solve } = pose;
+    const { pending } = solve;
+    let stamp = 0;
+    let moved = true;
+
+    solve.dirty = false;
+    if (solve.split !== null) resetApplied(pose);
+    if (solve.solved !== 0) {
+        // the official reset cache, for every bone. A bone without a constrained pose reads its animated pose.
+        stamp = nextStamp(pose);
+        solve.local.set(state.local);
+    }
+    if (solve.busy > 0) {
+        poseAll(pose, stamp);
+        stampAll(state.boneStamps, pending);
+        if (solve.busy === 1) leaveBusy(solve);
+        else solve.busy--;
+    } else {
+        // bones that are stamped without a look, because `shown` is out of date, say nothing: with
+        // them left out, an update that finds little moving decides nothing, and the next one looks again
+        const blind = solve.stale ? solve.multiCount : 0;
+        const changed = poseChanged(pose, stamp);
+
+        solve.force = false;
+        // once a large part moved, a smaller part is enough to stay on the plain way
+        const share = solve.streak > 0 ? BUSY_STAY : BUSY_SHARE;
+
+        if ((changed - blind) * share > state.boneStamps.length - blind) {
+            solve.busy = BUSY[solve.streak] ?? 30;
+            solve.streak++;
+        } else if (blind === 0) solve.streak = 0;
+        moved = changed > 0;
+    }
+    // a slider that wrote the animated pose leaves the next update something to do
+    if (solve.split !== null && keepLeaks(pose)) solve.dirty = true;
+    if (moved) state.version = pending;
+
+    return moved;
 }

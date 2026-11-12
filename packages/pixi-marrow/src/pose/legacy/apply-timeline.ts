@@ -45,47 +45,59 @@ import {
     type LegacyTimeline,
 } from './timelines';
 
-function applyBoneTimeline(player: LegacyPlayer, timeline: LegacyTimeline, blend: number, direction: number): void {
+/** The timelines of one value of a bone, and the one of its inherit mode. Animations have few of them. */
+function applyBoneValueTimeline(
+    player: LegacyPlayer,
+    timeline: LegacyTimeline,
+    blend: number,
+    direction: number,
+): void {
     const { rig, pose, values } = player;
     const local = pose.local;
     const setup = rig.model.bones.setup;
+    const moved = player.solver.moved;
     const v41 = rig.v41;
 
     switch (timeline.kind) {
-        case K_ROTATE:
-            applyRelative(timeline, local, setup, LOCAL_ROTATION, blend, false, values);
-            break;
-        case K_TRANSLATE:
-            applyRelativePair(timeline, local, setup, LOCAL_X, blend, values);
-            break;
         case K_TRANSLATE_X:
-            applyRelative(timeline, local, setup, LOCAL_X, blend, v41, values);
+            applyRelative(timeline, local, setup, LOCAL_X, blend, v41, moved);
             break;
         case K_TRANSLATE_Y:
-            applyRelative(timeline, local, setup, LOCAL_Y, blend, v41, values);
-            break;
-        case K_SCALE:
-            applyScalePair(timeline, local, setup, blend, direction, values);
+            applyRelative(timeline, local, setup, LOCAL_Y, blend, v41, moved);
             break;
         case K_SCALE_X:
-            applyScaleValue(timeline, local, setup, LOCAL_SCALE_X, blend, direction, v41, values);
+            applyScaleValue(timeline, local, setup, LOCAL_SCALE_X, blend, direction, v41, values, moved);
             break;
         case K_SCALE_Y:
-            applyScaleValue(timeline, local, setup, LOCAL_SCALE_Y, blend, direction, v41, values);
-            break;
-        case K_SHEAR:
-            applyRelativePair(timeline, local, setup, LOCAL_SHEAR_X, blend, values);
+            applyScaleValue(timeline, local, setup, LOCAL_SCALE_Y, blend, direction, v41, values, moved);
             break;
         case K_SHEAR_X:
-            applyRelative(timeline, local, setup, LOCAL_SHEAR_X, blend, v41, values);
+            applyRelative(timeline, local, setup, LOCAL_SHEAR_X, blend, v41, moved);
             break;
         case K_SHEAR_Y:
-            applyRelative(timeline, local, setup, LOCAL_SHEAR_Y, blend, v41, values);
+            applyRelative(timeline, local, setup, LOCAL_SHEAR_Y, blend, v41, moved);
             break;
         case K_INHERIT:
-            applyInherit(timeline, pose.inherit, rig.model.bones.inherit, blend, direction);
+            applyInherit(timeline, pose.inherit, rig.model.bones.inherit, blend, direction, moved);
             break;
     }
+}
+
+/**
+ * The timelines of a bone. The common ones are told apart here, and the function stays short: V8
+ * builds a function into its caller only below a size, and this one runs for most timelines.
+ */
+function applyBoneTimeline(player: LegacyPlayer, timeline: LegacyTimeline, blend: number, direction: number): void {
+    const local = player.pose.local;
+    const setup = player.rig.model.bones.setup;
+    const moved = player.solver.moved;
+    const kind = timeline.kind;
+
+    if (kind === K_ROTATE) applyRelative(timeline, local, setup, LOCAL_ROTATION, blend, false, moved);
+    else if (kind === K_TRANSLATE) applyRelativePair(timeline, local, setup, LOCAL_X, blend, player.values, moved);
+    else if (kind === K_SCALE) applyScalePair(timeline, local, setup, blend, direction, player.values, moved);
+    else if (kind === K_SHEAR) applyRelativePair(timeline, local, setup, LOCAL_SHEAR_X, blend, player.values, moved);
+    else applyBoneValueTimeline(player, timeline, blend, direction);
 }
 
 function applySlotTimeline(player: LegacyPlayer, timeline: LegacyTimeline, blend: number, direction: number): void {

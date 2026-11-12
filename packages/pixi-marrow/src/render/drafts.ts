@@ -1,10 +1,12 @@
 import { MarrowError } from '../base/errors';
 import { attachmentRegions } from '../geometry/atlas-regions';
+import { i16 } from '../geometry/read';
 import type { AtlasModel } from '../model/atlas';
-import type { AttachmentData, MeshAttachmentData, RegionAttachmentData } from '../model/attachments';
+import type { AttachmentData, MeshAttachmentData, RegionAttachmentData, VertexData } from '../model/attachments';
 import type { SkeletonModel } from '../model/model';
 import { type AttachmentLookup, meshSource } from '../pose/shared/lookup';
-import { type Cuts, NO_CUT, type RegionCut, regionCut } from './cuts';
+import { cutCode } from './cut-code';
+import { type Cuts, NO_CUT, type RegionCut } from './cuts';
 
 /*
  * What a template lays out: one draft per region and mesh attachment a slot can show, with the
@@ -100,7 +102,8 @@ function regionDraft(
     normalBlend: boolean,
 ): Draft {
     const regions = attachmentRegions(atlas, attachment);
-    const cut = regionCut(cuts, atlas, attachment, regions, normalBlend);
+    // cuts are handed out once the code that makes them is loaded
+    const cut = cutCode()?.regionCut(cuts, atlas, attachment, regions, normalBlend) ?? NO_CUT;
     const { polygon } = cut;
     const vertices = polygon === null ? 4 : polygon.length >> 1;
 
@@ -153,4 +156,32 @@ export function draftEntries(
                 : meshDraft(atlas, lookup, slot, attachment),
         ),
     );
+}
+
+/** Per weighted mesh or clip polygon: the bones its vertices hang on, each once. All instances share the lists. */
+const boneLists = new WeakMap<VertexData, Int16Array>();
+
+/**
+ * The bones the vertices of a weighted attachment hang on, each one once. The list is made on
+ * the first call for an attachment and kept.
+ *
+ * @example
+ * const bones = weightBones(meshSource(lookup, mesh));
+ */
+export function weightBones(data: VertexData): Int16Array {
+    let list = boneLists.get(data);
+
+    if (list === undefined) {
+        const found = new Set<number>();
+        const { bones } = data;
+
+        // per vertex: how many bones it hangs on, then those bones
+        for (let at = 0; bones !== null && at < bones.length; at += i16(bones, at) + 1) {
+            for (let b = 1; b <= i16(bones, at); b++) found.add(i16(bones, at + b));
+        }
+        list = Int16Array.from(found);
+        boneLists.set(data, list);
+    }
+
+    return list;
 }

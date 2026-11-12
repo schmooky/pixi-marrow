@@ -1,5 +1,5 @@
 import { updateCache } from './cache';
-import { setSlotAttachment, setupAttachment } from './slots';
+import { setSlotAttachment, setupAttachment, stampDrawOrder, stampSlot } from './slots';
 import { showUnposed } from './split';
 import type { Pose43 } from './types';
 
@@ -19,6 +19,8 @@ export function setupPoseBones(pose: Pose43): void {
     pose.local.set(bones.setup);
     pose.inherit.set(bones.inherit);
     pose.values.set(pose.rig.solver.setup);
+    pose.fresh.fill(1);
+    pose.solve.dirty = true;
 }
 
 /** The official `Slot.setupPose`: the colors, the sequence index and the attachment of one slot. */
@@ -36,6 +38,8 @@ function setupPoseSlot(pose: Pose43, slot: number): void {
         pose.attachments[slot] = null;
     }
     setSlotAttachment(pose, slot, setupAttachment(pose, slot));
+    // a call like this is rare: the slot is stamped without a look at what changed
+    stampSlot(pose, slot);
 }
 
 /** The official `Skeleton.setupPoseSlots`: the draw order and every slot. */
@@ -43,8 +47,10 @@ export function setupPoseSlots(pose: Pose43): void {
     const { drawOrder } = pose;
 
     for (let i = 0; i < drawOrder.length; i++) drawOrder[i] = i;
+    stampDrawOrder(pose);
     for (let slot = 0; slot < pose.rig.model.slots.count; slot++) setupPoseSlot(pose, slot);
     showUnposed(pose);
+    pose.solve.dirty = true;
 }
 
 /** The official `Skin.attachAll`: slots that show an attachment of the old skin show that of the new skin. */

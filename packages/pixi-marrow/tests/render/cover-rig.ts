@@ -1,8 +1,9 @@
 import type { AtlasOutlines } from '../../src/model/outlines';
+import { touchPose } from '../../src/pose/state';
 import type { SkeletonViewOptions } from '../../src/render/skeleton-view';
 import type { RigFiles } from '../parity/official';
 import { cutView, setOpaque } from './cuts';
-import { createRig, type Rig, step } from './rig';
+import { createRig, type Rig, redraw } from './rig';
 
 /*
  * Small skeletons for the test of covered slots: a few slots in a given draw order, each on a
@@ -143,12 +144,21 @@ export function coverRig(
 /** The slot index for a name. */
 export const slotOf = (rig: Rig, name: string): number => rig.model.slots.names.indexOf(name);
 
-/** Moves the bone of a slot of a cover rig, in the pose. The next update of the engine keeps it. */
+/**
+ * Moves the bone of a slot of a cover rig, in the pose. A bone of a cover rig hangs on a root
+ * that is not moved, so where it is in the world is where it is next to its parent. Both are
+ * written and the pose is marked as changed: an engine that poses the bones again gets the
+ * same numbers, and one that knows that no animation moved them leaves them alone.
+ */
 export function moveSlot(rig: Rig, name: string, x: number, y: number): void {
     const bone = rig.model.slots.bones[slotOf(rig, name)] ?? 0;
+    const { state } = rig.engine;
 
-    rig.engine.state.local[bone * 7] = x;
-    rig.engine.state.local[bone * 7 + 1] = y;
+    state.local[bone * 7] = x;
+    state.local[bone * 7 + 1] = y;
+    state.world[bone * 6 + 4] = x;
+    state.world[bone * 6 + 5] = y;
+    touchPose(state);
 }
 
 /**
@@ -159,7 +169,7 @@ export function moveSlot(rig: Rig, name: string, x: number, y: number): void {
 export function framesUntilCovered(
     rig: Rig,
     covered: number,
-    advance: () => void = () => step(rig, 0),
+    advance: () => void = () => redraw(rig),
     limit = 200,
 ): number {
     for (let frame = 1; frame <= limit; frame++) {

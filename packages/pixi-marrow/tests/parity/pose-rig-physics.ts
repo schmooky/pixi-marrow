@@ -10,6 +10,7 @@ import {
     physics,
     type RigParts,
 } from './pose-rig-kit';
+import { wakePhysics } from './pose-rig-wake';
 
 /*
  * A rig made for physics constraints, for 4.2 and 4.3. The official examples have physics that
@@ -257,7 +258,7 @@ function parts(version: SpineVersion): RigParts {
         slots: [{ name: 's', bone: 'root' }],
         constraints: constraintLists(version, constraints(version)),
         skins: [{ name: 'default' }],
-        animations: { shake: shake(), gust: gust(), jolt: jolt(), still: still() },
+        animations: { shake: shake(), gust: gust(), jolt: jolt(), wake: wakePhysics(), still: still() },
         header: { referenceScale: 80 },
     };
 }

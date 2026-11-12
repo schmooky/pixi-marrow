@@ -3,8 +3,8 @@
  * small interface, so a case drives both with the same calls.
  *
  * An instance has: `view` (the display object), `root` (a container that holds the object alone
- * until a scene puts it somewhere else), `place`, `setSkin`, `play`, `update`, `stats` and
- * `destroy`. Official instances also have `tint` and `hide`, which the tooling proof uses to make
+ * until a scene puts it somewhere else), `place`, `setSkin`, `play` (which loops unless it is
+ * told not to), `setMode`, `update`, `stats` and `destroy`. Official instances also have `tint` and `hide`, which the tooling proof uses to make
  * a picture wrong on purpose. Ours also has `info`, `outlines`, `mode` and `spine`, which is the
  * display object once more.
  *
@@ -59,7 +59,9 @@ export function officialSide(PIXI, lib) {
                     if (spine.skeleton.setupPoseSlots) spine.skeleton.setupPoseSlots();
                     else spine.skeleton.setSlotsToSetupPose();
                 },
-                play: (name) => spine.state.setAnimation(0, name, true),
+                play: (name, loop = true) => spine.state.setAnimation(0, name, loop),
+                // the official runtime has one way to draw
+                setMode() {},
                 update(seconds) {
                     spine.update(seconds);
                     for (const change of changes) change();
@@ -113,12 +115,22 @@ const scans = new WeakMap();
  *
  * `mode` asks for a render mode by name: `mesh` or `batched`. Without it the instance is created
  * with the default, which is `auto`. `instance.mode()` reads back what the runtime drew in.
+ *
+ * The code of the mesh mode is a chunk that loads on demand. An asset loads it when `auto` draws
+ * its skeleton with meshes, and when the load asks for the mesh mode. So an instance that asks
+ * for the mesh mode by name gets an asset that was loaded for it: the same shared asset, once
+ * more, which waits for the chunk. Without that the instance would draw in a batch until the
+ * chunk arrives. `preload: false` leaves that load out, for a scene about that path.
  */
 export function oursSide(PIXI, lib) {
     return {
         name: 'ours',
-        async create({ skeleton, atlas, cuts = 'default', mode }) {
-            const asset = await lib.MarrowAsset.load({ skeleton, atlas });
+        async create({ skeleton, atlas, cuts = 'default', mode, preload = true }) {
+            const asset = await lib.MarrowAsset.load({
+                skeleton,
+                atlas,
+                ...(mode === 'mesh' && preload ? { renderMode: 'mesh' } : {}),
+            });
 
             // the outlines are read from the page images in idle time. From here on every instance has them
             const waited = performance.now();
@@ -145,7 +157,11 @@ export function oursSide(PIXI, lib) {
                 setSkin(name) {
                     spine.skin = name;
                 },
-                play: (name) => spine.play(name, { loop: true, track: 0 }),
+                play: (name, loop = true) => spine.play(name, { loop, track: 0 }),
+                /** Asks for another render mode at run time: `auto`, `mesh` or `batched`. */
+                setMode(mode) {
+                    spine.renderMode = mode;
+                },
                 update: (seconds) => spine.update(seconds),
                 stats: () => (spine.stats ? { ...spine.stats } : null),
                 info: () => spine.info ?? null,

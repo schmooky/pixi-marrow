@@ -1,8 +1,10 @@
 import type { TextureSource } from 'pixi.js';
 import type { AtlasModel } from '../model/atlas';
 import type { AtlasOutlines } from '../model/outlines';
-import { type Cuts, pageAllowsCuts } from './cuts';
+import { cutCode, wantCutCode } from './cut-code';
+import type { Cuts } from './cuts';
 import type { EdgeBend } from './gate';
+import { pageAllowsCuts } from './page-block';
 
 /** Which cuts a view was asked for. */
 export interface CutChoice {
@@ -22,6 +24,9 @@ export interface CutChoice {
 /**
  * What one view knows about its cuts of overdraw: the outlines and the options. It also keeps
  * how each page texture was sampled at the last layout, and what Pixi did to the last draw.
+ *
+ * The code that cuts loads with the outlines, see `cut-code.ts`. A view that has outlines and
+ * not the code asks for it, and its layout is made again once the code is there.
  *
  * @example
  * const state = new CutState(atlas, sources, { outlines });
@@ -51,6 +56,8 @@ export class CutState {
     private outlines: AtlasOutlines | undefined;
     /** True when the outlines or the renderer changed since the last layout. */
     private stale = false;
+    /** True when the last layout was asked to cut and the code that cuts was not there. */
+    private waits = false;
 
     /** @param sources The texture source of every atlas page, in page order. */
     constructor(atlas: AtlasModel, sources: readonly TextureSource[], choice: CutChoice) {
@@ -61,11 +68,15 @@ export class CutState {
         this.hollow = choice.tightMesh !== 'off';
         this.occlusion = choice.occlusion !== 'off';
         this.allowed = new Uint8Array(sources.length);
+        if (this.asked) wantCutCode();
     }
 
-    /** Whether the view cuts at all: it has outlines, an option that is on, and no draw forbade it. */
+    /**
+     * Whether the view cuts at all: it has outlines, an option that is on, no draw forbade it,
+     * and the code that cuts is loaded.
+     */
     get wanted(): boolean {
-        return this.outlines !== undefined && !this.hostile && (this.hollow || this.occlusion);
+        return this.asked && cutCode() !== undefined;
     }
 
     /** The outlines the view has at the moment, or undefined. Give it others with {@link setOutlines}. */
@@ -79,6 +90,8 @@ export class CutState {
         // a view that cuts nothing has no polygon to take back and none to add
         if (!this.hostile && (this.hollow || this.occlusion)) this.stale = true;
         this.outlines = outlines;
+        // also after a load that failed: other outlines are a reason to try again
+        if (this.asked) wantCutCode();
     }
 
     /**
@@ -89,13 +102,17 @@ export class CutState {
     forbid(bend: EdgeBend | null = null): void {
         if (this.hostile) return;
         if (this.wanted) this.stale = true;
+        this.waits = false;
         this.hostile = true;
         this.bend = bend;
     }
 
-    /** True when the outlines changed or a draw forbade the cuts since the last layout. It must be made again. */
+    /**
+     * True when the layout must be made again. The outlines changed or a draw forbade the cuts
+     * since the last one, or that layout was made without the code that cuts, which has arrived.
+     */
     get changed(): boolean {
-        return this.stale;
+        return this.stale || (this.waits && cutCode() !== undefined);
     }
 
     /**
@@ -119,12 +136,18 @@ export class CutState {
         return false;
     }
 
+    /** Whether the view was asked to cut and may: it has outlines, an option that is on, and no draw forbade it. */
+    private get asked(): boolean {
+        return this.outlines !== undefined && !this.hostile && (this.hollow || this.occlusion);
+    }
+
     /** The cuts for a layout that is made now, or undefined for none. Remembers how the pages are sampled. */
     take(): Cuts | undefined {
         const { outlines, sources, allowed } = this;
         const { pages } = this.atlas;
 
         this.stale = false;
+        this.waits = this.asked && cutCode() === undefined;
         if (outlines === undefined || !this.wanted) return undefined;
         for (let i = 0; i < sources.length; i++) {
             const source = sources[i];

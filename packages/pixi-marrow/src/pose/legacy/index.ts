@@ -4,6 +4,7 @@ import type { PhysicsMode, PoseEngine, PoseEvent, TrackEntry, TrackFields } from
 import { createPoseState, type PoseState, poseStateBytes } from '../state';
 import { applyTracks } from './apply';
 import { configureEntry, LegacyEntry } from './entry';
+import { updateWorldTransform } from './pass';
 import { rotatePhysics, translatePhysics } from './physics-state';
 import {
     addAnimation,
@@ -17,7 +18,8 @@ import {
 } from './player';
 import { clipOf, type Rig, rigOf } from './rig';
 import { initPose, setBonesToSetupPose, setSkin, setSlotsToSetupPose } from './skeleton';
-import { createSolver, type Solver, updateWorldTransform } from './solver';
+import { createSolver, type Solver, stirPhysics } from './solver';
+import { closeStamps, openStamps } from './stamps';
 import { updateTracks } from './update';
 
 /** What `takeEvents` returns when nothing happened. Frozen, because every engine returns this one list. */
@@ -35,21 +37,36 @@ class LegacyEngine implements PoseEngine {
     private readonly solver: Solver;
     private readonly player: LegacyPlayer;
     private mode: PhysicsMode = 'update';
+    /** The version of the pose after the last call of this engine. Another version means that someone else wrote the pose. */
+    private seen: number;
 
     constructor(rig: Rig, pose: PoseState, solver: Solver) {
         this.rig = rig;
         this.state = pose;
         this.solver = solver;
         this.player = new LegacyPlayer(rig, pose, solver);
+        this.seen = pose.version;
+    }
+
+    /**
+     * Ends a call that changed the pose: closes its stamps and makes the next update apply the
+     * timelines and compute the world transforms again.
+     */
+    private changed(): void {
+        closeStamps(this.state);
+        this.seen = this.state.version;
+        this.player.stirred = true;
     }
 
     get bytes(): number {
-        const { applied, values, physics } = this.solver;
+        const { applied, values, physics, moved, noted, restless } = this.solver;
         // a skeleton without constraints has no applied pose of its own
         const own = applied === this.state.local ? 0 : applied.byteLength;
         const constraints = own + values.byteLength + physics.byteLength;
+        // what an update needs to know which world transforms to compute
+        const notes = moved.byteLength + noted.byteLength + restless.byteLength;
 
-        return poseStateBytes(this.state) + constraints + this.player.attachmentState.byteLength;
+        return poseStateBytes(this.state) + constraints + notes + this.player.attachmentState.byteLength;
     }
 
     get physics(): PhysicsMode {
@@ -64,16 +81,20 @@ class LegacyEngine implements PoseEngine {
                 fix: `Set one of ${PHYSICS_MODES.join(', ')}.`,
             });
         }
+        // every physics constraint runs anew in the new mode
+        if (this.solver.mode !== mode) this.solver.all = true;
         this.mode = value;
         this.solver.mode = mode;
     }
 
     physicsTranslate(x: number, y: number): void {
         translatePhysics(this.solver.physics, x, y);
+        stirPhysics(this.solver);
     }
 
     physicsRotate(x: number, y: number, degrees: number): void {
         rotatePhysics(this.solver.physics, x, y, degrees);
+        stirPhysics(this.solver);
     }
 
     get timeScale(): number {
@@ -119,6 +140,7 @@ class LegacyEngine implements PoseEngine {
             });
         }
         configureEntry(entry, fields, this.rig.v41);
+        this.player.stirred = true;
     }
 
     clearTrack(track: number): void {
@@ -130,27 +152,47 @@ class LegacyEngine implements PoseEngine {
     }
 
     setSkin(skin: number): void {
+        openStamps(this.state);
         setSkin(this.rig, this.state, this.solver, skin);
+        this.changed();
     }
 
     setupPose(): void {
+        openStamps(this.state);
         setBonesToSetupPose(this.rig, this.state, this.solver);
-        setSlotsToSetupPose(this.rig, this.state);
+        setSlotsToSetupPose(this.rig, this.state, this.solver);
+        this.changed();
     }
 
     setupPoseBones(): void {
+        openStamps(this.state);
         setBonesToSetupPose(this.rig, this.state, this.solver);
+        this.changed();
     }
 
     setupPoseSlots(): void {
-        setSlotsToSetupPose(this.rig, this.state);
+        openStamps(this.state);
+        setSlotsToSetupPose(this.rig, this.state, this.solver);
+        this.changed();
     }
 
     update(dt: number): void {
-        updateTracks(this.player, dt);
-        this.state.time += dt;
-        applyTracks(this.player);
-        updateWorldTransform(this.solver);
+        const { state, player, solver } = this;
+
+        // someone else wrote the pose, or a test asks for the whole update: nothing is known to be as it was
+        if (state.version !== this.seen || !this.rig.skips) {
+            player.stirred = true;
+            solver.all = true;
+        }
+        openStamps(state);
+        updateTracks(player, dt);
+        state.time += dt;
+        // an entry started or ended: a skeleton that was busy may not be any more, so look soon
+        if (player.stirred && solver.busy > 2) solver.busy = 2;
+        applyTracks(player);
+        updateWorldTransform(solver);
+        closeStamps(state);
+        this.seen = state.version;
     }
 
     takeEvents(): PoseEvent[] {
@@ -184,7 +226,12 @@ export function createLegacyEngine(model: SkeletonModel): PoseEngine {
     const pose = createPoseState(model);
     const solver = createSolver(rig, pose);
 
+    openStamps(pose);
     initPose(rig, pose, solver);
+    // a new state starts at version 1 with every stamp at 1
+    pose.boneStamps.fill(pose.version);
+    pose.slotStamps.fill(pose.version);
+    pose.drawOrderStamp = pose.version;
 
     return new LegacyEngine(rig, pose, solver);
 }

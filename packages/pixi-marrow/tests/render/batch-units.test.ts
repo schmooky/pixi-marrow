@@ -1,9 +1,10 @@
-import { Buffer, BufferUsage, Shader } from 'pixi.js';
+import { Buffer, BufferUsage, type Renderer, Shader, VERSION } from 'pixi.js';
 import { describe, expect, it } from 'vitest';
 import { holdsLayout, layoutSlots } from '../../src/render/batch-layout';
 import { createBatchShader } from '../../src/render/batch-shader';
 import { PendingUpload, uploadsStretch } from '../../src/render/batch-upload';
 import { CoverTest } from '../../src/render/cover';
+import { batcherOf, createStage } from './batch-stage';
 import { type CoverSlot, coverRig } from './cover-rig';
 import { PENTAGON, setPolygon } from './cuts';
 import { loadRig, step } from './rig';
@@ -152,14 +153,45 @@ describe('what a batch buffer uploads', () => {
 
     it('is always the used part with a Pixi that cannot upload from an offset', () => {
         const { buffer, uploads } = noting(100_000);
-        const pending = new PendingUpload(uploadsStretch((size?: number) => void size));
+        const pending = new PendingUpload(uploadsStretch((size?: number) => void size, VERSION));
 
-        expect(uploadsStretch(buffer.update)).toBe(true);
-        expect(uploadsStretch(Buffer.prototype.update)).toBe(true);
+        expect(uploadsStretch(buffer.update, VERSION)).toBe(true);
+        expect(uploadsStretch(Buffer.prototype.update, VERSION)).toBe(true);
+        // pixi.js 8.20 to 8.22 takes an offset, and its WebGL buffers upload when they are bound:
+        // a second stretch before that would replace the first, so stretches upload from 8.23 on
+        for (const [version, ranged] of [
+            ['8.16.0', false],
+            ['8.20.0', false],
+            ['8.22.3', false],
+            ['8.23.0', true],
+            ['8.30.1', true],
+            ['9.0.0', true],
+        ] as const) {
+            expect(uploadsStretch(buffer.update, version), version).toBe(ranged);
+        }
         pending.add(90_000, 4);
         expect(pending).toMatchObject({ whole: true, count: 0 });
         expect(pending.flush(buffer, 4, 95_000)).toBe(380_000);
         expect(uploads).toEqual([[0, 380_000]]);
+    });
+
+    it('is pushed by hand for a Pixi that uploads a buffer when its geometry is bound', async () => {
+        const stage = createStage();
+        const rig = await coverRig([{ name: 'small', shows: 'small' }], { renderMode: 'batched' });
+
+        stage.root.addChild(rig.view.container);
+        step(rig, 0);
+        stage.render();
+        const batcher = batcherOf(rig.view);
+        const pushed: unknown[] = [];
+        // a renderer as far as a push looks at it: the system that uploads a buffer now
+        const renderer = { buffer: { updateBuffer: (buffer: Buffer) => pushed.push(buffer) } } as unknown as Renderer;
+
+        batcher.push(renderer);
+        expect(pushed).toEqual([batcher.geometry.buffers[0], batcher.staticBuffer, batcher.geometry.indexBuffer]);
+        // a renderer without a GPU has no such system, and nothing to upload
+        batcher.push({} as unknown as Renderer);
+        expect(pushed).toHaveLength(3);
     });
 });
 

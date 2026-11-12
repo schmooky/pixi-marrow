@@ -5,7 +5,9 @@ import type { BatchElement } from './batch-element';
 import type { SlotLayout } from './batch-layout';
 import type { CoverTest } from './cover';
 import type { DrawGate } from './gate';
-import { MeshPaint } from './mesh-paint';
+import { loadMeshCode, meshCode, meshCodeState } from './mesh-code';
+import type { MeshPaint } from './mesh-paint';
+import { type ModeReason, modeFor, modeReason, type RenderMode } from './mode';
 import type { DrawMode, ViewStats } from './stats';
 import type { Template } from './template';
 import type { VisibleList } from './visible';
@@ -36,11 +38,13 @@ export interface ViewPaintsOptions {
  * What a view draws with in each of its two modes: the buffers and meshes of the mesh mode, and
  * the display object of the batched mode. Each is created when the view first draws in its mode,
  * and is hidden and kept while the view draws in the other one. A view that only ever draws in
- * one mode holds nothing of the other.
+ * one mode holds nothing of the other. The code of the mesh mode loads on demand, see
+ * `mesh-code.ts`.
  *
  * @example
- * const paints = new ViewPaints({ container, gate: view, pages, texture, dark, model, seen, cover, stats, measure }, 'batched');
- * paints.enter('batched', template, layoutSlots(template, model.slots.count));
+ * const paints = new ViewPaints({ container, gate: view, pages, texture, dark, model, seen, cover, stats, measure });
+ * const mode = paints.pick('auto', slots.plain, false);
+ * if (mode !== undefined) paints.enter(mode, template, slots);
  * paints.body?.touch();
  */
 export class ViewPaints {
@@ -48,16 +52,44 @@ export class ViewPaints {
     mesh: MeshPaint | undefined;
     /** The display object of the batched mode. It exists once the view drew in it. */
     body: BatchBody | undefined;
-    /** The mode that draws at the moment, or the one the view expects before it has drawn. */
+    /** The mode that draws at the moment. Before the view has drawn it is the batched mode. */
     mode: DrawMode;
     /** False until the view has drawn: nothing exists yet. */
     ready = false;
+    /** Why the view should draw in the mode it should, which is not always {@link mode}. */
+    reason: ModeReason = 'option';
+    /**
+     * True while the view should draw with meshes and the code of the mesh mode is not loaded.
+     * It draws in a batch until then, and nothing where a renderer cannot batch it.
+     */
+    waits = false;
     private readonly options: ViewPaintsOptions;
 
-    /** @param mode The mode the view expects to draw in. Nothing is created for it yet. */
-    constructor(options: ViewPaintsOptions, mode: DrawMode) {
+    /** Nothing is created yet: the first update of the view picks a mode and enters it. */
+    constructor(options: ViewPaintsOptions) {
         this.options = options;
-        this.mode = mode;
+        this.mode = 'batched';
+    }
+
+    /**
+     * Picks the mode for the option of the view, the vertices its skeleton has in a batch and
+     * whether a renderer refused to batch it. Returns the mode to enter, or undefined when the
+     * view draws in it already.
+     *
+     * A view that should draw with meshes before their code is loaded gets the batched mode, and
+     * the code is asked for when nobody did so before. After a load that failed, a command asks
+     * again and an update does not.
+     */
+    pick(choice: RenderMode, vertices: number, refused: boolean): DrawMode | undefined {
+        const reason = modeReason(choice, vertices, refused);
+        const wanted = modeFor(choice, reason);
+
+        this.reason = reason;
+        this.waits = wanted === 'mesh' && meshCode() === undefined;
+        if (this.waits && meshCodeState() === 'idle') void loadMeshCode();
+        const mode = this.waits ? 'batched' : wanted;
+
+        return mode !== this.mode || !this.ready ? mode : undefined;
     }
 
     /** The batch element of the view while it draws in the batched mode. */
@@ -100,15 +132,12 @@ export class ViewPaints {
         }
         if (this.body !== undefined) this.body.visible = false;
         if (this.mesh !== undefined) this.mesh.wake(template);
-        else
-            this.mesh = new MeshPaint({
-                container,
-                template,
-                pages,
-                dark,
-                blendModes: model.slots.blendModes,
-                measure,
-            });
+        else {
+            const { blendModes } = model.slots;
+
+            // the view enters the mesh mode only once its code is loaded
+            this.mesh = meshCode()?.createPaint({ container, template, pages, dark, blendModes, measure });
+        }
     }
 
     /** Takes the vertex ranges of a new layout: the buffers of the mesh mode and the element of the batched mode. */

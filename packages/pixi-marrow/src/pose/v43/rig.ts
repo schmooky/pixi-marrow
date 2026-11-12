@@ -404,7 +404,13 @@ function buildClip(build: Build, animation: AnimationData, index: number): Clip4
 
     for (const timeline of timelines) for (const id of timeline.ids) ids.add(id);
 
-    return { index, name: animation.name, duration: animation.duration, timelines, ids };
+    const resets = timelines.some((timeline) => timeline.kind === 'physicsConstraintReset');
+    const posed = timelines
+        .filter((timeline) => SPECS[timeline.kind].gate === 'bone')
+        .map((timeline) => timeline.target);
+    const bones = Int16Array.from(new Set(posed));
+
+    return { index, name: animation.name, duration: animation.duration, timelines, ids, resets, bones };
 }
 
 const rigs = new WeakMap<SkeletonModel, Rig43>();
@@ -427,7 +433,15 @@ export function prepareRig(model: SkeletonModel): Rig43 {
         model,
         lookup,
         clips,
-        empty: { index: -1, name: '<empty>', duration: 0, timelines: [], ids: new Set() },
+        empty: {
+            index: -1,
+            name: '<empty>',
+            duration: 0,
+            timelines: [],
+            ids: new Set(),
+            resets: false,
+            bones: new Int16Array(0),
+        },
         info: build.info,
         drawOrderId,
         solver,

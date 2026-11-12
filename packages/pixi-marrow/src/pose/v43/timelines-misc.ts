@@ -1,7 +1,7 @@
 import { MarrowError } from '../../base/errors';
 import type { EventKey } from '../../model/timelines';
 import { LAST_TIME, SHARED, search, TIME } from './curves';
-import { followerInfo, timelineActive } from './slots';
+import { followerInfo, stampDrawOrder, stampSlot, timelineActive } from './slots';
 import { CURRENT, type Pose43, type Timeline43 } from './types';
 
 // The official `SequenceMode` values. A sequence key holds one in its low four bits.
@@ -67,7 +67,14 @@ function applySequenceToSlot(pose: Pose43, timeline: Timeline43, slot: number, m
             },
         );
     }
-    pose.sequenceIndices[slot] = mode === HOLD ? index : sequenceIndex(mode, index, info.sequenceCount);
+    setSequenceIndex(pose, slot, mode === HOLD ? index : sequenceIndex(mode, index, info.sequenceCount));
+}
+
+/** Gives a slot a sequence index, and stamps the slot when that is another one than it had. */
+function setSequenceIndex(pose: Pose43, slot: number, index: number): void {
+    if (pose.sequenceIndices[slot] === index) return;
+    pose.sequenceIndices[slot] = index;
+    stampSlot(pose, slot);
 }
 
 /** The official sequence timeline: the region of an attachment's sequence, in every slot that follows it. */
@@ -78,13 +85,11 @@ export function applySequence(pose: Pose43, timeline: Timeline43, from: number, 
     if (!timelineActive(pose, target, timeline, slots)) return;
     if (out || time < Number(frames[0])) {
         if (from === CURRENT) return;
-        const indices = pose.sequenceIndices;
-
-        if (followerInfo(pose, target, timeline) !== null) indices[target] = -1;
+        if (followerInfo(pose, target, timeline) !== null) setSequenceIndex(pose, target, -1);
         for (let i = 0; i < slots.length; i++) {
             const slot = slots[i] ?? -1;
 
-            if (followerInfo(pose, slot, timeline) !== null) indices[slot] = -1;
+            if (followerInfo(pose, slot, timeline) !== null) setSequenceIndex(pose, slot, -1);
         }
 
         return;
@@ -152,7 +157,12 @@ export function applyEvent(timeline: Timeline43, events: EventKey[] | null): voi
     SHARED[LAST_TIME] = lastTime;
 }
 
-/** The official draw order timeline: the order of every slot. A null key is the setup order. */
+/**
+ * The official draw order timeline: the order of every slot. A null key is the setup order.
+ *
+ * The animated pose notes the key it got. While no draw order of the engine changes, the same key
+ * again writes nothing: a look at every slot in every update would cost more than the write.
+ */
 export function applyDrawOrder(pose: Pose43, timeline: Timeline43, from: number, out: boolean): void {
     const drawOrder = pose.drawOrder;
     const frames = timeline.frames;
@@ -163,11 +173,25 @@ export function applyDrawOrder(pose: Pose43, timeline: Timeline43, from: number,
     } else {
         order = timeline.orders[search(frames, 1)] ?? null;
     }
-    if (order === null) {
-        for (let i = 0; i < drawOrder.length; i++) drawOrder[i] = i;
-    } else {
-        drawOrder.set(order);
+    const { solve } = pose;
+    const animated = pose.fresh === solve.fresh;
+
+    // the key that was applied last, and no draw order has changed since: the order is there already
+    if (animated && order === solve.orderKey && solve.orderAt === solve.orderSerial) return;
+    const count = order === null ? drawOrder.length : order.length;
+    let changed = false;
+
+    for (let i = 0; i < count; i++) {
+        const slot = order === null ? i : Number(order[i]);
+
+        if (drawOrder[i] === slot) continue;
+        drawOrder[i] = slot;
+        changed = true;
     }
+    if (changed) stampDrawOrder(pose);
+    if (!animated) return;
+    solve.orderKey = order;
+    solve.orderAt = solve.orderSerial;
 }
 
 /**
@@ -185,14 +209,18 @@ export function applyDrawOrderFolder(pose: Pose43, timeline: Timeline43, from: n
         order = timeline.orders[search(frames, 1)] ?? null;
     }
     let found = 0;
+    let changed = false;
 
     for (let i = 0; i < drawOrder.length && found < slots.length; i++) {
         if (inFolder[drawOrder[i] ?? -1] !== 1) continue;
         const next = order === null ? found : (order[found] ?? -1);
+        const slot = slots[next] ?? -1;
 
-        drawOrder[i] = slots[next] ?? -1;
+        if (drawOrder[i] !== slot) changed = true;
+        drawOrder[i] = slot;
         found++;
     }
+    if (changed) stampDrawOrder(pose);
     if (found < slots.length) {
         // the official loop runs past the end of the draw order here
         throw new MarrowError(

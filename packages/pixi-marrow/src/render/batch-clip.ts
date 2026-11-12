@@ -12,11 +12,11 @@ import type { SkeletonModel } from '../model/model';
 import type { PoseState } from '../pose/state';
 import type { BatchElement, BatchHome } from './batch-element';
 import { POSITION_WORDS, RUN_PAD, STATIC_WORDS } from './batch-layout';
-import { colorWord, flagWord, NO_DARK, runKey } from './batch-pack';
-import type { BatchClipper, ClipRoom } from './clip-code';
+import { colorWord, flagWord, NO_DARK, placeMoved, runKey } from './batch-pack';
+import type { ClipCode, ClipRoom } from './clip-code';
 import { ClipShape } from './clip-shape';
-import { NO_CLIP } from './ranges';
 import { STATIC_STRIDE } from './template';
+import { NO_CLIP } from './visible';
 
 /*
  * Clips in a batch. The mesh mode clips with a stencil mask, which is two draw calls and ends
@@ -26,15 +26,17 @@ import { STATIC_STRIDE } from './template';
  * A skeleton keeps room for its cut triangles behind the room of its slots: some vertices and
  * some indices. A slot that the clip leaves whole draws from the room of the slot, with the
  * vertices its triangles share. A slot that is cut draws the vertices the clipper made, which are
- * written anew in every frame: positions, texture coordinates and the colors of the slot.
+ * written anew when the clip or a slot inside it moved: positions, texture coordinates and the
+ * colors of the slot.
  *
  * How much room the cut triangles need is known only after they are cut, and it changes with
  * the pose. The room is therefore what the clips of a model needed so far, with a margin, see
  * {@link roomOf}. Pixi builds the instructions again when a pose needs more. An animation that
  * loops has needed its most after one turn, and all instances of the model share the number.
  *
- * This module loads on demand, see `clip-code.ts`. Its arrays are shared by all skeletons: one
- * is clipped and written before the next one starts.
+ * This module loads on demand, see `clip-code.ts`. With it come the clip kernel and `ClipShape`,
+ * which the stencil mask of the mesh mode shapes its polygon with too. Its arrays are shared by
+ * all skeletons: one is clipped and written before the next one starts.
  */
 
 /** What a visible entry draws, in {@link plan}: its own triangles, nothing, or what was cut from this index on. */
@@ -313,14 +315,93 @@ function writeElement(element: BatchElement, home: BatchHome, mark: boolean): vo
 }
 
 /**
- * The code that clips in a batch. `clip-code.ts` hands it out once this module is loaded.
+ * Gives an element the room for cut triangles that the clips of its model needed so far, before
+ * it is added to a batch. A skeleton that clipped once keeps the room: a clip that comes and
+ * goes builds nothing again.
+ *
+ * @example
+ * clipCode()?.size(element);
+ * element.attributeSize = element.layout.vertices + element.clipVertices;
+ */
+function sizeClipRoom(element: BatchElement): void {
+    if (element.clipVertices === 0 && element.seen.clipped === 0) return;
+    if (element.seen.clipped > 0) batchClip.measure(element);
+    const room = roomOf(element.model);
+
+    element.clipVertices = room.vertices;
+    element.clipIndices = room.indices;
+}
+
+/**
+ * Takes the pose of an update for the clips of an element. While a clipping attachment cuts a
+ * visible slot, the slots are clipped now and written into the batch. Their positions are in
+ * the space of the skeleton, and the next sync moves them once Pixi knows where the skeleton is.
+ * Whether a pose needs more room than the batch has is then known before Pixi looks at its
+ * instructions.
+ *
+ * @example
+ * clipCode()?.pose(element, engine.state);
+ * body.touch();
+ */
+function clipPose(element: BatchElement, pose: PoseState): void {
+    const { home } = element;
+
+    element.pose = pose;
+    element.clipFresh = false;
+    element.clipPlaced = false;
+    element.dirty = true;
+    // an element without a place is measured and written when the instructions are built
+    if (element.seen.clipped === 0 || home === null || !element.placed || element.resized) return;
+    if (batchClip.fill(element, home, true)) element.clipFresh = true;
+    else element.resized = true;
+    element.stats.indices = element.drawn;
+}
+
+/**
+ * The part of a sync for a skeleton with slots inside a clip: the cut triangles and the indices
+ * of all slots. The batch holds the cut triangles of a pose in the space of the skeleton right
+ * after {@link clipPose}, and they are moved to the display object here. They are cut again when
+ * the batch holds them for another transform or another list of slots, and when a color changed,
+ * which every cut vertex carries.
+ *
+ * @param all Whether every vertex of the skeleton was placed again.
+ * @param statics Whether colors, texture coordinates or the list of slots changed.
+ *
+ * @example
+ * if (element.seen.clipped > 0) clipCode()?.write(element, home, true, moved, false);
+ */
+function writeClip(element: BatchElement, home: BatchHome, mark: boolean, all: boolean, statics: boolean): void {
+    const at = element._attributeStart + element.layout.vertices * POSITION_WORDS;
+
+    if (!element.clipFresh) {
+        if (element.clipPlaced && !all && !statics) return;
+        if (!batchClip.fill(element, home, mark)) {
+            element.resized = true;
+            // Pixi looks at the instructions of a display object that says it changed
+            element.place.touch();
+        }
+    }
+    element.stats.indices = element.drawn;
+    placeMoved(home.attributeBuffer.float32View, at, element.clipUsed, element.place.groupTransform);
+    if (mark && !all) home.touchPositions(at, element.clipUsed * POSITION_WORDS);
+    // they are where the display object is now, and cannot be moved again
+    element.clipFresh = false;
+    element.clipPlaced = true;
+}
+
+/**
+ * The code that clips. `clip-code.ts` hands it out once this module is loaded.
  *
  * @example
  * const { batchClip } = await import('./batch-clip');
  * if (!batchClip.fill(element, home, true)) element.resized = true;
  */
-export const batchClip: BatchClipper = {
+export const batchClip: ClipCode = {
+    shape,
     room: roomOf,
+    size: sizeClipRoom,
+    pose: clipPose,
+    write: writeClip,
     measure(element: BatchElement): void {
         const room = roomOf(element.model);
 

@@ -1,6 +1,6 @@
 import { MarrowError } from '../../base/errors';
 import { ALPHA, PERCENT, SHARED, search, TIME } from './curves';
-import { followerInfo, timelineActive } from './slots';
+import { followerInfo, stampSlot, timelineActive } from './slots';
 import { type AttachmentInfo, FIRST, type Pose43, SETUP, type Timeline43 } from './types';
 
 const LINEAR = 0;
@@ -89,6 +89,11 @@ function resizeDeform(pose: Pose43, slot: number, length: number): Float64Array 
 /*
  * The four ways the keyed vertices get into a deform. `v2` is null at the last key. Otherwise the
  * value of a vertex is between `v1` and `v2`, by the percent in `SHARED`.
+ *
+ * Each returns true when a number of the deform is not what it was. The two that replace the
+ * deform first look for the first number that differs and write from there on. A deform that
+ * moves differs in its first number, so the look costs it next to nothing. One that holds is
+ * found to be the same, and its slot keeps its stamp.
  */
 
 /** Adds the keyed offsets to the deform. `setup` holds the setup positions of a mesh without weights. */
@@ -98,31 +103,49 @@ function addKeyed(
     v2: Float32Array | null,
     setup: Float32Array | null,
     count: number,
-): void {
+): boolean {
     const percent = Number(SHARED[PERCENT]);
     const alpha = Number(SHARED[ALPHA]);
+    let changed = false;
 
     for (let i = 0; i < count; i++) {
         const prev = Number(v1[i]);
         const keyed = v2 === null ? prev : prev + (Number(v2[i]) - prev) * percent;
+        const current = Number(deform[i]);
+        const value = current + (setup === null ? keyed : keyed - Number(setup[i])) * alpha;
 
-        deform[i] = Number(deform[i]) + (setup === null ? keyed : keyed - Number(setup[i])) * alpha;
+        if (!changed && !Object.is(value, current)) changed = true;
+        deform[i] = value;
     }
+
+    return changed;
 }
 
 /** Replaces the deform with the keyed values, at full alpha. */
-function setKeyed(deform: Float64Array, v1: Float32Array, v2: Float32Array | null, count: number): void {
+function setKeyed(deform: Float64Array, v1: Float32Array, v2: Float32Array | null, count: number): boolean {
     const percent = Number(SHARED[PERCENT]);
+    let i = 0;
 
     if (v2 === null || percent === 0) {
-        for (let i = 0; i < count; i++) deform[i] = Number(v1[i]);
-    } else {
-        for (let i = 0; i < count; i++) {
-            const prev = Number(v1[i]);
+        while (i < count && Object.is(Number(v1[i]), Number(deform[i]))) i++;
+        if (i === count) return false;
+        for (; i < count; i++) deform[i] = Number(v1[i]);
 
-            deform[i] = prev + (Number(v2[i]) - prev) * percent;
-        }
+        return true;
     }
+    for (; i < count; i++) {
+        const prev = Number(v1[i]);
+
+        if (!Object.is(prev + (Number(v2[i]) - prev) * percent, Number(deform[i]))) break;
+    }
+    if (i === count) return false;
+    for (; i < count; i++) {
+        const prev = Number(v1[i]);
+
+        deform[i] = prev + (Number(v2[i]) - prev) * percent;
+    }
+
+    return true;
 }
 
 /** Mixes the keyed values in from the setup pose. */
@@ -132,35 +155,41 @@ function mixKeyedFromSetup(
     v2: Float32Array | null,
     setup: Float32Array | null,
     count: number,
-): void {
+): boolean {
     const percent = Number(SHARED[PERCENT]);
     const alpha = Number(SHARED[ALPHA]);
+    let changed = false;
 
     for (let i = 0; i < count; i++) {
         const prev = Number(v1[i]);
         const keyed = v2 === null ? prev : prev + (Number(v2[i]) - prev) * percent;
+        const base = setup === null ? 0 : Number(setup[i]);
+        const value = setup === null ? keyed * alpha : base + (keyed - base) * alpha;
 
-        if (setup === null) deform[i] = keyed * alpha;
-        else {
-            const base = Number(setup[i]);
-
-            deform[i] = base + (keyed - base) * alpha;
-        }
+        if (!changed && !Object.is(value, Number(deform[i]))) changed = true;
+        deform[i] = value;
     }
+
+    return changed;
 }
 
 /** Mixes the keyed values in from the current deform. */
-function mixKeyed(deform: Float64Array, v1: Float32Array, v2: Float32Array | null, count: number): void {
+function mixKeyed(deform: Float64Array, v1: Float32Array, v2: Float32Array | null, count: number): boolean {
     const percent = Number(SHARED[PERCENT]);
     const alpha = Number(SHARED[ALPHA]);
+    let changed = false;
 
     for (let i = 0; i < count; i++) {
         const prev = Number(v1[i]);
         const keyed = v2 === null ? prev : prev + (Number(v2[i]) - prev) * percent;
         const current = Number(deform[i]);
+        const value = current + (keyed - current) * alpha;
 
-        deform[i] = current + (keyed - current) * alpha;
+        if (!changed && !Object.is(value, current)) changed = true;
+        deform[i] = value;
     }
+
+    return changed;
 }
 
 /** The setup positions a deform is relative to: the vertices of a mesh without weights, else null. */
@@ -180,6 +209,30 @@ function setupVertices(pose: Pose43, slot: number, info: AttachmentInfo): Float3
     return geometry.bones === null ? geometry.vertices : null;
 }
 
+/*
+ * A deform timeline that stands at a key writes the vertices of that key in every update. The
+ * engine notes the key a deform holds, in `Solve43.held`. While the note stands, the same key
+ * again writes nothing and needs no look at the numbers. Everything else that writes a deform
+ * takes the note away. An engine with sliders keeps no notes: its slots can have two poses.
+ */
+
+/** The key whose vertices the deform of a slot holds, as far as the engine knows. Null when it does not know. */
+function heldKey(pose: Pose43, slot: number): Float32Array | null {
+    return pose.solve.held?.[slot] ?? null;
+}
+
+/** Notes the key whose vertices the deform of a slot holds now. Null when it holds something else. */
+function holdKey(pose: Pose43, slot: number, key: Float32Array | null): void {
+    const { solve } = pose;
+
+    if (solve.split !== null) return;
+    if (solve.held === null) {
+        if (key === null) return;
+        solve.held = new Array<Float32Array | null>(pose.rig.model.slots.count).fill(null);
+    }
+    solve.held[slot] = key;
+}
+
 /** The official `DeformTimeline.applyBeforeFirst`: what a slot's deform does before the first key. */
 function applyBeforeFirst(pose: Pose43, timeline: Timeline43, slot: number, from: number): void {
     const info = followerInfo(pose, slot, timeline);
@@ -187,8 +240,10 @@ function applyBeforeFirst(pose: Pose43, timeline: Timeline43, slot: number, from
     if (info === null) return;
     const alpha = Number(SHARED[ALPHA]);
 
+    holdKey(pose, slot, null);
     // an empty deform counts as the setup pose
     if (pose.deformLengths[slot] === 0 || from === SETUP || (from === FIRST && alpha === 1)) {
+        if (pose.deformLengths[slot] !== 0) stampSlot(pose, slot);
         pose.deformLengths[slot] = 0;
 
         return;
@@ -197,6 +252,8 @@ function applyBeforeFirst(pose: Pose43, timeline: Timeline43, slot: number, from
     const count = timeline.vertices[0]?.length ?? 0;
     const deform = resizeDeform(pose, slot, count);
     const setup = setupVertices(pose, slot, info);
+
+    stampSlot(pose, slot);
 
     if (setup === null) {
         const keep = 1 - alpha;
@@ -228,12 +285,21 @@ function applyToSlot(
     const fromSetup = from === SETUP || pose.deformLengths[slot] === 0;
     const count = timeline.vertices[0]?.length ?? 0;
     const setup = setupVertices(pose, slot, info);
+    const replaces = !(add && !fromSetup) && Number(SHARED[ALPHA]) === 1;
+    // the deform becomes the vertices of one key, as they are
+    const key = replaces && (v2 === null || Number(SHARED[PERCENT]) === 0) ? v1 : null;
+
+    if (key !== null && heldKey(pose, slot) === key && pose.deformLengths[slot] === count) return;
+    // a deform of another length is another deform, whatever its numbers are
+    let changed = pose.deformLengths[slot] !== count;
     const deform = resizeDeform(pose, slot, count);
 
-    if (add && !fromSetup) addKeyed(deform, v1, v2, setup, count);
-    else if (Number(SHARED[ALPHA]) === 1) setKeyed(deform, v1, v2, count);
-    else if (fromSetup) mixKeyedFromSetup(deform, v1, v2, setup, count);
-    else mixKeyed(deform, v1, v2, count);
+    if (replaces) changed = setKeyed(deform, v1, v2, count) || changed;
+    else if (add && !fromSetup) changed = addKeyed(deform, v1, v2, setup, count) || changed;
+    else if (fromSetup) changed = mixKeyedFromSetup(deform, v1, v2, setup, count) || changed;
+    else changed = mixKeyed(deform, v1, v2, count) || changed;
+    holdKey(pose, slot, key);
+    if (changed) stampSlot(pose, slot);
 }
 
 /** The official deform timeline: the vertices of an attachment, in every slot that follows it. */

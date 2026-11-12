@@ -11,6 +11,11 @@ import type { MeshAttachmentData, RegionAttachmentData } from '../../src/model/a
 import type { SkeletonModel } from '../../src/model/model';
 import { createPoseEngine, type PoseEngine } from '../../src/pose/engine';
 import { type AttachmentLookup, createAttachmentLookup, meshSource } from '../../src/pose/shared/lookup';
+import { type PoseState, touchPose } from '../../src/pose/state';
+import { loadClipCode } from '../../src/render/clip-code';
+import { loadCutCode } from '../../src/render/cut-code';
+import { loadMeshCode } from '../../src/render/mesh-code';
+import { hasClip } from '../../src/render/mode';
 import { SkeletonView, type SkeletonViewOptions } from '../../src/render/skeleton-view';
 import { listFixtures, readFixture } from '../parity/fixtures';
 import type { RigFiles } from '../parity/official';
@@ -75,15 +80,12 @@ export interface RigView {
     options?: (atlas: AtlasModel) => SkeletonViewOptions;
 }
 
-/**
- * Imports files and creates an engine and a view with a white texture per page. `change` can
- * edit the model and the atlas before the view sees them. `drawn` gives the view other textures
- * and options.
- */
-export async function createRig(
+/** Imports files and creates an engine and a view. `code` says whether the code that loads on demand is loaded first. */
+async function buildRig(
     files: RigFiles,
-    change?: (model: SkeletonModel, atlas: AtlasModel) => void,
-    drawn: RigView = {},
+    change: ((model: SkeletonModel, atlas: AtlasModel) => void) | undefined,
+    drawn: RigView,
+    code: boolean,
 ): Promise<Rig> {
     const model = await importSkeleton(files.skeleton);
     const atlas = importAtlas(files.atlas);
@@ -93,14 +95,66 @@ export async function createRig(
     const textures =
         drawn.textures?.(atlas) ??
         atlas.pages.map(() => new Texture({ source: new TextureSource({ width: 1, height: 1 }) }));
-    const view = new SkeletonView(model, atlas, textures, { renderMode: 'mesh', ...drawn.options?.(atlas) });
+    const options: SkeletonViewOptions = { renderMode: code ? 'mesh' : 'batched', ...drawn.options?.(atlas) };
+
+    // What an asset loads with a skeleton: the code of the mesh mode for a view that asks for it,
+    // the code that clips, and the code that cuts with outlines, which a view can get at any time
+    if (code) {
+        await Promise.all([
+            options.renderMode === 'mesh' ? loadMeshCode() : undefined,
+            hasClip(model) ? loadClipCode() : undefined,
+            loadCutCode(),
+        ]);
+    }
+    const view = new SkeletonView(model, atlas, textures, options);
 
     return { model, atlas, lookup: createAttachmentLookup(model), engine, view };
+}
+
+/**
+ * Imports files and creates an engine and a view with a white texture per page. `change` can
+ * edit the model and the atlas before the view sees them. `drawn` gives the view other textures
+ * and options.
+ */
+export function createRig(
+    files: RigFiles,
+    change?: (model: SkeletonModel, atlas: AtlasModel) => void,
+    drawn: RigView = {},
+): Promise<Rig> {
+    return buildRig(files, change, drawn, true);
+}
+
+/**
+ * {@link createRig} in the batched mode, and without the code that loads on demand: the view
+ * asks for what it needs, as when no asset loaded it before.
+ */
+export function createBareRig(files: RigFiles, drawn: RigView = {}): Promise<Rig> {
+    return buildRig(files, undefined, drawn, false);
 }
 
 /** {@link createRig} for a fixture. */
 export const loadRig = (id: string, change?: (model: SkeletonModel, atlas: AtlasModel) => void): Promise<Rig> =>
     createRig(fixtureFiles(id), change);
+
+/**
+ * Brings a view in line with a pose that a test wrote itself: the arrays of a `PoseState`
+ * directly, without an engine. Marks the whole pose as changed first, as such code must.
+ */
+export function drawPose(view: SkeletonView, state: PoseState): void {
+    touchPose(state);
+    view.update(state);
+}
+
+/**
+ * One more frame of a pose in which nothing has to move: the engine updates by no time, the pose
+ * is marked as changed, and the view does the work of a pose that changed. Tests of what a view
+ * does from frame to frame use it. An engine alone leaves a pose that did not move unmarked,
+ * and a view then has nothing to do.
+ */
+export function redraw(rig: Rig): void {
+    rig.engine.update(0);
+    drawPose(rig.view, rig.engine.state);
+}
 
 /** Advances the pose and brings the view in line with it. */
 export function step(rig: Rig, dt: number = FRAME): void {

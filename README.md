@@ -3,7 +3,7 @@
 A Spine runtime for PixiJS v8 with its own pose core. It plays Spine 4.1, 4.2 and 4.3 skeletons.
 
 <!-- facts:status -->
-Pre-release, milestone M5. Skeletons of Spine 4.1, 4.2 and 4.3 load, play and draw in PixiJS v8 with every constraint solved: IK, transform, path, physics and sliders. The poses equal the official cores to the bit, and the picture matches the official Pixi runtime. Small skeletons share draw calls.
+Pre-release, milestone M6. Skeletons of Spine 4.1, 4.2 and 4.3 load, play and draw in PixiJS v8 with every constraint solved: IK, transform, path, physics and sliders. The poses equal the official cores to the bit, and the picture matches the official Pixi runtime. Small skeletons share draw calls, and a skeleton at rest costs close to nothing.
 <!-- /facts:status -->
 
 The plan is in [docs/DESIGN.md](docs/DESIGN.md).
@@ -44,6 +44,10 @@ console.log(boss.stats.renderMode);
 ```
 
 `renderMode` is `auto` by default. `mesh` draws a skeleton with meshes of its own, which pays for large rigs. `batched` forces the batch.
+
+## Skeletons at rest
+
+A skeleton whose animation ended, or that never played one, costs close to nothing: no timeline runs, no vertex is placed, nothing is uploaded. It wakes with the next `play`. Physics is the exception: a skeleton with physics constraints keeps simulating, as in the official runtime.
 
 ## Why is it slow
 

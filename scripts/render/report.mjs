@@ -11,6 +11,7 @@ import {
     describeSceneMode,
     describeSceneRows,
 } from './report-modes.mjs';
+import { describeChunk, describeLazy } from './report-sleep.mjs';
 
 /** Failing frames per comparison that get a line of their own, unless every frame is listed. */
 const LINES_PER_LABEL = 3;
@@ -42,6 +43,9 @@ const SUMMARY_NAMES = {
     sceneModes: 'scenes, batched and mesh',
     sceneOwn: 'scenes, batched to mesh',
     sceneAuto: 'scenes, default options',
+    // a page on another pixi.js: the official runtime there against the reference
+    pixi: 'official, this pixi.js',
+    scenePixi: 'scenes, official here',
 };
 /** The lines that follow the line of a comparison: its clipped frames and its frames of rigs with physics. */
 const PARTS = { match: ['clipped', 'solved'], matchBatched: ['clippedBatched', 'solvedBatched'] };
@@ -236,6 +240,8 @@ function describe(entries, frames) {
     if (kind === 'sceneRows') return describeSceneRows(info);
     if (kind === 'sceneDraws') return describeSceneDraws(info);
     if (kind === 'sceneBuilds') return describeSceneBuilds(info);
+    if (kind === 'lazy') return describeLazy(info);
+    if (kind === 'chunk') return first.finding ?? describeChunk(info);
     if (kind === 'steady') return describeBuffers(entries);
     if (kind === 'overdraw') return describeOverdraw(info);
     if (kind === 'reading') {
@@ -339,6 +345,8 @@ export function createReporter({ root, dir, verbose, modesJudged: judged = false
             const groups = new Map();
             const limit = rig.limit === true;
             let failed = 0;
+            // what the official runtime draws on another pixi.js is a finding about it, and fails nothing
+            let official = 0;
 
             modes.add(rig, report.cases);
             for (const entry of report.cases) {
@@ -379,12 +387,25 @@ export function createReporter({ root, dir, verbose, modesJudged: judged = false
                     sum.kind = kind;
                     sum.numbers.push(groupNumbers(list, sum.proof));
                 }
-                const state = bad.length ? (limit ? 'FOUND' : 'FAIL') : INFO_KINDS.includes(kind) ? 'info' : 'ok  ';
+                // a case can hold a finding: something worth a line that fails nothing
+                const found = entries.find((entry) => entry.finding);
+                const state = bad.length
+                    ? limit || kind === 'pixi'
+                        ? 'FOUND'
+                        : 'FAIL'
+                    : found
+                      ? 'FOUND'
+                      : INFO_KINDS.includes(kind)
+                        ? 'info'
+                        : 'ok  ';
+
+                if (found) findings.push(`${rig.id}: ${found.finding.split(':')[0]}`);
 
                 // a runtime that reports no render mode says so once, in the summary
                 if (kind === 'mode' && !info.known && bad.length === 0) continue;
                 console.log(`    ${state} ${label.padEnd(30)} ${describe(entries, frames)}`);
-                failed += bad.length;
+                if (kind === 'pixi') official += bad.length;
+                else failed += bad.length;
                 for (const [index, entry] of (verbose ? entries : bad).entries()) {
                     if (!verbose && index === LINES_PER_LABEL) {
                         console.log(`         and ${bad.length - index} more failing frames (--verbose lists them)`);
@@ -410,6 +431,8 @@ export function createReporter({ root, dir, verbose, modesJudged: judged = false
                 }
             }
             for (const note of report.notes) console.log(`    note ${note}`);
+            if (official > 0)
+                findings.push(`${rig.id}: the official runtime differs from the reference in ${official} frames`);
             if (!limit) return failed;
             if (failed > 0) findings.push(`${rig.id}: ${failed}`);
 
@@ -439,7 +462,12 @@ export function createReporter({ root, dir, verbose, modesJudged: judged = false
                 const pick = sum.proof ? Math.min : Math.max;
                 const of = (name) => (sum.numbers.length ? pick(...sum.numbers.map((n) => n[name])) : 0);
                 // a comparison that is measured and has no limit cannot fail
-                const judged = sum.kind === 'modes' && !modesJudged ? 'not judged' : `${sum.failed} failed`;
+                const judged =
+                    sum.kind === 'modes' && !modesJudged
+                        ? 'not judged'
+                        : sum.kind === 'pixi'
+                          ? `${sum.failed} differ from the reference`
+                          : `${sum.failed} failed`;
                 let line = `  ${(SUMMARY_NAMES[key] ?? key).padEnd(24)} ${sum.frames} frames, ${judged}, `;
 
                 line += `${sum.proof ? 'weakest' : 'worst'} max ${of('max')}, over 1: ${percent(of('over1'))}, over 8: ${percent(of('over8'))}`;
@@ -459,7 +487,7 @@ export function createReporter({ root, dir, verbose, modesJudged: judged = false
                 );
             }
             for (const line of modes.lines()) console.log(line);
-            if (findings.length > 0) console.log(`  ${'findings at a limit'.padEnd(24)} ${findings.join(', ')}`);
+            if (findings.length > 0) console.log(`  ${'findings'.padEnd(24)} ${findings.join(', ')}`);
         },
     };
 }

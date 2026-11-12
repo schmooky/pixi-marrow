@@ -1,10 +1,12 @@
 import { MarrowError } from '../../base/errors';
+import type { AttachmentData } from '../../model/attachments';
 import type { EventKey } from '../../model/timelines';
 import { applyTimeline, slotIsActive } from './apply-timeline';
 import { ALPHA, ALPHA_HOLD, ALPHA_MIX, ANIMATION_TIME, LAST_TIME, MIX, SHARED, search, TIME } from './curves';
 import { type LegacyEntry, MODE_UNSET } from './entry';
 import { computeHolds, FIRST_TIMELINE, HOLD_FIRST, HOLD_SUBSEQUENT, SUBSEQUENT } from './hold';
 import { type LegacyPlayer, queueComplete, queueEvent } from './player';
+import { applyRepeats, keepPose, poseIsKept } from './rest';
 import { applyRotateTimeline, rotationsOf } from './rotate';
 import { findAttachment, setSlotAttachment } from './skeleton';
 import {
@@ -39,6 +41,31 @@ function setAttachment(player: LegacyPlayer, slot: number, name: string | null, 
 }
 
 /**
+ * Finds the attachment each key of an attachment timeline shows in the active skin, and keeps
+ * them with the timeline. It is a function of its own so that the apply of the timeline stays small.
+ */
+function findShown(player: LegacyPlayer, timeline: LegacyTimeline): readonly (AttachmentData | null)[] {
+    const { rig, pose } = player;
+    const names = timeline.attachmentNames;
+    const shown: (AttachmentData | null)[] = [];
+
+    for (let key = 0; key < names.length; key++) {
+        shown.push(findAttachment(rig, pose, timeline.target, names[key] ?? null));
+    }
+    timeline.shown[pose.skin + 1] = shown;
+
+    return shown;
+}
+
+/**
+ * The attachment each key of an attachment timeline shows in the active skin. Finding one by its
+ * name costs more than the rest of the timeline, so it is done once per skin.
+ */
+function shownBy(player: LegacyPlayer, timeline: LegacyTimeline): readonly (AttachmentData | null)[] {
+    return timeline.shown[player.pose.skin + 1] ?? findShown(player, timeline);
+}
+
+/**
  * The official `applyAttachmentTimeline`. With `attachments` false the attachment is set for
  * later timelines to see, and the slot goes back to its setup attachment after the apply.
  */
@@ -56,9 +83,11 @@ function applyAttachmentTimeline(
             setAttachment(player, slot, player.rig.model.slots.attachments[slot] ?? null, attachments);
         }
     } else {
-        const name = timeline.attachmentNames[search(timeline.frames, 1)] ?? null;
+        const attachment = shownBy(player, timeline)[search(timeline.frames, 1)] ?? null;
 
-        setAttachment(player, slot, name, attachments);
+        // the official setAttachment, with the attachment in hand
+        setSlotAttachment(player.rig, player.pose, slot, attachment);
+        if (attachments) player.attachmentState[slot] = player.unkeyedState + STATE_CURRENT;
     }
     // if an attachment was not set, set the setup attachment later
     if (Number(player.attachmentState[slot]) <= player.unkeyedState) {
@@ -337,11 +366,74 @@ function applyTrack(player: LegacyPlayer, index: number, current: LegacyEntry): 
     current.nextTrackLast = current.trackTime;
 }
 
-/** The official `AnimationState.apply`: poses the skeleton with the entries of every track. */
+/**
+ * What is left of an apply whose timelines need not run: the times of every entry move on, and
+ * an entry that completes a loop says so.
+ */
+function settleTracks(player: LegacyPlayer): void {
+    const tracks = player.tracks;
+
+    for (let i = 0, n = tracks.length; i < n; i++) {
+        const current = tracks[i] ?? null;
+
+        if (current === null || current.delay > 0) continue;
+        setTimes(current);
+        queueEvents(player, current);
+        current.nextAnimationLast = Number(SHARED[ANIMATION_TIME]);
+        current.nextTrackLast = current.trackTime;
+    }
+}
+
+/** The longest wait between two looks at whether an apply leaves the pose as it is, in applies. */
+const LONGEST_WAIT = 64;
+
+/**
+ * An apply that repeats the one before. It is first looked at: when it leaves the pose as it
+ * was, the applies after it that repeat it too are not run, as rest.ts explains. While it does
+ * not, the next look comes after a wait that doubles, so that a pose which keeps moving costs little.
+ */
+function applyAgain(player: LegacyPlayer): void {
+    if (player.settled) {
+        settleTracks(player);
+    } else if (player.patience-- > 0) {
+        poseTracks(player);
+    } else {
+        keepPose(player);
+        poseTracks(player);
+        player.settled = poseIsKept(player);
+        player.waited = Math.min(Math.max(1, player.waited * 2), LONGEST_WAIT);
+        player.patience = player.waited;
+    }
+}
+
+/**
+ * The official `AnimationState.apply`: poses the skeleton with the entries of every track. The
+ * timelines are not applied when they would leave the pose as it is.
+ *
+ * The apply of an animation that plays on is the common one, and it is kept short: what an apply
+ * that repeats needs is a function of its own.
+ */
 export function applyTracks(player: LegacyPlayer): void {
+    if (player.animationsChanged) computeHolds(player);
+    if (applyRepeats(player)) {
+        applyAgain(player);
+
+        return;
+    }
+    player.stirred = false;
+    // a look sets the wait: without one, the other two are as they start
+    if (player.waited !== 0) {
+        player.settled = false;
+        player.patience = 0;
+        player.waited = 0;
+    }
+    poseTracks(player);
+}
+
+/** Applies the entries of every track to the pose. */
+function poseTracks(player: LegacyPlayer): void {
     const { rig, pose, tracks, attachmentState } = player;
 
-    if (player.animationsChanged) computeHolds(player);
     for (let i = 0, n = tracks.length; i < n; i++) {
         const current = tracks[i] ?? null;
 

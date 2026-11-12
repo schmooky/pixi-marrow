@@ -1,4 +1,5 @@
 import type { PoseEvent } from '../../src/core';
+import { differences } from './compare';
 import type { RigFiles } from './official';
 import type { Subject } from './pose-run';
 import type { PoseDriver } from './pose-shared';
@@ -31,13 +32,87 @@ export function withEvents(subject: Subject, change: (events: PoseEvent[]) => Po
     return { ...subject, driver };
 }
 
-/** A side that counts the numbers of its poses that are not finite. Such a number equals any other that is not. */
+/** A copy of a pose that stays as it is when the side poses again. */
+function kept(value: unknown): unknown {
+    const typed =
+        value instanceof Float64Array ||
+        value instanceof Uint8Array ||
+        value instanceof Int32Array ||
+        value instanceof Int16Array;
+
+    if (typed) return value.slice();
+
+    return Array.isArray(value) ? value.map(kept) : value;
+}
+
+/**
+ * A side with a shortcut that is wrong. While an update changed nothing in the pose and no other
+ * call came since, it leaves the next updates out, as if an update that changes no pose did
+ * nothing at all. With `makeUp` it runs the time it left out as one update before the next call
+ * that is not an update. Either way the clocks of the tracks and of the physics go wrong.
+ */
+export function sleeping(subject: Subject, makeUp: boolean): Subject {
+    let asleep = false;
+    let owed = 0;
+    let before: Record<string, unknown> | undefined;
+    const wake = (): void => {
+        if (makeUp && owed > 0) subject.driver.update(owed);
+        owed = 0;
+        asleep = false;
+        before = undefined;
+    };
+    const update = (dt: number): void => {
+        if (asleep) {
+            owed += dt;
+
+            return;
+        }
+        subject.driver.update(dt);
+        const pose = subject.read();
+
+        asleep = before !== undefined && differences(pose, before).length === 0;
+        before = Object.fromEntries(Object.entries(pose).map(([key, value]) => [key, kept(value)]));
+    };
+    const driver: PoseDriver = new Proxy(subject.driver, {
+        get(target, key) {
+            const value: unknown = Reflect.get(target, key);
+
+            if (key === 'update') return update;
+            if (key === 'takeEvents' || typeof value !== 'function') return value;
+
+            return (...args: unknown[]): unknown => {
+                wake();
+
+                return Reflect.apply(value, target, args);
+            };
+        },
+        set(target, key, value) {
+            wake();
+
+            return Reflect.set(target, key, value);
+        },
+    });
+    const awake =
+        <A extends unknown[]>(call: (...args: A) => void) =>
+        (...args: A): void => {
+            wake();
+            call(...args);
+        };
+
+    return {
+        ...subject,
+        driver,
+        place: awake(subject.place),
+        yDown: awake(subject.yDown),
+        forces: awake(subject.forces),
+    };
+}
+
+/** A side that counts its poses with a number that is not finite. Such a number equals any other that is not. */
 export function countingNotFinite(subject: Subject): Subject & { readonly reads: number; readonly notFinite: number } {
     let reads = 0;
     let notFinite = 0;
-    const count = (values: unknown): void => {
-        if (values instanceof Float64Array && !values.every(Number.isFinite)) notFinite++;
-    };
+    const finite = (values: unknown): boolean => !(values instanceof Float64Array) || values.every(Number.isFinite);
 
     return {
         ...subject,
@@ -49,10 +124,10 @@ export function countingNotFinite(subject: Subject): Subject & { readonly reads:
         },
         read() {
             const pose = subject.read();
+            const deform = Array.isArray(pose.deform) ? pose.deform : [];
 
             reads++;
-            for (const key of ['local', 'world', 'colors', 'darkColors']) count(pose[key]);
-            if (Array.isArray(pose.deform)) pose.deform.forEach(count);
+            if (![pose.local, pose.world, pose.colors, pose.darkColors, ...deform].every(finite)) notFinite++;
 
             return pose;
         },

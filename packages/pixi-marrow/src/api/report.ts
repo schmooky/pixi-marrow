@@ -42,7 +42,7 @@ function countRanges(source: ReportSource, blend: boolean, pages: boolean): numb
     return ranges;
 }
 
-/** Why a view draws in its mode, as the reason of the row. */
+/** Why a view should draw in a mode, as the reason of the row. */
 function modeWhy({ option, reason, vertices, limit }: ReportSource['view']['mode']): string {
     const asked = `the option renderMode is "${option}"`;
     const count = `the skeleton has ${vertices} ${vertices === 1 ? 'vertex' : 'vertices'} in a batch`;
@@ -51,21 +51,59 @@ function modeWhy({ option, reason, vertices, limit }: ReportSource['view']['mode
     if (reason === 'small') return `${asked}: ${count}, which is at most ${limit}`;
     if (reason === 'large') return `${asked}: ${count}, which is more than ${limit}`;
 
-    if (reason === 'limit') {
-        return `${asked}, and a batch of the renderer samples fewer textures than the skeleton has atlas pages`;
+    return `${asked}, and a batch of the renderer samples fewer textures than the skeleton has atlas pages`;
+}
+
+/** What a view does while it should draw with meshes and does not: the code of the mesh mode loads on demand. */
+function waitingFor({ meshCode, drawn }: ReportSource['view']['mode']): string {
+    const batch = drawn ? 'draws in a batch' : 'cannot draw in a batch: it draws nothing';
+
+    if (meshCode === 'loaded') {
+        return `The code of the mesh mode has loaded, and the skeleton changes over with its next update. Until then it ${batch}`;
+    }
+    if (meshCode === 'failed') {
+        return `The code of the mesh mode did not load, so the skeleton ${drawn ? 'stays in a batch' : batch}`;
     }
 
-    return `${asked}, and a clipping attachment cuts a visible slot while the code that clips in a batch is not loaded: the clip draws with meshes and a stencil mask`;
+    return `The code of the mesh mode is loading, and until it is there the skeleton ${batch}`;
 }
 
 function renderModeRow({ view }: ReportSource): PerfEntry {
-    const { mode } = view.mode;
+    const { mode, wanted, drawn } = view.mode;
     const does =
         mode === 'batched'
             ? 'It shares draw calls with the skeletons next to it, and the CPU places its vertices'
             : 'It has draw calls of its own, and the GPU places its vertices';
 
+    if (wanted !== mode) {
+        return {
+            feature: 'renderMode',
+            value: drawn ? mode : `${mode}, nothing drawn`,
+            reason: `${modeWhy(view.mode)}. ${waitingFor(view.mode)}`,
+        };
+    }
+
     return { feature: 'renderMode', value: mode, reason: `${modeWhy(view.mode)}. ${does}` };
+}
+
+/** The row that says how much of the skeleton moved, and whether the view had anything to do. */
+function motionRow({ model, stats, view }: ReportSource): PerfEntry {
+    const { skipped, bones, slots } = view.motion;
+    const rested = `${plural(stats.skips, 'update')} of the view found nothing to do so far`;
+
+    if (skipped) {
+        return {
+            feature: 'motion',
+            value: 'at rest',
+            reason: `the pose is the one the view drew last, so the last update placed no vertex and uploaded nothing. ${rested}`,
+        };
+    }
+
+    return {
+        feature: 'motion',
+        value: `${bones} of ${model.bones.count} bones, ${slots} of ${model.slots.count} slots`,
+        reason: `the pose engine marked them as changed for the last update. The view placed the vertices of ${stats.placedSlots} of ${plural(view.visible.length, 'visible slot')} and wrote the colors of ${stats.coloredSlots}. ${rested}`,
+    };
 }
 
 /** The row about draw calls of a view that draws in batches. */
@@ -220,7 +258,7 @@ function bonesRow({ model, state }: ReportSource): PerfEntry {
         value: `${posed} of ${total} posed`,
         reason:
             posed === total
-                ? 'every bone is posed in every update'
+                ? 'every bone is posed in an update that moves the skeleton'
                 : `${plural(total - posed, 'bone')} need a skin that is not active`,
     };
 }
@@ -290,6 +328,7 @@ function layoutRow({ stats }: ReportSource): PerfEntry {
 export function buildReport(source: ReportSource): PerfEntry[] {
     return [
         renderModeRow(source),
+        motionRow(source),
         drawCallRow(source),
         blendRow(source),
         pagesRow(source),

@@ -14,21 +14,51 @@ const MAX_STRETCHES = 32;
 /** What one more upload call costs, in bytes of a copy. A guess that errs on the side of fewer calls. */
 const CALL_BYTES = 8192;
 
+/** The first pixi.js 8 minor whose buffers upload at once, on WebGL too, when they are told that they changed. */
+const AT_ONCE_MINOR = 23;
+
 /**
- * Whether this Pixi can upload a stretch of a buffer that does not start at its beginning: its
- * `Buffer.update` takes an offset, which pixi.js 8.16 does not. Without it every change uploads
- * the buffer from its start.
+ * Whether a Pixi can upload the stretches of a buffer one by one. Two things are needed, and
+ * pixi.js has both from 8.23 on:
+ *
+ * - `Buffer.update` takes an offset. pixi.js 8.16 to 8.19 has none: every change uploads the
+ *   buffer from its start.
+ * - A buffer uploads at once when it is told that it changed. Up to 8.22 a WebGL buffer waits
+ *   until its geometry is bound, and keeps the one stretch it was told last. A second stretch
+ *   before that would replace the first.
+ *
+ * @param version The version of Pixi, as its `VERSION` says.
  *
  * @example
- * const pending = new PendingUpload(uploadsStretch(Buffer.prototype.update));
+ * const pending = new PendingUpload(uploadsStretch(Buffer.prototype.update, VERSION));
  */
-export const uploadsStretch = (update: Buffer['update']): boolean => update.length > 1;
+export function uploadsStretch(update: Buffer['update'], version: string): boolean {
+    const [major = 0, minor = 0] = version.split('.').map(Number);
+
+    return update.length > 1 && (major > 8 || (major === 8 && minor >= AT_ONCE_MINOR));
+}
+
+/**
+ * Uploads the items of a buffer from `from` up to `to`, or the whole buffer where Pixi cannot
+ * upload a stretch on its own. Does nothing for an empty stretch.
+ *
+ * @param ranged What {@link uploadsStretch} says about this Pixi.
+ * @param itemBytes The bytes of one item.
+ *
+ * @example
+ * uploadStretch(positions, ranged, pass.from, pass.to, 8);
+ */
+export function uploadStretch(buffer: Buffer, ranged: boolean, from: number, to: number, itemBytes: number): void {
+    if (to <= from) return;
+    if (ranged) buffer.update((to - from) * itemBytes, from * itemBytes);
+    else buffer.update();
+}
 
 /**
  * The stretches of one buffer that changed since its last upload.
  *
  * @example
- * const pending = new PendingUpload(true);
+ * const pending = new PendingUpload(uploadsStretch(Buffer.prototype.update, VERSION));
  * pending.add(120, 40);
  * pending.flush(buffer, 4, used);
  */

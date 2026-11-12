@@ -1,6 +1,7 @@
 import { Container, Texture } from 'pixi.js';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { type MarrowAsset, MarrowSpine, type PerfEntry, type PerfFeature } from '../../src/index';
+import { loadMeshCode } from '../../src/render/mesh-code';
 import type { SkeletonView } from '../../src/render/skeleton-view';
 import type { CoverSlot } from '../render/cover-rig';
 import { outlineOf, PENTAGON, pageTextures, setPolygon } from '../render/cuts';
@@ -22,6 +23,11 @@ const SHAPES: readonly CoverSlot[] = [
 ];
 
 const STAYS = 'Both cuts stay off for this instance';
+
+// the code of the mesh mode is there, as after an asset that asked for it
+beforeAll(async () => {
+    await loadMeshCode();
+});
 
 describe('the rows of the perf report about the cuts of overdraw', () => {
     const made: MarrowSpine[] = [];

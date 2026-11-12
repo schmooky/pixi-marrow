@@ -4,8 +4,9 @@
  * time and the memory of an instance are those of the runtime alone.
  *
  * A side has `load`, which loads the files once and returns a function that creates display
- * objects, plus `setSkin` and `play`. Both kinds of display object have `update(seconds)` and
- * `destroy()`, and both are created with their own ticker switched off.
+ * objects, plus `setSkin` and `play`, which loops an animation unless it is told not to. Both
+ * kinds of display object have `update(seconds)` and `destroy()`, and both are created with
+ * their own ticker switched off.
  */
 
 /** The official runtime of one Spine version. `lib` is the loaded `@esotericsoftware/spine-pixi-v8`. */
@@ -23,7 +24,7 @@ export function officialSide(PIXI, lib) {
             if (object.skeleton.setupPoseSlots) object.skeleton.setupPoseSlots();
             else object.skeleton.setSlotsToSetupPose();
         },
-        play: (object, animation) => object.state.setAnimation(0, animation, true),
+        play: (object, animation, loop = true) => object.state.setAnimation(0, animation, loop),
     };
 }
 
@@ -31,8 +32,11 @@ export function officialSide(PIXI, lib) {
 export function oursSide(lib) {
     return {
         name: 'ours',
-        async load({ skeleton, atlas }) {
-            const asset = await lib.MarrowAsset.load({ skeleton, atlas });
+        async load({ skeleton, atlas, mesh = false }) {
+            // The code of the mesh mode loads on demand. A page whose instances ask for that mode
+            // by name loads its asset for it, which waits for the code. Without that they would
+            // draw in a batch until it arrives
+            const asset = await lib.MarrowAsset.load({ skeleton, atlas, ...(mesh ? { renderMode: 'mesh' } : {}) });
 
             // the outlines are read in idle time after the load. The cuts of overdraw need them
             await asset.optimized;
@@ -42,6 +46,6 @@ export function oursSide(lib) {
         setSkin(object, name) {
             object.skin = name;
         },
-        play: (object, animation) => object.play(animation, { loop: true }),
+        play: (object, animation, loop = true) => object.play(animation, { loop }),
     };
 }

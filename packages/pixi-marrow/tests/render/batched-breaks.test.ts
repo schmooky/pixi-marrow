@@ -1,14 +1,15 @@
 import type { BatcherPipe } from 'pixi.js';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { MarrowError } from '../../src/base/errors';
 import { RUN_PAD } from '../../src/render/batch-layout';
 import { linkRenderer } from '../../src/render/batch-pipe';
 import { MarrowBatcher, MarrowDarkBatcher } from '../../src/render/batcher';
 import { darkByte } from '../../src/render/colors';
 import { inspectView } from '../../src/render/inspect';
+import { loadMeshCode } from '../../src/render/mesh-code';
 import { expectBatch, loadFamily, populate } from './batch-check';
 import { batcherOf, bodyOf, createStage, elementOf, readRuns, readVertex } from './batch-stage';
-import { createRig, kernelUVs, play, type Rig, step, trianglesOf, visibleSlots } from './rig';
+import { createRig, drawPose, kernelUVs, play, type Rig, step, trianglesOf, visibleSlots } from './rig';
 
 /** The slot blend modes, as indices into `BLEND_MODES` of the model. */
 const ADDITIVE = 1;
@@ -22,6 +23,11 @@ function firstOf(rigs: readonly Rig[]): Rig {
 
     return rig;
 }
+
+// the code of the mesh mode is there, as after an asset that asked for it
+beforeAll(async () => {
+    await loadMeshCode();
+});
 
 describe('where a batch of skeletons ends', () => {
     it('keeps the draw order when Pixi draws something else in between', async () => {
@@ -145,7 +151,7 @@ describe('where a batch of skeletons ends', () => {
             rig.model.skins[rig.lookup.defaultSkin]?.attachments.find((item) => item.slot === flash)?.attachment ??
             null;
         rig.engine.state.colors[flash * 4 + 3] = 1;
-        rig.view.update(rig.engine.state);
+        drawPose(rig.view, rig.engine.state);
         stage.render();
         expect(stage.counts.draws).toHaveLength(1);
         expect(stage.counts.draws[0]?.blendMode).toBe('normal');
@@ -263,7 +269,7 @@ describe('a skeleton with slots that multiply or screen', () => {
 
         expect([blendModes[first?.slot ?? 0], blendModes[second?.slot ?? 0]]).toEqual([0, 0]);
         rig.engine.state.colors[(first?.slot ?? 0) * 4 + 3] = 0;
-        rig.view.update(rig.engine.state);
+        drawPose(rig.view, rig.engine.state);
         stage.render();
         expect(stage.counts.builds).toBe(1);
         const moved = stage.counts.draws.map((draw) => ({ start: draw.start, size: draw.size }));
@@ -293,7 +299,7 @@ describe('a skeleton with slots that multiply or screen', () => {
         for (const { slot } of visibleSlots(rig)) {
             if (rig.model.slots.blendModes[slot] === MULTIPLY) state.colors[slot * 4 + 3] = 0;
         }
-        rig.view.update(state);
+        drawPose(rig.view, state);
         expect(elementOf(rig.view).resized).toBe(true);
         stage.render();
         expect(stage.counts.builds).toBe(2);
@@ -422,7 +428,7 @@ describe('a skeleton with many atlas pages', () => {
         const batch = Reflect.get(stage.renderer.renderPipes, 'batch') as BatcherPipe;
         let error: unknown;
 
-        rig.view.update(rig.engine.state);
+        drawPose(rig.view, rig.engine.state);
         const body = bodyOf(rig.view);
 
         if (body === undefined) throw new Error('no body');

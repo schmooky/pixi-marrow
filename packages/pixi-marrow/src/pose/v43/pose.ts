@@ -2,7 +2,7 @@ import type { AttachmentData } from '../../model/attachments';
 import { createPoseState, LOCAL_STRIDE, type PoseState, WORLD_STRIDE } from '../state';
 import { createPhysicsState } from './physics';
 import type { SliderRig43, SlotStore, Split43 } from './slider-types';
-import { PHYSICS_UPDATE, type Solve43 } from './solver-types';
+import { PHYSICS_UPDATE, PLACED_SIZE, type Solve43 } from './solver-types';
 import type { Pose43, Rig43 } from './types';
 
 /** One pose of an engine. Every pose is made here, so that all of them have one shape. */
@@ -22,6 +22,8 @@ function poseOf(
         solve,
         local,
         inherit,
+        // only a change of the animated pose is something the next update has to follow
+        fresh: local === state.local ? solve.fresh : rig.solver.scratch.unread,
         colors: slots.colors,
         darkColors: slots.darkColors,
         attachments: slots.attachments,
@@ -71,6 +73,26 @@ function createSolve(rig: Rig43, state: PoseState): Solve43 {
         cache: new Int32Array(0),
         cacheLength: 0,
         solved: 0,
+        roles: solver.free,
+        multiList: new Int32Array(0),
+        multiCount: 0,
+        fresh: new Uint8Array(rig.model.bones.count),
+        force: true,
+        shown: new Float64Array(0),
+        stale: false,
+        held: null,
+        orderSerial: 0,
+        orderKey: null,
+        orderAt: -1,
+        busy: 0,
+        streak: 0,
+        pending: 2,
+        seen: 1,
+        dirty: true,
+        placed: new Float64Array(PLACED_SIZE).fill(Number.NaN),
+        resting: false,
+        calm: 0,
+        probing: false,
         physics: createPhysicsState(solver.physics),
         physicsMode: PHYSICS_UPDATE,
         split: null,
@@ -85,6 +107,8 @@ function createSplit(pose: Pose43, sliders: SliderRig43): Split43 {
     return {
         applied: poseOf(pose.rig, state, solve, solve.local, solve.inherit, state, state.drawOrder, solve.applied),
         slotPosed: new Uint8Array(sliders.slots.length > 0 ? slots : 0),
+        touched: new Uint8Array(sliders.slots.length > 0 ? slots : 0),
+        orderTouched: false,
         dormant: null,
         drawOrderPosed: false,
         dormantDrawOrder: null,
@@ -124,14 +148,18 @@ export function poseBytes(pose: Pose43): number {
     const { state, solve } = pose;
     const { split } = solve;
     const arrays = new Set<ArrayBufferView>([state.local, state.inherit, state.active, state.world, state.drawOrder]);
+
+    arrays.add(state.boneStamps).add(state.slotStamps);
     let bytes = 0;
 
     addSlots(arrays, state);
     addSlots(arrays, pose);
     arrays.add(pose.drawOrder).add(solve.values).add(solve.applied).add(solve.active).add(solve.local);
     arrays.add(solve.inherit).add(solve.constrained).add(solve.spare).add(solve.worldStamps);
-    arrays.add(solve.localStamps).add(solve.cache).add(solve.physics);
-    if (split !== null) arrays.add(split.slotPosed);
+    arrays.add(solve.localStamps).add(solve.cache).add(solve.physics).add(solve.fresh).add(solve.placed);
+    arrays.add(solve.multiList).add(solve.shown);
+    if (solve.roles !== pose.rig.solver.free) arrays.add(solve.roles);
+    if (split !== null) arrays.add(split.slotPosed).add(split.touched);
     if (split?.dormant) addSlots(arrays, split.dormant);
     if (split?.dormantDrawOrder) arrays.add(split.dormantDrawOrder);
     for (const array of arrays) bytes += array.byteLength;

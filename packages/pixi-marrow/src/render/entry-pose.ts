@@ -6,8 +6,7 @@ import { computeWorldVertices, transformPoints } from '../geometry/vertices';
 import type { PoseState } from '../pose/state';
 import { writeDark, writeLight } from './colors';
 import { u8 } from './read';
-import { MAX_PAGES } from './shader';
-import { showFrame, type Template } from './template';
+import { MAX_PAGES, showFrame, type Template } from './template';
 
 /** The deform of a slot that has none. */
 const NO_DEFORM = new Float64Array(0);

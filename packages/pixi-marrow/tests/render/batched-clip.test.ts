@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { batchClipper, loadBatchClipper } from '../../src/render/clip-code';
+import { clipCode, loadClipCode } from '../../src/render/clip-code';
 import { inspectView } from '../../src/render/inspect';
 import { loadFamily, populate } from './batch-check';
 import { expectClippedBatch } from './batch-clip-check';
@@ -27,12 +27,12 @@ const CLIPPED: [string, string, number][] = [
 ];
 
 beforeAll(async () => {
-    await loadBatchClipper();
+    await loadClipCode();
 });
 
 describe('a clip in the batched mode', () => {
     it('has its code once it was asked for', () => {
-        expect(batchClipper()).toBeDefined();
+        expect(clipCode()).toBeDefined();
     });
 
     it.each(CLIPPED)('draws what the official clipper leaves of %s in %s', async (id, animation, frames) => {
@@ -228,8 +228,9 @@ describe('what a clip cuts in a batch', () => {
 
         expect(held.cut).toBeGreaterThan(0);
         expect(element.clipUsed).toBeGreaterThan(0);
-        // as if a draw asked for more than the batch has room for
+        // as if a draw asked for more than the batch has room for: other vertex ranges, cut again
         element.clipVertices = 0;
+        element.clipPlaced = false;
         element.dirty = true;
         element.sync();
         expect(element.resized).toBe(true);

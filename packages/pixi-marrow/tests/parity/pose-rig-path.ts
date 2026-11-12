@@ -12,6 +12,7 @@ import {
     pathAttachment,
     type RigParts,
 } from './pose-rig-kit';
+import { wakePath } from './pose-rig-wake';
 
 /*
  * A rig made for path constraints. The official examples have a position in percent, spacing by
@@ -317,7 +318,7 @@ function parts(version: SpineVersion): RigParts {
         constraints: constraintLists(version, constraints(version)),
         skins: skins(all),
         // `still` has one key at time 0: an animation without a length
-        animations: { travel: travel(), other: other(), still },
+        animations: { travel: travel(), other: other(), wake: wakePath(), still },
     };
 }
 

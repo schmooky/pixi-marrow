@@ -3,12 +3,13 @@ import { describe, expect, it } from 'vitest';
 import { buildAtlasOutlines } from '../../src/geometry/outlines';
 import type { AtlasModel, AtlasPage } from '../../src/model/atlas';
 import type { AtlasOutlines } from '../../src/model/outlines';
-import { pageAllowsCuts } from '../../src/render/cuts';
+import { touchPose } from '../../src/pose/state';
+import { pageAllowsCuts } from '../../src/render/page-block';
 import { listAtlasFixtures, loadAtlasFixture } from '../geometry/outline-checks';
 import { DEGREES, regionName, syntheticRig } from '../geometry/synthetic';
 import { cutView, PENTAGON, pageTexture, pageTextures, plainOutlines, setPolygon } from './cuts';
 import { settle, WINDOW } from './heap';
-import { createRig, expectKernel, fixtureFiles, meshes, play, readDrawn, step, vertexData } from './rig';
+import { createRig, drawPose, expectKernel, fixtureFiles, meshes, play, readDrawn, step, vertexData } from './rig';
 
 const REGIONS = DEGREES.flatMap((degrees) => [regionName(degrees, false), regionName(degrees, true)]);
 
@@ -216,9 +217,10 @@ describe('a view whose cuts change', () => {
         const slot = rig.model.slots.names.indexOf(`quad-${regionName(0, false)}`);
 
         state.attachments[slot] = null;
+        touchPose(state);
         rig.view.beforeDraw(true);
         expect(stats).toMatchObject({ templateBuilds: 1, vertices });
-        rig.view.update(state);
+        drawPose(rig.view, state);
         expect(stats).toMatchObject({ templateBuilds: 2, tightRanges: 0 });
         readDrawn(rig);
     });
@@ -257,7 +259,7 @@ describe('memory with cuts', () => {
         const run = (i: number): void => {
             state.world[4] = i % 50;
             state.colors[head * 4 + 3] = i % 3 === 0 ? 0 : 1;
-            rig.view.update(state);
+            drawPose(rig.view, state);
             // what Pixi asks before every draw
             rig.view.beforeDraw(false);
         };

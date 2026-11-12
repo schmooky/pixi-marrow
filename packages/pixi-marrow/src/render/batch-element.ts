@@ -3,8 +3,8 @@ import type {
     BatchableElement,
     Batcher,
     BLEND_MODES,
-    Container,
     IndexBufferArray,
+    Matrix,
     Texture,
     TextureSource,
     Topology,
@@ -12,6 +12,7 @@ import type {
 } from 'pixi.js';
 import type { SkeletonModel } from '../model/model';
 import type { PoseState } from '../pose/state';
+import { noteTransform, spreadRuns } from './batch-cut';
 import {
     GROUP_PAGES,
     holdsLayout,
@@ -21,8 +22,8 @@ import {
     type SlotLayout,
     STATIC_WORDS,
 } from './batch-layout';
-import { type PackSource, placeEntries, placeMoved, planRuns, writeEntries, writeIndices } from './batch-pack';
-import { batchClipper } from './clip-code';
+import { type PackSource, placeEntries, planRuns, STATICS_CHANGED, writeEntries, writeIndices } from './batch-pack';
+import { clipCode } from './clip-code';
 import type { CoverTest } from './cover';
 import type { DrawGate } from './gate';
 import type { ViewStats } from './stats';
@@ -61,8 +62,8 @@ let planned = new Uint8Array(4);
 export interface BatchHome {
     /** Counts the builds of the instructions. An element that carries the number is in the batch. */
     readonly serial: number;
-    /** True when the positions changed since their last upload. Pixi uploads them and clears it. */
-    dirty: boolean;
+    /** Says that a stretch of the positions changed: `words` words from word `from` on. */
+    touchPositions(from: number, words: number): void;
     /** Says that a stretch of the static vertex data changed: `words` words from word `from` on. */
     touchStatics(from: number, words: number): void;
     /** Says that a stretch of the index data changed: `count` indices from index `from` on. */
@@ -75,10 +76,20 @@ export interface BatchHome {
     readonly indexBuffer: IndexBufferArray;
 }
 
+/** The display object of a skeleton in a batch, as its element reads it. */
+export interface BatchPlace {
+    /** The transform, the tint and the blend mode inside the render group, as Pixi computed them last. */
+    readonly groupTransform: Matrix;
+    readonly groupColorAlpha: number;
+    readonly groupBlendMode: BLEND_MODES;
+    /** Tells Pixi that the skeleton changed, so that it asks the pipe about it in the next frame. */
+    touch(): void;
+}
+
 /** What an element is created with. */
 export interface BatchElementOptions {
     /** The display object of the skeleton: its transform, tint and blend mode inside the render group. */
-    readonly place: Container;
+    readonly place: BatchPlace;
     /** The view of the skeleton, which is asked before every draw. */
     readonly gate: DrawGate;
     /** The texture source of every atlas page, in page order. */
@@ -150,6 +161,8 @@ export class BatchElement implements BatchableElement, PackSource {
     staticWords: number = STATIC_WORDS;
     tint = 0xffffffff;
     round = false;
+    packedFrom = 0;
+    packedTo = 0;
 
     /** The texture source of every atlas page, in page order. */
     readonly pages: readonly TextureSource[];
@@ -186,13 +199,17 @@ export class BatchElement implements BatchableElement, PackSource {
     /** The vertices of cut triangles the batch holds at the moment. */
     clipUsed = 0;
     /** True while the batch holds the cut triangles of the last pose, in the space of the skeleton. */
-    private clipFresh = false;
-    private readonly stats: ViewStats;
-    private readonly place: Container;
+    clipFresh = false;
+    /** True while the batch holds them where the display object is: nothing moved or changed since. */
+    clipPlaced = false;
+    readonly stats: ViewStats;
+    readonly place: BatchPlace;
     /** True when the batch holds nothing of the vertex ranges as they are: everything is written again. */
     private stale = true;
     /** True when an entry was marked since the batch got the entries. */
     private marked = false;
+    /** The transform of the display object that the positions in the batch were placed with. */
+    private readonly placedWith = new Float64Array(6);
 
     constructor(options: BatchElementOptions) {
         const { blendModes } = options.model.slots;
@@ -268,27 +285,9 @@ export class BatchElement implements BatchableElement, PackSource {
         this.template = template;
         this.stale = true;
         this.clipFresh = false;
+        this.clipPlaced = false;
         this.listDirty = true;
         this.dirty = true;
-    }
-
-    /**
-     * Takes the pose of an update. While a clipping attachment cuts a visible slot, the slots
-     * are clipped now and written into the batch. Their positions are in the space of the
-     * skeleton, and {@link sync} moves them once Pixi knows where the skeleton is. Whether a
-     * pose needs more room than the batch has is then known before Pixi looks at its instructions.
-     */
-    clip(pose: PoseState): void {
-        const { home } = this;
-        const clipper = this.seen.clipped > 0 ? batchClipper() : undefined;
-
-        this.pose = pose;
-        this.clipFresh = false;
-        // an element without a place is measured and written when the instructions are built
-        if (clipper === undefined || home === null || !this.placed || this.resized) return;
-        if (clipper.fill(this, home, true)) this.clipFresh = true;
-        else this.resized = true;
-        this.stats.indices = this.drawn;
     }
 
     /** Notes the texture of an atlas page in the batch that draws it. The batcher calls it. */
@@ -307,8 +306,9 @@ export class BatchElement implements BatchableElement, PackSource {
 
     /** Marks an entry whose colors or texture coordinates changed. The next {@link sync} writes them. */
     mark(entry: number): void {
-        this.state[this.changedAt + entry] = 1;
+        this.state[this.changedAt + entry] = Number(this.state[this.changedAt + entry]) | STATICS_CHANGED;
         this.marked = true;
+        this.dirty = true;
     }
 
     /**
@@ -338,16 +338,8 @@ export class BatchElement implements BatchableElement, PackSource {
      */
     prepare(round: boolean, dark: boolean): void {
         const runs = this.findRuns();
-        const clipper = batchClipper();
 
-        // a skeleton that clipped once keeps the room: a clip that comes and goes builds nothing again
-        if (clipper !== undefined && (this.clipVertices > 0 || this.seen.clipped > 0)) {
-            if (this.seen.clipped > 0) clipper.measure(this);
-            const room = clipper.room(this.model);
-
-            this.clipVertices = room.vertices;
-            this.clipIndices = room.indices;
-        }
+        clipCode()?.size(this);
         this.batcherName = dark ? DARK_BATCHER : BATCHER;
         this.staticWords = dark ? STATIC_WORDS + 1 : STATIC_WORDS;
         for (let run = 0; run < runs; run++) this.runKeys[run] = Number(planned[run]);
@@ -370,6 +362,7 @@ export class BatchElement implements BatchableElement, PackSource {
         this.serial = home.serial;
         this.stale = true;
         this.clipFresh = false;
+        this.clipPlaced = false;
         this.write(home, false);
     }
 
@@ -383,26 +376,7 @@ export class BatchElement implements BatchableElement, PackSource {
 
         if (home === null || !this.placed || this.resized) return;
         this.write(home, true);
-        this.spread();
-    }
-
-    /** Moves the borders of the batches of the runs to where the runs end now. */
-    private spread(): void {
-        const { batches, runSizes, runs } = this;
-        let at = this._indexStart;
-
-        if (runs === 1) return;
-        for (let run = 0; run < runs; run++) {
-            const batch = batches[run];
-
-            if (batch === undefined) return;
-            if (run > 0) {
-                batch.size += batch.start - at;
-                batch.start = at;
-            }
-            at += Number(runSizes[run]);
-            if (run < runs - 1) batch.size = at - batch.start;
-        }
+        spreadRuns(this.batches, this.runSizes, this.runs, this._indexStart);
     }
 
     /** The runs of the visible slots, into the shared plan. Returns how many there are. */
@@ -428,37 +402,30 @@ export class BatchElement implements BatchableElement, PackSource {
         const tint = this.place.groupColorAlpha;
         const vertex = this._attributeStart / POSITION_WORDS;
         const words = this.staticWords;
-
+        // every vertex carries the tint of the display object
         const fresh = this.stale || tint !== this.tint;
+        // an entry shows other colors, another frame or another attachment only now and then
+        const statics = fresh || this.marked || this.listDirty;
 
-        if (fresh) this.state.fill(-1, 0, this.changedAt);
+        // a new place in the batch holds no entry of any slot
+        if (this.stale) this.state.fill(-1, 0, this.changedAt);
         this.tint = tint;
-        // most frames move vertices and nothing else: a slot shows another entry only when the list changed
-        if (fresh || this.marked || this.listDirty) {
-            const written = writeEntries(this, home.statics, home.staticBytes, vertex * words, count);
+        if (statics) {
+            const written = writeEntries(this, home.statics, home.staticBytes, vertex * words, count, fresh);
 
             this.marked = false;
             if (written > 0 && mark) home.touchStatics(vertex * words, this.attributeSize * words);
         }
         const positions = home.attributeBuffer.float32View;
         const transform = this.place.groupTransform;
-        const clipper = this.seen.clipped > 0 ? batchClipper() : undefined;
+        // every vertex is placed again where the batch holds none of them, and after a move of the display object
+        const all = noteTransform(this.placedWith, transform) || this.stale;
 
-        placeEntries(this, positions, this._attributeStart, count, transform);
-        home.dirty = true;
-        if (clipper !== undefined) {
-            // cut triangles are written with the indices of all slots, in the space of the skeleton
-            if (!this.clipFresh && !clipper.fill(this, home, mark)) this.resized = true;
-            this.stats.indices = this.drawn;
-            placeMoved(
-                positions,
-                this._attributeStart + this.layout.vertices * POSITION_WORDS,
-                this.clipUsed,
-                transform,
-            );
-            // they are where the display object is now, and cannot be moved again
-            this.clipFresh = false;
-        } else if (this.listDirty || this.stale) {
+        placeEntries(this, positions, this._attributeStart, count, transform, all);
+        if (mark && all) home.touchPositions(this._attributeStart, this.attributeSize * POSITION_WORDS);
+        else if (mark) home.touchPositions(this.packedFrom, this.packedTo - this.packedFrom);
+        if (this.seen.clipped > 0) clipCode()?.write(this, home, mark, all, statics);
+        else if (this.listDirty || this.stale) {
             this.drawn = writeIndices(this, home.indexBuffer, this._indexStart, this.indexSize, vertex, count);
             if (mark) home.touchIndices(this._indexStart, this.indexSize);
         }

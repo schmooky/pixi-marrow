@@ -405,11 +405,14 @@ describe('physics constraints of the legacy engine', () => {
 
     it('counts the physics state in the bytes of an instance, and nothing without physics', async () => {
         const bytes = async (parts: Parameters<typeof readerRig>[0]): Promise<number> => {
-            const engine = await createPoseEngine(await importSkeleton(readerRig(parts)));
-            const { bones, slots } = engine.state.model;
+            const model = await importSkeleton(readerRig(parts));
+            const engine = await createPoseEngine(model);
+            const { bones, slots, constraints } = model;
+            // what an update keeps to know what moved: a byte per bone and one more, per constraint and per group
+            const notes = bones.count + 1 + constraints.length + cacheOf(rigOf(model), -1).groups.count;
 
             // what every instance has: the pose state and one number per slot for the attachment timelines
-            return engine.bytes - poseStateBytes(engine.state) - slots.count * 8 - bones.count * 7 * 8;
+            return engine.bytes - poseStateBytes(engine.state) - slots.count * 8 - bones.count * 7 * 8 - notes;
         };
         const applied = 11 * 7 * 8;
 

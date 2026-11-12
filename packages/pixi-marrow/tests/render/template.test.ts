@@ -7,6 +7,7 @@ import { SkeletonView } from '../../src/render/skeleton-view';
 import { syntheticRig } from '../geometry/synthetic';
 import {
     createRig,
+    drawPose,
     expectKernel,
     fixtureFiles,
     loadRig,
@@ -111,11 +112,11 @@ describe('the vertex template', () => {
         const before = stats.vertices;
 
         state.attachments[foreign.slot] = foreign.attachment;
-        rig.view.update(state);
+        drawPose(rig.view, state);
         expect(stats.templateBuilds).toBe(2);
         expect(stats.vertices).toBeGreaterThan(before);
         expect(expectKernel(rig).some((item) => item.attachment === foreign.attachment)).toBe(true);
-        rig.view.update(state);
+        drawPose(rig.view, state);
         expect(stats.templateBuilds).toBe(2);
     });
 
@@ -188,12 +189,12 @@ describe('what the view refuses', () => {
         if (head === undefined) throw new Error('goblingirl has a head');
         rig.atlas.regionNames[rig.atlas.regionNames.indexOf('goblingirl/head')] = 'gone';
         rig.engine.state.attachments[head.slot] = head.attachment;
-        expect(() => rig.view.update(rig.engine.state)).toThrow(/no region "goblingirl\/head"/);
+        expect(() => drawPose(rig.view, rig.engine.state)).toThrow(/no region "goblingirl\/head"/);
         // the slot is not dropped without a word afterwards
-        expect(() => rig.view.update(rig.engine.state)).toThrow(/no region "goblingirl\/head"/);
+        expect(() => drawPose(rig.view, rig.engine.state)).toThrow(/no region "goblingirl\/head"/);
         expect(rig.view.stats.templateBuilds).toBe(1);
         rig.engine.setupPoseSlots();
-        rig.view.update(rig.engine.state);
+        drawPose(rig.view, rig.engine.state);
         expectKernel(rig);
     });
 
@@ -238,6 +239,6 @@ describe('what the view refuses', () => {
 
         step(rig, 0);
         rig.engine.state.sequenceIndices[flame] = -7;
-        expect(() => rig.view.update(rig.engine.state)).toThrow(/has 3 sequence regions and no region -7/);
+        expect(() => drawPose(rig.view, rig.engine.state)).toThrow(/has 3 sequence regions and no region -7/);
     });
 });

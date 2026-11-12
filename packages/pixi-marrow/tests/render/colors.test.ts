@@ -1,7 +1,7 @@
 import { Color } from 'pixi.js';
 import { describe, expect, it } from 'vitest';
 import { colorByte, darkByte } from '../../src/render/colors';
-import { type Drawn, loadRig, meshes, play, type Rig, readDrawn, slotIndex, step, vertexData } from './rig';
+import { type Drawn, drawPose, loadRig, meshes, play, type Rig, readDrawn, slotIndex, step, vertexData } from './rig';
 
 /*
  * The reference below is the code of the official Pixi runtime, copied: `Spine.transformAttachments`
@@ -145,14 +145,14 @@ describe('vertex colors of the view', () => {
         expect(meshes(rig.view)[0]?.geometry.getAttribute('aDark')).toBeUndefined();
 
         state.colors.set([0.5, 0.25, 1, 0.75], head * 4);
-        rig.view.update(state);
+        drawPose(rig.view, state);
         expect(stats.colorUploads).toBe(2);
         expect(colorOfHead()).toBe(officialLight([0.5, 0.25, 1, 0.75], [1, 1, 1, 1]));
-        rig.view.update(state);
+        drawPose(rig.view, state);
         expect(stats.colorUploads).toBe(2);
         // less than a byte: the vertices hold the same bytes
         state.colors[head * 4] = 0.501;
-        rig.view.update(state);
+        drawPose(rig.view, state);
         expect(stats.colorUploads).toBe(2);
         expect(stats.indexRebuilds).toBe(1);
     });
@@ -168,7 +168,7 @@ describe('vertex colors of the view', () => {
         const head = slotIndex(rig, 'head');
 
         rig.engine.state.colors.set([0.9, 0.8, 0.7, 0.6], head * 4);
-        rig.view.update(rig.engine.state);
+        drawPose(rig.view, rig.engine.state);
         const drawn = readDrawn(rig).find((item) => item.slot === head);
 
         if (drawn === undefined) throw new Error('the head is visible');
@@ -183,11 +183,11 @@ describe('vertex colors of the view', () => {
 
         step(rig, 0);
         state.colors.set([0.2, 0.4, 0.6, 0.8], eye * 4);
-        rig.view.update(state);
+        drawPose(rig.view, state);
         expect(rig.view.stats.colorUploads).toBe(2);
         if (other === undefined) throw new Error('spineboy has a second eye');
         state.attachments[eye] = other;
-        rig.view.update(state);
+        drawPose(rig.view, state);
         expect(rig.view.stats.colorUploads).toBe(3);
         const drawn = readDrawn(rig).find((item) => item.slot === eye);
 

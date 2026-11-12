@@ -37,6 +37,15 @@ export interface Player43 {
     drainDisabled: boolean;
     /** The listener calls since the last `takeEvents`. */
     listened: PoseEvent[];
+    /**
+     * The entry of track 0 when the last apply was that entry alone, replacing the setup pose.
+     * Applied again at the same time it writes the same pose, so the apply can be left out.
+     */
+    rested: Entry | null;
+    /** The official `applyTime` of the entry that was applied last. */
+    restedTime: number;
+    /** The track time of that entry at that apply. */
+    restedTrack: number;
 }
 
 /** Creates the player of an engine, with no tracks. */
@@ -57,6 +66,9 @@ export function createPlayer(pose: Pose43): Player43 {
         queueKeys: [],
         drainDisabled: false,
         listened: [],
+        rested: null,
+        restedTime: Number.NaN,
+        restedTrack: Number.NaN,
     };
 }
 
@@ -113,6 +125,8 @@ function listen(player: Player43, type: PoseEventType, entry: Entry): void {
 
 function free(player: Player43, entry: Entry): void {
     entry.reset();
+    // the object can stand for a later entry, which has not been applied
+    if (player.rested === entry) player.rested = null;
     player.pool.push(entry);
 }
 

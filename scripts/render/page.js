@@ -24,11 +24,14 @@ const percent = (share) => `${(100 * share).toFixed(3)}%`;
 /**
  * The instances of one sequence: which side, which files, and what the tooling proof changes.
  *
+ * @param officialHere On a page that runs on another pixi.js: the official runtime on that
+ * pixi.js. `official` is then the reference, which runs on the pixi.js the package is developed
+ * with, and every comparison with the official runtime is one with the reference.
  * @param run Which modes of ours are drawn: `mesh`, `batched` and `auto`, see `chooseModes`.
  * The instances of the mesh mode are the ones this check had before there were modes. They ask
  * for the mode by name, so they stay what they were when `auto` picks another mode.
  */
-function roles(plan, official, ours, proof, run) {
+function roles(plan, official, ours, proof, run, officialHere = null) {
     const { skel, json, atlas, pma } = plan.files;
     const { placement } = plan;
     const list = [];
@@ -50,6 +53,8 @@ function roles(plan, official, ours, proof, run) {
             add('hide', official, skel, atlas, { setup: (it) => it.hide(proof.hide) });
         }
     }
+    // the official runtime once more, on the pixi.js of the page, where `official` is the reference
+    if (official && officialHere) add('official-here', officialHere, skel, atlas);
     if (ours && run.mesh) {
         const mode = 'mesh';
 
@@ -154,7 +159,9 @@ async function runSequence(ctx, sequence, withProof) {
     // the instances that asked for a render mode by name, and the mode each asked for
     const forced = new Map();
 
-    for (const role of roles(plan, ctx.official, ctx.ours, withProof ? plan.proof : null, ctx.run)) {
+    const proof = withProof ? plan.proof : null;
+
+    for (const role of roles(plan, ctx.official, ctx.ours, proof, ctx.run, ctx.officialHere)) {
         // the twin loads its own copies. Every other instance shares the files of its side
         const tag = role.key === 'twin' ? 'twin' : role.side.name;
         const url = (file) => `/fixtures/${tag}/${plan.version}/${file}`;
@@ -175,6 +182,8 @@ async function runSequence(ctx, sequence, withProof) {
                 place(placement);
             };
             live.set(role.key, instance);
+            // a side draws with its own renderer, into a render texture of its own
+            instance.studio = role.side.studio(plan.size);
             if (role.mode) forced.set(role.key, role.mode);
             if (sequence.skin) instance.setSkin(sequence.skin);
             instance.place(plan.placement);
@@ -279,8 +288,9 @@ async function runRig(env, plan, options) {
         plan,
         options,
         report,
-        studio: createStudio(env.PIXI, env.renderer, plan.size, env.draws, false, env.builds),
+        studio: (env.ours ?? env.official).studio(plan.size),
         official: env.official,
+        officialHere: env.officialHere,
         ours: env.ours,
         PIXI: env.PIXI,
         // which modes of ours are drawn. Without ours the tooling proof runs alone
@@ -320,6 +330,29 @@ function sampleLabel(ctx) {
     return ctx.plan.official ? 'ours' : 'ours, json and binary';
 }
 
+/**
+ * Gives a side what it draws with: its pixi.js, and `studio(size)`, a render texture of that size
+ * on its own renderer. Sides that share a renderer share the textures.
+ *
+ * @param stage `PIXI`, `renderer` and `builds` of the renderer the side draws with. The studios
+ * of the renderer are kept on it.
+ */
+function withStudio(side, stage, draws) {
+    stage.studios ??= new Map();
+
+    return {
+        ...side,
+        PIXI: stage.PIXI,
+        studio(size) {
+            if (!stage.studios.has(size)) {
+                stage.studios.set(size, createStudio(stage.PIXI, stage.renderer, size, draws, false, stage.builds));
+            }
+
+            return stage.studios.get(size);
+        },
+    };
+}
+
 /** What the renderer runs on, for the report. */
 function describe(PIXI, renderer) {
     if (renderer.type === PIXI.RendererType.WEBGPU) {
@@ -338,8 +371,12 @@ function describe(PIXI, renderer) {
  * matters: a runtime registers its render pipe on import, and a renderer has the pipes that were
  * registered when it was created. Publishes `window.renderCheck` for the Node side. Its `renderer`
  * is the name of the renderer that came up, which is `webgl` when WebGPU is missing.
+ *
+ * With `loadReference` the page runs on another pixi.js than the package is developed with. The
+ * official runtime is then loaded twice: on the pixi.js of the page, and as the reference on a
+ * pixi.js and a renderer of its own, see `referenceOfficial` of scripts/render/serve.mjs.
  */
-export async function start({ PIXI, loadOurs, loadOfficial, loadCore }) {
+export async function start({ PIXI, loadOurs, loadOfficial, loadReference, loadCore }) {
     const params = new URLSearchParams(location.search);
     const preference = params.get('renderer') === 'webgpu' ? 'webgpu' : 'webgl';
     const version = params.get('official');
@@ -348,33 +385,50 @@ export async function start({ PIXI, loadOurs, loadOfficial, loadCore }) {
     let step = 'load';
 
     try {
-        const official = version === 'none' ? null : officialSide(PIXI, await loadOfficial(version));
+        const officialLib = version === 'none' ? null : await loadOfficial(version);
+        // on a page that runs on another pixi.js: the official runtime on the pixi.js of the reference
+        const reference = officialLib && loadReference ? await loadReference(version) : null;
         const lib = params.get('ours') === 'yes' ? await loadOurs() : null;
+        const create = (pixi) =>
+            pixi.autoDetectRenderer({ preference, width: 16, height: 16, antialias: false, backgroundAlpha: 0 });
 
         step = 'renderer';
-        const renderer = await PIXI.autoDetectRenderer({
-            preference,
-            width: 16,
-            height: 16,
-            antialias: false,
-            backgroundAlpha: 0,
-        });
+        const renderer = await create(PIXI);
+        const here = { PIXI, renderer, builds: countBuilds(renderer) };
+        const there = reference ? { PIXI: reference.PIXI, renderer: await create(reference.PIXI) } : null;
+
+        if (there) there.builds = countBuilds(there.renderer);
+        const officialHere = officialLib ? withStudio(officialSide(PIXI, officialLib), here, draws) : null;
         const env = {
             PIXI,
             renderer,
             draws,
-            builds: countBuilds(renderer),
-            official,
-            ours: lib?.MarrowSpine ? oursSide(PIXI, lib) : null,
+            builds: here.builds,
+            // the official runtime the pictures are judged by: the reference where the page has one
+            official: there ? withStudio(officialSide(there.PIXI, reference.lib), there, draws) : officialHere,
+            // with a reference: the official runtime on the pixi.js of the page, for information
+            officialHere: there ? { ...officialHere, name: 'official-here' } : null,
+            ours: lib?.MarrowSpine ? withStudio(oursSide(PIXI, lib), here, draws) : null,
             lib,
             loadCore,
             // the package is built but has no display object yet
             missing: lib !== null && !lib.MarrowSpine,
         };
 
+        // a display object of a runtime that runs on the pixi.js of this page is a container of it
+        const onPage = (type) => (type ? type.prototype instanceof PIXI.Container : null);
+
         window.renderCheck = {
             renderer: renderer.name,
             gpu: describe(PIXI, renderer),
+            // The pixi.js of the page, and whether each runtime runs on that copy. Null: not loaded.
+            // `reference` is the pixi.js of the reference, where the page has one
+            pixi: {
+                version: PIXI.VERSION,
+                ours: onPage(lib?.MarrowSpine),
+                official: onPage(officialLib?.Spine),
+                reference: there ? there.PIXI.VERSION : null,
+            },
             run: (plan, options) => runRig(env, plan, options),
             scene: (scene, options) => runScene(env, scene, options),
         };

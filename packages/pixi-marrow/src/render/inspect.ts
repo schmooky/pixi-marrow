@@ -1,18 +1,21 @@
 import { type Buffer, type Container, Mesh } from 'pixi.js';
 import { i16, i32 } from '../geometry/read';
+import { isNewer, type PoseState } from '../pose/state';
 import { GROUP_PAGES, layoutSlots } from './batch-layout';
 import type { CoverTest } from './cover';
+import { type CutCodeState, cutCodeState } from './cut-code';
 import type { CutState } from './cut-state';
-import { FILTER_MARGIN, type PageBlock, pageBlock } from './cuts';
 import { drawsPlain, type EdgeBend } from './gate';
 import { ownsStatics } from './layouts';
+import { type MeshCodeState, meshCodeState } from './mesh-code';
 import { AUTO_BATCH_VERTICES, type ModeReason, type RenderMode } from './mode';
+import { FILTER_MARGIN, type PageBlock, pageBlock } from './page-block';
 import type { ViewPaints } from './paints';
+import type { PosePass } from './pose-pass';
 import { u8 } from './read';
-import { MAX_PAGES } from './shader';
 import type { SkeletonView } from './skeleton-view';
 import type { DrawMode } from './stats';
-import type { Template } from './template';
+import { MAX_PAGES, type Template } from './template';
 import type { VisibleList } from './visible';
 
 /*
@@ -48,6 +51,8 @@ export interface CutReport {
     occlusion: 'auto' | 'off';
     /** Whether the view has outlines. */
     outlines: boolean;
+    /** Where the code that cuts stands. It loads with the outlines, and a view without it keeps its quads. */
+    code: CutCodeState;
     /** Whether a draw that moves edges inside a pixel turned both cuts off for good. */
     hostile: boolean;
     /** What that draw did, or null when the caller did not say or no draw did it. */
@@ -66,8 +71,14 @@ interface ModeReport {
     option: RenderMode;
     /** The mode the view draws in at the moment. */
     mode: DrawMode;
-    /** Why it draws in that mode. */
+    /** The mode the view should draw in. It is the mesh mode while {@link mode} is not, until the code of that mode is loaded. */
+    wanted: DrawMode;
+    /** Why it should draw in that mode. */
     reason: ModeReason;
+    /** Where the code of the mesh mode stands, which loads on demand. */
+    meshCode: MeshCodeState;
+    /** Whether the view draws something. A view that no renderer can batch draws nothing until the code of the mesh mode is loaded. */
+    drawn: boolean;
     /** The vertices the skeleton has in a batch when every region is a quad. `auto` decides by this number. */
     vertices: number;
     /** The most of those vertices a skeleton can have for `auto` to batch it. */
@@ -83,12 +94,23 @@ interface ModeReport {
     clipIndices: number;
 }
 
+/** How much of a skeleton moved for its view, as plain data. */
+interface MotionReport {
+    /** Whether the last update of the view found nothing to do: the pose was the one it drew last. */
+    skipped: boolean;
+    /** Bones and slots that the pose engine stamped as changed for the last update that had work. */
+    bones: number;
+    slots: number;
+}
+
 /** A view as plain data. See {@link inspectView}. */
 export interface ViewReport {
     /** The visible slots in draw order. */
     visible: VisibleSlot[];
     /** The render mode of the view and what decided it. */
     mode: ModeReport;
+    /** How much of the skeleton moved in the last update, by the stamps of its pose. */
+    motion: MotionReport;
     /** The options of the cuts of overdraw and what stops them at the moment. */
     cuts: CutReport;
     /** How many attachments of the layout have an opaque rectangle, which can cover other slots. */
@@ -122,12 +144,16 @@ export interface ViewParts {
     seen: VisibleList;
     cover: CoverTest;
     cutState: CutState;
-    /** What the view draws with in each mode, and the mode that draws now. */
+    /** What the view draws with in each mode, the mode that draws now and why. */
     paints: ViewPaints;
-    /** Why the view draws in its mode. */
-    reason: ModeReason;
     /** The `renderMode` option of the view. */
     renderMode: RenderMode;
+    /** Whether a renderer refused to batch the view. */
+    refused: boolean;
+    /** What the last pass over the visible entries did, and which version of the pose it drew. */
+    pass: PosePass;
+    /** The pose of the last update, or undefined before the first one. */
+    pose: PoseState | undefined;
 }
 
 const sumBytes = (arrays: readonly ArrayBufferView[]): number =>
@@ -177,6 +203,8 @@ export function layoutArrayBytes(template: Template): number {
         template.offsets,
         template.tightOffsets,
         template.opaqueOffsets,
+        // the bones of the weighted meshes, which a pass asks for stamps
+        ...template.weights.filter((list) => list !== null),
     ];
 
     return sumBytes(arrays) + (ownsStatics(template) ? 0 : template.statics.byteLength);
@@ -200,6 +228,7 @@ export function describeCuts(state: CutState): CutReport {
         tightMesh,
         occlusion: state.occlusion ? 'auto' : 'off',
         outlines: outlines !== undefined,
+        code: cutCodeState(),
         hostile: state.hostile,
         bend: state.bend,
         pages: state.atlas.pages.map((page, i) => {
@@ -231,6 +260,15 @@ function meshBufferBytes(container: Container): number {
     return bytes;
 }
 
+/** How many stamps of a pose are newer than a version. */
+function newerThan(stamps: Uint32Array, version: number): number {
+    let count = 0;
+
+    for (const stamp of stamps) if (isNewer(stamp, version)) count++;
+
+    return count;
+}
+
 function shapeOf(template: Template, entry: number): SlotShape {
     if (template.sources[entry] != null) return 'mesh';
     if (u8(template.hollow, entry) === 1) return 'hollow';
@@ -247,7 +285,7 @@ function shapeOf(template: Template, entry: number): SlotShape {
  * console.log(report.visible.filter((slot) => slot.covered).length, report.arrayBytes, report.gpuBytes);
  */
 export function inspectView(view: SkeletonView): ViewReport {
-    const { template, seen, cover, cutState, paints, reason, renderMode } = view.parts;
+    const { template, seen, cover, cutState, paints, renderMode, refused, pass, pose } = view.parts;
     const { element } = paints;
     const visible: VisibleSlot[] = [];
     // the batch buffers hold the data of a skeleton once Pixi has built the instructions with it
@@ -272,7 +310,10 @@ export function inspectView(view: SkeletonView): ViewReport {
         mode: {
             option: renderMode,
             mode: paints.mode,
-            reason,
+            wanted: paints.waits ? 'mesh' : paints.mode,
+            reason: paints.reason,
+            meshCode: meshCodeState(),
+            drawn: !(refused && paints.waits),
             vertices: layout.plain,
             limit: AUTO_BATCH_VERTICES,
             batches: element?.placed ? element.runs : 0,
@@ -280,6 +321,11 @@ export function inspectView(view: SkeletonView): ViewReport {
             batchBytes,
             clipVertices: element?.clipVertices ?? 0,
             clipIndices: element?.clipIndices ?? 0,
+        },
+        motion: {
+            skipped: pass.skipped,
+            bones: pose === undefined ? 0 : newerThan(pose.boneStamps, pass.before),
+            slots: pose === undefined ? 0 : newerThan(pose.slotStamps, pass.before),
         },
         cuts: describeCuts(cutState),
         opaqueRects: template.opaqueCount,

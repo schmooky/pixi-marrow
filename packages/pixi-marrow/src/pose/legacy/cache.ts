@@ -1,4 +1,5 @@
 import { C_IK, C_PATH, C_PHYSICS, C_TRANSFORM, type ConstraintPlan, type LegacyConstraint } from './constraints';
+import { buildGroups, type Groups } from './groups';
 import type { Rig } from './rig';
 
 /**
@@ -10,6 +11,8 @@ export interface UpdateCache {
     readonly entries: Int32Array;
     /** 1 for each bone that is posed with this skin. */
     readonly boneActive: Uint8Array;
+    /** How many bones are posed with this skin. */
+    readonly posed: number;
     /** 1 for each constraint that is solved and animated with this skin: the official `constraint.active`. */
     readonly constraintActive: Uint8Array;
     /**
@@ -18,6 +21,8 @@ export interface UpdateCache {
      * compute that pose from the world transform it wrote. Nothing else can see the applied pose.
      */
     readonly appliedRead: Uint8Array;
+    /** Which entries run together when an update computes only what changed. */
+    readonly groups: Groups;
 }
 
 /** What the sort functions work on: the official `sorted` and `active` flags and the cache so far. */
@@ -200,8 +205,10 @@ function buildCache(rig: Rig, skinIndex: number): UpdateCache {
     return {
         entries: Int32Array.from(sort.entries),
         boneActive: sort.active,
+        posed: sort.active.reduce((sum, active) => sum + active, 0),
         constraintActive,
         appliedRead: appliedReads(plan, sort.entries, count),
+        groups: buildGroups(plan, parents, sort.entries, count),
     };
 }
 

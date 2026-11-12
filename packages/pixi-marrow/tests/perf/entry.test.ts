@@ -67,6 +67,10 @@ const PROBE_MARKER = 'has a probe that measures its updates';
 const REPORT_MARKER = 'a draw range samples up to 8';
 /** A message of the clip kernel, which loads with an asset that has a clipping attachment. */
 const KERNEL_MARKER = 'A clip polygon without a vertex cannot clip';
+/** The label of the meshes of the mesh mode, which loads when a skeleton draws with meshes. */
+const MESH_MARKER = 'marrow-range';
+/** A field of the search for covered slots, which loads with the outlines. A minifier keeps the names of fields. */
+const CUT_MARKER = 'coveredBy';
 
 const sizeCheck = (): string => readFileSync(join(pkgDir, '../../scripts/size-check.mjs'), 'utf8');
 
@@ -125,7 +129,9 @@ describe('the entry pixi-marrow/perf', () => {
         // the entry of the root import, up to the comment of the next entry
         const root = /\n {4}everything: \[[\s\S]*?\n {4}\/\//.exec(sizeCheck())?.[0] ?? '';
 
-        for (const marker of [PROBE_MARKER, REPORT_MARKER, KERNEL_MARKER]) expect(root).toContain(`'${marker}'`);
+        for (const marker of [PROBE_MARKER, REPORT_MARKER, KERNEL_MARKER, MESH_MARKER, CUT_MARKER]) {
+            expect(root).toContain(`'${marker}'`);
+        }
         expect(sizeCheck()).toContain("'perf (createProbe)': ['createProbe', ['pixi.js', 'marrow-skeleton'], '/perf']");
     });
 
@@ -189,6 +195,92 @@ describe('the code behind perf.report and perf.memory', () => {
         expect((await report).map((row) => row.feature)).toContain('drawCalls');
         expect((await memory).instance).toBeGreaterThan(spine.engine.bytes);
         spine.destroy();
+    });
+});
+
+describe('the code of the mesh mode, the code for clips and the code that cuts overdraw', () => {
+    /** The modules of the mesh mode: its draw ranges, its shaders, its paint and the stencil mask of a clip. */
+    const MESH = [
+        'render/clip-mask.ts',
+        'render/measured-geometry.ts',
+        'render/mesh-paint.ts',
+        'render/ranges.ts',
+        'render/shader.ts',
+    ];
+    /** The modules a clip needs in both render modes: the kernel, the shape of a polygon, the cut triangles of a batch. */
+    const CLIPS = [
+        'geometry/clip-triangles-cut.ts',
+        'geometry/clip-triangles-parts.ts',
+        'geometry/clip-triangles-store.ts',
+        'geometry/clip-triangles-verdict.ts',
+        'geometry/clip-triangles.ts',
+        'geometry/triangulator.ts',
+        'render/batch-clip.ts',
+        'render/clip-shape.ts',
+    ];
+    /** The modules of the cuts of overdraw: polygons and opaque rectangles of a layout, and the search for covered slots. */
+    const CUTS = [
+        'geometry/occlusion.ts',
+        'geometry/outline-vertices.ts',
+        'render/cover-search.ts',
+        'render/cut-work.ts',
+    ];
+
+    it('are not in what the root entry loads up front, and the batched mode is', () => {
+        const upfront = reach('index.ts', true);
+
+        expect([...MESH, ...CLIPS, ...CUTS].filter((file) => upfront.files.has(file))).toEqual([]);
+        for (const file of [
+            'render/batcher.ts',
+            'render/batch-element.ts',
+            'render/mesh-code.ts',
+            'render/clip-code.ts',
+            'render/cut-code.ts',
+            'render/cover.ts',
+        ]) {
+            expect(upfront.files.has(file), file).toBe(true);
+        }
+    });
+
+    it('are each reached through one dynamic import, which brings all of its modules', () => {
+        const all = reach('index.ts');
+        const loaders = {
+            'render/mesh-code.ts': './mesh-paint',
+            'render/clip-code.ts': './batch-clip',
+            'render/cut-code.ts': './cut-work',
+        };
+
+        expect([...MESH, ...CLIPS, ...CUTS].filter((file) => !all.files.has(file))).toEqual([]);
+        expect(MESH.filter((file) => !reach('render/mesh-paint.ts', true).files.has(file))).toEqual([]);
+        expect(CLIPS.filter((file) => !reach('render/batch-clip.ts', true).files.has(file))).toEqual([]);
+        expect(CUTS.filter((file) => !reach('render/cut-work.ts', true).files.has(file))).toEqual([]);
+        for (const [file, target] of Object.entries(loaders)) {
+            const code = readFileSync(join(srcDir, file), 'utf8');
+
+            expect(code.split(`import('${target}')`), file).toHaveLength(2);
+        }
+        // the mesh mode does not bring the code for clips with it: a mask asks for the shape where it is loaded
+        expect(CLIPS.filter((file) => reach('render/mesh-paint.ts', true).files.has(file))).toEqual([]);
+    });
+
+    it('are imported at run time by no module outside of them', () => {
+        const lazy = new Set([...MESH, ...CLIPS, ...CUTS].map((file) => join(srcDir, file)));
+        const importers = sourceFiles(srcDir)
+            .filter((file) => !lazy.has(file))
+            .filter((file) => imports(file, true).files.some((target) => lazy.has(target)))
+            .map((file) => relative(srcDir, file));
+
+        expect(importers).toEqual([]);
+    });
+
+    it('are kept out of the root import by the size check, each with a text only its code holds', () => {
+        expect(holdersOf(MESH_MARKER)).toEqual(['render/ranges.ts']);
+        expect(holdersOf(KERNEL_MARKER)).toEqual(['geometry/clip-triangles-parts.ts']);
+        expect(holdersOf(CUT_MARKER)).toEqual(['render/cover-search.ts']);
+        // the size check also lists the three chunks by name, with their sizes
+        expect(sizeCheck()).toContain(`'the mesh mode': '${MESH_MARKER}'`);
+        expect(sizeCheck()).toContain(`'the code for clips': '${KERNEL_MARKER}'`);
+        expect(sizeCheck()).toContain(`'the cuts of overdraw': '${CUT_MARKER}'`);
     });
 });
 

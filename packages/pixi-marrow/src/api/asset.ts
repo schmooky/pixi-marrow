@@ -7,8 +7,11 @@ import { describeSkeleton, type SkeletonInfo } from '../model/info';
 import type { SkeletonModel } from '../model/model';
 import type { AtlasOutlines } from '../model/outlines';
 import { loadPoseEngine, type PoseEngineFactory } from '../pose/engine';
-import { loadBatchClipper } from '../render/clip-code';
-import { hasClip } from '../render/mode';
+import { loadClipCode } from '../render/clip-code';
+import { loadCutCode } from '../render/cut-code';
+import { loadMeshCode } from '../render/mesh-code';
+import { hasClip, type RenderMode, startsWithMeshes } from '../render/mode';
+import { renderMode } from './checks';
 import { configureTexture, isStillImage, loadPages, releasePage } from './textures';
 
 /** What `MarrowAsset.load` and `MarrowSpine.load` take. */
@@ -38,6 +41,14 @@ export interface MarrowLoadOptions {
      * A file or an object that does not fit the atlas throws.
      */
     outlines?: 'auto' | 'off' | string | AtlasOutlines;
+    /**
+     * The render mode the display objects of the asset will ask for, so that the load brings
+     * the code they draw with. The code of the mesh mode is not in the root import. The load
+     * waits for it with `mesh`, and with `auto` (the default) for a skeleton that `auto` draws
+     * with meshes. A display object that asks for the mesh mode later loads the code itself and
+     * draws in a batch until it is there.
+     */
+    renderMode?: 'auto' | 'mesh' | 'batched';
 }
 
 /** What `MarrowAsset.from` takes: a skeleton and an atlas that are in memory. */
@@ -51,6 +62,8 @@ export interface MarrowAssetData {
      * textures in idle time, `off` uses none, an object is checked against the atlas and used.
      */
     outlines?: 'auto' | 'off' | AtlasOutlines;
+    /** The render mode the display objects will ask for, see `MarrowLoadOptions.renderMode`. Default `auto`. */
+    renderMode?: 'auto' | 'mesh' | 'batched';
 }
 
 /**
@@ -151,24 +164,31 @@ async function readOutlines(outlines: MarrowLoadOptions['outlines']): Promise<un
 
 /**
  * What an asset starts with: the outlines of an object, checked against the atlas, or the word
- * for none or later. The code that checks loads on demand, so a load without outlines does not
- * pay for it.
+ * for none or later. The code that checks them and the code that cuts with them load on
+ * demand, so a load without outlines does not pay for either.
  */
 async function checkOutlines(outlines: unknown, atlas: AtlasModel): Promise<AtlasOutlines | 'auto' | undefined> {
     if (outlines === 'off') return undefined;
     if (outlines === undefined || outlines === 'auto') return 'auto';
-    const { readAtlasOutlines } = await import('../geometry/outlines');
+    const [{ readAtlasOutlines }] = await Promise.all([import('../geometry/outlines'), loadCutCode()]);
 
     return readAtlasOutlines(outlines, atlas);
 }
 
 /**
- * The code that poses a skeleton, and with it the code that clips in a batch when the skeleton
- * has a clipping attachment. Both load on demand, so a skeleton without a clip does not pay for
- * the second one.
+ * The code that poses a skeleton, and with it the code its instances draw with that is not in
+ * the root import. The code that clips loads for a skeleton with a clipping attachment. The
+ * code of the mesh mode loads when the instances start in that mode: `mode` names it, or it is
+ * `auto` and the skeleton is one that `auto` draws with meshes.
+ *
+ * A load of the mesh mode that fails does not fail the asset: its instances draw in a batch.
  */
-async function loadCode(model: SkeletonModel): Promise<PoseEngineFactory> {
-    const [createEngine] = await Promise.all([loadPoseEngine(model), hasClip(model) ? loadBatchClipper() : undefined]);
+async function loadCode(model: SkeletonModel, atlas: AtlasModel, mode: RenderMode): Promise<PoseEngineFactory> {
+    const [createEngine] = await Promise.all([
+        loadPoseEngine(model),
+        hasClip(model) ? loadClipCode() : undefined,
+        startsWithMeshes(model, atlas, mode) ? loadMeshCode() : undefined,
+    ]);
 
     return createEngine;
 }
@@ -308,7 +328,8 @@ export class MarrowAsset {
         const key = loadKey(options);
         const cached = key === undefined ? undefined : shared.get(key);
 
-        if (cached !== undefined) return cached;
+        // an asset that is shared was loaded for another mode, perhaps: the code of this one loads next to it
+        if (cached !== undefined) return options.renderMode === 'mesh' ? loadMeshCode().then(() => cached) : cached;
         const loading = MarrowAsset.fetch(options, key);
 
         if (key !== undefined) {
@@ -334,7 +355,9 @@ export class MarrowAsset {
         const { model, atlas, textures } = data;
         const outlines = await checkOutlines(data.outlines, atlas);
 
-        return new MarrowAsset({ model, atlas, textures, outlines }, await loadCode(model), []);
+        const createEngine = await loadCode(model, atlas, renderMode(data.renderMode ?? 'auto'));
+
+        return new MarrowAsset({ model, atlas, textures, outlines }, createEngine, []);
     }
 
     private static async fetch(options: MarrowLoadOptions, key: string | undefined): Promise<MarrowAsset> {
@@ -347,7 +370,7 @@ export class MarrowAsset {
         const atlas = importAtlas(await atlasFile.text());
         // before the images, so that outlines of another atlas cost no image loads
         const outlines = await checkOutlines(outlinesFile, atlas);
-        const createEngine = await loadCode(model);
+        const createEngine = await loadCode(model, atlas, renderMode(options.renderMode ?? 'auto'));
         const { textures, loaded } = await loadPages(atlas, options.atlas, options.textures);
 
         return new MarrowAsset({ model, atlas, textures, outlines }, createEngine, loaded, key);
@@ -393,6 +416,8 @@ export class MarrowAsset {
             })
             // code that did not load gives no outlines, and every region keeps its quad
             .catch(() => undefined)
+            // the code that cuts loads once there are outlines to cut with, and before a view gets them
+            .then((outlines) => (outlines === undefined ? undefined : loadCutCode().then(() => outlines)))
             .then((outlines) => {
                 // a scan that was stopped or replaced gives nothing
                 if (this.scan !== scan) return;

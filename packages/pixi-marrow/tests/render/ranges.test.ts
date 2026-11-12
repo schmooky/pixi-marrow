@@ -5,6 +5,7 @@ import { SkeletonView } from '../../src/render/skeleton-view';
 import { walkOfficial } from './clip-official';
 import {
     type Drawn,
+    drawPose,
     expectKernel,
     kernelUVs,
     loadRig,
@@ -102,7 +103,7 @@ describe('draw ranges', () => {
         expect(additive.length).toBeGreaterThan(0);
         step(rig, 0);
         for (const slot of additive) show(rig, slot);
-        rig.view.update(rig.engine.state);
+        drawPose(rig.view, rig.engine.state);
         const drawn = expectKernel(rig);
         const { statics } = vertexData(rig.view);
 
@@ -153,12 +154,12 @@ describe('draw ranges', () => {
         const positions = vertexData(rig.view).positions;
 
         state.colors[screen * 4 + 3] = 0;
-        rig.view.update(state);
+        drawPose(rig.view, state);
         expect(expectRanges(rig).map((range) => range.blend)).toEqual([NORMAL]);
         // the two meshes wait, hidden, and come back without a new one
         expect(rig.view.container.children.length).toBe(3);
         state.colors[screen * 4 + 3] = 1;
-        rig.view.update(state);
+        drawPose(rig.view, state);
         expect(expectRanges(rig).map((range) => range.blend)).toEqual([NORMAL, SCREEN, NORMAL]);
         expect(rig.view.container.children.length).toBe(3);
         // a screen slot first in the draw order: the first mesh changes its blend mode
@@ -166,7 +167,7 @@ describe('draw ranges', () => {
 
         state.drawOrder.copyWithin(1, 0, at);
         state.drawOrder[0] = screen;
-        rig.view.update(state);
+        drawPose(rig.view, state);
         expect(expectRanges(rig).map((range) => range.blend)).toEqual([SCREEN, NORMAL]);
         expect(rig.view.stats.templateBuilds).toBe(1);
         expect(vertexData(rig.view).positions).toBe(positions);

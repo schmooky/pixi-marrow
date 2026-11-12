@@ -43,6 +43,7 @@ export interface MarrowAssetData {
   atlas: AtlasModel;
   textures: readonly Texture[];
   outlines?: "auto" | "off" | AtlasOutlines;
+  renderMode?: "auto" | "mesh" | "batched";
 }
 export declare class MarrowError extends Error {
   override readonly name: string;
@@ -72,6 +73,7 @@ export interface MarrowLoadOptions {
   atlas: string;
   textures?: Readonly<Record<string, Texture | string>>;
   outlines?: "auto" | "off" | string | AtlasOutlines;
+  renderMode?: "auto" | "mesh" | "batched";
 }
 export interface MarrowNames {
   animations: string;
@@ -164,7 +166,7 @@ export interface PerfEntry {
   reason: string;
   animation?: string;
 }
-export type PerfFeature = "renderMode" | "drawCalls" | "blend" | "pages" | "clipping" | "tightMesh" | "occlusion" | "outlines" | "darkTint" | "physics" | "constraints" | "bones" | "slots" | "vertices" | "uploads" | "layout";
+export type PerfFeature = "renderMode" | "motion" | "drawCalls" | "blend" | "pages" | "clipping" | "tightMesh" | "occlusion" | "outlines" | "darkTint" | "physics" | "constraints" | "bones" | "slots" | "vertices" | "uploads" | "layout";
 export interface PerfMemory {
   shared: number;
   instance: number;
@@ -251,6 +253,9 @@ export interface ViewStats {
   maskRebuilds: number;
   tightRanges: number;
   coveredSlots: number;
+  skips: number;
+  placedSlots: number;
+  coloredSlots: number;
 }
 ```
 
@@ -395,6 +400,7 @@ export interface IkConstraintData extends ConstraintBase {
 export declare function importAtlas(text: string): AtlasModel;
 export declare function importSkeleton(source: SkeletonSource): Promise<SkeletonModel>;
 export declare const INHERIT_MODES: readonly string[];
+export declare const isNewer: (stamp: number, seen: number) => boolean;
 export declare function loadPoseEngine(model: SkeletonModel): Promise<PoseEngineFactory>;
 export declare const LOCAL_STRIDE = 7;
 export declare class MarrowError extends Error {
@@ -427,6 +433,7 @@ export interface MeshAttachmentData extends VertexData {
   sequence: SequenceData | null;
 }
 export declare function meshSource(lookup: AttachmentLookup, mesh: MeshAttachmentData): MeshAttachmentData;
+export declare const nextVersion: (version: number) => number;
 export interface PathAttachmentData extends VertexData {
   type: "path";
   name: string;
@@ -538,6 +545,10 @@ export interface PoseState {
   readonly deform: Float64Array[];
   readonly deformLengths: Int32Array;
   readonly drawOrder: Int16Array;
+  version: number;
+  readonly boneStamps: Uint32Array;
+  readonly slotStamps: Uint32Array;
+  drawOrderStamp: number;
 }
 export declare function poseStateBytes(state: PoseState): number;
 export declare function readRegion(atlas: AtlasModel, region: number): AtlasRegion;
@@ -667,6 +678,7 @@ export interface TimelineData {
   folderSlots?: Int16Array;
 }
 export type TimelineKind = "rotate" | "translate" | "translateX" | "translateY" | "scale" | "scaleX" | "scaleY" | "shear" | "shearX" | "shearY" | "inherit" | "rgba" | "rgb" | "alpha" | "rgba2" | "rgb2" | "attachment" | "deform" | "sequence" | "event" | "drawOrder" | "drawOrderFolder" | "ikConstraint" | "transformConstraint" | "pathConstraintPosition" | "pathConstraintSpacing" | "pathConstraintMix" | "physicsConstraintInertia" | "physicsConstraintStrength" | "physicsConstraintDamping" | "physicsConstraintMass" | "physicsConstraintWind" | "physicsConstraintGravity" | "physicsConstraintMix" | "physicsConstraintReset" | "slider" | "sliderMix";
+export declare function touchPose(state: PoseState): void;
 export interface TrackEntry {
   readonly trackIndex: number;
   readonly animation: number;
@@ -807,6 +819,9 @@ export declare class PerfProbe implements UpdateProbe {
   private rangesRebuilt;
   private clips;
   private coveredSlots;
+  private skippedUpdates;
+  private placedSlots;
+  private lastSkips;
   private lastPositions;
   private lastUploads;
   private lastRebuilds;
@@ -832,6 +847,8 @@ export interface ProbeCounters {
   rangesRebuilt: number;
   clips: number;
   coveredSlots: number;
+  skippedUpdates: number;
+  placedSlots: number;
 }
 export interface ProbeReading {
   updates: number;

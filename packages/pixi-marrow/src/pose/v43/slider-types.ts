@@ -50,6 +50,14 @@ export interface Split43 {
     /** 1 for each slot whose applied pose is its official constrained pose. */
     readonly slotPosed: Uint8Array;
     /**
+     * 1 for each slot whose pose in the pose state may not be its animated pose. The player wrote
+     * the animated pose, or a slider wrote the pose of its own that the slot has. Such a slot is
+     * carried over to the pose state, and stamped, at the start of the next update.
+     */
+    readonly touched: Uint8Array;
+    /** True when the animated draw order changed since it was last carried over to the pose state. */
+    orderTouched: boolean;
+    /**
      * The official constrained pose of each slot of `SliderRig43.slots` while it is not the
      * applied pose. A slot shows it again when a slider gives it a pose of its own once more.
      * Null until a slot has lost its pose: until then each is that of a new official `SlotPose`.

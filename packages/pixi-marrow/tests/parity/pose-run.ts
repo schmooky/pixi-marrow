@@ -11,10 +11,12 @@ import { createAttachmentLookup } from '../../src/pose/shared/lookup';
 import { differences } from './compare';
 import { describeOp, type PoseScript, type ScriptOp } from './pose-script';
 import type { OfficialDriver, PoseDriver } from './pose-shared';
+import { stampWatch } from './pose-stamps';
 
 /*
  * Runs one script on two sides and compares them after every update. A side is a pose engine or
- * an official driver, plus a way to read its pose as a plain object of typed arrays.
+ * an official driver, plus a way to read its pose as a plain object of typed arrays. After every
+ * call, an update or any other, the stamps of our side must have reported what the call changed.
  */
 
 /** One side of a comparison. */
@@ -28,6 +30,12 @@ export interface Subject {
     forces(windX: number, windY: number, gravityX: number, gravityY: number): void;
     /** The pose, in the same shape on both sides. Attachments are names, so they compare by identity. */
     read(): Record<string, unknown>;
+    /**
+     * What changed since the call before without a stamp of the pose state that reports it, as
+     * text. Empty when the stamps are honest, and always on the official side, which has none.
+     * The runner asks after every call.
+     */
+    stamps(): string;
 }
 
 const refLabel = (ref: AttachmentRef): string => `skin ${ref.skin}, slot ${ref.slot}, ${ref.name}`;
@@ -44,6 +52,7 @@ export function officialSubject(driver: OfficialDriver, label: (ref: AttachmentR
 
             return { ...pose, attachments: pose.attachments.map((ref) => (ref === null ? null : label(ref))) };
         },
+        stamps: () => '',
     };
 }
 
@@ -58,6 +67,7 @@ export function engineSubject(engine: PoseEngine, label: (attachment: Attachment
     const { bones, slots } = state.model;
     const world = new Float64Array(state.world.length);
     const darkColors = new Float64Array(state.darkColors.length);
+    const watch = stampWatch(state);
 
     return {
         driver: engine,
@@ -95,7 +105,42 @@ export function engineSubject(engine: PoseEngine, label: (attachment: Attachment
                 drawOrder: state.drawOrder,
             };
         },
+        stamps: () => watch.faults(),
     };
+}
+
+/**
+ * Our side next to a second engine of the same model. Before every update of the first, the
+ * second plays the animations of the rig in turn, at its own pace and mirrored. What an engine
+ * keeps from one update to the next must be its own: with a key, a path or a pose kept in a place
+ * that instances share, the first engine poses wrong.
+ */
+export function besideAnother(subject: Subject, other: PoseEngine, animations: number): Subject {
+    let updates = 0;
+    const update = (dt: number): void => {
+        if (updates % 5 === 0) other.setAnimation(0, (updates / 5) % animations, updates % 2 === 0);
+        if (updates % 11 === 0) other.setAnimation(1, (updates / 11 + 1) % animations, true);
+        updates++;
+        other.update(dt * 2.7 + 0.013);
+        other.takeEvents();
+        subject.driver.update(dt);
+    };
+    const driver: PoseDriver = new Proxy(subject.driver, {
+        get(target, key) {
+            const value: unknown = Reflect.get(target, key);
+
+            if (key === 'update') return update;
+
+            // bound to the engine itself, so that the engine does not see the proxy
+            return typeof value === 'function' ? value.bind(target) : value;
+        },
+        set: (target, key, value) => Reflect.set(target, key, value),
+    });
+
+    other.state.scaleX = -1.2;
+    other.state.x = 40;
+
+    return { ...subject, driver };
 }
 
 /**
@@ -263,7 +308,7 @@ function collect(side: Side, created?: TrackEntry): void {
     if (created !== undefined) side.ordinals.set(created, ordinal);
 }
 
-const frame = (side: Side) => ({ ...side.subject.read(), events: side.events });
+const frame = (side: Side) => ({ ...side.subject.read(), stamps: side.subject.stamps(), events: side.events });
 
 /** One update on both sides. Returns where the poses or the events since the last update differ. */
 function updateBoth(ours: Side, theirs: Side, dt: number): string[] {
@@ -281,7 +326,10 @@ function updateBoth(ours: Side, theirs: Side, dt: number): string[] {
     return lines;
 }
 
-/** One other call on both sides. Returns where the entries it made or changed differ. */
+/**
+ * One other call on both sides. Returns where the entries it made or changed differ, and what the
+ * call changed in the pose without a stamp: a call such as a setup pose call writes the pose at once.
+ */
 function callBoth(ours: Side, theirs: Side, op: ScriptOp): string[] {
     const mine = call(ours.subject, op, ours.entries);
     const official = call(theirs.subject, op, theirs.entries);
@@ -290,7 +338,10 @@ function callBoth(ours: Side, theirs: Side, op: ScriptOp): string[] {
     collect(ours, creates ? mine : undefined);
     collect(theirs, creates ? official : undefined);
 
-    return mine && official ? differences({ entry: entryFields(mine) }, { entry: entryFields(official) }) : [];
+    return differences(
+        { entry: mine && entryFields(mine), stamps: ours.subject.stamps() },
+        { entry: official && entryFields(official), stamps: theirs.subject.stamps() },
+    );
 }
 
 /**

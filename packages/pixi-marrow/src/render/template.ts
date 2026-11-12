@@ -1,5 +1,5 @@
 import { MarrowError } from '../base/errors';
-import { type AtlasRegion, readRegion, resolveSequenceIndex } from '../geometry/atlas-regions';
+import { readRegion, resolveSequenceIndex } from '../geometry/atlas-regions';
 import { computeMeshUVs } from '../geometry/mesh';
 import { type FloatArray, f32, i32 } from '../geometry/read';
 import { computeRegionOffsets, computeRegionUVs } from '../geometry/region';
@@ -7,10 +7,10 @@ import type { AtlasModel } from '../model/atlas';
 import type { AttachmentData, VertexData } from '../model/attachments';
 import type { SkeletonModel } from '../model/model';
 import type { AttachmentLookup } from '../pose/shared/lookup';
-import { type Cuts, type RegionCut, writeOpaque, writePolygon } from './cuts';
-import { type Draft, type Drawable, draftEntries, isDrawable } from './drafts';
+import { cutCode } from './cut-code';
+import { type Cuts, NO_CUT } from './cuts';
+import { type Draft, type Drawable, draftEntries, isDrawable, weightBones } from './drafts';
 import { layoutKey, shareLayout } from './layouts';
-import { MAX_PAGES } from './shader';
 
 /*
  * The stable vertex layout of one skeleton instance. Every region and mesh attachment a slot can
@@ -29,6 +29,12 @@ import { MAX_PAGES } from './shader';
 
 /** 32-bit numbers per vertex in {@link Template.statics}: u, v, then four flag bytes. */
 export const STATIC_STRIDE = 3;
+
+/**
+ * How many atlas pages one draw of the mesh mode can sample. More pages split the draw. The flag
+ * bytes of a vertex hold the number of its page inside such a group of 8.
+ */
+export const MAX_PAGES = 8;
 
 /** What a layout holds in place of the arrays an instance writes. */
 const NO_BYTES = new Uint8Array(0);
@@ -54,6 +60,8 @@ export interface Template {
     readonly attachments: readonly Drawable[];
     /** Per entry: the mesh that holds the vertices, or null for a region attachment. */
     readonly sources: readonly (VertexData | null)[];
+    /** Per entry: the bones the vertices of a weighted mesh hang on, each once. Null where they hang on the bone of the slot. */
+    readonly weights: readonly (Int16Array | null)[];
     /** Per entry: three vertex numbers per triangle, relative to the first vertex. */
     readonly triangles: readonly Uint16Array[];
     /** Per entry: the slot. */
@@ -167,6 +175,7 @@ function allocate(model: SkeletonModel, skin: number, drafts: readonly Draft[], 
         slotEntries: new Int32Array(model.slots.count + 1),
         attachments: drafts.map((entry) => entry.attachment),
         sources: drafts.map((entry) => entry.source),
+        weights: drafts.map(({ source }) => (source === null || source.bones === null ? null : weightBones(source))),
         triangles: drafts.map((entry) => entry.triangles),
         slots: Int32Array.from(drafts, (entry) => entry.slot),
         first: new Int32Array(entries),
@@ -200,37 +209,14 @@ function allocate(model: SkeletonModel, skin: number, drafts: readonly Draft[], 
     };
 }
 
-/** Where the next entry puts its data in the shared arrays. */
-interface Cursor {
+/** Where the next entry puts its data in the shared arrays, while a layout is filled. */
+export interface TemplateCursor {
     vertex: number;
     frame: number;
     uv: number;
     offset: number;
     tight: number;
     opaque: number;
-}
-
-/**
- * Writes what the outline of its region gives a region entry: the vertices of the polygon in
- * place of the corners of the quad, and the corners of the opaque rectangle. The offsets of
- * the quad are in place before it runs. Without a polygon the entry gets the quad.
- */
-function fillCut(template: Template, entry: number, region: AtlasRegion, cut: RegionCut, cursor: Cursor): void {
-    const { polygon, opaque } = cut;
-    const quad = template.offsets.subarray(cursor.offset, cursor.offset + 8);
-    const at = cursor.vertex * STATIC_STRIDE;
-
-    if (polygon === null) computeRegionUVs(region, template.statics, at, STATIC_STRIDE);
-    else if (polygon.length > 0) {
-        template.tightAt[entry] = cursor.tight;
-        writePolygon(polygon, region, quad, template.tightOffsets, cursor.tight, template.statics, at, STATIC_STRIDE);
-        cursor.tight += polygon.length;
-    }
-    if (opaque !== null) {
-        template.opaqueAt[entry] = cursor.opaque;
-        template.opaqueAreas[entry] = writeOpaque(opaque, region, quad, template.opaqueOffsets, cursor.opaque);
-        cursor.opaque += 8;
-    }
 }
 
 /** Writes the offsets, the texture coordinates and the page of every frame of one entry. */
@@ -240,7 +226,7 @@ function fillFrames(
     atlas: AtlasModel,
     entry: number,
     { attachment, source, regions, vertices, cut }: Draft,
-    cursor: Cursor,
+    cursor: TemplateCursor,
 ): void {
     const many = regions.length > 1;
     // a single frame goes straight to the vertex data, more frames wait in their own array
@@ -255,8 +241,9 @@ function fillFrames(
         if (source !== null) computeMeshUVs(region, source.regionUVs, out, at, stride);
         else if (attachment.type === 'region') {
             computeRegionOffsets(model.version, attachment, region, template.offsets, cursor.offset + frame * 8);
-            if (many) computeRegionUVs(region, out, at, stride);
-            else fillCut(template, entry, region, cut, cursor);
+            // a cut is the work of the code that loads with the outlines, which gave the entry that cut
+            if (many || cut === NO_CUT) computeRegionUVs(region, out, at, stride);
+            else cutCode()?.fillCut(template, entry, region, cut, cursor);
         }
     });
 }
@@ -268,7 +255,7 @@ function fillEntry(
     atlas: AtlasModel,
     entry: number,
     item: Draft,
-    cursor: Cursor,
+    cursor: TemplateCursor,
 ): void {
     const { attachment, source, regions, vertices, slot } = item;
     const frames = regions.length;
@@ -338,7 +325,7 @@ function layOut(
     dark: boolean,
 ): Template {
     const template = allocate(model, skin, drafts, dark);
-    const cursor: Cursor = { vertex: 0, frame: 0, uv: 0, offset: 0, tight: 0, opaque: 0 };
+    const cursor: TemplateCursor = { vertex: 0, frame: 0, uv: 0, offset: 0, tight: 0, opaque: 0 };
     let entry = 0;
 
     // the drafts are sorted by slot

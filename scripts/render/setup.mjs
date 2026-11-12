@@ -3,8 +3,8 @@
  * sources are newer than its build, and start the installed Google Chrome with the GPU switched on.
  */
 import { execFileSync } from 'node:child_process';
-import { existsSync, readdirSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { chromium } from 'playwright-core';
 
 const GPU_FLAGS = ['--enable-unsafe-webgpu', '--enable-gpu', '--ignore-gpu-blocklist'];
@@ -37,7 +37,7 @@ function buildNeeded(root) {
  *
  * @param name The name of the tool, for the line it prints.
  */
-export function ensureBuilt(root, name) {
+function ensureBuilt(root, name) {
     const why = buildNeeded(root);
 
     if (!why) return;
@@ -48,6 +48,66 @@ export function ensureBuilt(root, name) {
         stdio: ['ignore', 'ignore', 'inherit'],
         shell: process.platform === 'win32',
     });
+}
+
+/**
+ * The built package a tool loads into its page: the folder that holds its `package.json` and its
+ * `dist`. Without `dist` that is the package of the working tree, built first when its sources
+ * are newer. `--dist=<folder>` names a build that was kept, for example the one of an earlier
+ * commit: a tool then measures that build and leaves the working tree alone.
+ *
+ * @param dist The value of `--dist`, or undefined.
+ * @param name The name of the tool, for the line it prints.
+ */
+export function builtPackage(root, dist, name) {
+    if (!dist) {
+        ensureBuilt(root, name);
+
+        return join(root, 'packages/pixi-marrow');
+    }
+    const folder = resolve(dist);
+
+    if (!existsSync(join(folder, 'package.json')) || !existsSync(join(folder, 'dist/index.js'))) {
+        throw new Error(`--dist=${dist} holds no package.json next to a dist/index.js`);
+    }
+    console.log(`${name}: loads the build in ${folder}, not the working tree`);
+
+    return folder;
+}
+
+/**
+ * The pixi.js a tool bundles into its page, for both runtimes: its folder and its version.
+ *
+ * Without `version` that is the `pixi.js` the package is developed with. `--pixi=<version>`
+ * names another one, which must be installed as a dev dependency of the package under an alias
+ * that starts with `pixi-`, as `pixi-8.16` is for pixi.js 8.16.0. The peer range of the package
+ * allows versions nobody develops on. This is how a page runs on one of them.
+ *
+ * @param version The value of `--pixi`, as `8.16` or `8.16.0`, or undefined.
+ * @param name The name of the tool, for the line it prints.
+ */
+export function pixiPackage(root, version, name) {
+    const modules = join(root, 'packages/pixi-marrow/node_modules');
+    const installed = readdirSync(modules)
+        .filter((alias) => alias === 'pixi.js' || /^pixi-\d/.test(alias))
+        .map((alias) => ({
+            alias,
+            dir: realpathSync(join(modules, alias)),
+            version: JSON.parse(readFileSync(join(modules, alias, 'package.json'), 'utf8')).version,
+        }));
+    const found = version
+        ? installed.find((it) => it.version === version || it.version.startsWith(`${version}.`))
+        : installed.find((it) => it.alias === 'pixi.js');
+
+    if (!found) {
+        throw new Error(
+            `--pixi=${version} is not installed. There are ${installed.map((it) => it.version).join(', ')}. ` +
+                'Add an alias like "pixi-8.16": "npm:pixi.js@8.16.0" to the devDependencies of packages/pixi-marrow/package.json',
+        );
+    }
+    if (version) console.log(`${name}: the page runs on pixi.js ${found.version}`);
+
+    return found;
 }
 
 /**

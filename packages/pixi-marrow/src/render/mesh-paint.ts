@@ -1,11 +1,14 @@
-import { type Buffer, type Container, RenderContainer } from 'pixi.js';
+import { Buffer, type Container, RenderContainer, VERSION } from 'pixi.js';
 import { MarrowError } from '../base/errors';
 import { i16, i32 } from '../geometry/read';
 import type { SkeletonModel } from '../model/model';
 import type { PoseState } from '../pose/state';
-import { ClipShape } from './clip-shape';
+import { uploadStretch, uploadsStretch } from './batch-upload';
+import { clipCode, clipCodeMissing } from './clip-code';
 import { bendsEdges, type DrawGate } from './gate';
+import type { MeshCode } from './mesh-code';
 import { vertexBuffer } from './pages';
+import type { PosePass } from './pose-pass';
 import { DrawRanges, type DrawRangesOptions } from './ranges';
 import type { ViewStats } from './stats';
 import type { Template } from './template';
@@ -14,8 +17,8 @@ import type { VisibleList } from './visible';
 /** The deform of a slot that has none. */
 const NO_DEFORM = new Float64Array(0);
 
-/** The scratch arrays all views shape their clip polygons with. Created when a skeleton first clips. */
-let clipShape: ClipShape | undefined;
+/** Whether this Pixi uploads a stretch of a buffer on its own. */
+const RANGED = uploadsStretch(Buffer.prototype.update, VERSION);
 
 /** What a {@link MeshPaint} is created with: what its draw ranges need, and the first vertex ranges. */
 export interface MeshPaintOptions extends Omit<DrawRangesOptions, 'buffers'> {
@@ -65,11 +68,17 @@ export class MeshPaint {
         this.ranges.resize(template);
     }
 
-    /** Uploads the positions, and the colors and texture coordinates when they changed. */
-    upload(colors: boolean, uvs: boolean): void {
-        this.positions.update();
-        if (uvs) this.statics.update();
-        if (colors) this.colors.update();
+    /**
+     * Uploads what a pass over the visible entries changed, and nothing else: the positions and
+     * the colors of the vertices it wrote, and the texture coordinates when a sequence showed
+     * another region. A stretch uploads on its own where Pixi can do that, see `uploadsStretch`.
+     *
+     * @param colorBytes The bytes of the colors of one vertex.
+     */
+    upload(pass: PosePass, colorBytes: number): void {
+        if (pass.placed > 0) uploadStretch(this.positions, RANGED, pass.from, pass.to, 8);
+        if (pass.colored > 0) uploadStretch(this.colors, RANGED, pass.colorFrom, pass.colorTo, colorBytes);
+        if (pass.framed > 0) this.statics.update();
     }
 
     /** Adds the child that calls `beforeDraw` of a view, once. It stays the first child. */
@@ -104,8 +113,10 @@ export class MeshPaint {
      */
     clip(model: SkeletonModel, state: PoseState, seen: VisibleList, stats: ViewStats): void {
         const { ranges } = this;
+        const clipShape = clipCode()?.shape;
 
-        clipShape ??= new ClipShape();
+        // the code that shapes a polygon loads with an asset whose skeleton has a clipping attachment
+        if (clipShape === undefined) throw clipCodeMissing();
         for (let index = 0; index < ranges.masks; index++) {
             const slot = ranges.maskSlot(index);
             const attachment = seen.shown[slot];
@@ -140,3 +151,14 @@ export class MeshPaint {
         this.colors.destroy();
     }
 }
+
+/**
+ * The code of the mesh mode. `mesh-code.ts` hands it out once this module is loaded.
+ *
+ * @example
+ * const { meshMode } = await import('./mesh-paint');
+ * const paint = meshMode.createPaint({ container, template, pages, dark, blendModes, measure });
+ */
+export const meshMode: MeshCode = {
+    createPaint: (options: MeshPaintOptions): MeshPaint => new MeshPaint(options),
+};

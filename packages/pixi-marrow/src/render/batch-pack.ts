@@ -8,8 +8,8 @@ import { STATIC_STRIDE, type Template } from './template';
  * integers stay inside one function: the transform is read from its matrix here, and colors are
  * put together from bytes here.
  *
- * A batch keeps a vertex in two buffers. The position buffer holds x and y, which every pose
- * rewrites and every frame uploads. The static buffer holds 5 words of 32 bits, or 6 with dark
+ * A batch keeps a vertex in two buffers. The position buffer holds x and y, which a pose
+ * rewrites for the slots that moved. The static buffer holds 5 words of 32 bits, or 6 with dark
  * colors: u, v, the light color, the tint of the display object, the flags, the dark color. It
  * uploads only when one of them changed. A slot writes its vertices where its layout says, so a
  * slot that shows another attachment writes over the one before.
@@ -20,6 +20,13 @@ const ADDITIVE = 1;
 
 /** The dark color of a slot that has none: black, with the alpha of 1 every dark color carries. */
 export const NO_DARK: number = 0xff000000 | 0;
+
+/**
+ * What a skeleton notes per entry about its place in a batch, as bits of one number: its colors
+ * or texture coordinates changed, and its positions changed.
+ */
+export const STATICS_CHANGED = 1;
+export const POSITIONS_CHANGED = 2;
 
 /** The flag byte of an additive slot, and the one of a vertex that is rounded to pixels. */
 const ADDITIVE_FLAG = 0xff00;
@@ -47,9 +54,10 @@ export interface PackSource {
     readonly blendModes: Uint8Array;
     /**
      * What the skeleton keeps about its place in the batch, in one array. First per slot: the
-     * entry whose vertices the batch holds, or -1. From `changedAt` on per entry: 1 when its
-     * colors or texture coordinates changed since the batch got them. From `pagesAt` on per atlas
-     * page: the texture of the page in the batch.
+     * entry whose vertices the batch holds, or -1. From `changedAt` on per entry: what changed
+     * since the batch got the entry, as the bits {@link STATICS_CHANGED} and
+     * {@link POSITIONS_CHANGED}. From `pagesAt` on per atlas page: the texture of the page in the
+     * batch.
      */
     state: Int32Array;
     changedAt: number;
@@ -65,6 +73,12 @@ export interface PackSource {
     tint: number;
     /** Whether the renderer rounds positions to pixels. */
     round: boolean;
+    /**
+     * The words of the position buffer the last {@link placeEntries} wrote: the first one and the
+     * one behind the last. Equal when it wrote nothing.
+     */
+    packedFrom: number;
+    packedTo: number;
 }
 
 /**
@@ -95,14 +109,15 @@ export function flagWord(source: PackSource, entry: number, slot: number): numbe
 /**
  * Writes what a pose does not move for every visible entry the batch does not hold as it is:
  * texture coordinates, colors, the tint and the flags. An entry is written when its slot showed
- * another one, and when its colors or its texture coordinates changed.
+ * another one, and when its colors or its texture coordinates changed. With `all` every visible
+ * entry is written, as for another tint of the display object.
  *
  * `words` and `bytes` are the static buffer of the batch, as 32-bit floats and as 32-bit
  * integers. `base` is the word of that buffer the first vertex of the skeleton starts at.
  * Returns how many entries were written.
  *
  * @example
- * const written = writeEntries(source, home.statics, home.staticBytes, firstVertex * STATIC_WORDS, count);
+ * const written = writeEntries(source, home.statics, home.staticBytes, firstVertex * STATIC_WORDS, count, false);
  */
 export function writeEntries(
     source: PackSource,
@@ -110,6 +125,7 @@ export function writeEntries(
     bytes: Uint32Array,
     base: number,
     count: number,
+    all: boolean,
 ): number {
     const { template, visible, state, changedAt, tint } = source;
     const { slots, first, counts, statics, light, dark, hasDark } = template;
@@ -121,9 +137,13 @@ export function writeEntries(
         const entry = Number(visible[i]);
         const slot = Number(slots[entry]);
 
-        if (state[slot] === entry && state[changedAt + entry] === 0) continue;
+        const shown = state[slot] === entry;
+        const changed = Number(state[changedAt + entry]);
+
+        if (!all && shown && (changed & STATICS_CHANGED) === 0) continue;
+        // an entry that its slot did not show before has other positions too
+        state[changedAt + entry] = shown ? changed & ~STATICS_CHANGED : POSITIONS_CHANGED;
         state[slot] = entry;
-        state[changedAt + entry] = 0;
         written++;
         const lightColor = colorWord(light, entry);
         // black with an alpha of 1 tints nothing: what a skeleton without dark colors is in a batch that has them
@@ -147,15 +167,19 @@ export function writeEntries(
 }
 
 /**
- * Places the vertices of every visible entry: the positions of the pose, moved by the transform
+ * Places the vertices of the visible entries: the positions of the pose, moved by the transform
  * of the display object inside its render group. The arithmetic is that of Pixi's batcher, which
  * the official runtime draws through: 64-bit products and sums of 32-bit positions.
+ *
+ * With `all` every visible entry is placed, as after a move of the display object. Without it
+ * only the entries whose positions changed are, see {@link POSITIONS_CHANGED}. What was written
+ * is noted in `packedFrom` and `packedTo` of the source.
  *
  * @param words The position buffer of the batch.
  * @param base The word of that buffer the first vertex of the skeleton starts at.
  *
  * @example
- * placeEntries(source, batcher.attributeBuffer.float32View, element._attributeStart, count, body.groupTransform);
+ * placeEntries(source, batcher.attributeBuffer.float32View, element._attributeStart, count, body.groupTransform, true);
  */
 export function placeEntries(
     source: PackSource,
@@ -163,18 +187,27 @@ export function placeEntries(
     base: number,
     count: number,
     transform: Matrix,
+    all: boolean,
 ): void {
-    const { template, visible } = source;
+    const { template, visible, state, changedAt } = source;
     const { slots, first, counts, positions } = template;
     const slotAt = source.layout.at;
     const { a, b, c, d, tx, ty } = transform;
+    let low = words.length;
+    let high = 0;
 
     for (let i = 0; i < count; i++) {
         const entry = Number(visible[i]);
+        const changed = Number(state[changedAt + entry]);
+
+        if (!all && (changed & POSITIONS_CHANGED) === 0) continue;
+        state[changedAt + entry] = changed & ~POSITIONS_CHANGED;
         let from = Number(first[entry]) * 2;
         let to = base + Number(slotAt[Number(slots[entry])]) * POSITION_WORDS;
         const end = from + Number(counts[entry]) * 2;
 
+        if (end === from) continue;
+        if (to < low) low = to;
         for (; from < end; from += 2, to += POSITION_WORDS) {
             const x = Number(positions[from]);
             const y = Number(positions[from + 1]);
@@ -182,7 +215,10 @@ export function placeEntries(
             words[to] = a * x + c * y + tx;
             words[to + 1] = d * y + b * x + ty;
         }
+        if (to > high) high = to;
     }
+    source.packedFrom = Math.min(low, high);
+    source.packedTo = high;
 }
 
 /**

@@ -90,6 +90,23 @@ function totalRotation42(rotations: Float64Array, i: number, values: Float64Arra
 }
 
 /**
+ * Sets the local rotation at `at` to `player.values[0]` and notes the bone as moved when the
+ * rotation is a new one, down to the sign of a zero.
+ */
+function setRotation(player: LegacyPlayer, bone: number, at: number): void {
+    const local = player.pose.local;
+    const moved = player.solver.moved;
+    const rotation = Number(player.values[0]);
+    const current = Number(local[at]);
+
+    if (rotation !== current || (rotation === 0 && 1 / rotation !== 1 / current)) {
+        moved[bone + 1] = 1;
+        moved[0] = 1;
+        local[at] = rotation;
+    }
+}
+
+/**
  * The official `applyRotateTimeline`: mixes a rotation along the shortest way on the first frame
  * of a mix and keeps that direction afterwards. `i` is the index of the entry's two rotation numbers.
  */
@@ -119,7 +136,10 @@ export function applyRotateTimeline(
     let r2 = 0;
 
     if (Number(SHARED[TIME]) < Number(timeline.frames[0])) {
-        if (blend === SETUP) pose.local[at] = setup;
+        if (blend === SETUP) {
+            values[0] = setup;
+            setRotation(player, bone, at);
+        }
         if (blend !== FIRST) return;
         r1 = Number(pose.local[at]);
         r2 = setup;
@@ -140,5 +160,6 @@ export function applyRotateTimeline(
         else totalRotation42(rotations, i, values);
     }
     rotations[i + 1] = diff;
-    pose.local[at] = r1 + Number(rotations[i]) * alpha;
+    values[0] = r1 + Number(rotations[i]) * alpha;
+    setRotation(player, bone, at);
 }

@@ -29,6 +29,10 @@ export interface ProbeCounters {
     clips: number;
     /** Slots that were left out because a later opaque slot covered them, as they stood after each update. */
     coveredSlots: number;
+    /** Updates in which the view found nothing to do: the pose was the one it drew last. */
+    skippedUpdates: number;
+    /** Visible slots whose vertices the view placed, over the updates that had work. */
+    placedSlots: number;
 }
 
 /** What a probe measured since it was made or reset. Times are milliseconds of `performance.now()`. */
@@ -87,7 +91,10 @@ export class PerfProbe implements UpdateProbe {
     private rangesRebuilt = 0;
     private clips = 0;
     private coveredSlots = 0;
+    private skippedUpdates = 0;
+    private placedSlots = 0;
     /** The counters of the view at the end of the update before. */
+    private lastSkips = 0;
     private lastPositions = 0;
     private lastUploads = 0;
     private lastRebuilds = 0;
@@ -125,6 +132,9 @@ export class PerfProbe implements UpdateProbe {
         if (stats.positionUploads !== this.lastPositions) this.vertices += stats.vertices;
         this.uploads += uploadsOf(stats) - this.lastUploads;
         this.rangesRebuilt += stats.indexRebuilds - this.lastRebuilds;
+        // an update that skipped placed nothing: the count of the view is that of the update before
+        if (stats.skips !== this.lastSkips) this.skippedUpdates++;
+        else this.placedSlots += stats.placedSlots;
         this.mark(stats);
     }
 
@@ -149,6 +159,8 @@ export class PerfProbe implements UpdateProbe {
                 rangesRebuilt: this.rangesRebuilt,
                 clips: this.clips,
                 coveredSlots: this.coveredSlots,
+                skippedUpdates: this.skippedUpdates,
+                placedSlots: this.placedSlots,
             },
         };
     }
@@ -163,6 +175,8 @@ export class PerfProbe implements UpdateProbe {
         this.rangesRebuilt = 0;
         this.clips = 0;
         this.coveredSlots = 0;
+        this.skippedUpdates = 0;
+        this.placedSlots = 0;
         if (this.target !== null) this.mark(this.target.stats);
     }
 
@@ -194,6 +208,7 @@ export class PerfProbe implements UpdateProbe {
 
     /** Remembers the counters of the view that only grow, to count what the next update adds. */
     private mark(stats: ViewStats): void {
+        this.lastSkips = stats.skips;
         this.lastPositions = stats.positionUploads;
         this.lastUploads = uploadsOf(stats);
         this.lastRebuilds = stats.indexRebuilds;
