@@ -16,6 +16,7 @@ import {
 import { applyAlpha, applyRgb, applyRgb2, applyRgba, applyRgba2 } from './colors';
 import { applyConstraintTimeline } from './constraint-timelines';
 import { applyDeform } from './deform';
+import { applyPhysicsTimeline } from './physics-timelines';
 import type { LegacyPlayer } from './player';
 import { applyAttachment, applyDrawOrder, applyEvents, applySequence } from './slots';
 import {
@@ -24,8 +25,8 @@ import {
     K_DEFORM,
     K_DRAW_ORDER,
     K_EVENT,
-    K_IK,
     K_INHERIT,
+    K_PATH_MIX,
     K_RGB,
     K_RGB2,
     K_RGBA,
@@ -126,7 +127,7 @@ export function slotIsActive(player: LegacyPlayer, slot: number): boolean {
 
 /**
  * Applies one timeline: the official `Timeline.apply` of its kind. `fired` collects events, or is
- * null to fire none. Timelines of physics constraints do nothing.
+ * null to fire none.
  *
  * The official `lastTime`, `time` and `alpha` arguments are read from `SHARED`.
  */
@@ -147,7 +148,9 @@ export function applyTimeline(
         if (fired !== null) applyEvents(timeline, fired);
     } else if (kind === K_DRAW_ORDER) {
         applyDrawOrder(player.pose, timeline, blend, direction);
-    } else if (kind >= K_IK) {
+    } else if (kind <= K_PATH_MIX) {
         applyConstraintTimeline(player.solver, timeline, blend, direction, player.values);
+    } else {
+        applyPhysicsTimeline(player.solver, timeline, blend, player.values);
     }
 }

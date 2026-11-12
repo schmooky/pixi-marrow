@@ -1,6 +1,6 @@
 import type { PathAttachmentData } from '../../model/attachments';
 import { computeWorldVertices } from '../shared/vertices';
-import { CONSTRAINT_STRIDE, PATH_POSITION, type PathPlan } from './solver-types';
+import { PATH_POSITION, type PathPlan } from './solver-types';
 import type { Pose43 } from './types';
 
 /*
@@ -156,7 +156,7 @@ function positionsByStoredLengths(
     const { lengths, closed } = path;
     const last = path.worldVerticesLength / 6 - (closed ? 1 : 2);
     const pathLength = Number(lengths[last]);
-    let position = Number(pose.solve.values[plan.index * CONSTRAINT_STRIDE + PATH_POSITION]);
+    let position = Number(pose.solve.applied[plan.at + PATH_POSITION]);
     let multiplier = 1;
     // the curve the last point was on, and what is loaded: a curve, `NONE`, `BEFORE` or `AFTER`
     let curve = 0;
@@ -324,7 +324,7 @@ function positionsByMeasuredLengths(
     measureCurves(world, curveCount, curves);
     // the path has a curve, so the last entry is the length of the path
     const pathLength = Number(curves[curveCount - 1]);
-    let position = Number(pose.solve.values[plan.index * CONSTRAINT_STRIDE + PATH_POSITION]);
+    let position = Number(pose.solve.applied[plan.at + PATH_POSITION]);
     let multiplier = 1;
     // the curve and the segment the last point was on, the curve whose segments are measured, and its length
     let curve = 0;

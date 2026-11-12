@@ -3,8 +3,9 @@ import { DT, ODD, type PoseScript, script, thresholds } from './pose-script';
 import type { PoseRigInfo } from './pose-shared';
 
 /*
- * The random script: every kind of call in an order no hand-written script has. It is seeded, so
- * a fixture gets the same script on every run and on every machine.
+ * The random script: every kind of call in an order no hand-written script has, the calls for
+ * physics and for the place and the y direction of the skeleton among them. It is seeded, so a fixture gets the same
+ * script on every run and on every machine.
  */
 
 /** How many calls a random script makes before its closing updates. */
@@ -12,6 +13,11 @@ const CALLS = 70;
 const STEPS = [1 / 60, DT, ODD, 0.05, 0.1, 0] as const;
 const MIXES = [0, 0.1, 0.25, 0.4] as const;
 const DELAYS = [0, 0, 0.2, 0.5, -0.1] as const;
+/** `update` comes up most, so that physics runs most of the time. */
+const MODES = ['update', 'update', 'update', 'pose', 'none', 'reset'] as const;
+const PLACES = [-60, -7.5, 0, 0, 12, 90] as const;
+const SCALES = [1, 1, -1, 0.6, -1.5, 2] as const;
+const DIRECTIONS = [-1, 0, 0, 0.5, 1, 3] as const;
 
 /** mulberry32, seeded with a hash of the text. */
 function generator(seed: string): () => number {
@@ -82,20 +88,26 @@ export function randomScript(rig: PoseRigInfo, seed: string): PoseScript {
     return script(`random, seed ${seed}`, (s) => {
         // weight, call. The weights add up to 100.
         const calls: [number, () => void][] = [
-            [40, () => s.update(of(STEPS), 1 + below(4))],
-            [18, () => s.set(track(), animation(), loop(), fields())],
-            [10, () => s.add(track(), animation(), loop(), of(DELAYS), fields())],
-            [5, () => s.setEmpty(track(), of(MIXES))],
-            [5, () => s.addEmpty(track(), of(MIXES), of(DELAYS))],
-            [4, () => s.clearTrack(track())],
+            [37, () => s.update(of(STEPS), 1 + below(4))],
+            [16, () => s.set(track(), animation(), loop(), fields())],
+            [9, () => s.add(track(), animation(), loop(), of(DELAYS), fields())],
+            [4, () => s.setEmpty(track(), of(MIXES))],
+            [4, () => s.addEmpty(track(), of(MIXES), of(DELAYS))],
+            [3, () => s.clearTrack(track())],
             [2, () => s.clearTracks()],
             [1, () => s.setupPose()],
             [1, () => s.setupPoseBones()],
             [1, () => s.setupPoseSlots()],
             [4, () => s.skin(below(rig.skins + 1) - 1)],
             [3, () => s.timeScale(of([0, 0.5, 1, 1, 2]))],
-            [3, () => s.setMix(animation(), animation(), of(MIXES))],
-            [3, () => s.defaultMix(of(MIXES))],
+            [2, () => s.setMix(animation(), animation(), of(MIXES))],
+            [2, () => s.defaultMix(of(MIXES))],
+            [3, () => s.physics(of(MODES))],
+            [2, () => s.physicsTranslate(of(PLACES), of(PLACES))],
+            [2, () => s.physicsRotate(of(PLACES), of(PLACES), of([-200, -30, 15, 90]))],
+            [2, () => s.place(of(PLACES), of(PLACES), of(SCALES), of(SCALES))],
+            [1, () => s.forces(of(DIRECTIONS), of(DIRECTIONS), of(DIRECTIONS), of(DIRECTIONS))],
+            [1, () => s.yDown(chance(0.6))],
         ];
 
         s.defaultMix(of(MIXES));
@@ -111,6 +123,7 @@ export function randomScript(rig: PoseRigInfo, seed: string): PoseScript {
             }
         }
         s.timeScale(1);
+        s.physics('update');
         s.update(DT, 6);
     });
 }

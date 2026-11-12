@@ -1,9 +1,10 @@
 import { MarrowError } from '../../base/errors';
 import type { SkeletonModel } from '../../model/model';
-import type { PoseEngine, PoseEvent, TrackEntry, TrackFields } from '../engine';
+import type { PhysicsMode, PoseEngine, PoseEvent, TrackEntry, TrackFields } from '../engine';
 import { createPoseState, type PoseState, poseStateBytes } from '../state';
 import { applyTracks } from './apply';
 import { configureEntry, LegacyEntry } from './entry';
+import { rotatePhysics, translatePhysics } from './physics-state';
 import {
     addAnimation,
     addEmptyAnimation,
@@ -24,12 +25,16 @@ const NO_EVENTS: PoseEvent[] = [];
 
 Object.freeze(NO_EVENTS);
 
+/** The physics modes. The index of a mode is the number of the official `Physics` of that name. */
+const PHYSICS_MODES: readonly PhysicsMode[] = ['none', 'reset', 'update', 'pose'];
+
 /** The pose engine for 4.1 and 4.2: the official `AnimationState` and `Skeleton` of those versions in one object. */
 class LegacyEngine implements PoseEngine {
     readonly state: PoseState;
     private readonly rig: Rig;
     private readonly solver: Solver;
     private readonly player: LegacyPlayer;
+    private mode: PhysicsMode = 'update';
 
     constructor(rig: Rig, pose: PoseState, solver: Solver) {
         this.rig = rig;
@@ -39,11 +44,36 @@ class LegacyEngine implements PoseEngine {
     }
 
     get bytes(): number {
-        const { applied, values } = this.solver;
-        // a skeleton without solved constraints has no applied pose of its own
+        const { applied, values, physics } = this.solver;
+        // a skeleton without constraints has no applied pose of its own
         const own = applied === this.state.local ? 0 : applied.byteLength;
+        const constraints = own + values.byteLength + physics.byteLength;
 
-        return poseStateBytes(this.state) + own + values.byteLength + this.player.attachmentState.byteLength;
+        return poseStateBytes(this.state) + constraints + this.player.attachmentState.byteLength;
+    }
+
+    get physics(): PhysicsMode {
+        return this.mode;
+    }
+
+    set physics(value: PhysicsMode) {
+        const mode = PHYSICS_MODES.indexOf(value);
+
+        if (mode < 0) {
+            throw new MarrowError('invalid-data', `"${value}" is not a physics mode.`, {
+                fix: `Set one of ${PHYSICS_MODES.join(', ')}.`,
+            });
+        }
+        this.mode = value;
+        this.solver.mode = mode;
+    }
+
+    physicsTranslate(x: number, y: number): void {
+        translatePhysics(this.solver.physics, x, y);
+    }
+
+    physicsRotate(x: number, y: number, degrees: number): void {
+        rotatePhysics(this.solver.physics, x, y, degrees);
     }
 
     get timeScale(): number {
@@ -118,8 +148,7 @@ class LegacyEngine implements PoseEngine {
 
     update(dt: number): void {
         updateTracks(this.player, dt);
-        // the skeleton time exists from 4.2 on
-        if (!this.rig.v41) this.state.time += dt;
+        this.state.time += dt;
         applyTracks(this.player);
         updateWorldTransform(this.solver);
     }
@@ -139,11 +168,11 @@ class LegacyEngine implements PoseEngine {
  * Creates the pose engine for a Spine 4.1 or 4.2 skeleton. It is a port of the official 4.2
  * runtime, with the 4.1 formulas where the two differ. The pose starts as the setup pose without a skin.
  *
- * IK, transform and path constraints are solved as the official runtime solves them. Physics
- * constraints are not: they keep their place in the update order and change nothing, as in the
- * official runtime with physics switched off, and their timelines are skipped.
+ * IK, transform, path and physics constraints are solved as the official runtime solves them.
+ * Spine 4.1 has no physics constraints.
  *
  * Throws a {@link MarrowError} for a constraint that points at a bone or a slot the model does not have.
+ * It also throws for a physics constraint with a step of zero or less, which would never end an update.
  *
  * @example
  * const engine = createLegacyEngine(await importSkeleton(bytes));

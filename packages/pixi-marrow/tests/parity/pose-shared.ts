@@ -11,19 +11,19 @@ import {
     type TrackFields,
     WORLD_STRIDE,
 } from '../../src/core';
-import { differences } from './compare';
 
 /*
  * What the three official pose drivers share. A driver takes the calls of a pose engine and makes
  * them on the official Skeleton and AnimationState of one Spine version.
  *
- * The world transforms are those of the official skeleton with its physics and slider constraints
- * switched off, because a pose engine does not solve these two yet. The played skeleton runs all
- * its constraints. A second skeleton gets what the IK, transform and path constraints read after
- * every call, and updates with physics mode `none` and, in 4.3, a slider mix of zero. Both are
- * what the official core offers to switch a constraint off: the constraint keeps its place in the
- * update order and changes nothing. 4.1 has neither kind, so there the played skeleton is the
- * reference.
+ * The reference is the played official skeleton, with every constraint on: IK, transform and path
+ * constraints, physics in the mode the script sets, and sliders. An update is the official
+ * sequence `state.update(dt)`, `skeleton.update(dt)`, `state.apply(skeleton)`,
+ * `skeleton.updateWorldTransform(physics)`. 4.1 has no skeleton time and no physics mode.
+ *
+ * 4.3 keeps two poses of what a slider can write: the animated one and the applied one. The bone
+ * pose a driver reads is the animated one, the world transforms are those of the applied one, and
+ * the slot values and the draw order are the applied ones: what is drawn.
  */
 
 /** The calls a script makes. A pose engine and an official driver both take them. */
@@ -36,11 +36,11 @@ export interface OfficialPose {
     inherit: Uint8Array;
     active: Uint8Array;
     /**
-     * a, b, c, d, worldX, worldY per bone, with IK, transform and path constraints solved and with
-     * physics and slider constraints switched off. Zero for a bone that is not active: the official
-     * value is stale there.
+     * a, b, c, d, worldX, worldY per bone, with every constraint solved. Zero for a bone that is
+     * not active: the official value is stale there.
      */
     world: Float64Array;
+    /** r, g, b, a per slot, as drawn: in 4.3 after the sliders. */
     colors: Float64Array;
     /** r, g, b per slot. Zero for a slot without a dark color. */
     darkColors: Float64Array;
@@ -60,40 +60,31 @@ export interface PoseRigInfo {
     skins: number;
     /** `events` says whether the animation has an event timeline. */
     animations: { name: string; duration: number; events: boolean }[];
-    /** How many physics and slider constraints the rig has: the ones a pose engine does not solve yet. */
-    ignored: number;
+    /** How many physics constraints the rig has. */
+    physics: number;
+    /** How many sliders the rig has. */
+    sliders: number;
 }
 
 export interface OfficialDriver extends PoseDriver {
     /** Sets the position and the scale of the skeleton, as writing them to the state of a pose engine does. */
     place(x: number, y: number, scaleX: number, scaleY: number): void;
+    /**
+     * Says whether the y axis of the world points down, as writing `yDown` to the state of a pose
+     * engine does. The official flag is the static `Skeleton.yDown`, one for the whole process. A
+     * driver turns it on for its own update only and turns it off after it.
+     */
+    yDown(value: boolean): void;
+    /** Sets the directions of wind and gravity, as writing them to the state of a pose engine does. 4.3 only. */
+    forces(windX: number, windY: number, gravityX: number, gravityY: number): void;
     /** Copies the pose out. The next call reuses the arrays. */
     read(): OfficialPose;
-    /** With `audit` on: every change a constraint made to the animated pose during an update. */
-    readonly leaks: readonly string[];
-}
-
-export interface DriverOptions {
-    /** Compares the animated pose before and after the constraints of every update. */
-    audit?: boolean;
-    /**
-     * Where the world transforms come from. `second`, the default, is the second skeleton.
-     * `direct` is the played skeleton with its own physics and slider constraints switched off,
-     * and no second skeleton: it must give what `second` gives. `full` is the played skeleton
-     * with every constraint on.
-     */
-    world?: 'second' | 'direct' | 'full';
-}
-
-export interface RigOptions {
-    /** Removes the timelines that animate physics and slider constraints from every animation. Durations stay. */
-    stripIgnoredTimelines?: boolean;
 }
 
 /** A skeleton file loaded by the official core of its version, ready to make drivers. */
 export interface OfficialPoseRig {
     readonly info: PoseRigInfo;
-    createDriver(options?: DriverOptions): OfficialDriver;
+    createDriver(): OfficialDriver;
 }
 
 export function createPose(bones: number, slots: number): OfficialPose {
@@ -108,6 +99,46 @@ export function createPose(bones: number, slots: number): OfficialPose {
         sequenceIndices: new Int32Array(slots),
         deform: Array.from({ length: slots }, () => new Float64Array(0)),
         drawOrder: new Int16Array(slots),
+    };
+}
+
+/** What `yDownKeeper` needs of an official skeleton and of its class. */
+interface Flippable {
+    /** The official setter. The getter gives the negated value while the static is on. */
+    scaleY: number;
+}
+
+/**
+ * Keeps the y direction of one official skeleton. The official `scaleY` getter negates what the
+ * setter took while the static `Skeleton.yDown` is on. A script places the effective scale, so the
+ * keeper gives the setter the negated scale while the skeleton is y down. `solve` runs the world
+ * transform update with the static on for this skeleton only, and off again whatever happens.
+ */
+export function yDownKeeper(skeleton: Flippable, flag: { yDown: boolean }) {
+    let down = false;
+    let scaleY = 1;
+    const hold = (): void => {
+        skeleton.scaleY = down ? -scaleY : scaleY;
+    };
+
+    return {
+        /** The effective scaleY a script placed. */
+        place(value: number): void {
+            scaleY = value;
+            hold();
+        },
+        set(value: boolean): void {
+            down = value;
+            hold();
+        },
+        solve(update: () => void): void {
+            flag.yDown = down;
+            try {
+                update();
+            } finally {
+                flag.yDown = false;
+            }
+        },
     };
 }
 
@@ -407,46 +438,3 @@ export function setEntryFields(
         Reflect.set(entry, field, value);
     }
 }
-
-/** The part of a pose that animations write and the next update reads. */
-const animated = (pose: OfficialPose) => ({
-    local: pose.local,
-    inherit: pose.inherit,
-    colors: pose.colors,
-    darkColors: pose.darkColors,
-    attachments: pose.attachments,
-    sequenceIndices: pose.sequenceIndices,
-    deform: pose.deform,
-    drawOrder: pose.drawOrder,
-});
-
-/**
- * Checks that the constraints of an update leave the animated pose alone. `readPose` copies the
- * animated pose of the official skeleton. Call `before` after the animations are applied and
- * `after` once the constraints have run.
- */
-export function createAudit(bones: number, slots: number, readPose: (out: OfficialPose) => void) {
-    const first = createPose(bones, slots);
-    const second = createPose(bones, slots);
-    const leaks: string[] = [];
-    let updates = 0;
-
-    return {
-        leaks,
-        before(): void {
-            readPose(first);
-        },
-        after(): void {
-            updates++;
-            readPose(second);
-            if (leaks.length < 20) {
-                for (const line of differences(animated(second), animated(first)))
-                    leaks.push(`update ${updates}: ${line}`);
-            }
-        },
-    };
-}
-
-/** Whether a timeline of this kind animates a physics or slider constraint. A pose engine does not apply it yet. */
-export const isIgnoredKind = (kind: string): boolean =>
-    kind.startsWith('physicsConstraint') || kind.startsWith('slider');

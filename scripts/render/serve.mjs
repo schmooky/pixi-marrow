@@ -1,8 +1,9 @@
 /**
- * The page of the render check: bundles pixi.js, the two official runtimes and the built package
- * with rolldown, and serves the bundle and fixtures/.cache from a local HTTP server.
+ * The page of the render check and of the bench. This bundles pixi.js, the two official runtimes
+ * and the built package with rolldown. It serves the bundle and fixtures/.cache from a local HTTP
+ * server.
  */
-import { mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { dirname, extname, join, normalize, sep } from 'node:path';
 import { rolldown } from 'rolldown';
@@ -15,7 +16,7 @@ const TYPES = {
     '.skel': 'application/octet-stream',
 };
 const PAGE = [
-    '<!doctype html><meta charset="utf-8"><title>render check</title>',
+    '<!doctype html><meta charset="utf-8"><title>pixi-marrow in headless Chrome</title>',
     // no icon, so the browser does not ask for one
     '<link rel="icon" href="data:,">',
     '<script type="module" src="/bundle/entry.js"></script>',
@@ -61,16 +62,40 @@ function officialCore(pkgDir) {
     };
 }
 
+/** True while a process with this id runs. */
+function alive(pid) {
+    try {
+        process.kill(pid, 0);
+
+        return true;
+    } catch (error) {
+        // the process is there and belongs to someone else
+        return error.code === 'EPERM';
+    }
+}
+
 /**
- * Bundles the page into `<work>/dist`. The two official runtimes register the same Pixi extension
+ * Bundles a page into `<work>/dist`. The two official runtimes register the same Pixi extension
  * names, so each sits behind a dynamic import and a page loads one of them.
  *
+ * @param page The browser entry, relative to the repo root. It exports `start`, which gets `PIXI`
+ * and the loaders of the runtimes.
  * @returns `dir` is the folder that holds `entry.js` and its chunks, `remove` deletes the scratch project.
  */
-export async function bundlePage(root) {
+export async function bundlePage(root, page = 'scripts/render/page.js') {
     const pkgDir = join(root, 'packages/pixi-marrow');
-    const work = join(root, 'node_modules/.cache/check-render');
+    const cache = join(root, 'node_modules/.cache');
+    // one scratch project per process, so the check and the bench can run at the same time
+    const work = join(cache, `marrow-page-${process.pid}`);
     const modules = join(work, 'node_modules');
+
+    mkdirSync(cache, { recursive: true });
+    // a run that was killed could not remove its scratch project
+    for (const name of readdirSync(cache)) {
+        const pid = /^marrow-page-(\d+)$/.exec(name)?.[1];
+
+        if (pid && !alive(Number(pid))) rmSync(join(cache, name), { recursive: true, force: true });
+    }
     const entry = join(work, 'entry.js');
 
     // a scratch project, so the bare imports of the entry resolve to the packages the library uses
@@ -85,7 +110,7 @@ export async function bundlePage(root) {
         entry,
         [
             "import * as PIXI from 'pixi.js';",
-            `import { start } from ${JSON.stringify(join(root, 'scripts/render/page.js').replaceAll('\\', '/'))};`,
+            `import { start } from ${JSON.stringify(join(root, page).replaceAll('\\', '/'))};`,
             'start({',
             '    PIXI,',
             "    loadOurs: () => import('pixi-marrow'),",
@@ -113,9 +138,11 @@ export async function bundlePage(root) {
  * The tag is ignored: it gives each instance on the page its own URLs, so no two of them share a
  * cache entry or a texture.
  *
+ * @param options.isolated True sends the two headers that make the page cross-origin isolated.
+ * Chrome measures the memory of a page with `performance.measureUserAgentSpecificMemory` only then.
  * @returns The origin and a function that stops the server.
  */
-export async function serve(root, bundleDir) {
+export async function serve(root, bundleDir, { isolated = false } = {}) {
     const cacheDir = join(root, 'fixtures/.cache');
     const resolve = (base, path) => {
         const file = normalize(join(base, path));
@@ -128,6 +155,10 @@ export async function serve(root, bundleDir) {
         const { pathname } = new URL(request.url, 'http://x');
         const parts = decodeURIComponent(pathname).split('/').filter(Boolean);
 
+        if (isolated) {
+            response.setHeader('cross-origin-opener-policy', 'same-origin');
+            response.setHeader('cross-origin-embedder-policy', 'require-corp');
+        }
         try {
             if (parts.length === 0) {
                 response.setHeader('content-type', 'text/html');

@@ -3,7 +3,7 @@
 A Spine runtime for PixiJS v8 with its own pose core. It plays Spine 4.1, 4.2 and 4.3 skeletons.
 
 <!-- facts:status -->
-Pre-release, milestone M3. Skeletons of Spine 4.1, 4.2 and 4.3 load, play and draw in PixiJS v8, with IK, transform and path constraints and with clipping, and the picture matches the official runtime. Physics and slider constraints are not solved yet: a skeleton that has them plays only with them ignored.
+Pre-release, milestone M4. Skeletons of Spine 4.1, 4.2 and 4.3 load, play and draw in PixiJS v8 with every constraint solved: IK, transform, path, physics and sliders. The poses equal the official cores to the bit, and the picture matches the official Pixi runtime.
 <!-- /facts:status -->
 
 The plan is in [docs/DESIGN.md](docs/DESIGN.md).
@@ -19,7 +19,29 @@ app.stage.addChild(hero);
 hero.play('run', { loop: true });
 ```
 
-A skeleton with physics or slider constraints needs `constraints: 'ignore'` in the load options until those are solved. It then plays without them. IK, transform and path constraints and clipping work.
+Every constraint is solved: IK, transform, path, physics and sliders. Clipping works.
+
+## Tracks and physics
+
+```ts
+hero.play('aim', { track: 1, additive: true, alpha: 0.5 });
+hero.play('walk', { start: 0.2, end: 1.1, entry: { mixDrawOrderThreshold: 0.5 } });
+
+hero.physics = 'pose';
+hero.resetPhysics();
+hero.physicsTranslate(dx, dy);
+```
+
+`entry` and `track.configure` take any field of the official `TrackEntry` by its official name. `physics` is the official mode: `update`, `pose`, `reset` or `none`. Physics does not follow the Pixi position by itself: tell it with `physicsTranslate` and `physicsRotate`.
+
+## Why is it slow
+
+```ts
+console.table(await hero.perf.report());
+console.log(await hero.perf.memory());
+```
+
+The report lists what the runtime decided for this instance and why: draw calls, blend ranges, tight meshes, covered slots, clipping, physics and more. For timings, `createProbe(hero)` from `pixi-marrow/perf` measures the pose, geometry and event work of every update.
 
 ## Less overdraw
 
@@ -49,6 +71,7 @@ const hero = await MarrowSpine.load({ skeleton: 'hero.skel', atlas: 'hero.atlas'
 | `pixi-marrow` | `MarrowSpine`, the display object, with `MarrowAsset`, `Track` and `MarrowError`. Needs `pixi.js`. |
 | `pixi-marrow/core` | `importSkeleton`, `importAtlas`, `createPoseEngine`, the geometry functions, `describeSkeleton` and the model types. No Pixi. Runs in Node. |
 | `pixi-marrow/optimize` | `generateNames`, `buildAtlasOutlines`, `decodePng` and the `pixi-marrow` command line tool (`info`, `typegen`, `outlines`). Runs in Node. |
+| `pixi-marrow/perf` | `createProbe`: times the pose, geometry and event work of every update of one `MarrowSpine` and counts what the renderer did. For benchmarks and profiling. |
 <!-- /facts:entry-points -->
 
 ## Work on it

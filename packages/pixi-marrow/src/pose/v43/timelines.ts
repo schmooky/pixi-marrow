@@ -3,6 +3,7 @@ import { applyInherit, applyPair, applyRelative, applyScale, applyScalePair } fr
 import { applyConstraintMixes, applyConstraintValue, applyIkConstraint } from './timelines-constraint';
 import { applyDeform } from './timelines-deform';
 import { applyDrawOrder, applyDrawOrderFolder, applyEvent, applySequence } from './timelines-misc';
+import { applyPhysicsReset, applyPhysicsValue } from './timelines-physics';
 import { applyAlpha, applyAttachment, applyColor, applyColorWithoutDark } from './timelines-slot';
 import {
     OP_ALPHA,
@@ -17,19 +18,23 @@ import {
     OP_MIXES,
     OP_NO_DARK,
     OP_PAIR,
+    OP_PHYSICS,
+    OP_PHYSICS_MASS,
+    OP_PHYSICS_RESET,
     OP_RELATIVE,
     OP_SCALE,
     OP_SCALE_PAIR,
     OP_SEQUENCE,
+    OP_SLIDER,
     OP_VALUE,
     type Pose43,
     type Timeline43,
 } from './types';
 
 /**
- * Applies one timeline to a pose: the official `Timeline.apply`, without the applied pose flag,
- * because this engine writes the animated pose only. The official `lastTime`, `time` and `alpha`
- * are read from `SHARED`. Set them with `setClock`.
+ * Applies one timeline to a pose: the official `Timeline.apply`. The pose stands for the official
+ * applied pose flag: the player passes the animated pose of the engine and a slider the applied
+ * one. The official `lastTime`, `time` and `alpha` are read from `SHARED`. Set them with `setClock`.
  *
  * Every kernel is called by name. V8 can inline such a call. It cannot inline a call through a
  * field of the timeline, which is a different function from one timeline to the next.
@@ -94,11 +99,23 @@ export function applyTimeline(
             applyConstraintMixes(pose, timeline, from, add);
             break;
         case OP_VALUE:
+            // a path position adds. A path spacing does not
+            applyConstraintValue(pose, timeline, from, add && timeline.additive);
+            break;
+        case OP_SLIDER:
             applyConstraintValue(pose, timeline, from, add);
             break;
         case OP_NO_DARK:
             applyColorWithoutDark(pose, timeline);
             break;
-        // OP_NOTHING: a timeline of a constraint that is not solved changes nothing
+        case OP_PHYSICS:
+            applyPhysicsValue(pose, timeline, from, add, false);
+            break;
+        case OP_PHYSICS_MASS:
+            applyPhysicsValue(pose, timeline, from, add, true);
+            break;
+        case OP_PHYSICS_RESET:
+            applyPhysicsReset(pose, timeline);
+            break;
     }
 }

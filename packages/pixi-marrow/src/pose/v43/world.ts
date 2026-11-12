@@ -183,14 +183,13 @@ function inheritNoScale(
  * The world transform of a bone with a parent that does not inherit all of the parent transform,
  * by the inherit mode of the bone.
  */
-function updateChild(state: PoseState, local: Float64Array, bone: number, parent: number): void {
+function updateChild(state: PoseState, local: Float64Array, bone: number, parent: number, inherit: number): void {
     const { world } = state;
     const p = parent * WORLD_STRIDE;
     const l = bone * LOCAL_STRIDE;
     const o = bone * WORLD_STRIDE;
     const x = Number(local[l]);
     const y = Number(local[l + 1]);
-    const inherit = state.inherit[bone];
 
     world[o + 4] = Number(world[p]) * x + Number(world[p + 1]) * y + Number(world[p + 4]);
     world[o + 5] = Number(world[p + 2]) * x + Number(world[p + 3]) * y + Number(world[p + 5]);
@@ -206,8 +205,15 @@ function updateChild(state: PoseState, local: Float64Array, bone: number, parent
  * with a parent itself: nearly every bone has it.
  *
  * `local` holds the local numbers of the bone. `parent` is -1 for a bone without a parent.
+ * `inherit` is the inherit mode of the bone, a whole number.
  */
-export function updateBoneWorld(state: PoseState, local: Float64Array, bone: number, parent: number): void {
+export function updateBoneWorld(
+    state: PoseState,
+    local: Float64Array,
+    bone: number,
+    parent: number,
+    inherit: number,
+): void {
     if (parent < 0) updateRoot(state, local, bone);
-    else updateChild(state, local, bone, parent);
+    else updateChild(state, local, bone, parent, inherit);
 }

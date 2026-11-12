@@ -82,7 +82,7 @@ function timelineOf(model: SkeletonModel, kind: string): TimelineData {
     return timeline;
 }
 
-const play = (model: SkeletonModel): Promise<PoseEngine> => createPoseEngine(model, { constraints: 'ignore' });
+const play = (model: SkeletonModel): Promise<PoseEngine> => createPoseEngine(model);
 
 /** The error of creating an engine after `damage` changed the model, as text. */
 async function createError(damage: Damage): Promise<string> {

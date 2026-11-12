@@ -6,7 +6,7 @@ import type { AtlasModel } from '../model/atlas';
 import { describeSkeleton, type SkeletonInfo } from '../model/info';
 import type { SkeletonModel } from '../model/model';
 import type { AtlasOutlines } from '../model/outlines';
-import { loadPoseEngine, type PoseEngineFactory, type PoseEngineOptions } from '../pose/engine';
+import { loadPoseEngine, type PoseEngineFactory } from '../pose/engine';
 import { configureTexture, isStillImage, loadPages, releasePage } from './textures';
 
 /** What `MarrowAsset.load` and `MarrowSpine.load` take. */
@@ -23,12 +23,6 @@ export interface MarrowLoadOptions {
      * loaded from next to the atlas. A name that is no page of the atlas throws.
      */
     textures?: Readonly<Record<string, Texture | string>>;
-    /**
-     * What to do with a skeleton that has physics or slider constraints, which are not solved
-     * yet. `error` (the default) throws. `ignore` plays the skeleton without those. IK, transform
-     * and path constraints are always solved.
-     */
-    constraints?: 'error' | 'ignore';
     /**
      * Where the outlines of the atlas regions come from. With them a slot behind an opaque one
      * is skipped and a region without a visible pixel is not drawn. The picture stays the same.
@@ -50,14 +44,23 @@ export interface MarrowAssetData {
     atlas: AtlasModel;
     /** One texture per atlas page, in page order. */
     textures: readonly Texture[];
-    /** What to do with a skeleton that has physics or slider constraints. `error` (the default) throws. */
-    constraints?: 'error' | 'ignore';
     /**
      * Where the outlines of the atlas regions come from: `auto` (the default) reads the page
      * textures in idle time, `off` uses none, an object is checked against the atlas and used.
      */
     outlines?: 'auto' | 'off' | AtlasOutlines;
 }
+
+/**
+ * Where the outlines of an asset stand.
+ *
+ * - `given`: the load got them, as a file or as an object.
+ * - `scanned`: they were read from the page images after the load.
+ * - `scanning`: the page images are being read at the moment, and there are none yet.
+ * - `unread`: the scan ended and could read no page image. Every region keeps its quad.
+ * - `off`: the asset was loaded with `outlines: 'off'`.
+ */
+export type OutlinesState = 'given' | 'scanned' | 'scanning' | 'unread' | 'off';
 
 /** What an asset is made of: the files, and the outlines or the word that says how to get them. */
 interface AssetParts {
@@ -69,9 +72,6 @@ interface AssetParts {
 
 /** The assets loaded from URLs, by what was asked for. Loads of the same things share one asset. */
 const shared = new Map<string, Promise<MarrowAsset>>();
-
-const engineOptions = (constraints: 'error' | 'ignore' | undefined): PoseEngineOptions =>
-    constraints === undefined ? {} : { constraints };
 
 /** Numbers for the outline objects that loads were asked with, so that a load can be told from another. */
 const outlineIds = new WeakMap<object, number>();
@@ -97,13 +97,7 @@ function loadKey(options: MarrowLoadOptions): string | undefined {
         .map(([name, texture]) => [name, typeof texture === 'string' ? texture : `texture ${texture.uid}`])
         .sort(([a = ''], [b = '']) => a.localeCompare(b));
 
-    return JSON.stringify([
-        options.skeleton,
-        options.atlas,
-        options.constraints ?? 'error',
-        textures,
-        outlinesKey(options.outlines),
-    ]);
+    return JSON.stringify([options.skeleton, options.atlas, textures, outlinesKey(options.outlines)]);
 }
 
 async function fetchFile(url: string, what: string): Promise<Response> {
@@ -257,6 +251,14 @@ export class MarrowAsset {
         return this.found;
     }
 
+    /** Where the {@link outlines} come from, and whether they are still being read. */
+    get outlinesState(): OutlinesState {
+        if (!this.scans) return this.found === undefined ? 'off' : 'given';
+        if (this.scan !== undefined) return 'scanning';
+
+        return this.found === undefined ? 'unread' : 'scanned';
+    }
+
     /**
      * Resolves when the work in the background has ended: with `outlines: 'auto'` the scan of the
      * page images, which sets {@link outlines}. Resolves at once when there is no such work. It
@@ -279,15 +281,15 @@ export class MarrowAsset {
      * atlas page: alpha mode, filters, mipmaps and wrap.
      *
      * Loads of the same skeleton URL, atlas URL and options share one asset. Throws a
-     * `MarrowError` when a file does not load or is not valid. A skeleton with physics or slider
-     * constraints throws too, unless `constraints` is `ignore`.
+     * `MarrowError` when a file does not load or is not valid. Every constraint of the skeleton
+     * is solved: IK, transform, path, physics and sliders.
      *
      * The outlines of the atlas regions are read from the page images after the load, in idle
      * time, unless `outlines` names a file, gives them or is `off`.
      *
      * @example
      * const asset = await MarrowAsset.load({ skeleton: 'hero.json', atlas: 'hero.atlas' });
-     * const fromBytes = await MarrowAsset.load({ skeleton: bytes, atlas: 'hero.atlas', constraints: 'ignore' });
+     * const fromBytes = await MarrowAsset.load({ skeleton: bytes, atlas: 'hero.atlas' });
      */
     static load(options: MarrowLoadOptions): Promise<MarrowAsset> {
         const key = loadKey(options);
@@ -319,11 +321,7 @@ export class MarrowAsset {
         const { model, atlas, textures } = data;
         const outlines = await checkOutlines(data.outlines, atlas);
 
-        return new MarrowAsset(
-            { model, atlas, textures, outlines },
-            await loadPoseEngine(model, engineOptions(data.constraints)),
-            [],
-        );
+        return new MarrowAsset({ model, atlas, textures, outlines }, await loadPoseEngine(model), []);
     }
 
     private static async fetch(options: MarrowLoadOptions, key: string | undefined): Promise<MarrowAsset> {
@@ -334,9 +332,9 @@ export class MarrowAsset {
         ]);
         const model = await importSkeleton(source);
         const atlas = importAtlas(await atlasFile.text());
-        // before the images, so that outlines of another atlas and a skeleton that cannot play cost no image loads
+        // before the images, so that outlines of another atlas cost no image loads
         const outlines = await checkOutlines(outlinesFile, atlas);
-        const createEngine = await loadPoseEngine(model, engineOptions(options.constraints));
+        const createEngine = await loadPoseEngine(model);
         const { textures, loaded } = await loadPages(atlas, options.atlas, options.textures);
 
         return new MarrowAsset({ model, atlas, textures, outlines }, createEngine, loaded, key);

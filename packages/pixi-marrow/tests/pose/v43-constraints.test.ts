@@ -1,4 +1,4 @@
-import { AnimationState, AnimationStateData, Physics, Skeleton, Slider } from 'spine-core-4.3';
+import { AnimationState, AnimationStateData, Physics, Skeleton } from 'spine-core-4.3';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { createPoseEngine, importSkeleton, type SkeletonModel, WORLD_STRIDE } from '../../src/core';
 import { loadPoseRig } from '../parity/pose-official';
@@ -338,7 +338,7 @@ describe('the constraints of the 4.3 pose engine', () => {
     let model: SkeletonModel;
     let labels: ReturnType<typeof attachmentLabels>;
     const run = async (each: PoseScript): Promise<void> => {
-        const engine = await createPoseEngine(model, { constraints: 'ignore' });
+        const engine = await createPoseEngine(model);
         const failure = runScript(
             each,
             engineSubject(engine, labels.ofObject),
@@ -362,7 +362,7 @@ describe('the constraints of the 4.3 pose engine', () => {
 
     it('give every bone the official world transform, also a bone that is not active', async () => {
         const data = readData43({ skeleton: RIG, atlas: ATLAS });
-        const engine = await createPoseEngine(model, { constraints: 'ignore' });
+        const engine = await createPoseEngine(model);
         const skeleton = new Skeleton(data);
         const state = new AnimationState(new AnimationStateData(data));
         const compare = (where: string): void => {
@@ -371,8 +371,6 @@ describe('the constraints of the 4.3 pose engine', () => {
             expect(Array.from(engine.state.world), where).toEqual(theirs);
         };
 
-        // a slider that does nothing and physics that are not updated: what the engine leaves out
-        for (const constraint of skeleton.constraints) if (constraint instanceof Slider) constraint.update = () => {};
         Object.assign(engine.state, { x: 7, y: -3, scaleX: -1.25, scaleY: 0.75 });
         Object.assign(skeleton, { x: 7, y: -3, scaleX: -1.25, scaleY: 0.75 });
         [WAVE, AIM, TRAVEL].forEach((animation, track) => {
@@ -391,8 +389,9 @@ describe('the constraints of the 4.3 pose engine', () => {
             }
             engine.update(0.07);
             state.update(0.07);
+            skeleton.update(0.07);
             state.apply(skeleton);
-            skeleton.updateWorldTransform(Physics.none);
+            skeleton.updateWorldTransform(Physics.update);
             compare(`update ${step}`);
         }
         // the constraints leave the animated pose alone
@@ -412,9 +411,7 @@ describe('the constraints of the 4.3 pose engine', () => {
             animation.timelines = animation.timelines.filter(({ kind }) => !/[cC]onstraint|slider/.test(kind));
         }
         for (const skin of bare.skins) skin.constraints = new Int16Array(0);
-        const [engine, free] = await Promise.all(
-            [plain, bare].map((each) => createPoseEngine(each, { constraints: 'ignore' })),
-        );
+        const [engine, free] = await Promise.all([plain, bare].map((each) => createPoseEngine(each)));
         const moved = (): string[] => {
             engine?.update(0);
             free?.update(0);
@@ -426,23 +423,13 @@ describe('the constraints of the 4.3 pose engine', () => {
             );
         };
 
+        // the slider poses goal and step with the first keys of its animation
+        const always = ['arm1', 'arm2', 'hand', 'goal', 'leg', 'step', 'follow1', 'follow2', 'c1', 'c2', 'c3', 'c4'];
+
         // gated and tip need the skin, like the constraints gatedIk and grow
-        expect(moved()).toEqual(['arm1', 'arm2', 'hand', 'leg', 'follow1', 'follow2', 'c1', 'c2', 'c3', 'c4']);
+        expect(moved()).toEqual(always);
         engine?.setSkin(1);
         free?.setSkin(1);
-        expect(moved()).toEqual([
-            'arm1',
-            'arm2',
-            'hand',
-            'leg',
-            'follow1',
-            'follow2',
-            'c1',
-            'c2',
-            'c3',
-            'c4',
-            'gated',
-            'tip',
-        ]);
+        expect(moved()).toEqual([...always, 'gated', 'tip']);
     });
 });

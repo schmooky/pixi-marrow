@@ -1,4 +1,4 @@
-import type { TrackFields } from '../../src/core';
+import type { PhysicsMode, TrackFields } from '../../src/core';
 import type { PoseRigInfo } from './pose-shared';
 
 /*
@@ -25,6 +25,17 @@ export type ScriptOp =
     | { op: 'setupPoseSlots' }
     /** The position and the scale of the skeleton: `x`, `y`, `scaleX` and `scaleY` of the pose state. */
     | { op: 'place'; x: number; y: number; scaleX: number; scaleY: number }
+    /**
+     * Whether the y axis of the world points down: `yDown` of the pose state, the official static
+     * `Skeleton.yDown`. The scale `place` sets stays the effective one.
+     */
+    | { op: 'yDown'; value: boolean }
+    /** How physics constraints run from the next update on. */
+    | { op: 'physics'; mode: PhysicsMode }
+    | { op: 'physicsTranslate'; x: number; y: number }
+    | { op: 'physicsRotate'; x: number; y: number; degrees: number }
+    /** The directions of wind and gravity: `windX`, `windY`, `gravityX` and `gravityY` of the pose state. 4.3 only. */
+    | { op: 'forces'; windX: number; windY: number; gravityX: number; gravityY: number }
     /** `times` updates of `dt` seconds, each followed by a comparison. */
     | { op: 'update'; dt: number; times: number };
 
@@ -50,6 +61,11 @@ export interface ScriptBuilder {
     setupPoseBones(): void;
     setupPoseSlots(): void;
     place(x: number, y: number, scaleX: number, scaleY: number): void;
+    yDown(value: boolean): void;
+    physics(mode: PhysicsMode): void;
+    physicsTranslate(x: number, y: number): void;
+    physicsRotate(x: number, y: number, degrees: number): void;
+    forces(windX: number, windY: number, gravityX: number, gravityY: number): void;
     update(dt: number, times?: number): void;
 }
 
@@ -82,6 +98,11 @@ export function script(name: string, build: (s: ScriptBuilder) => void): PoseScr
         setupPoseBones: () => push({ op: 'setupPoseBones' }),
         setupPoseSlots: () => push({ op: 'setupPoseSlots' }),
         place: (x, y, scaleX, scaleY) => push({ op: 'place', x, y, scaleX, scaleY }),
+        yDown: (value) => push({ op: 'yDown', value }),
+        physics: (mode) => push({ op: 'physics', mode }),
+        physicsTranslate: (x, y) => push({ op: 'physicsTranslate', x, y }),
+        physicsRotate: (x, y, degrees) => push({ op: 'physicsRotate', x, y, degrees }),
+        forces: (windX, windY, gravityX, gravityY) => push({ op: 'forces', windX, windY, gravityX, gravityY }),
         update: (dt, times = 1) => push({ op: 'update', dt, times }),
     });
 

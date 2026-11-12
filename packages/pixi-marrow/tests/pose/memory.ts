@@ -21,7 +21,7 @@ export async function measureInstanceBytes(): Promise<Record<string, number>> {
     for (const fixture of listFixtures()) {
         if (fixture.id.startsWith('local/')) continue;
         const model = await importSkeleton(readFixture(fixture).skeleton);
-        const engine = await createPoseEngine(model, { constraints: 'ignore' });
+        const engine = await createPoseEngine(model);
 
         for (let animation = 0; animation < model.animations.length; animation++) {
             engine.setAnimation(0, animation, true);

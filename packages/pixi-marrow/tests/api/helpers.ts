@@ -41,11 +41,11 @@ export function blankTexture(): Texture {
     return new Texture({ source: new TextureSource({ width: 2, height: 2 }) });
 }
 
-/** An asset from a fixture, with a blank texture per atlas page and constraints left out. */
+/** An asset from a fixture, with a blank texture per atlas page. */
 export async function fixtureAsset(id: string): Promise<MarrowAsset> {
     const { model, atlas } = await importRig(id);
 
-    return MarrowAsset.from({ model, atlas, textures: atlas.pages.map(() => Texture.WHITE), constraints: 'ignore' });
+    return MarrowAsset.from({ model, atlas, textures: atlas.pages.map(() => Texture.WHITE) });
 }
 
 /**
@@ -66,6 +66,7 @@ export function bareEngine(asset: MarrowAsset): PoseEngine {
     const engine = asset.createEngine();
 
     engine.state.scaleY = -1;
+    engine.state.yDown = true;
 
     return engine;
 }

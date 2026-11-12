@@ -41,7 +41,12 @@
       "alien-pro",
       "tank-pro",
       "powerup-pro",
-      "diamond-pro"
+      "diamond-pro",
+      "owl-pro",
+      "celestial-circus-pro",
+      "sack-pro",
+      "snowglobe-pro",
+      "cloud-pot"
     ],
     "pma": ["spineboy-pro", "coin-pro"]
   },
@@ -192,7 +197,13 @@
       "atlas": {
         "path": "examples/owl/export/owl.atlas",
         "sha256": "cbe034e0f2098d799630bf500e739b997ab8d70113fae96c2073b95ae29ccee1"
-      }
+      },
+      "images": [
+        {
+          "path": "examples/owl/export/owl.png",
+          "sha256": "c42ba3838ef44171f585690a2b3f866fe1bb0aa5f7868a797401066125647dda"
+        }
+      ]
     },
     {
       "version": "4.1",
@@ -594,7 +605,13 @@
       "atlas": {
         "path": "examples/owl/export/owl.atlas",
         "sha256": "29354987fecbaa2a0e96d03f6d2eba4aa515933d7cae248c7edab8c6308562cf"
-      }
+      },
+      "images": [
+        {
+          "path": "examples/owl/export/owl.png",
+          "sha256": "7d0fb60ceef63b6ad592b17045f57a10500ad826024210f65145f97592b921d4"
+        }
+      ]
     },
     {
       "version": "4.2",
@@ -860,7 +877,13 @@
       "atlas": {
         "path": "examples/celestial-circus/export/celestial-circus.atlas",
         "sha256": "6473faf0c6d7d7cd037d86e6e10ef9d6624adc881f3bd997538624d9a406163e"
-      }
+      },
+      "images": [
+        {
+          "path": "examples/celestial-circus/export/celestial-circus.png",
+          "sha256": "1f9cc52137fc3699b09f0e632274e67fa18a6dac1c570bf593ba9565d4f1b5de"
+        }
+      ]
     },
     {
       "version": "4.2",
@@ -876,7 +899,13 @@
       "atlas": {
         "path": "examples/sack/export/sack.atlas",
         "sha256": "f25b09f24311ceec48e6015502dee9d612afc58b9af7c201836e1fa09146f6c6"
-      }
+      },
+      "images": [
+        {
+          "path": "examples/sack/export/sack.png",
+          "sha256": "306cc3609100bf0994c815173e336e170d3e8e4ab5937ace3d630c2bda537fd7"
+        }
+      ]
     },
     {
       "version": "4.2",
@@ -892,7 +921,29 @@
       "atlas": {
         "path": "examples/snowglobe/export/snowglobe.atlas",
         "sha256": "8b7dec2fd462e52ec20e38549c3322a86e27da0bc0ecc0ae6239446fd6daa463"
-      }
+      },
+      "images": [
+        {
+          "path": "examples/snowglobe/export/snowglobe.png",
+          "sha256": "dc09e6f677953a05fc7c69e7609c0b50b4a985ceea404d290ab65623766fd3f7"
+        },
+        {
+          "path": "examples/snowglobe/export/snowglobe_2.png",
+          "sha256": "e809e564cabd8b6d68faa74b494cbdee48780989ae0af2bdd6b075c473965440"
+        },
+        {
+          "path": "examples/snowglobe/export/snowglobe_3.png",
+          "sha256": "52e792ea764420761415bf9af2c61b01f073309bbd7f361daad3faecc9f63651"
+        },
+        {
+          "path": "examples/snowglobe/export/snowglobe_4.png",
+          "sha256": "cffc0149537301895a63f9b7a6335ae873ff9c21c6d9a4605475a8d4fb88036a"
+        },
+        {
+          "path": "examples/snowglobe/export/snowglobe_5.png",
+          "sha256": "c2b7224f0b9d4f7a28dbcdff3500be62033e2dd858754941100273678262e1cf"
+        }
+      ]
     },
     {
       "version": "4.2",
@@ -908,7 +959,13 @@
       "atlas": {
         "path": "examples/cloud-pot/export/cloud-pot.atlas",
         "sha256": "0fa5e25e321d99ae607c374d29950080e351517c8b874c858d69e0c56669a0e3"
-      }
+      },
+      "images": [
+        {
+          "path": "examples/cloud-pot/export/cloud-pot.png",
+          "sha256": "4d7120a1bd0d3525ccc7f21a059202009e13e7e963bc5322862496fcc282f145"
+        }
+      ]
     },
     {
       "version": "4.3",
@@ -1056,7 +1113,13 @@
       "atlas": {
         "path": "examples/owl/export/owl.atlas",
         "sha256": "28ee1d480b668d2011b68a06b952b436efd02d1d2115133d5c9a2b3a42a86d1f"
-      }
+      },
+      "images": [
+        {
+          "path": "examples/owl/export/owl.png",
+          "sha256": "5fb4ceefbbdcf1171a2e94d7c1aae1363db1d5fb8986199238de09d2374e6691"
+        }
+      ]
     },
     {
       "version": "4.3",
@@ -1330,7 +1393,13 @@
       "atlas": {
         "path": "examples/celestial-circus/export/celestial-circus.atlas",
         "sha256": "aa84d948bf73c2b82e310abc27f6431d6bf3d9ed03e1eadcbc0dabad9b396d92"
-      }
+      },
+      "images": [
+        {
+          "path": "examples/celestial-circus/export/celestial-circus.png",
+          "sha256": "0cc52b1454d3962d90624740c0e8fc75a79c2811331d73c7c880a129916b28b6"
+        }
+      ]
     },
     {
       "version": "4.3",
@@ -1346,7 +1415,13 @@
       "atlas": {
         "path": "examples/7-anticipation/export/7-anticipation.atlas",
         "sha256": "b8b5e388a6021c3ec389eee23f68efb4fd80c4b6dca926dc9bf26f0ca8e548b6"
-      }
+      },
+      "images": [
+        {
+          "path": "examples/7-anticipation/export/7-anticipation.png",
+          "sha256": "a887ee5a47991e693b4a58fdb75bbd7334dc54d60ea88e1d4b8b63ea8e5d8d91"
+        }
+      ]
     },
     {
       "version": "4.3",
@@ -1362,7 +1437,21 @@
       "atlas": {
         "path": "examples/snowglobe/export/snowglobe.atlas",
         "sha256": "5e9c1cef310713577aff6f124c8d0716c315faec068133daaa3ddf8cee5b699c"
-      }
+      },
+      "images": [
+        {
+          "path": "examples/snowglobe/export/snowglobe.png",
+          "sha256": "8e374e743f568487959f405594a0cb8aa37412338123e25bda0ff2213a7656cd"
+        },
+        {
+          "path": "examples/snowglobe/export/snowglobe_2.png",
+          "sha256": "d35b0341e19680064b3121b6741875f0c95a5b0b0d2419bd201a7eb5a1f0f5e6"
+        },
+        {
+          "path": "examples/snowglobe/export/snowglobe_3.png",
+          "sha256": "eac6979679130f6ce7edfe76049cc824601faad6bc97fb5259be03d94815ea1d"
+        }
+      ]
     },
     {
       "version": "4.3",
@@ -1378,7 +1467,13 @@
       "atlas": {
         "path": "examples/cloud-pot/export/cloud-pot.atlas",
         "sha256": "d659c6eb9df5c423aafa7ebce56a3974a119addf932ab98cff848443afcd6351"
-      }
+      },
+      "images": [
+        {
+          "path": "examples/cloud-pot/export/cloud-pot.png",
+          "sha256": "6f4597b532d357b739cb5ce8dcf9ee8a2d53b3f1c487c85c397b011ec33bd5f4"
+        }
+      ]
     },
     {
       "version": "4.3",

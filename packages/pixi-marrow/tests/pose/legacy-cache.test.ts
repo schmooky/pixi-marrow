@@ -95,11 +95,15 @@ function official42(files: RigFiles): Official {
 
 /**
  * The official cache in the numbers of the engine: a bone index, or -1 minus the index of a
- * constraint in the list of the model, which holds IK first, then transform, then path. Physics
- * constraints have no entry in the engine, so they are left out here.
+ * constraint in the list of the model, which holds IK first, then transform, path and physics.
  */
 function officialEntries(skeleton: Sorted): number[] {
-    const lists: object[][] = [skeleton.ikConstraints, skeleton.transformConstraints, skeleton.pathConstraints];
+    const lists: object[][] = [
+        skeleton.ikConstraints,
+        skeleton.transformConstraints,
+        skeleton.pathConstraints,
+        skeleton.physicsConstraints ?? [],
+    ];
     const constraints = lists.flat();
     const bones: object[] = skeleton.bones;
     const entries: number[] = [];
@@ -210,9 +214,9 @@ function sortRig(version: Version): string {
 }
 
 /**
- * A 4.2 skeleton where a physics constraint that is switched off still changes numbers. The
- * transform constraint writes the world transform of `b`. The physics constraint on `a` then has
- * the bones below `a` sorted again, so `b` updates once more, from its applied pose.
+ * A 4.2 skeleton where a physics constraint changes numbers even when physics is switched off.
+ * The transform constraint writes the world transform of `b`. The physics constraint on `a` then
+ * has the bones below `a` sorted again, so `b` updates once more, from its applied pose.
  */
 function physicsRig(withPhysics: boolean): string {
     return JSON.stringify({
@@ -267,15 +271,16 @@ describe('the update order of the legacy engine', () => {
         expect(pathBones.map((bones) => Array.from(bones))).toEqual([[9], [6, 2], []]);
     });
 
-    it('keeps the place of a physics constraint that is switched off, as the official core does', async () => {
+    it('sorts the bones below a physics constraint again, which shows even with physics switched off', async () => {
         const text = physicsRig(true);
         const model = await importSkeleton(text);
-        const engine = await createPoseEngine(model, { constraints: 'ignore' });
+        const engine = await createPoseEngine(model);
         const b = model.bones.names.indexOf('b');
 
+        engine.physics = 'none';
         engine.update(0);
         // b comes twice: before the transform constraint, and again because physics sits on its parent
-        expect(Array.from(cacheOf(rigOf(model), -1).entries)).toEqual([0, 1, 2, b, -1, b, 4]);
+        expect(Array.from(cacheOf(rigOf(model), -1).entries)).toEqual([0, 1, 2, b, -1, -2, b, 4]);
         expect(Array.from(engine.state.world)).toEqual(officialWorld(text));
         // taken out of the file, the constraint leaves b as the transform constraint wrote it
         const without = officialWorld(physicsRig(false));

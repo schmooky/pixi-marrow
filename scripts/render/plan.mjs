@@ -7,10 +7,20 @@ import { existsSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-/** What an animation can key, most telling for a picture first. The choice covers these. */
-const INTEREST = ['deform', 'attachments', 'drawOrder', 'colors', 'sequences', 'bones'];
+/**
+ * What an animation can key, most telling for a picture first. The choice covers these. Only a
+ * rig with physics has animations that key `physics`, so the choice for every other rig is the
+ * one it was without that entry.
+ */
+const INTEREST = ['deform', 'attachments', 'drawOrder', 'colors', 'sequences', 'bones', 'physics'];
 /** Steps of a sequence after which both sides are drawn. The last one is past the loop point. */
 const CAPTURES = [0, 7, 15, 26];
+/**
+ * One more capture for a rig with physics, deep in the second loop. Physics carries its state
+ * over the loop point, so the second loop is not the first one again. By step 7 a constraint has
+ * run for 0.3 loops, which is 0.14 seconds for the shortest animation of the physics rigs.
+ */
+const LATE_CAPTURE = 41;
 /**
  * One step as a share of a loop: about 24 steps per loop. Not a plain fraction, so a capture does
  * not fall on a key, where the rounding of a key time would decide which side of it is drawn.
@@ -24,7 +34,11 @@ const MIN_SCALE = 0.35;
  * The part of a skeleton to frame, as x, y, width and height in skeleton units, where the setup
  * bounds are no good. The bounds of the tank are 7200 units wide, and most of that is ground.
  */
-const FRAMES = { 'tank-pro': [-1450, -349, 2800, 1299] };
+const FRAMES = {
+    'tank-pro': [-1450, -349, 2800, 1299],
+    // the 4.2 export says its bounds are 273928 units high. These are the bounds of the 4.3 export
+    'cloud-pot': [-345, -17, 756, 1098],
+};
 /**
  * What an animation can key that changes which slots are drawn: a slot appears, vanishes when its
  * alpha reaches 0, moves in the draw order or shows another region. The index buffer may be
@@ -88,9 +102,13 @@ function placement([x, y, frameWidth, frameHeight], baseSize) {
 /**
  * The animations of the buffer check: the chosen ones, plus one that keys none of REWRITERS when
  * the chosen ones all do, so the index buffer is watched where it must stay.
+ *
+ * @param played What the sliders of the rig key. A slider plays an animation of its own on top
+ * of every animation, so its keys count for each of them.
  */
-function steadyAnimations(infos, chosen) {
-    const quiet = (info) => !info.features.some((feature) => REWRITERS.includes(feature));
+function steadyAnimations(infos, chosen, played) {
+    const keys = (info) => [...new Set([...info.features, ...played])];
+    const quiet = (info) => !keys(info).some((feature) => REWRITERS.includes(feature));
     const list = [...chosen];
 
     if (!list.some(quiet)) {
@@ -99,7 +117,14 @@ function steadyAnimations(infos, chosen) {
         if (extra) list.push(extra);
     }
 
-    return list.map((info) => ({ animation: info.name, dt: stepOf(info), features: info.features }));
+    return list.map((info) => ({ animation: info.name, dt: stepOf(info), features: keys(info) }));
+}
+
+/** What the animations key that the sliders of a skeleton play. Empty for a skeleton without sliders. */
+function sliderFeatures(model, infos) {
+    const sliders = model.constraints.filter((constraint) => constraint.type === 'slider');
+
+    return [...new Set(sliders.flatMap((slider) => infos[slider.animation]?.features ?? []))];
 }
 
 /**
@@ -130,16 +155,21 @@ export async function planRigs({ root, size, animations, only }) {
         for (const file of [entry.json, entry.atlas, ...entry.images, ...(entry.pma?.images ?? [])]) cached(file);
         const model = await core.importSkeleton(new Uint8Array(readFileSync(cached(entry.skel))));
         const info = core.describeSkeleton(model);
-        const placed = placement(FRAMES[entry.rig] ?? [model.x, model.y, model.width, model.height], size);
+        const frame = FRAMES[entry.rig] ?? [model.x, model.y, model.width, model.height];
+        const placed = placement(frame, size);
         const skins = chooseSkins(model);
         const chosen = chooseAnimations(info.animations, animations);
+        const physics = info.features.includes('physics');
+        const played = sliderFeatures(model, info.animations);
+        const captures = physics ? [...CAPTURES, LATE_CAPTURE] : CAPTURES;
         const sequences = skins.flatMap((skin, skinIndex) =>
             // the second skin plays the first animation only
             (skinIndex === 0 ? chosen : chosen.slice(0, 1)).map((animation) => ({
                 skin,
                 animation: animation.name,
+                duration: animation.duration,
                 dt: stepOf(animation),
-                captures: animation.duration > 0 ? CAPTURES : CAPTURES.slice(0, 2),
+                captures: animation.duration > 0 ? captures : CAPTURES.slice(0, 2),
             })),
         );
 
@@ -157,13 +187,22 @@ export async function planRigs({ root, size, animations, only }) {
             },
             size: placed.size,
             placement: { x: placed.x, y: placed.y, scale: placed.scale },
+            // the part of the skeleton the placement frames: x, y, width and height in its own units
+            frame,
+            // what drives the cost of the rig: bones, slots, constraints, vertices and so on
+            counts: info.counts,
             features: info.features,
+            // constraints with state, or that play an animation of their own: the report counts their frames
+            physics,
+            slider: info.features.includes('slider'),
             // with additive slots the alpha of a transparent target differs from the official one by design
             additive: info.features.includes('additiveBlend'),
             // only normal and additive slots: the whole skeleton fits one draw call
             oneDraw: !info.features.includes('multiplyBlend') && !info.features.includes('screenBlend'),
             sequences,
-            steady: steadyAnimations(info.animations, chosen),
+            steady: steadyAnimations(info.animations, chosen, played),
+            // what the sliders key through the animations they play, on top of every animation
+            sliderFeatures: played,
             steadySkin: skins[0],
             rewriters: REWRITERS,
             proof: PROOF_SLOTS[entry.rig] ?? null,

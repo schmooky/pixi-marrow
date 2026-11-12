@@ -246,7 +246,7 @@ const scripts: PoseScript[] = [
     }),
 ];
 
-/** The world transforms the official core gives the setup pose, with the skeleton placed, and with physics switched off. */
+/** The world transforms the official core gives the setup pose, with the skeleton placed. */
 function officialWorld(version: Version, text: string, [x, y, scaleX, scaleY]: readonly number[]): number[] {
     const json41 = new core41.SkeletonJson(new core41.AtlasAttachmentLoader(new core41.TextureAtlas('')));
     const json42 = new core42.SkeletonJson(new core42.AtlasAttachmentLoader(new core42.TextureAtlas('')));
@@ -257,7 +257,7 @@ function officialWorld(version: Version, text: string, [x, y, scaleX, scaleY]: r
 
     Object.assign(official, { x, y, scaleX, scaleY });
     if (official instanceof core41.Skeleton) official.updateWorldTransform();
-    else official.updateWorldTransform(core42.Physics.none);
+    else official.updateWorldTransform(core42.Physics.update);
 
     return official.bones.flatMap((bone) =>
         bone.active ? [bone.a, bone.b, bone.c, bone.d, bone.worldX, bone.worldY] : [0, 0, 0, 0, 0, 0],
@@ -270,7 +270,7 @@ describe.each(['4.1', '4.2'] as const)('constraints of the legacy engine on a ha
     const create = async (): Promise<{ model: SkeletonModel; engine: PoseEngine }> => {
         const model = await importSkeleton(files.skeleton);
 
-        return { model, engine: await createPoseEngine(model, { constraints: 'ignore' }) };
+        return { model, engine: await createPoseEngine(model) };
     };
 
     it.each(scripts)('poses like the official core: $name', async (each) => {

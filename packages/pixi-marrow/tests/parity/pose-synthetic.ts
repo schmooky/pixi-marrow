@@ -2,14 +2,19 @@ import type { SpineVersion } from '../../src/core';
 import { type Fixture, listFixtures, readFixture } from './fixtures';
 import type { RigFiles } from './official';
 import { ikRigs } from './pose-rig-ik';
+import { SEQUENCE_ATLAS } from './pose-rig-kit';
 import { orderRigs } from './pose-rig-order';
 import { pathRigs } from './pose-rig-path';
+import { physicsRigs } from './pose-rig-physics';
+import { physicsOrderRigs } from './pose-rig-physics-order';
+import { sliderRigs } from './pose-rig-slider';
+import { sliderSlotRigs } from './pose-rig-slider-slots';
 import { transformRigs } from './pose-rig-transform';
 
 /*
  * The skeletons the pose suite runs on: the fixtures and the rigs made here. The rigs made for
- * constraints are in the `pose-rig-` files, one for IK, one for transform constraints, one for
- * path constraints and one for the order of constraints.
+ * constraints are in the `pose-rig-` files: one for IK, one for transform constraints, one for
+ * path constraints, one for the order of constraints, two for physics and two for sliders.
  *
  * This file holds the rig for what no official example has apart from constraints: the timelines
  * for one scale or shear axis, for rgb, alpha and rgb2, for the inherit mode and for draw order
@@ -28,15 +33,6 @@ export interface PoseRigSource {
 }
 
 const EDITOR_VERSIONS: Record<SpineVersion, string> = { '4.1': '4.1.24', '4.2': '4.2.43', '4.3': '4.3.39' };
-
-/** Five numbered regions for the sequences, each 2 by 2 pixels. */
-const ATLAS = [
-    'page.png',
-    'size: 16, 4',
-    'filter: Linear, Linear',
-    ...[1, 2, 3, 4, 5].flatMap((n) => [`img0${n}`, `bounds: ${(n - 1) * 2}, 0, 2, 2`]),
-    '',
-].join('\n');
 
 /**
  * The bones: one of every inherit mode under a parent that is rotated, scaled, sheared and
@@ -407,7 +403,7 @@ function syntheticRigs(): PoseRigSource[] {
         id: `${version}/made-for-pose.json`,
         rig: 'made-for-pose',
         version,
-        read: () => ({ skeleton: skeletonJson(version), atlas: ATLAS }),
+        read: () => ({ skeleton: skeletonJson(version), atlas: SEQUENCE_ATLAS }),
     }));
 }
 
@@ -427,5 +423,9 @@ export function listPoseRigs(): PoseRigSource[] {
         ...transformRigs(),
         ...pathRigs(),
         ...orderRigs(),
+        ...physicsRigs(),
+        ...physicsOrderRigs(),
+        ...sliderRigs(),
+        ...sliderSlotRigs(),
     ];
 }

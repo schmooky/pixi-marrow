@@ -20,6 +20,10 @@
       "types": "./dist/optimize.d.ts",
       "default": "./dist/optimize.js"
     },
+    "./perf": {
+      "types": "./dist/perf.d.ts",
+      "default": "./dist/perf.js"
+    },
     "./package.json": "./package.json"
   },
   "bin": {

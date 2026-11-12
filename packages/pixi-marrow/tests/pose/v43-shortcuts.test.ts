@@ -110,7 +110,7 @@ describe('the trig shortcuts of the 4.3 pose engine', () => {
                     state.update(1 / 12);
                     skeleton.update(1 / 12);
                     state.apply(skeleton);
-                    skeleton.updateWorldTransform(Physics.none);
+                    skeleton.updateWorldTransform(Physics.update);
                 }),
             );
             skeleton.bones.forEach((bone, i) => {

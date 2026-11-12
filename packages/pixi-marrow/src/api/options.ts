@@ -1,3 +1,5 @@
+import type { TrackFields } from '../pose/engine';
+
 /**
  * The names of one skeleton as string unions. `pixi-marrow typegen` writes a type of this shape.
  * Passed to the display object, it turns a misspelled name into a compile error.
@@ -52,6 +54,49 @@ export interface PlayOptions {
     alpha?: number;
     /** True to play the animation backwards. Default false. */
     reverse?: boolean;
+    /**
+     * True to add the animation to the pose that lower tracks gave, where its timelines can add.
+     * False replaces that pose. Default false.
+     *
+     * In Spine 4.1 and 4.2 this is the official `mixBlend` with the value `add`, and track 0
+     * never adds. In Spine 4.3 it is the official entry field `additive`. The official runtime
+     * takes it for a new animation only, so it is an option here and read-only on the `Track`.
+     */
+    additive?: boolean;
+    /**
+     * Seconds into the animation where playback starts, and where a loop starts again: the
+     * official `animationStart`. Default 0.
+     *
+     * Events keyed before it fire in the first update, as in the official runtime. To leave
+     * them out, also pass `entry: { animationLast: start }`.
+     */
+    start?: number;
+    /**
+     * Seconds into the animation where playback ends, and where a loop turns back to `start`:
+     * the official `animationEnd`. Default: the duration of the animation.
+     */
+    end?: number;
+    /**
+     * True to turn the shortest way in every update while this animation mixes rotations. False
+     * keeps the direction of the first update for the whole mix, so a bone cannot flip to the
+     * other side. The official `shortestRotation`. Default false.
+     */
+    shortestRotation?: boolean;
+    /**
+     * While this animation mixes out, its events fire as long as the mix has gone less far than
+     * this share, from 0 to 1. The official `eventThreshold`. Default 0: an animation that mixes
+     * out fires no event.
+     */
+    eventThreshold?: number;
+    /**
+     * Any other field of the official `TrackEntry`, by its official name: `holdPrevious`,
+     * `keepHold`, `trackEnd`, `trackTime`, `animationLast`, `mixAttachmentThreshold` and so on.
+     * It is set after the options above. Default: no field.
+     *
+     * A field the Spine version of the skeleton lacks throws a `MarrowError` that names the
+     * fields of that version. The animation plays then, without the fields of this option.
+     */
+    entry?: TrackFields;
 }
 
 /** Options for playing an animation after what a track holds. */
@@ -72,6 +117,23 @@ export interface StopOptions {
      * what the track did to it. Default 0.
      */
     mix?: number;
+}
+
+/**
+ * Takes the time each update of a display object spent. Set it as `updateProbe` of a
+ * `MarrowSpine`. `createProbe` of `pixi-marrow/perf` makes one that adds the times up.
+ */
+export interface UpdateProbe {
+    /**
+     * Called at the end of every update, with milliseconds of `performance.now()`. The pose
+     * engine runs animations, constraints and world transforms. The view writes vertices,
+     * colors, draw ranges and buffers.
+     *
+     * @param pose The time in the pose engine.
+     * @param geometry The time in the view.
+     * @param events The time for matching events to their tracks and emitting them to listeners.
+     */
+    record(pose: number, geometry: number, events: number): void;
 }
 
 /** An event key that an animation fired, as plain data. */

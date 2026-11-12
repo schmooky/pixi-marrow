@@ -24,7 +24,9 @@ const TOLERANCE = 0.1;
 
 /** name: [what the app imports, markers that must NOT end up in that bundle, subpath (default the root)] */
 const IMPORTS = {
-    everything: ['*', []],
+    // the root import does not carry the probes of pixi-marrow/perf, and the perf report loads on demand.
+    // The markers are a message of the probes and a reason of the report
+    everything: ['*', ['has a probe that measures its updates', 'a draw range samples up to 8']],
     // the headless core has no Pixi in it. pixi.js is external, so an import of it stays visible
     'core (everything)': ['*', ['pixi.js'], '/core'],
     'core (sniffSkeleton)': ['sniffSkeleton', ['pixi.js'], '/core'],
@@ -35,6 +37,8 @@ const IMPORTS = {
     // the pose engine of one Spine version loads on demand, like the readers
     'core (createPoseEngine)': ['createPoseEngine', ['pixi.js'], '/core'],
     'optimize (generateNames)': ['generateNames', ['pixi.js'], '/optimize'],
+    // a probe holds its display object by shape, so the entry needs no Pixi and no code of the root import
+    'perf (createProbe)': ['createProbe', ['pixi.js', 'marrow-skeleton'], '/perf'],
 };
 
 // a scratch project that depends on the built package, so resolution goes through its package.json

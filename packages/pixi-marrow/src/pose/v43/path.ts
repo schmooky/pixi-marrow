@@ -3,8 +3,8 @@ import { WORLD_STRIDE } from '../state';
 import { modifyWorld } from './bone-pose';
 import { DEG_RAD, EPSILON, PI, PI2 } from './math';
 import { computeWorldPositions } from './path-positions';
-import { constraintError } from './solver';
-import { CONSTRAINT_STRIDE, PATH_MIX, PATH_SPACING, type PathPlan, type SolveScratch43 } from './solver-types';
+import { constraintError } from './plan-checks';
+import { PATH_MIX, PATH_SPACING, type PathPlan, type SolveScratch43 } from './solver-types';
 import type { Pose43 } from './types';
 
 const SPACING_LENGTH = 0;
@@ -47,7 +47,7 @@ function percentSpaces(pose: Pose43, plan: PathPlan, spacesCount: number, scale:
     const { world } = pose.state;
     const { spaces, lengths } = pose.rig.solver.scratch;
     const setupLengths = pose.rig.model.bones.lengths;
-    const spacing = Number(pose.solve.values[plan.index * CONSTRAINT_STRIDE + PATH_SPACING]);
+    const spacing = Number(pose.solve.applied[plan.at + PATH_SPACING]);
 
     if (scale) {
         for (let i = 0, n = spacesCount - 1; i < n; i++) {
@@ -73,7 +73,7 @@ function boneSpaces(pose: Pose43, plan: PathPlan, spacesCount: number): void {
     const { world } = pose.state;
     const { spaces, lengths } = pose.rig.solver.scratch;
     const setupLengths = pose.rig.model.bones.lengths;
-    const spacing = Number(pose.solve.values[plan.index * CONSTRAINT_STRIDE + PATH_SPACING]);
+    const spacing = Number(pose.solve.applied[plan.at + PATH_SPACING]);
     const mode = plan.spacingMode;
     let sum = 0;
 
@@ -140,10 +140,10 @@ function placeBones(pose: Pose43, plan: PathPlan): void {
     const { positions, spaces, lengths } = pose.rig.solver.scratch;
     const setupLengths = pose.rig.model.bones.lengths;
     const { bones, rotateMode } = plan;
-    const v = plan.index * CONSTRAINT_STRIDE + PATH_MIX;
-    const mixRotate = Number(pose.solve.values[v]);
-    const mixX = Number(pose.solve.values[v + 1]);
-    const mixY = Number(pose.solve.values[v + 2]);
+    const v = plan.at + PATH_MIX;
+    const mixRotate = Number(pose.solve.applied[v]);
+    const mixX = Number(pose.solve.applied[v + 1]);
+    const mixY = Number(pose.solve.applied[v + 2]);
     const tip = plan.offsetRotation === 0 && rotateMode === ROTATE_CHAIN;
     let offsetRotation = plan.offsetRotation;
     let boneX = Number(positions[0]);
@@ -223,8 +223,8 @@ export function solvePath(pose: Pose43, plan: PathPlan): void {
     const attachment = pose.state.attachments[plan.slot];
 
     if (attachment == null || attachment.type !== 'path') return;
-    const { values } = pose.solve;
-    const v = plan.index * CONSTRAINT_STRIDE + PATH_MIX;
+    const values = pose.solve.applied;
+    const v = plan.at + PATH_MIX;
 
     if (values[v] === 0 && values[v + 1] === 0 && values[v + 2] === 0) return;
     const tangents = plan.rotateMode === ROTATE_TANGENT;

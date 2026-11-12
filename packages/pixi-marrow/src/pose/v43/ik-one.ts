@@ -8,8 +8,8 @@ import {
     ONLY_TRANSLATION,
     RAD_DEG,
 } from './math';
-import { constraintError } from './solver';
-import { CONSTRAINT_STRIDE, IK_MIX, type IkPlan } from './solver-types';
+import { constraintError } from './plan-checks';
+import { IK_MIX, type IkPlan } from './solver-types';
 import type { Pose43 } from './types';
 
 /*
@@ -76,8 +76,8 @@ export function solveOneBone(
     const { state } = pose;
     const { world } = state;
     const { local } = pose.solve;
-    const mix = Number(pose.solve.values[plan.index * CONSTRAINT_STRIDE + IK_MIX]);
-    const inherit = state.inherit[bone];
+    const mix = Number(pose.solve.applied[plan.at + IK_MIX]);
+    const inherit = pose.solve.inherit[bone];
     const l = bone * LOCAL_STRIDE;
     const o = bone * WORLD_STRIDE;
     const t = plan.target * WORLD_STRIDE;

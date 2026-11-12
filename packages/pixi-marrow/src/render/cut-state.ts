@@ -2,6 +2,7 @@ import type { TextureSource } from 'pixi.js';
 import type { AtlasModel } from '../model/atlas';
 import type { AtlasOutlines } from '../model/outlines';
 import { type Cuts, pageAllowsCuts } from './cuts';
+import type { EdgeBend } from './gate';
 
 /** Which cuts a view was asked for. */
 export interface CutChoice {
@@ -34,16 +35,20 @@ export class CutState {
      * that is drawn to two kinds of targets is not laid out again in every frame.
      */
     hostile = false;
-    private outlines: AtlasOutlines | undefined;
+    /** What the draw that set {@link hostile} did, when its caller said so. */
+    bend: EdgeBend | null = null;
     /** Polygons in place of quads. */
-    private readonly tight: boolean;
+    readonly tight: boolean;
     /** No vertex for a region without a visible pixel. */
-    private readonly hollow: boolean;
-    private readonly occlusion: boolean;
-    private readonly atlas: AtlasModel;
-    private readonly sources: readonly TextureSource[];
+    readonly hollow: boolean;
+    /** Whether covered slots are left out. */
+    readonly occlusion: boolean;
+    readonly atlas: AtlasModel;
+    /** The texture source of every atlas page, in page order. */
+    readonly sources: readonly TextureSource[];
     /** Per atlas page: 1 when the page allowed cuts at the last layout. */
-    private readonly allowed: Uint8Array;
+    readonly allowed: Uint8Array;
+    private outlines: AtlasOutlines | undefined;
     /** True when the outlines or the renderer changed since the last layout. */
     private stale = false;
 
@@ -63,6 +68,11 @@ export class CutState {
         return this.outlines !== undefined && !this.hostile && (this.hollow || this.occlusion);
     }
 
+    /** The outlines the view has at the moment, or undefined. Give it others with {@link setOutlines}. */
+    get held(): AtlasOutlines | undefined {
+        return this.outlines;
+    }
+
     /** Gives the view other outlines, or none. The next layout uses them. */
     setOutlines(outlines: AtlasOutlines | undefined): void {
         if (outlines === this.outlines) return;
@@ -71,11 +81,16 @@ export class CutState {
         this.outlines = outlines;
     }
 
-    /** Turns both cuts off for good, after a draw that moves edges inside a pixel. */
-    forbid(): void {
+    /**
+     * Turns both cuts off for good, after a draw that moves edges inside a pixel.
+     *
+     * @param bend What the draw did, for the perf report.
+     */
+    forbid(bend: EdgeBend | null = null): void {
         if (this.hostile) return;
         if (this.wanted) this.stale = true;
         this.hostile = true;
+        this.bend = bend;
     }
 
     /** True when the outlines changed or a draw forbade the cuts since the last layout. It must be made again. */

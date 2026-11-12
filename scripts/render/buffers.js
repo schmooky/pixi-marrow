@@ -66,7 +66,8 @@ export function drawCallCase(ctx) {
  * an animation plays, and it is 1 when no skin was set. And the index buffer is rewritten only when
  * the drawn slots change: `indexRebuilds` stays for an animation whose `info` features hold none of
  * `plan.rewriters`. With one of those keys a slot can appear, vanish or move, for example when its
- * alpha reaches 0, so there the count is information.
+ * alpha reaches 0, so there the count is information. A slider plays an animation of its own on
+ * top, so what that one keys counts as well.
  */
 async function play(ctx, { animation, dt, features }) {
     const { plan, studio } = ctx;
@@ -91,7 +92,8 @@ async function play(ctx, { animation, dt, features }) {
             return { ...where, reasons: [], skipped: 'the display object has no stats for it' };
         }
         const named = instance.info()?.animations.find((entry) => entry.name === animation);
-        const keys = (named?.features ?? features).filter((feature) => plan.rewriters.includes(feature));
+        const keyed = [...new Set([...(named?.features ?? features), ...plan.sliderFeatures])];
+        const keys = keyed.filter((feature) => plan.rewriters.includes(feature));
         // the frames after which the index buffer had been rewritten
         const at = [];
         let count = before.indexRebuilds;

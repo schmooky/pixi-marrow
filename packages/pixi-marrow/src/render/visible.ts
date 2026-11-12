@@ -55,6 +55,11 @@ export class VisibleList {
         this.endsFirst = model.version === '4.3';
     }
 
+    /** The bytes of the typed arrays of the list. */
+    get bytes(): number {
+        return this.list.byteLength + this.clips.byteLength + this.entries.byteLength;
+    }
+
     /** Forgets what the slots show, for a template that was built for another skin. */
     reset(): void {
         this.shown.fill(null);

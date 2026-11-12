@@ -222,7 +222,7 @@ describe.each(['4.1', '4.2'] as const)('what the legacy engine refuses in a %s s
         const official = data instanceof core41.SkeletonData ? new core41.Skeleton(data) : new core42.Skeleton(data);
 
         if (official instanceof core41.Skeleton) official.updateWorldTransform();
-        else official.updateWorldTransform(core42.Physics.none);
+        else official.updateWorldTransform(core42.Physics.update);
         engine.update(0);
         expect(world(engine)).toEqual(
             official.bones.flatMap((bone) => [bone.a, bone.b, bone.c, bone.d, bone.worldX, bone.worldY]),

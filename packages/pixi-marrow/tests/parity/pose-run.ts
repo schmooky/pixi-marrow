@@ -22,6 +22,10 @@ export interface Subject {
     driver: PoseDriver;
     /** Sets the position and the scale of the skeleton. */
     place(x: number, y: number, scaleX: number, scaleY: number): void;
+    /** Says whether the y axis of the world points down. The scale of the skeleton stays what `place` set. */
+    yDown(value: boolean): void;
+    /** Sets the directions of wind and gravity. */
+    forces(windX: number, windY: number, gravityX: number, gravityY: number): void;
     /** The pose, in the same shape on both sides. Attachments are names, so they compare by identity. */
     read(): Record<string, unknown>;
 }
@@ -33,6 +37,8 @@ export function officialSubject(driver: OfficialDriver, label: (ref: AttachmentR
     return {
         driver,
         place: (x, y, scaleX, scaleY) => driver.place(x, y, scaleX, scaleY),
+        yDown: (value) => driver.yDown(value),
+        forces: (windX, windY, gravityX, gravityY) => driver.forces(windX, windY, gravityX, gravityY),
         read() {
             const pose = driver.read();
 
@@ -57,6 +63,12 @@ export function engineSubject(engine: PoseEngine, label: (attachment: Attachment
         driver: engine,
         place(x, y, scaleX, scaleY) {
             Object.assign(state, { x, y, scaleX, scaleY });
+        },
+        yDown(value) {
+            state.yDown = value;
+        },
+        forces(windX, windY, gravityX, gravityY) {
+            Object.assign(state, { windX, windY, gravityX, gravityY });
         },
         read() {
             world.set(state.world);
@@ -189,6 +201,21 @@ function call(subject: Subject, op: ScriptOp, entries: TrackEntry[]): TrackEntry
             break;
         case 'place':
             subject.place(op.x, op.y, op.scaleX, op.scaleY);
+            break;
+        case 'yDown':
+            subject.yDown(op.value);
+            break;
+        case 'physics':
+            driver.physics = op.mode;
+            break;
+        case 'physicsTranslate':
+            driver.physicsTranslate(op.x, op.y);
+            break;
+        case 'physicsRotate':
+            driver.physicsRotate(op.x, op.y, op.degrees);
+            break;
+        case 'forces':
+            subject.forces(op.windX, op.windY, op.gravityX, op.gravityY);
             break;
         case 'update':
             driver.update(op.dt);

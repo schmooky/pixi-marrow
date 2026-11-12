@@ -2,6 +2,7 @@ import type { SpineVersion } from '../../src/core';
 import {
     type Constraint,
     constraintLists,
+    copy,
     ik,
     type Json,
     keys,
@@ -25,11 +26,11 @@ import {
  * In 4.1 and 4.2 the lists are written last constraint first: the order numbers decide.
  *
  * 4.2 and 4.3 add a physics constraint in the middle, on a bone above bones that world
- * constraints moved before, and 4.3 adds two sliders. A pose engine does not solve these yet, and
- * the reference has them switched off. They still take their place in the update order.
+ * constraints moved before, and 4.3 adds two sliders. The bones below the physics bone are posed
+ * again after it, and the sliders play an animation that keys the bones and the values of the
+ * constraints before them.
  */
 
-const SIX = ['rotate', 'x', 'y', 'scaleX', 'scaleY', 'shearY'];
 const MIXES = ['mixRotate', 'mixX', 'mixY', 'mixScaleX', 'mixScaleY', 'mixShearY'];
 
 function bones(): Json[] {
@@ -61,22 +62,6 @@ function bones(): Json[] {
     ];
 }
 
-/** A transform constraint from a source bone, world or local, in the words of the version. */
-function copy(
-    version: SpineVersion,
-    name: string,
-    more: Json & { bones: string[]; from: string; local?: boolean },
-): Constraint {
-    const { bones, from, local = false, ...rest } = more;
-
-    if (version !== '4.3')
-        return { type: 'transform', name, bones, target: from, ...(local ? { local } : {}), ...rest };
-    const properties = Object.fromEntries(SIX.map((property) => [property, { to: { [property]: { max: 100 } } }]));
-    const space = local ? { localSource: true, localTarget: true } : {};
-
-    return { type: 'transform', name, bones, source: from, ...space, properties, ...rest };
-}
-
 function constraints(version: SpineVersion): Constraint[] {
     const part = { mixRotate: 0.5, mixX: 0.6, mixY: 0.6, mixScaleX: 0, mixScaleY: 0, mixShearY: 0 };
     const sway: Constraint = {
@@ -106,7 +91,7 @@ function constraints(version: SpineVersion): Constraint[] {
         copy(version, 'armCopy', { bones: ['arm'], from: 'head', local: true, rotation: -90, mixX: 0, mixY: 0 }),
         ik(version, 'armIk', ['arm'], 'aim', { mix: 0.5 }),
         copy(version, 'flagCopy', { bones: ['flag', 'flag2'], from: 'aim', ...part, mixX: 0.3, mixY: 0.3 }),
-        // not solved yet. In 4.2 the bones below `hip` are still posed again after it.
+        // the bones below `hip` are posed again after it
         ...(version === '4.1' ? [] : [sway]),
         // the path hangs on `hip` and `flag`
         path(version, 'tail', ['t1', 't2', 't3'], 'line', hang),
@@ -146,8 +131,8 @@ function skins(all: Json[]): Json[] {
     ];
 }
 
-/** Keys for the constraints a pose engine does not solve yet: physics in 4.2 and 4.3, sliders in 4.3. */
-function ignored(version: SpineVersion, k: (values: number[]) => Json[]): Json {
+/** Keys for the constraints not every version has: physics in 4.2 and 4.3, sliders in 4.3. */
+function newerKeys(version: SpineVersion, k: (values: number[]) => Json[]): Json {
     const sway = {
         mix: k([1, 0.2, 0.8]),
         inertia: k([0.5, 0.9]),
@@ -196,7 +181,7 @@ function main(version: SpineVersion): Json {
         },
         path: { ride, tail: { position: k([0, 0.4]) } },
         attachments: { default: { rail: { rail: { deform: rail } } } },
-        ...ignored(version, k),
+        ...newerKeys(version, k),
     };
 }
 
@@ -234,7 +219,7 @@ function slide(): Json {
     };
 }
 
-/** One key at time 0: an animation without a length. It keys what `main` keys, also for the constraints that are not solved. */
+/** One key at time 0: an animation without a length. It keys what `main` keys, also for physics and a slider. */
 function still(version: SpineVersion): Json {
     return {
         bones: { aim: { translate: [{ x: -70, y: -90 }] } },

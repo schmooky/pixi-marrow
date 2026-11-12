@@ -67,7 +67,7 @@ function applySequenceToSlot(pose: Pose43, timeline: Timeline43, slot: number, m
             },
         );
     }
-    pose.state.sequenceIndices[slot] = mode === HOLD ? index : sequenceIndex(mode, index, info.sequenceCount);
+    pose.sequenceIndices[slot] = mode === HOLD ? index : sequenceIndex(mode, index, info.sequenceCount);
 }
 
 /** The official sequence timeline: the region of an attachment's sequence, in every slot that follows it. */
@@ -78,7 +78,7 @@ export function applySequence(pose: Pose43, timeline: Timeline43, from: number, 
     if (!timelineActive(pose, target, timeline, slots)) return;
     if (out || time < Number(frames[0])) {
         if (from === CURRENT) return;
-        const indices = pose.state.sequenceIndices;
+        const indices = pose.sequenceIndices;
 
         if (followerInfo(pose, target, timeline) !== null) indices[target] = -1;
         for (let i = 0; i < slots.length; i++) {
@@ -154,7 +154,7 @@ export function applyEvent(timeline: Timeline43, events: EventKey[] | null): voi
 
 /** The official draw order timeline: the order of every slot. A null key is the setup order. */
 export function applyDrawOrder(pose: Pose43, timeline: Timeline43, from: number, out: boolean): void {
-    const drawOrder = pose.state.drawOrder;
+    const drawOrder = pose.drawOrder;
     const frames = timeline.frames;
     let order: Int16Array | null = null;
 
@@ -176,7 +176,7 @@ export function applyDrawOrder(pose: Pose43, timeline: Timeline43, from: number,
  */
 export function applyDrawOrderFolder(pose: Pose43, timeline: Timeline43, from: number, out: boolean): void {
     const { slots, inFolder, frames } = timeline;
-    const drawOrder = pose.state.drawOrder;
+    const drawOrder = pose.drawOrder;
     let order: Int16Array | null = null;
 
     if (out || Number(SHARED[TIME]) < Number(frames[0])) {

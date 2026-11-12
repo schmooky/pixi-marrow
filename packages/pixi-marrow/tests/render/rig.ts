@@ -82,7 +82,7 @@ export async function createRig(
     const atlas = importAtlas(files.atlas);
 
     change?.(model, atlas);
-    const engine = await createPoseEngine(model, { constraints: 'ignore' });
+    const engine = await createPoseEngine(model);
     const textures = drawn.textures?.(atlas) ?? atlas.pages.map(() => Texture.WHITE);
     const view = new SkeletonView(model, atlas, textures, drawn.options?.(atlas));
 

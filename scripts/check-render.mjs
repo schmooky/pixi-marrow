@@ -9,11 +9,13 @@
  *                          [--out=.shots/render] [--size=512]
  *
  * The rigs are the entries of fixtures/manifest.json that have page images. For each one a few
- * animations play on both sides with the same time steps. Both sides solve IK, transform and path
- * constraints. Physics constraints and sliders are off on both. At four steps each
+ * animations play on both sides with the same time steps. Both sides run as they ship and solve
+ * every constraint: IK, transform, path, physics and sliders. Physics has state, so both sides
+ * get the same updates from the same start: scripts/render/sides.js says how. At four steps each
  * side is drawn alone into a render texture, once on a transparent and once on a solid background,
- * and the raw pixels are read back. Per frame the check reports the largest channel difference and
- * the share of the covered pixels that differ by more than 1 and by more than 8 (of 255).
+ * and the raw pixels are read back. A rig with physics is drawn at a fifth step, deep in its
+ * second loop. Per frame the check reports the largest channel difference and the share of the
+ * covered pixels that differ by more than 1 and by more than 8 (of 255).
  *
  * Ours is drawn with its defaults, after `asset.optimized` has resolved. The cuts of overdraw
  * that are on by default are therefore part of every comparison with the official runtime.
@@ -66,6 +68,10 @@
  * own. `--strict-clipping` does nothing: it was the switch that failed clipped frames while they
  * were a known gap, and it is still accepted so that older command lines keep working.
  *
+ * Physics and sliders: the summary counts the frames of ours against official once more for the
+ * rigs that have such constraints, in a line of their own. A solver that is wrong fails there and
+ * leaves the other rigs alone.
+ *
  * Images of failing cases (ours or first, official or second, and where they differ) and of one
  * passing frame per rig go to `.shots/render/<renderer>/`. `--shots` sets how many cases per rig
  * get images. `--self-test` runs the tooling proof alone and draws nothing of ours. A proof is a
@@ -78,14 +84,13 @@
  * Runs the installed Google Chrome. CHROME_PATH names another binary and CHROME_ARGS replaces the
  * launch flags. The package is built first when it has no build or the sources are newer.
  */
-import { execFileSync } from 'node:child_process';
-import { existsSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { chromium } from 'playwright-core';
 import { planRigs } from './render/plan.mjs';
 import { createReporter } from './render/report.mjs';
 import { bundlePage, serve } from './render/serve.mjs';
+import { ensureBuilt, launchChrome, parseArgs } from './render/setup.mjs';
 
 /**
  * The pass criteria, each as tight as the pictures of this repo support. The numbers they rest on
@@ -141,16 +146,9 @@ const TOLERANCE = {
 /** Failing cases per rig that get their images saved. */
 const SHOTS_PER_RIG = 4;
 const RIG_TIMEOUT = 180_000;
-const GPU_FLAGS = ['--enable-unsafe-webgpu', '--enable-gpu', '--ignore-gpu-blocklist'];
 
 const root = fileURLToPath(new URL('..', import.meta.url));
-const args = Object.fromEntries(
-    process.argv.slice(2).map((arg) => {
-        const [key, value = 'true'] = arg.replace(/^--/, '').split('=');
-
-        return [key, value];
-    }),
-);
+const args = parseArgs();
 const wanted = ['webgl', 'webgpu'].includes(args.renderer) ? [args.renderer] : ['webgl', 'webgpu'];
 const outDir = resolve(root, args.out ?? '.shots/render');
 const selfTest = args['self-test'] === 'true';
@@ -199,30 +197,8 @@ async function runRig(browser, origin, renderer, rig) {
     }
 }
 
-/** Why the package has to be built before the check, or an empty string. */
-function buildNeeded() {
-    const pkgDir = join(root, 'packages/pixi-marrow');
-    const built = join(pkgDir, 'dist/index.js');
-
-    if (!existsSync(built)) return 'no build found';
-    const sources = readdirSync(join(pkgDir, 'src'), { recursive: true }).map((file) => join(pkgDir, 'src', file));
-    const newest = Math.max(...sources.map((file) => statSync(file).mtimeMs));
-
-    return newest > statSync(built).mtimeMs ? 'the sources are newer than the build' : '';
-}
-
 async function main() {
-    const why = buildNeeded();
-
-    if (why) {
-        console.log(`check-render: ${why}, running pnpm build`);
-        // the file list of the build is of no use here. What goes wrong is on stderr
-        execFileSync('pnpm', ['build'], {
-            cwd: root,
-            stdio: ['ignore', 'ignore', 'inherit'],
-            shell: process.platform === 'win32',
-        });
-    }
+    ensureBuilt(root, 'check-render');
     const planned = await planRigs({
         root,
         size: Number(args.size ?? 512),
@@ -237,13 +213,7 @@ async function main() {
     rigs[0].extras = true;
     const bundle = await bundlePage(root);
     const server = await serve(root, bundle.dir);
-    const browser = await chromium.launch({
-        ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : { channel: 'chrome' }),
-        headless: true,
-        args: process.env.CHROME_ARGS
-            ? process.env.CHROME_ARGS.split(/\s+/).filter(Boolean)
-            : [...GPU_FLAGS, ...(process.platform === 'darwin' ? ['--use-angle=metal'] : [])],
-    });
+    const browser = await launchChrome();
     let failed = 0;
     let ran = 0;
     let missing = false;
@@ -270,7 +240,12 @@ async function main() {
                 announced = true;
                 const plays = rig.sequences.map((s) => `${s.animation}${s.skin ? ` (${s.skin})` : ''}`).join(', ');
 
-                console.log(`  ${rig.id}  ${rig.size} px, scale ${rig.placement.scale}, plays ${plays}`);
+                const solves = [rig.physics && 'physics', rig.slider && 'slider'].filter(Boolean).join(' and ');
+
+                console.log(
+                    `  ${rig.id}  ${rig.size} px, scale ${rig.placement.scale}, ` +
+                        `${solves ? `solves ${solves}, ` : ''}plays ${plays}`,
+                );
                 if (crash || state.error) {
                     console.log(`    FAIL the page failed: ${crash ?? state.error}`);
                     failed++;

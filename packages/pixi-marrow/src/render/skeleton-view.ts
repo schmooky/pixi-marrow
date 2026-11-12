@@ -13,7 +13,8 @@ import { ClipShape } from './clip-shape';
 import { CoverTest } from './cover';
 import { type CutChoice, CutState } from './cut-state';
 import { placeEntry, tintEntry } from './entry-pose';
-import { bendsEdges, drawsPlain } from './gate';
+import { bendsEdges, drawsPlain, type EdgeBend } from './gate';
+import type { ViewParts } from './inspect';
 import { pageSources, vertexBuffer } from './pages';
 import { DrawRanges } from './ranges';
 import { u8 } from './read';
@@ -191,19 +192,20 @@ export class SkeletonView {
      * renderer that moves edges inside a pixel turns both cuts off for good: the vertex ranges are
      * laid out again as quads, for the pose of the last update.
      *
-     * @param bends Whether the renderer rounds positions to pixels or draws to a multisampled target.
+     * @param bends What the renderer does that moves edges: it rounds positions to pixels or draws
+     * to a multisampled target. True when it does one of them, false when it does neither.
      *
      * @example
      * hero.alpha = 0.5;
      * view.beforeDraw(false);
      * console.log(view.stats.coveredSlots); // 0
      */
-    beforeDraw(bends: boolean): void {
+    beforeDraw(bends: EdgeBend | boolean): void {
         const state = this.last;
         const { cutState, cover } = this;
 
         if (this.destroyed) return;
-        if (bends) cutState.forbid();
+        if (bends !== false) cutState.forbid(bends === true ? null : bends);
         // nothing is drawn before the first update, which then lays the quads out
         if (state === undefined) return;
         // only a draw that skips a slot has to ask how Pixi blends it
@@ -214,6 +216,16 @@ export class SkeletonView {
 
         // a pose that moved on without an update keeps its buffers until that update
         if (outdated && this.seen.inStep(this.template, state)) this.redraw(state);
+    }
+
+    /**
+     * The state of the view as it is, for `inspectView`. That function turns it into plain data,
+     * and the perf report loads it on demand, so the view carries no describing code.
+     */
+    get parts(): ViewParts {
+        const { template, seen, cover, cutState, ranges } = this;
+
+        return { template, seen, cover, cutState, ranges };
     }
 
     /** Frees the buffers, the meshes and the shaders. The textures belong to the caller. */

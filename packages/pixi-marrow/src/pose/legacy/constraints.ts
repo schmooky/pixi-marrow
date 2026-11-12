@@ -1,5 +1,5 @@
 import { MarrowError } from '../../base/errors';
-import type { ConstraintData, PathConstraintData } from '../../model/constraints';
+import type { ConstraintData, PathConstraintData, PhysicsConstraintData } from '../../model/constraints';
 import type { SkeletonModel } from '../../model/model';
 
 /** Constraint kind code: an IK constraint. */
@@ -8,10 +8,13 @@ export const C_IK = 0;
 export const C_TRANSFORM = 1;
 /** Constraint kind code: a path constraint. */
 export const C_PATH = 2;
-/** Constraint kind code: a physics constraint. It keeps its place in the update order and is not solved. */
+/** Constraint kind code: a physics constraint. */
 export const C_PHYSICS = 3;
 
-/** Numbers per constraint in the animated values of an instance and in the setup values. */
+/**
+ * Numbers per IK, transform or path constraint in the animated values of an instance and in the
+ * setup values. A physics constraint keeps its values with its simulation state.
+ */
 export const CONSTRAINT_STRIDE = 6;
 
 /** IK value offset: mix. Softness follows it. */
@@ -34,6 +37,29 @@ export const PATH_MIX = 0;
 export const PATH_POSITION = 3;
 /** Path value offset: spacing. */
 export const PATH_SPACING = 4;
+
+/** Numbers per physics constraint in {@link ConstraintPlan.physicsData}. */
+export const PHYSICS_DATA_STRIDE = 15;
+/** Physics data offset: the official `x`, how far the bone follows the simulation along x. */
+export const PHYSICS_X = 0;
+/** Physics data offset: the official `y`. */
+export const PHYSICS_Y = 1;
+/** Physics data offset: the official `rotate`. */
+export const PHYSICS_ROTATE = 2;
+/** Physics data offset: the official `scaleX`. */
+export const PHYSICS_SCALE_X = 3;
+/** Physics data offset: the official `shearX`. */
+export const PHYSICS_SHEAR_X = 4;
+/** Physics data offset: the official `limit`, the most a bone movement counts for in a second. */
+export const PHYSICS_LIMIT = 5;
+/** Physics data offset: the official `step`, the seconds of one simulation step. */
+export const PHYSICS_STEP = 6;
+/** Physics data offset: the setup length of the bone. */
+export const PHYSICS_LENGTH = 7;
+/** Physics data offset: the setup values, `PHYSICS_VALUES` numbers in the order of the animated values. */
+export const PHYSICS_SETUP = 8;
+/** The animated values of a physics constraint: inertia, strength, damping, the inverse of the mass, wind, gravity and mix. */
+export const PHYSICS_VALUES = 7;
 
 /** The official `PositionMode.Percent`. */
 export const POSITION_PERCENT = 1;
@@ -72,8 +98,17 @@ export interface LegacyConstraint {
     readonly bones: Int16Array;
     /** The target bone of an IK or transform constraint, or the slot of a path constraint. -1 for physics. */
     readonly target: number;
-    /** The bone that must be active for the constraint to be: the target bone, or the bone of the path slot. */
+    /**
+     * The bone that must be active for the constraint to be: the target bone, the bone of the path
+     * slot, or the bone a physics constraint moves.
+     */
     readonly targetBone: number;
+    /**
+     * Physics: the place of the constraint among the physics constraints of the model, as in the
+     * official `skeleton.physicsConstraints`. Its data and its state start at this place times
+     * their stride. -1 for the other kinds.
+     */
+    readonly physics: number;
     /** IK: the official `uniform`. */
     readonly uniform: boolean;
     /** Transform: the official `local`. */
@@ -100,8 +135,23 @@ export interface LegacyConstraint {
 /** What every instance of a model shares about its constraints. */
 export interface ConstraintPlan {
     readonly constraints: readonly LegacyConstraint[];
-    /** The setup values of every constraint, in the layout of the animated values. */
+    /**
+     * The setup values of the IK, transform and path constraints, in the layout of the animated
+     * values. It ends after the last of them: the model lists physics constraints last.
+     */
     readonly setup: Float64Array;
+    /** The index of every physics constraint in `constraints`, in list order. */
+    readonly physics: Int32Array;
+    /**
+     * What the physics constraints of every instance share, `PHYSICS_DATA_STRIDE` numbers each: the
+     * numbers of the official `PhysicsConstraintData`, the length of the bone and the setup values.
+     */
+    readonly physicsData: Float64Array;
+    /**
+     * Per physics constraint, the animated values a timeline for all constraints changes. Bit `i`
+     * stands for value `i`: the official `inertiaGlobal` is bit 0 and `mixGlobal` is bit 6.
+     */
+    readonly physicsGlobal: Uint8Array;
     /** Constraint indices in the order the official `updateCache` sorts them. */
     readonly order: Int32Array;
     /** Per bone, where its children start in `childList`. One more entry than bones. */
@@ -218,11 +268,13 @@ function partsOf(model: SkeletonModel, data: ConstraintData, firstBone: Int32Arr
         return { bones: boneList(data, data.bones, firstBone), target, targetBone: target };
     }
     if (data.type === 'path') return pathParts(model, data, firstBone);
-    if (data.type === 'physics') {
+    if (data.type === 'physics' && model.version !== '4.1') {
         // the official physics constraint takes its bone by index, not by name
         if (!inRange(data.bone, model.bones.count)) {
             throw nowhere(data, `has the constrained bone ${data.bone}, which does not exist`);
         }
+        // the official update subtracts the step from the time that passed until less than a step is left
+        if (data.step <= 0) throw nowhere(data, `has the step ${data.step}, with which an update never ends`);
 
         return { bones: Int16Array.of(data.bone), target: -1, targetBone: data.bone };
     }
@@ -238,7 +290,13 @@ function kindOf(data: ConstraintData): number {
     return data.type === 'path' ? C_PATH : C_PHYSICS;
 }
 
-function compile(model: SkeletonModel, data: ConstraintData, index: number, firstBone: Int32Array): LegacyConstraint {
+function compile(
+    model: SkeletonModel,
+    data: ConstraintData,
+    index: number,
+    firstBone: Int32Array,
+    physics: number,
+): LegacyConstraint {
     const parts = partsOf(model, data, firstBone);
     const path = data.type === 'path' ? data : null;
     const transform = data.type === 'transform' ? data : null;
@@ -251,6 +309,7 @@ function compile(model: SkeletonModel, data: ConstraintData, index: number, firs
         bones: parts.bones,
         target: parts.target,
         targetBone: parts.targetBone,
+        physics,
         uniform: data.type === 'ik' && data.uniform === true,
         local: transform?.local === true,
         relative: transform?.relative === true,
@@ -263,7 +322,10 @@ function compile(model: SkeletonModel, data: ConstraintData, index: number, firs
     };
 }
 
-/** Writes the setup values of a constraint: what the official `setToSetupPose` of its kind sets. */
+/**
+ * Writes the setup values of an IK, transform or path constraint: what the official
+ * `setToSetupPose` of its kind sets.
+ */
 function writeSetup(data: ConstraintData, out: Float64Array, at: number): void {
     if (data.type === 'ik') {
         out.set([data.mix, data.softness, data.bendDirection, data.compress ? 1 : 0, data.stretch ? 1 : 0], at);
@@ -272,6 +334,50 @@ function writeSetup(data: ConstraintData, out: Float64Array, at: number): void {
     } else if (data.type === 'path') {
         out.set([data.mixRotate, data.mixX, data.mixY, data.position, data.spacing], at);
     }
+}
+
+/** The numbers of a physics constraint in the layout of {@link ConstraintPlan.physicsData}. */
+function physicsNumbers(data: PhysicsConstraintData, length: number): number[] {
+    return [
+        ...[data.x, data.y, data.rotate, data.scaleX, data.shearX, data.limit, data.step, length],
+        // the setup values, from `PHYSICS_SETUP` on
+        ...[data.inertia, data.strength, data.damping, data.massInverse, data.wind, data.gravity, data.mix],
+    ];
+}
+
+/** The bits of {@link ConstraintPlan.physicsGlobal} for a physics constraint. */
+function physicsGlobalBits(data: PhysicsConstraintData): number {
+    const flags = [
+        data.inertiaGlobal,
+        data.strengthGlobal,
+        data.dampingGlobal,
+        data.massGlobal,
+        data.windGlobal,
+        data.gravityGlobal,
+        data.mixGlobal,
+    ];
+
+    return flags.reduce((bits, flag, i) => (flag ? bits | (1 << i) : bits), 0);
+}
+
+/** What every instance shares about the physics constraints of a model. */
+function physicsTables(model: SkeletonModel): Pick<ConstraintPlan, 'physics' | 'physicsData' | 'physicsGlobal'> {
+    const physics: number[] = [];
+    const numbers: number[] = [];
+    const global: number[] = [];
+
+    model.constraints.forEach((data, i) => {
+        if (data.type !== 'physics') return;
+        physics.push(i);
+        numbers.push(...physicsNumbers(data, Number(model.bones.lengths[data.bone])));
+        global.push(physicsGlobalBits(data));
+    });
+
+    return {
+        physics: Int32Array.from(physics),
+        physicsData: Float64Array.from(numbers),
+        physicsGlobal: Uint8Array.from(global),
+    };
 }
 
 /**
@@ -325,10 +431,14 @@ function childTable(parents: Int16Array, count: number): { childStart: Int32Arra
  */
 export function createConstraintPlan(model: SkeletonModel): ConstraintPlan {
     const firstBone = firstByName(model.bones.names);
-    const constraints = model.constraints.map((data, i) => compile(model, data, i, firstBone));
-    const setup = new Float64Array(constraints.length * CONSTRAINT_STRIDE);
+    let places = 0;
+    const constraints = model.constraints.map((data, i) =>
+        compile(model, data, i, firstBone, data.type === 'physics' ? places++ : -1),
+    );
+    const valued = constraints.findLastIndex((constraint) => constraint.kind !== C_PHYSICS) + 1;
+    const setup = new Float64Array(valued * CONSTRAINT_STRIDE);
 
-    model.constraints.forEach((data, i) => {
+    model.constraints.slice(0, valued).forEach((data, i) => {
         writeSetup(data, setup, i * CONSTRAINT_STRIDE);
     });
 
@@ -336,6 +446,7 @@ export function createConstraintPlan(model: SkeletonModel): ConstraintPlan {
         constraints,
         setup,
         order: sortOrder(model.constraints),
+        ...physicsTables(model),
         ...childTable(model.bones.parents, model.bones.count),
     };
 }

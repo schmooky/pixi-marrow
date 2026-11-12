@@ -12,8 +12,17 @@ export type Json = Record<string, unknown>;
 const VERSIONS: readonly SpineVersion[] = ['4.1', '4.2', '4.3'];
 const EDITOR_VERSIONS: Record<SpineVersion, string> = { '4.1': '4.1.24', '4.2': '4.2.43', '4.3': '4.3.39' };
 
-/** One page without regions. The rigs made for constraints show paths only. */
+/** One page without regions, for a rig that shows paths only. */
 const ATLAS = ['page.png', 'size: 4, 4', 'filter: Linear, Linear', ''].join('\n');
+
+/** One page with the regions `img01` to `img05`, each 2 by 2 pixels: the frames of a sequence named `img`. */
+export const SEQUENCE_ATLAS: string = [
+    'page.png',
+    'size: 16, 4',
+    'filter: Linear, Linear',
+    ...[1, 2, 3, 4, 5].flatMap((n) => [`img0${n}`, `bounds: ${(n - 1) * 2}, 0, 2, 2`]),
+    '',
+].join('\n');
 
 /** The inherit mode of a bone. 4.1 calls it the transform mode. */
 export const inherit = (version: SpineVersion, mode: string): Json =>
@@ -40,6 +49,36 @@ export function ik(version: SpineVersion, name: string, bones: string[], target:
 /** A path constraint. 4.3 names the slot `slot`, the others `target`. */
 export function path(version: SpineVersion, name: string, bones: string[], slot: string, more: Json = {}): Constraint {
     return { type: 'path', name, bones, ...(version === '4.3' ? { slot } : { target: slot }), ...more };
+}
+
+const SIX = ['rotate', 'x', 'y', 'scaleX', 'scaleY', 'shearY'];
+
+/** A transform constraint that copies a source bone, world or local, in the words of the version. */
+export function copy(
+    version: SpineVersion,
+    name: string,
+    more: Json & { bones: string[]; from: string; local?: boolean },
+): Constraint {
+    const { bones, from, local = false, ...rest } = more;
+
+    if (version !== '4.3')
+        return { type: 'transform', name, bones, target: from, ...(local ? { local } : {}), ...rest };
+    const properties = Object.fromEntries(SIX.map((property) => [property, { to: { [property]: { max: 100 } } }]));
+    const space = local ? { localSource: true, localTarget: true } : {};
+
+    return { type: 'transform', name, bones, source: from, ...space, properties, ...rest };
+}
+
+/** A physics constraint on one bone. 4.2 and 4.3 have the same words for it, apart from `scaleY`, which only 4.3 has. */
+export function physics(version: SpineVersion, name: string, bone: string, more: Json = {}): Constraint {
+    const { scaleY, ...rest } = more;
+
+    return { type: 'physics', name, bone, ...rest, ...(version === '4.3' && scaleY !== undefined ? { scaleY } : {}) };
+}
+
+/** A 4.3 slider that plays an animation by its own time, or by a property of a bone when `more` names one. */
+export function slider(name: string, animation: string, more: Json = {}): Constraint {
+    return { type: 'slider', name, animation, ...more };
 }
 
 /**
@@ -180,22 +219,38 @@ export interface RigParts {
     constraints: Json;
     skins: Json[];
     animations: Record<string, Json>;
+    /** The events of the file, by name. */
+    events?: Json;
+    /** More values for the header of the file, such as `referenceScale`. */
+    header?: Json;
+    /** The atlas, for a rig that shows regions. Without it the atlas has no regions. */
+    atlas?: string;
 }
 
-/** A rig made here, once for each version. */
-export function madeRig(name: string, parts: (version: SpineVersion) => RigParts): PoseRigSource[] {
-    return VERSIONS.map((version) => ({
+/** A rig made here, once for each version, or for the versions given. */
+export function madeRig(
+    name: string,
+    parts: (version: SpineVersion) => RigParts,
+    versions: readonly SpineVersion[] = VERSIONS,
+): PoseRigSource[] {
+    return versions.map((version) => ({
         id: `${version}/${name}.json`,
         rig: name,
         version,
         read() {
-            const { bones, slots, constraints, skins, animations } = parts(version);
-            const skeleton = { hash: name, spine: EDITOR_VERSIONS[version], x: -200, y: -200, width: 400, height: 400 };
-
-            return {
-                skeleton: JSON.stringify({ skeleton, bones, slots, ...constraints, skins, animations }),
-                atlas: ATLAS,
+            const { bones, slots, constraints, skins, animations, events, header, atlas = ATLAS } = parts(version);
+            const skeleton = {
+                hash: name,
+                spine: EDITOR_VERSIONS[version],
+                x: -200,
+                y: -200,
+                width: 400,
+                height: 400,
+                ...header,
             };
+            const file = { skeleton, bones, slots, ...constraints, skins, ...(events ? { events } : {}), animations };
+
+            return { skeleton: JSON.stringify(file), atlas };
         },
     }));
 }

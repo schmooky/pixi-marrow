@@ -299,7 +299,7 @@ describe.each(['4.1', '4.2'] as const)('the legacy engine on a hand-written %s s
     const create = async (): Promise<{ model: SkeletonModel; engine: PoseEngine }> => {
         const model = await importSkeleton(files.skeleton);
 
-        return { model, engine: await createPoseEngine(model, { constraints: 'ignore' }) };
+        return { model, engine: await createPoseEngine(model) };
     };
 
     it.each(scripts(official.info))('poses like the official core: $name', async (each) => {
@@ -342,7 +342,7 @@ describe.each(['4.1', '4.2'] as const)('the legacy engine on a hand-written %s s
         expect(Array.from(engine.state.world)).toEqual(officialWorld(version, files.skeleton, placing));
     });
 
-    it('counts the skeleton time from 4.2 on and hands each event out once, with the entry it is about', async () => {
+    it('counts the skeleton time and hands each event out once, with the entry it is about', async () => {
         const { engine } = await create();
 
         engine.defaultMix = 0.3;
@@ -357,7 +357,7 @@ describe.each(['4.1', '4.2'] as const)('the legacy engine on a hand-written %s s
         const empty = engine.setEmptyAnimation(0, 0);
 
         for (let i = 0; i < 3; i++) engine.update(0.25);
-        expect(engine.state.time).toBe(version === '4.1' ? 0 : 1.125);
+        expect(engine.state.time).toBe(1.125);
         const made: TrackEntry[] = [first, second, empty];
         const name = (entry: TrackEntry): string => ['first', 'second', 'empty'][made.indexOf(entry)] ?? 'unknown';
         const events = engine.takeEvents();

@@ -1,79 +1,51 @@
-import { MarrowError } from '../../base/errors';
 import type {
     ConstraintData,
     IkConstraintData,
     PathConstraintData,
-    SliderConstraintData,
+    PhysicsConstraintData,
     TransformConstraintData,
-    TransformProperty,
 } from '../../model/constraints';
 import type { SkeletonModel } from '../../model/model';
-import { LOCAL_STRIDE, WORLD_STRIDE } from '../state';
+import type { AttachmentLookup } from '../shared/lookup';
+import { checkIndices, constraintError, PROPERTY_KINDS } from './plan-checks';
+import { planSlider, planSliders } from './slider-plan';
 import {
-    CONSTRAINT_STRIDE,
     IK_BEND_DIRECTION,
     IK_COMPRESS,
     IK_MIX,
+    IK_SIZE,
     IK_SOFTNESS,
     IK_STRETCH,
     type IkPlan,
     PATH_MIX,
     PATH_POSITION,
+    PATH_SIZE,
     PATH_SPACING,
     type PathPlan,
+    PHYSICS_SIZE,
+    PHYSICS_STATE,
+    type PhysicsPlan,
     type Plan43,
-    type SliderPlan,
-    type Solve43,
+    SLIDER_MIX,
+    SLIDER_SIZE,
+    SLIDER_TIME,
     type Solver43,
     type SolveScratch43,
+    TRANSFORM_SIZE,
     type TransformPlan,
 } from './solver-types';
-import type { Rig43 } from './types';
 
-/** The official `TransformConstraintData` property numbers, which are also the positions of the six mixes. */
-const PROPERTY_KINDS: Record<TransformProperty, number> = { rotate: 0, x: 1, y: 2, scaleX: 3, scaleY: 4, shearY: 5 };
 const SCALE_Y_MODES: readonly string[] = ['none', 'uniform', 'volume'];
+/** How many numbers the pose of a constraint takes, by the type of the constraint. */
+const SIZES: Record<ConstraintData['type'], number> = {
+    ik: IK_SIZE,
+    transform: TRANSFORM_SIZE,
+    path: PATH_SIZE,
+    physics: PHYSICS_SIZE,
+    slider: SLIDER_SIZE,
+};
 const SPACING_MODES: readonly string[] = ['length', 'fixed', 'percent', 'proportional'];
 const ROTATE_MODES: readonly string[] = ['tangent', 'chain', 'chainScale'];
-const LABELS: Record<ConstraintData['type'], string> = {
-    ik: 'IK',
-    transform: 'transform',
-    path: 'path',
-    physics: 'physics',
-    slider: 'slider',
-};
-
-/**
- * The error for constraint data the official runtime fails on. The message starts with the kind
- * and the name of the constraint.
- */
-export function constraintError(type: ConstraintData['type'], name: string, problem: string): MarrowError {
-    return new MarrowError('invalid-data', `The ${LABELS[type]} constraint "${name}" ${problem}`, {
-        fix: 'Export the skeleton again from Spine.',
-    });
-}
-
-/**
- * Throws unless every index is one of `count` bones or slots. `what` is "bone" or "slot" and
- * `role` says what the constraint uses it for, for example "target bone".
- */
-function checkIndices(
-    data: ConstraintData,
-    indices: Iterable<number>,
-    count: number,
-    what: string,
-    role: string = what,
-): void {
-    for (const index of indices) {
-        if (Number.isInteger(index) && index >= 0 && index < count) continue;
-        throw constraintError(
-            data.type,
-            data.name,
-            `points at ${role} ${index}, but the skeleton has ${count} ${count === 1 ? what : `${what}s`}.`,
-        );
-    }
-}
-
 /** The position of a name in a list of official enum names. Throws for a name the list does not have. */
 function modeOf(data: ConstraintData, modes: readonly string[], mode: string | undefined, fallback: string): number {
     const index = modes.indexOf(mode ?? fallback);
@@ -83,7 +55,7 @@ function modeOf(data: ConstraintData, modes: readonly string[], mode: string | u
     return index;
 }
 
-function planIk(model: SkeletonModel, data: IkConstraintData, index: number): IkPlan {
+function planIk(model: SkeletonModel, data: IkConstraintData, index: number, at: number): IkPlan {
     const { count } = model.bones;
 
     checkIndices(data, data.bones, count, 'bone');
@@ -94,13 +66,14 @@ function planIk(model: SkeletonModel, data: IkConstraintData, index: number): Ik
         index,
         name: data.name,
         skinRequired: data.skinRequired,
+        at,
         bones: data.bones,
         target: data.target,
         scaleYMode: modeOf(data, SCALE_Y_MODES, data.scaleYMode, 'none'),
     };
 }
 
-function planTransform(model: SkeletonModel, data: TransformConstraintData, index: number): TransformPlan {
+function planTransform(model: SkeletonModel, data: TransformConstraintData, index: number, at: number): TransformPlan {
     const { count } = model.bones;
     const froms = data.properties ?? [];
     const tos = froms.flatMap((from) => from.to);
@@ -117,6 +90,7 @@ function planTransform(model: SkeletonModel, data: TransformConstraintData, inde
         index,
         name: data.name,
         skinRequired: data.skinRequired,
+        at,
         bones: data.bones,
         source: data.source,
         localSource: data.localSource ?? false,
@@ -134,7 +108,7 @@ function planTransform(model: SkeletonModel, data: TransformConstraintData, inde
     };
 }
 
-function planPath(model: SkeletonModel, data: PathConstraintData, index: number): PathPlan {
+function planPath(model: SkeletonModel, data: PathConstraintData, index: number, at: number): PathPlan {
     checkIndices(data, data.bones, model.bones.count, 'bone');
     checkIndices(data, [data.slot], model.slots.count, 'slot');
     const slotBone = model.slots.bones[data.slot] ?? -1;
@@ -146,6 +120,7 @@ function planPath(model: SkeletonModel, data: PathConstraintData, index: number)
         index,
         name: data.name,
         skinRequired: data.skinRequired,
+        at,
         bones: data.bones,
         slot: data.slot,
         slotBone,
@@ -156,86 +131,107 @@ function planPath(model: SkeletonModel, data: PathConstraintData, index: number)
     };
 }
 
-const BONE_TIMELINES: readonly string[] = [
-    'rotate',
-    'translate',
-    'translateX',
-    'translateY',
-    'scale',
-    'scaleX',
-    'scaleY',
-    'shear',
-    'shearX',
-    'shearY',
-    'inherit',
-];
-
-/** The official `Animation.bones`: the bones the timelines of an animation animate, each once, in timeline order. */
-function animatedBones(model: SkeletonModel, data: SliderConstraintData): Int32Array {
-    const animation = model.animations[data.animation];
-
-    if (animation === undefined) {
-        throw constraintError(
-            'slider',
-            data.name,
-            `plays animation ${data.animation}, which the skeleton does not have.`,
-        );
-    }
-    const bones = new Set<number>();
-
-    for (const timeline of animation.timelines) if (BONE_TIMELINES.includes(timeline.kind)) bones.add(timeline.target);
-    checkIndices(data, bones, model.bones.count, 'bone', 'an animation for bone');
-
-    return Int32Array.from(bones);
-}
-
-function planSlider(model: SkeletonModel, data: SliderConstraintData, index: number): SliderPlan {
-    if (data.bone !== -1) checkIndices(data, [data.bone], model.bones.count, 'bone');
+/**
+ * The official `PhysicsConstraint` of the model. `ordinal` counts the physics constraints of the
+ * model before it.
+ */
+function planPhysics(
+    model: SkeletonModel,
+    data: PhysicsConstraintData,
+    index: number,
+    at: number,
+    ordinal: number,
+): PhysicsPlan {
+    checkIndices(data, [data.bone], model.bones.count, 'bone');
+    const globals = [
+        data.inertiaGlobal,
+        data.strengthGlobal,
+        data.dampingGlobal,
+        data.massGlobal,
+        data.windGlobal,
+        data.gravityGlobal,
+        data.mixGlobal,
+    ];
 
     return {
-        type: 'slider',
+        type: 'physics',
         index,
         name: data.name,
         skinRequired: data.skinRequired,
+        at,
         bone: data.bone,
-        local: data.local,
-        bones: animatedBones(model, data),
+        state: ordinal * PHYSICS_STATE,
+        x: data.x,
+        y: data.y,
+        rotate: data.rotate,
+        scaleX: data.scaleX,
+        shearX: data.shearX,
+        limit: data.limit,
+        step: data.step,
+        scaleYMode: modeOf(data, SCALE_Y_MODES, data.scaleYMode, 'none'),
+        globals: Uint8Array.from(globals, (flag) => (flag ? 1 : 0)),
     };
 }
 
-function plan(model: SkeletonModel, data: ConstraintData, index: number): Plan43 {
-    switch (data.type) {
-        case 'ik':
-            return planIk(model, data, index);
-        case 'transform':
-            return planTransform(model, data, index);
-        case 'path':
-            return planPath(model, data, index);
-        case 'physics':
-            checkIndices(data, [data.bone], model.bones.count, 'bone');
+/** The plan of every constraint of a model. The pose of each starts where that of the one before ends. */
+function planAll(model: SkeletonModel): Plan43[] {
+    const plans: Plan43[] = [];
+    let at = 0;
+    let physics = 0;
 
-            return { type: 'physics', index, name: data.name, skinRequired: data.skinRequired, bone: data.bone };
-        case 'slider':
-            return planSlider(model, data, index);
-    }
+    model.constraints.forEach((data, index) => {
+        switch (data.type) {
+            case 'ik':
+                plans.push(planIk(model, data, index, at));
+                break;
+            case 'transform':
+                plans.push(planTransform(model, data, index, at));
+                break;
+            case 'path':
+                plans.push(planPath(model, data, index, at));
+                break;
+            case 'physics':
+                plans.push(planPhysics(model, data, index, at, physics++));
+                break;
+            case 'slider':
+                plans.push(planSlider(model, data, index, at));
+                break;
+        }
+        at += SIZES[data.type];
+    });
+
+    return plans;
 }
 
-/** Writes the setup pose of one constraint: the official `data.setupPose`. */
-function writeSetup(setup: Float64Array, data: ConstraintData, index: number): void {
-    const i = index * CONSTRAINT_STRIDE;
-
-    if (data.type === 'ik') {
-        setup[i + IK_MIX] = data.mix;
-        setup[i + IK_SOFTNESS] = data.softness;
-        setup[i + IK_BEND_DIRECTION] = data.bendDirection;
-        setup[i + IK_COMPRESS] = data.compress ? 1 : 0;
-        setup[i + IK_STRETCH] = data.stretch ? 1 : 0;
-    } else if (data.type === 'transform') {
-        setup.set([data.mixRotate, data.mixX, data.mixY, data.mixScaleX, data.mixScaleY, data.mixShearY], i);
-    } else if (data.type === 'path') {
-        setup[i + PATH_POSITION] = data.position;
-        setup[i + PATH_SPACING] = data.spacing;
-        setup.set([data.mixRotate, data.mixX, data.mixY], i + PATH_MIX);
+/** Writes the setup pose of one constraint from `i` on: the official `data.setupPose`. */
+function writeSetup(setup: Float64Array, data: ConstraintData, i: number): void {
+    switch (data.type) {
+        case 'ik':
+            setup[i + IK_MIX] = data.mix;
+            setup[i + IK_SOFTNESS] = data.softness;
+            setup[i + IK_BEND_DIRECTION] = data.bendDirection;
+            setup[i + IK_COMPRESS] = data.compress ? 1 : 0;
+            setup[i + IK_STRETCH] = data.stretch ? 1 : 0;
+            break;
+        case 'transform':
+            setup.set([data.mixRotate, data.mixX, data.mixY, data.mixScaleX, data.mixScaleY, data.mixShearY], i);
+            break;
+        case 'path':
+            setup[i + PATH_POSITION] = data.position;
+            setup[i + PATH_SPACING] = data.spacing;
+            setup.set([data.mixRotate, data.mixX, data.mixY], i + PATH_MIX);
+            break;
+        case 'physics':
+            // in the order of the pose: see the `PHYSICS_` positions
+            setup.set(
+                [data.inertia, data.strength, data.damping, data.massInverse, data.wind, data.gravity, data.mix],
+                i,
+            );
+            break;
+        case 'slider':
+            setup[i + SLIDER_TIME] = data.time;
+            setup[i + SLIDER_MIX] = data.mix;
+            break;
     }
 }
 
@@ -295,43 +291,26 @@ function createScratch(model: SkeletonModel, plans: readonly Plan43[]): SolveScr
 }
 
 /**
- * Prepares the constraints of a model for the 4.3 pose engine. Throws a {@link MarrowError} that
- * names the constraint when one points at a bone, a slot or an animation the skeleton does not have.
+ * Prepares the constraints of a model for the 4.3 pose engine. Throws a `MarrowError` that names
+ * the constraint when one points at a bone, a slot or an animation the skeleton does not have.
  */
-export function prepareSolver(model: SkeletonModel): Solver43 {
-    const plans = model.constraints.map((data, index) => plan(model, data, index));
-    const setup = new Float64Array(plans.length * CONSTRAINT_STRIDE);
+export function prepareSolver(model: SkeletonModel, lookup: AttachmentLookup): Solver43 {
+    const plans = planAll(model);
+    const size = plans.reduce((sum, item) => sum + SIZES[item.type], 0);
+    const setup = new Float64Array(size);
 
-    model.constraints.forEach((data, index) => {
-        writeSetup(setup, data, index);
+    plans.forEach((item, index) => {
+        const data = model.constraints[index];
+
+        if (data !== undefined) writeSetup(setup, data, item.at);
     });
 
     return {
         plans,
+        physics: plans.filter((item) => item.type === 'physics'),
         setup,
-        solvable: plans.some((item) => item.type === 'ik' || item.type === 'transform' || item.type === 'path'),
         ...listChildren(model),
+        sliders: planSliders(model, lookup, plans),
         scratch: createScratch(model, plans),
-    };
-}
-
-/** Creates the constraint state of one engine: every constraint in its setup pose, and no update order yet. */
-export function createSolve(rig: Rig43): Solve43 {
-    const { solver } = rig;
-    const constrained = solver.plans.length > 0 ? rig.model.bones.count : 0;
-    const solved = solver.solvable ? rig.model.bones.count : 0;
-
-    return {
-        values: Float64Array.from(solver.setup),
-        active: new Uint8Array(solver.plans.length),
-        local: new Float64Array(solved * LOCAL_STRIDE),
-        constrained: new Uint8Array(constrained),
-        spare: new Float64Array(constrained * WORLD_STRIDE),
-        stamp: 0,
-        worldStamps: new Uint8Array(solved),
-        localStamps: new Uint8Array(solved),
-        cache: new Int32Array(0),
-        cacheLength: 0,
-        solved: 0,
     };
 }

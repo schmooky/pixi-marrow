@@ -29,6 +29,7 @@ export declare class MarrowAsset {
   get info(): SkeletonInfo;
   get destroyed(): boolean;
   get outlines(): AtlasOutlines | undefined;
+  get outlinesState(): OutlinesState;
   get optimized(): Promise<void>;
   static load(options: MarrowLoadOptions): Promise<MarrowAsset>;
   static from(data: MarrowAssetData): Promise<MarrowAsset>;
@@ -41,7 +42,6 @@ export interface MarrowAssetData {
   model: SkeletonModel;
   atlas: AtlasModel;
   textures: readonly Texture[];
-  constraints?: "error" | "ignore";
   outlines?: "auto" | "off" | AtlasOutlines;
 }
 export declare class MarrowError extends Error {
@@ -71,7 +71,6 @@ export interface MarrowLoadOptions {
   skeleton: string | Uint8Array | ArrayBuffer | object;
   atlas: string;
   textures?: Readonly<Record<string, Texture | string>>;
-  constraints?: "error" | "ignore";
   outlines?: "auto" | "off" | string | AtlasOutlines;
 }
 export interface MarrowNames {
@@ -81,26 +80,39 @@ export interface MarrowNames {
   slots: string;
   events: string;
 }
+export declare class MarrowPerf {
+  private readonly owner;
+  private readonly view;
+  constructor(owner: PerfOwner, view: SkeletonView);
+  report(): Promise<PerfEntry[]>;
+  memory(): Promise<PerfMemory>;
+}
 export declare class MarrowSpine<N extends MarrowNames = MarrowNames> extends Container {
   readonly asset: MarrowAsset;
   readonly engine: PoseEngine;
   private readonly skeletonView;
   private outlines;
   private readonly book;
-  private pending;
-  private spare;
-  private emitting;
+  private readonly pump;
   private ticking;
+  private afterReset;
+  private tools;
+  private probe;
   constructor(asset: MarrowAsset, options?: MarrowSpineOptions);
   static load<N extends MarrowNames = MarrowNames>(options: MarrowLoadOptions & MarrowSpineOptions): Promise<MarrowSpine<N>>;
   get info(): SkeletonInfo;
   get stats(): ViewStats;
+  get perf(): MarrowPerf;
+  get updateProbe(): UpdateProbe | null;
+  set updateProbe(probe: UpdateProbe | null);
   get skin(): N["skins"] | null;
   set skin(name: N["skins"] | null);
   get timeScale(): number;
   set timeScale(value: number);
   get defaultMix(): number;
   set defaultMix(seconds: number);
+  get physics(): PhysicsMode;
+  set physics(mode: PhysicsMode);
   get autoUpdate(): boolean;
   set autoUpdate(value: boolean);
   setMix(from: N["animations"], to: N["animations"], seconds: number): void;
@@ -108,7 +120,13 @@ export declare class MarrowSpine<N extends MarrowNames = MarrowNames> extends Co
   queue(name: N["animations"], options?: QueueOptions): Track<N>;
   stop(options?: StopOptions): void;
   update(seconds: number): void;
+  resetPhysics(): void;
+  physicsTranslate(x: number, y: number): void;
+  physicsRotate(x: number, y: number, degrees: number): void;
   override destroy(options?: DestroyOptions): void;
+  private measure;
+  private endReset;
+  private configure;
   private draw;
   private onTick;
   private animationIndex;
@@ -116,9 +134,6 @@ export declare class MarrowSpine<N extends MarrowNames = MarrowNames> extends Co
   private mixOut;
   private adopt;
   private absorb;
-  private emitPending;
-  private emitOne;
-  private eventOf;
 }
 export interface MarrowSpineEvents<N extends MarrowNames = MarrowNames> {
   start: [track: Track<N>];
@@ -133,12 +148,28 @@ export interface MarrowSpineOptions {
   tightMesh?: "auto" | "on" | "off";
   occlusion?: "auto" | "off";
 }
+export type OutlinesState = "given" | "scanned" | "scanning" | "unread" | "off";
 export interface PageRect {
   x: number;
   y: number;
   width: number;
   height: number;
 }
+export interface PerfEntry {
+  feature: PerfFeature;
+  value: string;
+  reason: string;
+  animation?: string;
+}
+export type PerfFeature = "drawCalls" | "blend" | "pages" | "clipping" | "tightMesh" | "occlusion" | "outlines" | "darkTint" | "physics" | "constraints" | "bones" | "slots" | "vertices" | "uploads" | "layout";
+export interface PerfMemory {
+  shared: number;
+  instance: number;
+  gpu: number;
+  gpuBuffers: number;
+  gpuTextures: number;
+}
+export type PhysicsMode = "none" | "reset" | "update" | "pose";
 export interface PlayOptions {
   track?: number;
   loop?: boolean;
@@ -146,6 +177,12 @@ export interface PlayOptions {
   speed?: number;
   alpha?: number;
   reverse?: boolean;
+  additive?: boolean;
+  start?: number;
+  end?: number;
+  shortestRotation?: boolean;
+  eventThreshold?: number;
+  entry?: TrackFields;
 }
 export interface QueueOptions extends PlayOptions {
   delay?: number;
@@ -183,9 +220,33 @@ export interface Track<N extends MarrowNames = MarrowNames> {
   loop: boolean;
   speed: number;
   alpha: number;
+  readonly additive: boolean;
   readonly time: number;
   readonly finished: Promise<void>;
   stop(options?: Pick<StopOptions, "mix">): void;
+  configure(fields: TrackFields): void;
+}
+export type TrackField = "loop" | "delay" | "trackTime" | "trackEnd" | "timeScale" | "alpha" | "mixTime" | "mixDuration" | "reverse" | "shortestRotation" | "eventThreshold" | "animationStart" | "animationEnd" | "animationLast" | "holdPrevious" | "mixBlend" | "attachmentThreshold" | "drawOrderThreshold" | "mixAttachmentThreshold" | "alphaAttachmentThreshold" | "mixDrawOrderThreshold" | "additive" | "keepHold";
+export type TrackFields = Partial<Record<TrackField, number | boolean | string>>;
+export interface UpdateProbe {
+  record(pose: number, geometry: number, events: number): void;
+}
+export interface ViewStats {
+  drawCalls: number;
+  vertices: number;
+  templateBuilds: number;
+  indexRebuilds: number;
+  positionUploads: number;
+  colorUploads: number;
+  uvUploads: number;
+  indices: number;
+  bufferBytes: number;
+  clips: number;
+  maskDraws: number;
+  maskUploads: number;
+  maskRebuilds: number;
+  tightRanges: number;
+  coveredSlots: number;
 }
 ```
 
@@ -293,7 +354,7 @@ export interface ConstraintBase {
 }
 export type ConstraintData = IkConstraintData | TransformConstraintData | PathConstraintData | PhysicsConstraintData | SliderConstraintData;
 export declare function createAttachmentLookup(model: SkeletonModel): AttachmentLookup;
-export declare function createPoseEngine(model: SkeletonModel, options?: PoseEngineOptions): Promise<PoseEngine>;
+export declare function createPoseEngine(model: SkeletonModel): Promise<PoseEngine>;
 export declare function describeSkeleton(model: SkeletonModel): SkeletonInfo;
 export interface EventData {
   name: string;
@@ -330,7 +391,7 @@ export interface IkConstraintData extends ConstraintBase {
 export declare function importAtlas(text: string): AtlasModel;
 export declare function importSkeleton(source: SkeletonSource): Promise<SkeletonModel>;
 export declare const INHERIT_MODES: readonly string[];
-export declare function loadPoseEngine(model: SkeletonModel, options?: PoseEngineOptions): Promise<PoseEngineFactory>;
+export declare function loadPoseEngine(model: SkeletonModel): Promise<PoseEngineFactory>;
 export declare const LOCAL_STRIDE = 7;
 export declare class MarrowError extends Error {
   override readonly name: string;
@@ -409,6 +470,7 @@ export interface PhysicsConstraintData extends ConstraintBase {
   mixGlobal: boolean;
   scaleYMode?: ScaleYMode;
 }
+export type PhysicsMode = "none" | "reset" | "update" | "pose";
 export interface PointAttachmentData {
   type: "point";
   name: string;
@@ -433,13 +495,13 @@ export interface PoseEngine {
   setupPose(): void;
   setupPoseBones(): void;
   setupPoseSlots(): void;
+  physics: PhysicsMode;
+  physicsTranslate(x: number, y: number): void;
+  physicsRotate(x: number, y: number, degrees: number): void;
   update(dt: number): void;
   takeEvents(): PoseEvent[];
 }
 export type PoseEngineFactory = () => PoseEngine;
-export interface PoseEngineOptions {
-  constraints?: "error" | "ignore";
-}
 export interface PoseEvent {
   type: PoseEventType;
   track: number;
@@ -454,8 +516,13 @@ export interface PoseState {
   y: number;
   scaleX: number;
   scaleY: number;
+  yDown: boolean;
   skin: number;
   time: number;
+  windX: number;
+  windY: number;
+  gravityX: number;
+  gravityY: number;
   readonly local: Float64Array;
   readonly inherit: Uint8Array;
   readonly active: Uint8Array;
@@ -720,5 +787,60 @@ export interface RegionOutline {
 export declare function runCli(args: readonly string[], host: CliHost): Promise<number>;
 export declare function summarizeOutlines(atlas: AtlasModel, outlines: AtlasOutlines): OutlinesSummary;
 export declare function typeNameFor(fileName: string): string;
+```
+
+## pixi-marrow/perf
+
+```ts
+export declare function createProbe(spine: ProbeTarget): PerfProbe;
+export declare class PerfProbe implements UpdateProbe {
+  private target;
+  private updates;
+  private readonly times;
+  private drawCalls;
+  private vertices;
+  private uploads;
+  private rangesRebuilt;
+  private clips;
+  private coveredSlots;
+  private lastPositions;
+  private lastUploads;
+  private lastRebuilds;
+  constructor(target: ProbeTarget);
+  get attached(): boolean;
+  record(pose: number, geometry: number, events: number): void;
+  read(): ProbeReading;
+  reset(): void;
+  stop(): void;
+  private add;
+  private bucket;
+  private mark;
+}
+export interface ProbeBucket {
+  total: number;
+  mean: number;
+  worst: number;
+}
+export interface ProbeCounters {
+  drawCalls: number;
+  vertices: number;
+  uploads: number;
+  rangesRebuilt: number;
+  clips: number;
+  coveredSlots: number;
+}
+export interface ProbeReading {
+  updates: number;
+  update: ProbeBucket;
+  pose: ProbeBucket;
+  geometry: ProbeBucket;
+  events: ProbeBucket;
+  counters: ProbeCounters;
+}
+export interface ProbeTarget {
+  updateProbe: UpdateProbe | null;
+  readonly stats: ViewStats;
+  readonly destroyed: boolean;
+}
 ```
 

@@ -8,6 +8,8 @@
 export const PI = 3.1415927;
 /** The official `MathUtils.PI2`. */
 export const PI2: number = PI * 2;
+/** The official `MathUtils.invPI2`. */
+export const INV_PI2: number = 1 / PI2;
 /** The official `MathUtils.radDeg`. */
 export const RAD_DEG: number = 180 / PI;
 /** The official `MathUtils.degRad`. */

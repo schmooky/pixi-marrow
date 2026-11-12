@@ -62,9 +62,9 @@ export type {
 export { BLEND_MODES, BONE_SETUP_STRIDE, INHERIT_MODES } from './model/model';
 export type { EventKey, TimelineData, TimelineKind } from './model/timelines';
 export type {
+    PhysicsMode,
     PoseEngine,
     PoseEngineFactory,
-    PoseEngineOptions,
     PoseEvent,
     PoseEventType,
     TrackEntry,

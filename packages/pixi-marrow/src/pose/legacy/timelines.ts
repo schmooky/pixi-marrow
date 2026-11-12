@@ -59,18 +59,35 @@ export const K_SEQUENCE = 18;
 export const K_EVENT = 19;
 /** Timeline kind code: `DrawOrderTimeline`. */
 export const K_DRAW_ORDER = 20;
-/** Timeline kind code: a timeline that animates a physics constraint. It counts for mixing and is not applied. */
-export const K_SKIPPED = 21;
 /** Timeline kind code: `IkConstraintTimeline`. */
-export const K_IK = 22;
+export const K_IK = 21;
 /** Timeline kind code: `TransformConstraintTimeline`. */
-export const K_TRANSFORM = 23;
+export const K_TRANSFORM = 22;
 /** Timeline kind code: `PathConstraintPositionTimeline`. */
-export const K_PATH_POSITION = 24;
+export const K_PATH_POSITION = 23;
 /** Timeline kind code: `PathConstraintSpacingTimeline`. */
-export const K_PATH_SPACING = 25;
+export const K_PATH_SPACING = 24;
 /** Timeline kind code: `PathConstraintMixTimeline`. */
-export const K_PATH_MIX = 26;
+export const K_PATH_MIX = 25;
+/**
+ * Timeline kind code: `PhysicsConstraintInertiaTimeline`. The codes of the six other timelines
+ * that animate a value of a physics constraint follow it, in the order of the values.
+ */
+export const K_PHYSICS_INERTIA = 26;
+/** Timeline kind code: `PhysicsConstraintStrengthTimeline`. */
+export const K_PHYSICS_STRENGTH = 27;
+/** Timeline kind code: `PhysicsConstraintDampingTimeline`. */
+export const K_PHYSICS_DAMPING = 28;
+/** Timeline kind code: `PhysicsConstraintMassTimeline`. */
+export const K_PHYSICS_MASS = 29;
+/** Timeline kind code: `PhysicsConstraintWindTimeline`. */
+export const K_PHYSICS_WIND = 30;
+/** Timeline kind code: `PhysicsConstraintGravityTimeline`. */
+export const K_PHYSICS_GRAVITY = 31;
+/** Timeline kind code: `PhysicsConstraintMixTimeline`. */
+export const K_PHYSICS_MIX = 32;
+/** Timeline kind code: `PhysicsConstraintResetTimeline`. */
+export const K_PHYSICS_RESET = 33;
 
 const NO_FLOATS = new Float32Array(0);
 
@@ -95,7 +112,10 @@ export interface TimelineParts {
 export class LegacyTimeline {
     /** One of the `K_` codes. */
     readonly kind: number;
-    /** The bone, slot or constraint index. -1 for kinds without a target. */
+    /**
+     * The bone, slot or constraint index. For a physics timeline the place of its constraint among
+     * the physics constraints, or -1 for all of them. -1 for kinds without a target.
+     */
     readonly target: number;
     /** Floats per key in `frames`. */
     readonly entries: number;

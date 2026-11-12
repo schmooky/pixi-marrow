@@ -20,10 +20,28 @@ export interface PoseState {
     y: number;
     scaleX: number;
     scaleY: number;
+    /**
+     * True when the y axis of the world points down, as in Pixi: the official static
+     * `Skeleton.yDown`. It does not flip the pose, a `scaleY` of -1 does that. Physics constraints
+     * read it for the direction of gravity. Default false.
+     */
+    yDown: boolean;
     /** The index of the active skin, or -1 for none. */
     skin: number;
-    /** Seconds this skeleton has been updated for. */
+    /** Seconds this skeleton has been updated for. Physics constraints read it. */
     time: number;
+    /**
+     * The direction the wind of physics constraints blows in: the official `Skeleton.windX` and
+     * `windY` of Spine 4.3. Default 1, 0. Spine 4.2 has no such fields: there they change nothing.
+     */
+    windX: number;
+    windY: number;
+    /**
+     * The direction the gravity of physics constraints pulls in: the official `Skeleton.gravityX`
+     * and `gravityY` of Spine 4.3. Default 0, 1. Spine 4.2 has no such fields: there they change nothing.
+     */
+    gravityX: number;
+    gravityY: number;
     /** The animated pose of each bone, relative to its parent. See {@link LOCAL_STRIDE}. */
     readonly local: Float64Array;
     /** How each bone inherits its parent transform: an index into `INHERIT_MODES`. A timeline can change it. */
@@ -65,8 +83,13 @@ export function createPoseState(model: SkeletonModel): PoseState {
         y: 0,
         scaleX: 1,
         scaleY: 1,
+        yDown: false,
         skin: -1,
         time: 0,
+        windX: 1,
+        windY: 0,
+        gravityX: 0,
+        gravityY: 1,
         local: new Float64Array(bones * LOCAL_STRIDE),
         inherit: new Uint8Array(bones),
         active: new Uint8Array(bones),

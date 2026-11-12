@@ -169,11 +169,7 @@ export async function multisampledCase(env, plan) {
     const made = [];
 
     try {
-        const asset = await lib.MarrowAsset.load({
-            skeleton: url(plan.files.skel),
-            atlas: url(plan.files.atlas),
-            constraints: 'ignore',
-        });
+        const asset = await lib.MarrowAsset.load({ skeleton: url(plan.files.skel), atlas: url(plan.files.atlas) });
 
         await asset.optimized;
         const studio = createStudio(PIXI, env.renderer, plan.size, env.draws, true);

@@ -2,7 +2,7 @@ import { LOCAL_STRIDE, WORLD_STRIDE } from '../state';
 import { modifyLocal } from './bone-pose';
 import { ikParent, scaleBone, solveOneBone } from './ik-one';
 import { EPSILON, NORMAL, PI, RAD_DEG } from './math';
-import { CONSTRAINT_STRIDE, IK_BEND_DIRECTION, IK_MIX, IK_SOFTNESS, type IkPlan } from './solver-types';
+import { IK_BEND_DIRECTION, IK_MIX, IK_SOFTNESS, type IkPlan } from './solver-types';
 import type { Pose43 } from './types';
 
 /*
@@ -134,13 +134,13 @@ function solveNonUniform(bendDir: number): void {
  */
 export function solveTwoBones(pose: Pose43, plan: IkPlan, parent: number, child: number, stretch: boolean): void {
     const { state } = pose;
+    const { local, inherit, applied: values } = pose.solve;
 
-    if (state.inherit[parent] !== NORMAL || state.inherit[child] !== NORMAL) return;
+    if (inherit[parent] !== NORMAL || inherit[child] !== NORMAL) return;
     modifyLocal(pose, parent);
     modifyLocal(pose, child);
     const { world } = state;
-    const { local, values } = pose.solve;
-    const v = plan.index * CONSTRAINT_STRIDE;
+    const v = plan.at;
     const pl = parent * LOCAL_STRIDE;
     const cl = child * LOCAL_STRIDE;
     const po = parent * WORLD_STRIDE;

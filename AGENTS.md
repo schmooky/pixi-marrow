@@ -7,7 +7,7 @@ Instructions for AI coding agents and for people working in this repo. Read it b
 pixi-marrow is a Spine runtime for PixiJS v8. It has its own pose core and its own render path, and it plays Spine 4.1, 4.2 and 4.3 skeletons. The plan, the classes and the milestones are in `docs/DESIGN.md`.
 
 <!-- facts:status -->
-Pre-release, milestone M3. Skeletons of Spine 4.1, 4.2 and 4.3 load, play and draw in PixiJS v8, with IK, transform and path constraints and with clipping, and the picture matches the official runtime. Physics and slider constraints are not solved yet: a skeleton that has them plays only with them ignored.
+Pre-release, milestone M4. Skeletons of Spine 4.1, 4.2 and 4.3 load, play and draw in PixiJS v8 with every constraint solved: IK, transform, path, physics and sliders. The poses equal the official cores to the bit, and the picture matches the official Pixi runtime.
 <!-- /facts:status -->
 
 ```
@@ -30,6 +30,7 @@ Entry points:
 | `pixi-marrow` | `MarrowSpine`, the display object, with `MarrowAsset`, `Track` and `MarrowError`. Needs `pixi.js`. |
 | `pixi-marrow/core` | `importSkeleton`, `importAtlas`, `createPoseEngine`, the geometry functions, `describeSkeleton` and the model types. No Pixi. Runs in Node. |
 | `pixi-marrow/optimize` | `generateNames`, `buildAtlasOutlines`, `decodePng` and the `pixi-marrow` command line tool (`info`, `typegen`, `outlines`). Runs in Node. |
+| `pixi-marrow/perf` | `createProbe`: times the pose, geometry and event work of every update of one `MarrowSpine` and counts what the renderer did. For benchmarks and profiling. |
 <!-- /facts:entry-points -->
 
 ## 2. What it is not
@@ -56,11 +57,13 @@ A file imports only from its own layer or the layers above it in this table. `pn
 | api | `src/api` | The display object and handles |
 | features | `src/bake`, `src/debug`, `src/perf`, `src/optimize` | Optional entry points |
 
-`base`, `model`, `formats`, `pose`, `geometry`, `render`, `api` and `optimize` have files today. The others arrive with their milestones.
+`base`, `model`, `formats`, `pose`, `geometry`, `render`, `api`, `optimize` and `perf` have files today. The others arrive with their milestones.
 
 `src/render` turns a pose into Pixi meshes (`SkeletonView`). `src/api` is the public display object (`MarrowSpine`) on top of a pose engine and a view.
 
 `src/pose` has two engines behind one interface: `legacy` plays 4.1 and 4.2 skeletons, `v43` plays 4.3 skeletons. The official runtimes mix animations differently, so they do not share a player. Each engine ports the constraint solvers and the update order of its own official runtime.
+
+Every constraint is solved: IK, transform, path, physics and sliders. A slider of 4.3 writes the applied pose, so `PoseState` holds what is drawn, and the animated pose of what a slider touches stays inside the engine. `PoseState.yDown` is the official static `Skeleton.yDown`: the display object sets it, and physics reads it for the direction of gravity.
 
 `src/formats` has one folder per reader: `json42` and `binary42` read 4.1 and 4.2 files, `json43` and `binary43` read 4.3 files. `shared` holds what they have in common.
 
@@ -68,12 +71,13 @@ A file imports only from its own layer or the layers above it in this table. `pn
 
 ## 4. Invariants
 
-- Parity is the law. The official `spine-core` of a file's version is the specification. A change that makes a parity test fail is wrong.
+- Parity is the law. The official `spine-core` of a file's version is the specification, quirks included. A change that makes a parity test fail is wrong.
 - No `spine-core` in `src`. The official cores are imported in tests only.
 - The model is a faithful import. A reader stores what its file holds and does not convert between versions.
 - A reader mirrors the official reader of its own version, bugs included. It is stricter only where the official reader would crash, hang or store garbage. There it throws.
 - No runtime dependencies. `pixi.js` will be the one peer.
-- Speed and memory are goals of equal weight. Pose data lives in typed arrays. A played loop allocates nothing after warm-up. Data that all instances can share is stored once.
+- Speed and memory are goals of equal weight. Pose data lives in typed arrays. A played loop allocates nothing after warm-up. Data that all instances can share is stored once. State of a feature exists only for a skeleton that uses the feature.
+- Code that most games never call loads on demand, not with the root import. The size check guards the root.
 - An optimization that is on by default must be exact. It needs a test that runs it on and off.
 - An optimization that is not exact to the bit is an option. Its doc states what changes in the picture, and the pixel check bounds it. `tightMesh: 'on'` is the first one.
 - Never fail silently. Unsupported data throws `MarrowError` with a code, the cause and the fix.
@@ -112,12 +116,14 @@ It draws rigs with pixi-marrow and with the official Pixi runtime in headless Ch
 
 A frame that fails against the official runtime is drawn again, moved by a fraction of a pixel, and fails only when it fails at both places. The two runtimes place vertices in different code, so a vertex on a subpixel boundary can round two ways. A defect stays wrong after the move.
 
+A change that may cost or save time needs a measurement. `pnpm bench:ab` runs pixi-marrow against the official Pixi runtime in headless Chrome: CPU time, frame time, draw calls and heap per instance. `pnpm bench:ab --mode=overdraw` compares tight meshes on and off. It prints the spread between runs: a difference inside the spread is not a result. It measures this one machine, not phones.
+
 Library changes need a changeset. Run `pnpm changeset`.
 
 ## 7. How to work here
 
 - Read `docs/DESIGN.md` before designing anything. Update it when a decision changes.
 - Write the test first when the official core defines the answer.
-- Keep performance claims out of the docs until spine-benchmark has measured them.
+- A performance claim in the docs names its measurement and its machine. Numbers for phones wait for spine-benchmark.
 - In code that runs every update, pass indices into typed arrays, not numbers. V8 puts a double on the heap when it crosses a call that is not inlined.
 - Commit messages follow Conventional Commits.
