@@ -5,36 +5,90 @@
 import { BACKGROUNDS, compare, difference, displacedShare, picture } from './pixels.js';
 
 /**
- * The comparisons of one frame: label, first picture, second picture, how it is judged.
+ * The comparisons of one frame of a rig. Each has a `label`, the keys `a` and `b` of the two
+ * instances it compares, and a `kind` that says how it is judged.
  *
  * `exact` allows no difference. `match` and `pma` limit the largest difference and the shares of
  * the pixels over 1 and over 8. `formats` limits the share a small displacement cannot explain.
  * `cuts` limits the largest difference between ours with the cuts of overdraw on and off.
  * `polygons` and `polygonsOfficial` limit the shares of the pixels over 1 and over 8 between ours
  * with polygons and a picture of quads. They report the largest difference and do not limit it.
- * A `proof` is wrong on purpose: it passes when every criterion in its list rejects it.
+ * `modes` is ours in the batched mode against ours in the mesh mode, judged like `match` with
+ * limits of its own. It is measured and not judged while `TOLERANCE.modes` of the check is null.
+ * A `proof` is wrong on purpose: it passes when every criterion in `rejectedBy` rejects it.
+ *
+ * `group` names the line of the summary a comparison counts in, where that is not its kind. The
+ * comparisons of the batched mode have lines of their own, so the lines of the mesh mode keep
+ * their meaning. `auto` keeps a comparison for the frames in which the instance with the default
+ * options drew in that mode.
  */
 export const PAIRS = [
-    ['official twice', 'twin', 'official', 'exact'],
-    ['ours', 'ours', 'official', 'match'],
-    ['ours, json', 'ours-json', 'official-json', 'match'],
-    ['official, json and binary', 'official-json', 'official', 'formats'],
-    ['ours, json and binary', 'ours-json', 'ours', 'formats'],
-    ['official, premultiplied atlas', 'official-pma', 'official', 'pma'],
-    ['ours, premultiplied atlas', 'ours-pma', 'ours', 'pma'],
+    { label: 'official twice', a: 'twin', b: 'official', kind: 'exact' },
+    { label: 'ours', a: 'ours', b: 'official', kind: 'match' },
+    { label: 'ours, json', a: 'ours-json', b: 'official-json', kind: 'match' },
+    { label: 'official, json and binary', a: 'official-json', b: 'official', kind: 'formats' },
+    { label: 'ours, json and binary', a: 'ours-json', b: 'ours', kind: 'formats' },
+    { label: 'official, premultiplied atlas', a: 'official-pma', b: 'official', kind: 'pma' },
+    { label: 'ours, premultiplied atlas', a: 'ours-pma', b: 'ours', kind: 'pma' },
     // the cuts that are on by default must leave the picture as it is
-    ['ours, cuts on and off', 'ours', 'ours-plain', 'cuts'],
-    ['ours, cuts on and off, premultiplied', 'ours-pma', 'ours-pma-plain', 'cuts'],
+    { label: 'ours, cuts on and off', a: 'ours', b: 'ours-plain', kind: 'cuts' },
+    { label: 'ours, cuts on and off, premultiplied', a: 'ours-pma', b: 'ours-pma-plain', kind: 'cuts' },
     // polygons are asked for by name: other triangles, so the last bit of a pixel can differ
-    ['ours, polygons and quads', 'ours-polygons', 'ours-plain', 'polygons'],
-    ['ours, polygons and quads, premultiplied', 'ours-pma-polygons', 'ours-pma-plain', 'polygons'],
-    ['ours with polygons, official', 'ours-polygons', 'official', 'polygonsOfficial'],
-    ['proof, shifted 1 px', 'shift', 'official', 'proof', ['match']],
-    ['proof, shifted 0.25 px', 'nudge', 'official', 'proof', ['match']],
+    { label: 'ours, polygons and quads', a: 'ours-polygons', b: 'ours-plain', kind: 'polygons' },
+    {
+        label: 'ours, polygons and quads, premultiplied',
+        a: 'ours-pma-polygons',
+        b: 'ours-pma-plain',
+        kind: 'polygons',
+    },
+    { label: 'ours with polygons, official', a: 'ours-polygons', b: 'official', kind: 'polygonsOfficial' },
+    // the batched mode: against the official runtime under the same rules, and against the mesh mode
+    { label: 'ours batched', a: 'ours-batched', b: 'official', kind: 'match', group: 'matchBatched' },
+    { label: 'ours, batched and mesh', a: 'ours-batched', b: 'ours', kind: 'modes' },
+    {
+        label: 'ours batched, premultiplied atlas',
+        a: 'ours-batched-pma',
+        b: 'ours-batched',
+        kind: 'pma',
+        group: 'pmaBatched',
+    },
+    {
+        label: 'ours batched, cuts on and off',
+        a: 'ours-batched',
+        b: 'ours-batched-plain',
+        kind: 'cuts',
+        group: 'cutsBatched',
+    },
+    {
+        label: 'ours batched, polygons and quads',
+        a: 'ours-batched-polygons',
+        b: 'ours-batched-plain',
+        kind: 'polygons',
+        group: 'polygonsBatched',
+    },
+    // the default options: `auto` picks a mode, and then draws what that mode draws, to the bit
+    { label: 'ours, auto and mesh', a: 'ours-auto', b: 'ours', kind: 'exact', group: 'auto', auto: 'mesh' },
+    {
+        label: 'ours, auto and batched',
+        a: 'ours-auto',
+        b: 'ours-batched',
+        kind: 'exact',
+        group: 'auto',
+        auto: 'batched',
+    },
+    { label: 'proof, shifted 1 px', a: 'shift', b: 'official', kind: 'proof', rejectedBy: ['match'] },
+    { label: 'proof, shifted 0.25 px', a: 'nudge', b: 'official', kind: 'proof', rejectedBy: ['match'] },
     // a displacement is what `formats` allows, so only the changed slots are a proof for it
-    ['proof, slot tinted', 'tint', 'official', 'proof', ['match', 'formats']],
-    ['proof, slot hidden', 'hide', 'official', 'proof', ['match', 'formats']],
-    ['proof, ours shifted 1 px', 'ours-shift', 'official', 'proof', ['match']],
+    { label: 'proof, slot tinted', a: 'tint', b: 'official', kind: 'proof', rejectedBy: ['match', 'formats'] },
+    { label: 'proof, slot hidden', a: 'hide', b: 'official', kind: 'proof', rejectedBy: ['match', 'formats'] },
+    { label: 'proof, ours shifted 1 px', a: 'ours-shift', b: 'official', kind: 'proof', rejectedBy: ['match'] },
+    {
+        label: 'proof, ours batched shifted 1 px',
+        a: 'ours-batched-shift',
+        b: 'official',
+        kind: 'proof',
+        rejectedBy: ['match'],
+    },
 ];
 
 /**
@@ -52,6 +106,13 @@ export const SECOND_PLACEMENT = { x: 0.37 / 8, y: 0.61 / 8 };
 
 /** The kinds whose pictures are ours against the official runtime. */
 const AGAINST_OFFICIAL = ['match', 'polygonsOfficial'];
+/**
+ * The kinds that get a second look. `own` is ours in the batched mode judged against ours in the
+ * mesh mode, in a scene the official runtime cannot draw. `modes` is the same pair for a rig, once
+ * it has a limit. The two modes move vertices to the screen in different places, one on the CPU
+ * and one in the vertex shader, like the two runtimes.
+ */
+const SECOND_LOOK = ['match', 'own', 'modes'];
 
 const percent = (share) => `${(100 * share).toFixed(3)}%`;
 
@@ -140,9 +201,9 @@ function brief(measured) {
  * of rounding: it passes, and the report lists it with the numbers of both placements. A frame
  * that is outside at both placements fails. Returns the numbers of the second placement.
  */
-async function lookAgain(ctx, result, first, again) {
+async function lookAgain(ctx, result, first, again, kind = 'match') {
     const { a, b } = await again();
-    const second = measure(ctx, 'match', ['match'], a, b);
+    const second = measure(ctx, kind, [kind], a, b);
 
     if (second.flagged.length > 0) {
         for (const { name, why } of second.flagged) result.reasons.push(`second placement, ${name} background: ${why}`);
@@ -191,15 +252,43 @@ function shots(ctx, result, flagged, a, b) {
     };
 }
 
+/** One frame of an instance: its picture on both backgrounds, and what its stats say. */
+export async function capture(studio, instance) {
+    return {
+        clear: await studio.shoot(instance.root, BACKGROUNDS.clear),
+        solid: await studio.shoot(instance.root, BACKGROUNDS.solid),
+        stats: instance.stats(),
+    };
+}
+
+/** One frame of an instance at the second placement. The instance is put back where it was. */
+export async function captureSecond(studio, instance) {
+    const home = instance.home;
+
+    instance.place({ ...home, x: home.x + SECOND_PLACEMENT.x, y: home.y + SECOND_PLACEMENT.y });
+    try {
+        return await capture(studio, instance);
+    } finally {
+        instance.place(home);
+    }
+}
+
 /**
  * Compares two frames on both backgrounds and judges the result.
  *
+ * @param pair One entry of `PAIRS`, or of the comparisons of a scene.
  * @param again Draws both sides of the pair at the second placement and returns the two frames.
  */
-export async function judge(ctx, where, [label, , , kind, rejectedBy], a, b, again) {
+export async function judge(ctx, where, pair, a, b, again) {
+    const { label, kind, rejectedBy, group } = pair;
     const result = { ...where, label, kind, reasons: [] };
-    const criteria = rejectedBy ?? [kind];
+    // a kind whose tolerance is null is measured and not judged
+    const criteria = rejectedBy ?? (ctx.options.tolerance[kind] === null ? [] : [kind]);
     const first = measure(ctx, kind, criteria, a, b);
+
+    if (group) result.group = group;
+    // the mode that drew the batched side of this frame, where a comparison has one
+    if (pair.a.includes('batched') && ctx.batchedDrew) result.drew = ctx.batchedDrew;
     const { flagged } = first;
 
     result.clear = first.clear;
@@ -214,10 +303,12 @@ export async function judge(ctx, where, [label, , , kind, rejectedBy], a, b, aga
         if (result.reasons.length === 0 && criteria.includes('match')) await proveAgain(ctx, result, first, again);
     } else {
         for (const { name, why } of flagged) result.reasons.push(`${name} background: ${why}`);
-        if (kind === 'match' && flagged.length > 0) await lookAgain(ctx, result, first, again);
+        if (SECOND_LOOK.includes(kind) && flagged.length > 0) await lookAgain(ctx, result, first, again, kind);
     }
-    // a frame that ours draws through a clip mask is told apart in the report, and judged like any other
-    if (kind === 'match' && a.stats?.maskDraws > 0) result.clipped = true;
+    // A frame that ours draws through a clip mask is told apart in the report, and judged like any
+    // other. The batched mode has no mask draws, so its frame counts when the mesh frame of the
+    // same pose does: `ctx.clipped`
+    if (kind === 'match' && (a.stats?.maskDraws > 0 || (group && ctx.clipped))) result.clipped = true;
     shots(ctx, result, flagged, a, b);
 
     return result;

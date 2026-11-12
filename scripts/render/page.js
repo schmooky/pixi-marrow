@@ -1,13 +1,18 @@
 /*
  * Browser entry of scripts/check-render.mjs. It creates one renderer and runs the cases of one rig
- * per call. Both runtimes play the same animation with the same time steps, each is drawn alone
- * into a render texture on two backgrounds, and the pixels are compared.
+ * or of one scene per call. Both runtimes play the same animation with the same time steps, each
+ * is drawn alone into a render texture on two backgrounds, and the pixels are compared. Ours is
+ * drawn in each of its render modes, see scripts/render/probe.js. Scenes are in
+ * scripts/render/scenes.js.
  */
 
 import { bufferCases, drawCallCase, overdrawCase, triangleArea } from './buffers.js';
 import { multisampledCase, premultipliedReadingCase } from './cut-cases.js';
-import { judge, PAIRS, SECOND_PLACEMENT } from './judge.js';
-import { BACKGROUNDS, countDraws, coverage, createStudio } from './pixels.js';
+import { capture, captureSecond, judge, PAIRS } from './judge.js';
+import { statMode } from './mode.js';
+import { BACKGROUNDS, countBuilds, countDraws, coverage, createStudio } from './pixels.js';
+import { chooseModes, probeModes } from './probe.js';
+import { runScene } from './scenes.js';
 import { officialSide, oursSide } from './sides.js';
 
 /** The share of the picture a rig must cover in some frame of an animation to count as drawn. */
@@ -16,13 +21,20 @@ const VISIBLE_SHARE = 0.005;
 const message = (error) => (error instanceof Error ? `${error.name}: ${error.message}` : String(error));
 const percent = (share) => `${(100 * share).toFixed(3)}%`;
 
-/** The instances of one sequence: which side, which files, and what the tooling proof changes. */
-function roles(plan, official, ours, proof) {
+/**
+ * The instances of one sequence: which side, which files, and what the tooling proof changes.
+ *
+ * @param run Which modes of ours are drawn: `mesh`, `batched` and `auto`, see `chooseModes`.
+ * The instances of the mesh mode are the ones this check had before there were modes. They ask
+ * for the mode by name, so they stay what they were when `auto` picks another mode.
+ */
+function roles(plan, official, ours, proof, run) {
     const { skel, json, atlas, pma } = plan.files;
     const { placement } = plan;
     const list = [];
-    const add = (key, side, skeleton, atlasFile, setup, cuts = 'default') =>
-        list.push({ key, side, skeleton, atlas: atlasFile, setup, cuts });
+    const add = (key, side, skeleton, atlasFile, more = {}) =>
+        list.push({ key, side, skeleton, atlas: atlasFile, cuts: 'default', ...more });
+    const shifted = (it) => it.place({ ...placement, x: placement.x + 1 });
 
     if (official) {
         add('official', official, skel, atlas);
@@ -30,47 +42,76 @@ function roles(plan, official, ours, proof) {
         add('official-json', official, json, atlas);
         if (pma) add('official-pma', official, skel, pma);
         if (proof) {
-            add('shift', official, skel, atlas, (it) => it.place({ ...placement, x: placement.x + 1 }));
-            add('nudge', official, skel, atlas, (it) => it.place({ ...placement, x: placement.x + 0.25 }));
-            add('tint', official, skel, atlas, (it) => it.tint(proof.tint, 0.9));
-            add('hide', official, skel, atlas, (it) => it.hide(proof.hide));
+            add('shift', official, skel, atlas, { setup: shifted });
+            add('nudge', official, skel, atlas, {
+                setup: (it) => it.place({ ...placement, x: placement.x + 0.25 }),
+            });
+            add('tint', official, skel, atlas, { setup: (it) => it.tint(proof.tint, 0.9) });
+            add('hide', official, skel, atlas, { setup: (it) => it.hide(proof.hide) });
         }
     }
-    if (ours) {
-        add('ours', ours, skel, atlas);
-        add('ours-json', ours, json, atlas);
-        add('ours-plain', ours, skel, atlas, undefined, 'off');
-        add('ours-polygons', ours, skel, atlas, undefined, 'polygons');
-        if (pma) add('ours-pma', ours, skel, pma);
-        if (pma) add('ours-pma-plain', ours, skel, pma, undefined, 'off');
-        if (pma) add('ours-pma-polygons', ours, skel, pma, undefined, 'polygons');
+    if (ours && run.mesh) {
+        const mode = 'mesh';
+
+        add('ours', ours, skel, atlas, { mode });
+        add('ours-json', ours, json, atlas, { mode });
+        add('ours-plain', ours, skel, atlas, { mode, cuts: 'off' });
+        add('ours-polygons', ours, skel, atlas, { mode, cuts: 'polygons' });
+        if (pma) add('ours-pma', ours, skel, pma, { mode });
+        if (pma) add('ours-pma-plain', ours, skel, pma, { mode, cuts: 'off' });
+        if (pma) add('ours-pma-polygons', ours, skel, pma, { mode, cuts: 'polygons' });
         // a difference that is real on our side: it must fail at both placements
-        if (proof && official)
-            add('ours-shift', ours, skel, atlas, (it) => it.place({ ...placement, x: placement.x + 1 }));
+        if (proof && official) add('ours-shift', ours, skel, atlas, { mode, setup: shifted });
     }
+    if (ours && run.batched) {
+        const mode = 'batched';
+
+        add('ours-batched', ours, skel, atlas, { mode });
+        add('ours-batched-plain', ours, skel, atlas, { mode, cuts: 'off' });
+        add('ours-batched-polygons', ours, skel, atlas, { mode, cuts: 'polygons' });
+        if (pma) add('ours-batched-pma', ours, skel, pma, { mode });
+        if (proof && official) add('ours-batched-shift', ours, skel, atlas, { mode, setup: shifted });
+    }
+    // the default options, as an application gets them
+    if (ours && run.auto) add('ours-auto', ours, skel, atlas);
 
     return list;
 }
 
-/** One frame of an instance: its picture on both backgrounds, and what its stats say. */
-async function capture(studio, instance) {
-    return {
-        clear: await studio.shoot(instance.root, BACKGROUNDS.clear),
-        solid: await studio.shoot(instance.root, BACKGROUNDS.solid),
-        stats: instance.stats(),
-    };
-}
+/**
+ * The render modes of the instances of ours in the frame that was drawn last.
+ *
+ * An instance that asked for the mesh mode by name must draw in it. One that asked for the
+ * batched mode may draw meshes for a frame, for example while a clip cuts a visible slot: the
+ * frame is compared all the same, and `ctx.batchedDrew` notes the mode for the report.
+ *
+ * @returns The mode the instance with the default options drew in, or null when there is none
+ * or the runtime does not say.
+ */
+async function modesOfFrame(ctx, live, forced, at) {
+    for (const [key, asked] of forced) {
+        const drew = live.has(key) ? statMode(live.get(key).spine) : null;
 
-/** One frame of an instance at the second placement. The instance is put back where it was. */
-async function captureSecond(studio, instance) {
-    const home = instance.home;
-
-    instance.place({ ...home, x: home.x + SECOND_PLACEMENT.x, y: home.y + SECOND_PLACEMENT.y });
-    try {
-        return await capture(studio, instance);
-    } finally {
-        instance.place(home);
+        if (asked !== 'mesh' || drew === null || drew === asked) continue;
+        forced.delete(key);
+        ctx.report.cases.push({
+            ...at,
+            label: `${key} left its render mode`,
+            kind: 'error',
+            reasons: [`renderMode '${asked}' was asked for and stats.renderMode says ${drew}`],
+        });
     }
+    const batched = live.get('ours-batched');
+    const auto = live.get('ours-auto');
+
+    ctx.batchedDrew = batched ? statMode(batched.spine) : null;
+    if (!auto) return null;
+    // with --trust-mode the default of a runtime that reports no mode is taken as the mesh mode
+    const mode = (await auto.mode()).mode ?? (ctx.options.trustMode ? 'mesh' : null);
+
+    ctx.autoModes.add(mode ?? 'none');
+
+    return mode;
 }
 
 /** Notes what the triangles of ours cover in a captured frame, with the cuts of overdraw on and off. */
@@ -110,7 +151,10 @@ async function runSequence(ctx, sequence, withProof) {
         live.delete(key);
     };
 
-    for (const role of roles(plan, ctx.official, ctx.ours, withProof ? plan.proof : null)) {
+    // the instances that asked for a render mode by name, and the mode each asked for
+    const forced = new Map();
+
+    for (const role of roles(plan, ctx.official, ctx.ours, withProof ? plan.proof : null, ctx.run)) {
         // the twin loads its own copies. Every other instance shares the files of its side
         const tag = role.key === 'twin' ? 'twin' : role.side.name;
         const url = (file) => `/fixtures/${tag}/${plan.version}/${file}`;
@@ -120,6 +164,7 @@ async function runSequence(ctx, sequence, withProof) {
                 skeleton: url(role.skeleton),
                 atlas: url(role.atlas),
                 cuts: role.cuts,
+                mode: role.mode,
             });
 
             const place = instance.place;
@@ -130,6 +175,7 @@ async function runSequence(ctx, sequence, withProof) {
                 place(placement);
             };
             live.set(role.key, instance);
+            if (role.mode) forced.set(role.key, role.mode);
             if (sequence.skin) instance.setSkin(sequence.skin);
             instance.place(plan.placement);
             role.setup?.(instance);
@@ -157,18 +203,22 @@ async function runSequence(ctx, sequence, withProof) {
             }
         }
         const at = { ...where, step, time: Math.round(step * sequence.dt * 1000) / 1000 };
+        const autoMode = await modesOfFrame(ctx, live, forced, at);
 
+        ctx.clipped = frames.get('ours')?.stats?.maskDraws > 0;
         for (const pair of PAIRS) {
-            const a = frames.get(pair[1]);
-            const b = frames.get(pair[2]);
+            const a = frames.get(pair.a);
+            const b = frames.get(pair.b);
             const again = async () => ({
-                a: await captureSecond(studio, live.get(pair[1])),
-                b: await captureSecond(studio, live.get(pair[2])),
+                a: await captureSecond(studio, live.get(pair.a)),
+                b: await captureSecond(studio, live.get(pair.b)),
             });
 
+            if (pair.auto && pair.auto !== autoMode) continue;
             if (a && b) report.cases.push(await judge(ctx, at, pair, a, b, again));
         }
         if (frames.has('official')) ctx.draws.official.push(frames.get('official').solid.draws);
+        if (frames.has('ours-batched')) ctx.draws.batched.push(frames.get('ours-batched').solid.draws);
         if (frames.has('ours')) {
             const { solid, stats } = frames.get('ours');
 
@@ -199,6 +249,29 @@ async function runSequence(ctx, sequence, withProof) {
     }
 }
 
+/**
+ * Asks the runtime of ours which render modes it has, with the first animation of the rig, and
+ * adds what it says to the report. Returns which modes are drawn.
+ */
+async function askModes(ctx) {
+    const { plan, options, report } = ctx;
+    const [sequence] = plan.sequences;
+    const url = (file) => `/fixtures/ours/${plan.version}/${file}`;
+    const readings = await probeModes(ctx.ours, ctx.studio, {
+        skeleton: url(plan.files.skel),
+        atlas: url(plan.files.atlas),
+        skin: sequence.skin,
+        animation: sequence.animation,
+        placement: plan.placement,
+    });
+    const { run, entry } = chooseModes(readings, options);
+
+    report.cases.push(entry);
+    ctx.modeEntry = entry;
+
+    return run;
+}
+
 /** Runs every case of one rig. The result is plain data for the Node side. */
 async function runRig(env, plan, options) {
     const report = { cases: [], notes: [], missing: env.missing };
@@ -206,29 +279,45 @@ async function runRig(env, plan, options) {
         plan,
         options,
         report,
-        studio: createStudio(env.PIXI, env.renderer, plan.size, env.draws),
+        studio: createStudio(env.PIXI, env.renderer, plan.size, env.draws, false, env.builds),
         official: env.official,
         ours: env.ours,
         PIXI: env.PIXI,
-        draws: { ours: [], official: [] },
+        // which modes of ours are drawn. Without ours the tooling proof runs alone
+        run: { mesh: false, batched: false, auto: false },
+        // the modes the instance with the default options drew in, over the captured frames
+        autoModes: new Set(),
+        draws: { ours: [], batched: [], official: [] },
         overdraw: { on: [], off: [], polygons: [] },
         outlines: null,
         shotsLeft: options.shots,
         sampled: false,
     };
 
-    ctx.sampleLabel = ctx.ours ? (plan.official ? 'ours' : 'ours, json and binary') : 'official twice';
+    if (ctx.ours) ctx.run = await askModes(ctx);
+    ctx.sampleLabel = sampleLabel(ctx);
     for (const [index, sequence] of plan.sequences.entries()) await runSequence(ctx, sequence, index === 0);
     if (ctx.ours) {
-        if (ctx.draws.ours.length) report.cases.push(drawCallCase(ctx));
+        if (ctx.modeEntry) ctx.modeEntry.info.drew = [...ctx.autoModes];
+        if (ctx.draws.ours.length || ctx.draws.batched.length) report.cases.push(drawCallCase(ctx));
         if (ctx.overdraw.on.length) report.cases.push(overdrawCase(ctx));
         report.cases.push(...(await bufferCases(ctx)));
-        report.cases.push(await multisampledCase(env, plan));
+        for (const mode of ['mesh', 'batched']) {
+            if (ctx.run[mode]) report.cases.push(await multisampledCase(env, plan, mode));
+        }
         // one image of 2 by 2 pixels, the same for every rig: the first rig runs it
         if (options.extras) report.cases.push(await premultipliedReadingCase(env, await env.loadCore()));
     }
 
     return report;
+}
+
+/** The comparison whose first passing frame gets its images saved, as a sample of the rig. */
+function sampleLabel(ctx) {
+    if (!ctx.ours) return 'official twice';
+    if (!ctx.run.mesh) return 'ours batched';
+
+    return ctx.plan.official ? 'ours' : 'ours, json and binary';
 }
 
 /** What the renderer runs on, for the report. */
@@ -274,6 +363,7 @@ export async function start({ PIXI, loadOurs, loadOfficial, loadCore }) {
             PIXI,
             renderer,
             draws,
+            builds: countBuilds(renderer),
             official,
             ours: lib?.MarrowSpine ? oursSide(PIXI, lib) : null,
             lib,
@@ -286,6 +376,7 @@ export async function start({ PIXI, loadOurs, loadOfficial, loadCore }) {
             renderer: renderer.name,
             gpu: describe(PIXI, renderer),
             run: (plan, options) => runRig(env, plan, options),
+            scene: (scene, options) => runScene(env, scene, options),
         };
     } catch (error) {
         window.renderCheck = { error: message(error), step };

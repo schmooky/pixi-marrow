@@ -105,6 +105,8 @@ export declare class MarrowSpine<N extends MarrowNames = MarrowNames> extends Co
   get perf(): MarrowPerf;
   get updateProbe(): UpdateProbe | null;
   set updateProbe(probe: UpdateProbe | null);
+  get renderMode(): NonNullable<MarrowSpineOptions["renderMode"]>;
+  set renderMode(mode: NonNullable<MarrowSpineOptions["renderMode"]>);
   get skin(): N["skins"] | null;
   set skin(name: N["skins"] | null);
   get timeScale(): number;
@@ -145,6 +147,7 @@ export interface MarrowSpineEvents<N extends MarrowNames = MarrowNames> {
 }
 export interface MarrowSpineOptions {
   autoUpdate?: boolean;
+  renderMode?: "auto" | "mesh" | "batched";
   tightMesh?: "auto" | "on" | "off";
   occlusion?: "auto" | "off";
 }
@@ -161,7 +164,7 @@ export interface PerfEntry {
   reason: string;
   animation?: string;
 }
-export type PerfFeature = "drawCalls" | "blend" | "pages" | "clipping" | "tightMesh" | "occlusion" | "outlines" | "darkTint" | "physics" | "constraints" | "bones" | "slots" | "vertices" | "uploads" | "layout";
+export type PerfFeature = "renderMode" | "drawCalls" | "blend" | "pages" | "clipping" | "tightMesh" | "occlusion" | "outlines" | "darkTint" | "physics" | "constraints" | "bones" | "slots" | "vertices" | "uploads" | "layout";
 export interface PerfMemory {
   shared: number;
   instance: number;
@@ -232,6 +235,7 @@ export interface UpdateProbe {
   record(pose: number, geometry: number, events: number): void;
 }
 export interface ViewStats {
+  renderMode: DrawMode;
   drawCalls: number;
   vertices: number;
   templateBuilds: number;

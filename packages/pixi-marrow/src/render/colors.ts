@@ -38,10 +38,15 @@ export function darkByte(value: number, alpha: number): number {
     return ((colorByte(value) * alpha) / 255) | 0;
 }
 
-/** Writes four bytes to every vertex of an entry, `offset` bytes into the colors of the vertex. */
+/**
+ * Writes four bytes to every vertex of an entry, `offset` bytes into the colors of the vertex.
+ * A template without vertex colors keeps the color of the entry alone.
+ */
 function fill(template: Template, entry: number, offset: number, r: number, g: number, b: number, a: number): void {
     const { colors } = template;
     const stride = template.hasDark ? 8 : 4;
+
+    if (colors.length === 0) return;
     const first = i32(template.first, entry) * stride;
     const end = first + i32(template.counts, entry) * stride;
 
@@ -124,4 +129,27 @@ export function writeDark(
     fill(template, entry, 4, r, g, b, 255);
 
     return true;
+}
+
+/**
+ * Gives a template that was built without vertex colors its color per vertex, from the colors
+ * its entries hold. Does nothing for a template that has them. The mesh mode calls it before
+ * it draws a layout that a batch drew before.
+ *
+ * @example
+ * restoreColors(template);
+ * colorBuffer.data = template.colors;
+ */
+export function restoreColors(template: Template): void {
+    const { light, dark, hasDark } = template;
+
+    if (template.colors.length > 0) return;
+    // a GPU buffer cannot be empty, so there is room for one vertex at least
+    template.colors = new Uint8Array(Math.max(template.vertexCount, 1) * (hasDark ? 8 : 4));
+    for (let entry = 0; entry < template.slots.length; entry++) {
+        const t = entry * 4;
+
+        fill(template, entry, 0, u8(light, t), u8(light, t + 1), u8(light, t + 2), u8(light, t + 3));
+        if (hasDark) fill(template, entry, 4, u8(dark, t), u8(dark, t + 1), u8(dark, t + 2), u8(dark, t + 3));
+    }
 }

@@ -1,4 +1,4 @@
-import { Mesh, Texture } from 'pixi.js';
+import { Mesh, Texture, TextureSource } from 'pixi.js';
 import { expect } from 'vitest';
 import { importAtlas } from '../../src/formats/atlas';
 import { importSkeleton } from '../../src/formats/import';
@@ -62,9 +62,16 @@ export function fixtureFiles(id: string): RigFiles {
 
 /** What a rig is drawn with: the page textures and the options of the view. */
 export interface RigView {
-    /** One texture per atlas page. Default: a white texture of one pixel, which allows no cut of overdraw. */
+    /**
+     * One texture per atlas page. Default: a texture of one pixel per page, which allows no cut
+     * of overdraw. Every rig gets textures of its own, as every loaded skeleton does. The shaders
+     * of the mesh mode are shared by page texture.
+     */
     textures?: (atlas: AtlasModel) => Texture[];
-    /** The outlines and the cuts of overdraw. Default: none. */
+    /**
+     * The render mode, the outlines and the cuts of overdraw. Default: the mesh mode without
+     * outlines. The helpers of this file read the buffers of the meshes.
+     */
     options?: (atlas: AtlasModel) => SkeletonViewOptions;
 }
 
@@ -83,8 +90,10 @@ export async function createRig(
 
     change?.(model, atlas);
     const engine = await createPoseEngine(model);
-    const textures = drawn.textures?.(atlas) ?? atlas.pages.map(() => Texture.WHITE);
-    const view = new SkeletonView(model, atlas, textures, drawn.options?.(atlas));
+    const textures =
+        drawn.textures?.(atlas) ??
+        atlas.pages.map(() => new Texture({ source: new TextureSource({ width: 1, height: 1 }) }));
+    const view = new SkeletonView(model, atlas, textures, { renderMode: 'mesh', ...drawn.options?.(atlas) });
 
     return { model, atlas, lookup: createAttachmentLookup(model), engine, view };
 }
@@ -190,7 +199,7 @@ export function visibleSlots(rig: Rig): { slot: number; attachment: Drawable }[]
 }
 
 /** The triangles of an attachment, relative to its first vertex. */
-function trianglesOf(rig: Rig, attachment: Drawable): number[] {
+export function trianglesOf(rig: Rig, attachment: Drawable): number[] {
     return attachment.type === 'region' ? QUAD : Array.from(meshSource(rig.lookup, attachment).triangles);
 }
 
@@ -230,7 +239,7 @@ export function readDrawn(rig: Rig): Drawn[] {
 }
 
 /** The world positions the geometry kernel gives for a slot in the current pose, as 32-bit floats. */
-function kernelPositions(rig: Rig, slot: number, attachment: Drawable): Float32Array {
+export function kernelPositions(rig: Rig, slot: number, attachment: Drawable): Float32Array {
     const { model, atlas } = rig;
     const { state } = rig.engine;
     const bone = model.slots.bones[slot] ?? -1;

@@ -19,8 +19,9 @@ import { GlProgram, GpuProgram, Shader, type TextureSource, type TextureStyle } 
  *
  * Attribute `aFlags` holds two bytes: x is the texture unit of the page, y is 255 for additive.
  *
- * A clip mask has a shader of its own. It places a vertex with the same statements and writes no
- * color: Pixi draws a mask into the stencil buffer with color writes turned off.
+ * Clip masks have a shader of their own, one for all of them. It places a vertex with the same
+ * statements and writes no color: Pixi draws a mask into the stencil buffer with color writes
+ * turned off.
  */
 
 /** How many atlas pages one draw can sample. More pages split the draw. */
@@ -227,20 +228,59 @@ fn mainFragment(varyings: Varyings) -> @location(0) vec4<f32> {
 `;
 }
 
+/** The view shaders that exist, by the first page they sample, then by all pages and the tint mode. */
+const viewShaders = new WeakMap<TextureSource, Map<string, Shader>>();
+
+/** How many times each shared shader was handed out and not given back. */
+const users = new WeakMap<Shader, number>();
+
+/** Counts one more user of a shared shader. */
+function retain(shader: Shader): Shader {
+    users.set(shader, (users.get(shader) ?? 0) + 1);
+
+    return shader;
+}
+
 /**
- * Creates the shader that draws one range of a skeleton: a WebGL2 program and a WebGPU program
- * with the same output. `sources` are the pages the range samples, 1 to {@link MAX_PAGES}. Vertex
+ * Gives a shader of {@link createViewShader} or `createMaskShader` back. The shader is
+ * destroyed when the last one who got it gives it back.
+ *
+ * @example
+ * const shader = createViewShader([texture.source], false);
+ * releaseShader(shader);
+ */
+export function releaseShader(shader: Shader): void {
+    const left = (users.get(shader) ?? 1) - 1;
+
+    if (left > 0) users.set(shader, left);
+    else {
+        users.delete(shader);
+        shader.destroy();
+    }
+}
+
+/**
+ * The shader that draws one range of a skeleton: a WebGL2 program and a WebGPU program with the
+ * same output. `sources` are the pages the range samples, 1 to {@link MAX_PAGES}. Vertex
  * attribute `aFlags.x` selects one of them. `dark` adds the dark color attribute and the two color
  * tint of the official runtime.
  *
- * Programs are shared: two shaders with the same page count and tint mode use the same programs.
- * The output is premultiplied. The textures must hold premultiplied colors on the GPU.
+ * Shaders are shared: every call with the same pages and tint mode returns the same shader, so
+ * all instances of a skeleton draw with one. Give it back with {@link releaseShader} and do not
+ * destroy it. The output is premultiplied. The textures must hold premultiplied colors on the GPU.
  *
  * @example
  * const shader = createViewShader([texture.source], model.slots.hasDark.includes(1));
  * const mesh = new Mesh({ geometry, shader });
  */
 export function createViewShader(sources: readonly TextureSource[], dark: boolean): Shader {
+    const [first] = sources;
+    const key = `${dark ? 'dark' : 'light'} ${sources.map((source) => source.uid).join(' ')}`;
+    const shared = first === undefined ? undefined : viewShaders.get(first);
+    const known = shared?.get(key);
+
+    // a shader that was given back by its last user is destroyed and has no program
+    if (known !== undefined && known.glProgram !== null) return retain(known);
     const pages = sources.length;
     const name = `marrow-${dark ? 'dark' : 'light'}-${pages}`;
     const source = wgsl(dark, pages);
@@ -250,8 +290,7 @@ export function createViewShader(sources: readonly TextureSource[], dark: boolea
         resources[`uTexture${i}`] = page;
         resources[`uSampler${i}`] = page.style;
     });
-
-    return new Shader({
+    const shader = new Shader({
         glProgram: GlProgram.from({ name, vertex: glVertex(dark, pages), fragment: glFragment(dark, pages) }),
         gpuProgram: GpuProgram.from({
             name,
@@ -260,6 +299,13 @@ export function createViewShader(sources: readonly TextureSource[], dark: boolea
         }),
         resources,
     });
+
+    if (first !== undefined) {
+        if (shared === undefined) viewShaders.set(first, new Map([[key, shader]]));
+        else shared.set(key, shader);
+    }
+
+    return retain(shader);
 }
 
 const GL_MASK_VERTEX = `#version 300 es
@@ -332,13 +378,17 @@ fn mainFragment() -> @location(0) vec4<f32> {
 }
 `;
 
+/** The shader of all clip masks, while a mask holds it. */
+let maskShader: Shader | undefined;
+
 /**
- * Creates the shader of a clip mask: a WebGL2 program and a WebGPU program that place the
- * vertices of a polygon as {@link createViewShader} places the vertices of a slot. The one
- * attribute is `aPosition`. The color it writes is never seen: Pixi draws a mask into the stencil
- * buffer with color writes turned off.
+ * The shader of a clip mask: a WebGL2 program and a WebGPU program that place the vertices of a
+ * polygon as {@link createViewShader} places the vertices of a slot. The one attribute is
+ * `aPosition`. The color it writes is never seen: Pixi draws a mask into the stencil buffer with
+ * color writes turned off.
  *
- * Programs are shared between all mask shaders.
+ * The shader samples nothing, so every mask of every skeleton draws with the same one. Give it
+ * back with {@link releaseShader} and do not destroy it.
  *
  * @example
  * const mask = new Mesh({ geometry: polygon, shader: createMaskShader() });
@@ -348,7 +398,9 @@ fn mainFragment() -> @location(0) vec4<f32> {
 export function createMaskShader(): Shader {
     const name = 'marrow-mask';
 
-    return new Shader({
+    // a shader that was given back by its last user is destroyed and has no program
+    if (maskShader !== undefined && maskShader.glProgram !== null) return retain(maskShader);
+    maskShader = new Shader({
         glProgram: GlProgram.from({ name, vertex: GL_MASK_VERTEX, fragment: GL_MASK_FRAGMENT }),
         gpuProgram: GpuProgram.from({
             name,
@@ -357,4 +409,6 @@ export function createMaskShader(): Shader {
         }),
         resources: {},
     });
+
+    return retain(maskShader);
 }

@@ -5,6 +5,7 @@
  * is measured.
  *
  * usage: pnpm check:render [--renderer=webgl|webgpu|both] [--only=4.3/spineboy] [--animations=3|all]
+ *                          [--render-mode=both|mesh|batched] [--strict-rebuilds] [--trust-mode]
  *                          [--strict-clipping] [--self-test] [--verbose] [--shots=4]
  *                          [--out=.shots/render] [--size=512]
  *
@@ -17,8 +18,21 @@
  * second loop. Per frame the check reports the largest channel difference and the share of the
  * covered pixels that differ by more than 1 and by more than 8 (of 255).
  *
- * Ours is drawn with its defaults, after `asset.optimized` has resolved. The cuts of overdraw
- * that are on by default are therefore part of every comparison with the official runtime.
+ * Ours is drawn after `asset.optimized` has resolved, with the default cuts of overdraw. Those
+ * are therefore part of every comparison with the official runtime.
+ *
+ * Render modes. pixi-marrow draws a skeleton with meshes of its own or as a part of the batches
+ * of its render group: `renderMode: 'auto' | 'mesh' | 'batched'`. Every rig is drawn in both
+ * modes, each asked for by name, and each is held to the same rules against the official
+ * runtime. The official frames are drawn once and serve both. The lines of the mesh mode are the
+ * ones this check had before there were modes. The batched mode has lines of its own.
+ *
+ * The page never takes the mode it asked for as the mode that drew. It reads the mode back from
+ * the runtime: `stats.renderMode`, else the row `renderMode` of `perf.report()`. A runtime that
+ * reports no mode has one render path, and its batched comparisons do not run. A runtime may draw
+ * meshes where the batched mode was asked for, for example while a clip cuts a visible slot.
+ * Such a frame is compared like any other, and the report counts those frames: they say nothing
+ * about batching.
  *
  *   official twice             two official instances. No difference is allowed: the tooling is exact
  *   proof, ...                 an instance made wrong on purpose. It must be rejected, at both
@@ -51,6 +65,47 @@
  *                              multisampled target, so the picture equals the one without cuts
  *   premultiplied page reading the outlines of a premultiplied page must see a color under alpha 0,
  *                              which a 2D canvas returns as black. Runs once per renderer
+ *   render mode                which mode `auto` picked for the rig, and what the two modes draw
+ *                              when they are asked for by name
+ *   ours batched               the batched mode against the official runtime, judged like `ours`
+ *   ours, batched and mesh     the two modes against each other: the largest difference and the
+ *                              share of the pixels that differ. They place vertices in different
+ *                              ways and need not be equal to the bit. Judged by TOLERANCE.modes
+ *   ours batched, ...          the premultiplied atlas, the cuts on and off and the polygons once
+ *                              more in the batched mode, each judged like its line of the mesh mode
+ *   ours, auto and mesh        the default options against the mode they picked, asked for by name.
+ *   ours, auto and batched     No difference is allowed: `auto` picks a mode and adds nothing
+ *   buffers ..., batched       the buffer check in the batched mode
+ *   multisampled ..., batched  the multisampled target in the batched mode, judged by the picture
+ *
+ * Instruction builds. Both buffer checks also count how often Pixi built the instructions of the
+ * render group again while an animation played, from outside: scripts/render/pixels.js wraps the
+ * one method of Pixi that builds them. The stable layout aims at zero, with draw order and
+ * attachment keys too. The count is information. --strict-rebuilds makes a build in the batched
+ * mode a failure, for rigs and for the scenes whose stage does not change.
+ *
+ * Scenes. After the rigs come stages with several instances, see scripts/render/scene-plan.mjs:
+ * many instances that overlap, two rigs in turns, Pixi objects between instances, parents with
+ * alpha and tint, a mask, a filter or a render group, instances that do not draw, blend modes,
+ * dark tint, atlas pages and clips in one batch, and a stage that changes between frames. Each
+ * scene is built once per side and compared like a rig:
+ *
+ *   mesh, batched              ours in that mode against the official runtime of the Spine version
+ *   batched and mesh           the two modes against each other, measured
+ *   batched against mesh       the same, judged, where the official runtime cannot draw the scene
+ *   auto                       the default options at the first frame, against the same reference
+ *   render mode                how many instances of the batched side and of the default options
+ *                              drew in which mode
+ *   what the rigs bring        the rows of `perf.report()` about draw ranges, blend modes, pages,
+ *                              clips and dark tint, from one instance per rig
+ *   draw calls                 per side, counted on the GPU interface for all alike
+ *   instruction builds         how often Pixi built instructions after the first frame, per side
+ *   proof, two instances ...   two instances swapped in the draw order. It must be rejected
+ *
+ * The last scenes look for a limit: 1200 instances in one stage, once of a rig with a clip and
+ * once of a rig without. Each render mode of ours gets a page of its own there, so a mode that
+ * throws inside Pixi cannot disturb the next one. What such a scene runs into prints as `FOUND`,
+ * is listed in the summary as a finding and does not fail the check.
  *
  * TOLERANCE below holds the pass criteria and what they rest on.
  *
@@ -76,7 +131,14 @@
  * passing frame per rig go to `.shots/render/<renderer>/`. `--shots` sets how many cases per rig
  * get images. `--self-test` runs the tooling proof alone and draws nothing of ours. A proof is a
  * picture that is wrong on purpose: it must be rejected, and rejected again at the second
- * placement, so that the second look cannot let a real difference pass.
+ * placement, so that the second look cannot let a real difference pass. The proofs of a rig move,
+ * tint and hide. The proof of the scenes swaps two instances in the draw order.
+ *
+ * --only keeps the rigs and scenes whose id holds the text: `--only=scene/` runs the scenes
+ * alone, `--only=4.` the rigs alone. --render-mode=mesh or batched draws one mode of ours.
+ * --trust-mode runs the batched comparisons on a runtime that reports no mode, and takes the mode
+ * that was asked for as the mode that drew. It is for work on this tool: such a run proves
+ * nothing about a batched mode.
  *
  * Without --renderer both run. A renderer the browser does not have is skipped with a line that
  * says so, and fails the check only when it was asked for by name.
@@ -89,8 +151,9 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { planRigs } from './render/plan.mjs';
 import { createReporter } from './render/report.mjs';
+import { planScenes } from './render/scene-plan.mjs';
 import { bundlePage, serve } from './render/serve.mjs';
-import { ensureBuilt, launchChrome, parseArgs } from './render/setup.mjs';
+import { ensureBuilt, inTime, launchChrome, parseArgs } from './render/setup.mjs';
 
 /**
  * The pass criteria, each as tight as the pictures of this repo support. The numbers they rest on
@@ -142,6 +205,17 @@ const TOLERANCE = {
     // The largest difference is reported and has no limit: one edge pixel differs by up to 53.
     polygons: { over1: 0.0025, over8: 0.0001, few1: 8, few8: 3 },
     polygonsOfficial: { over1: 0.0025, over8: 0.0001, few1: 8, few8: 3 },
+    // Ours in the batched mode against ours in the mesh mode. The two modes place vertices in
+    // different ways, one on the CPU and one in the vertex shader, so they need not be equal to
+    // the bit. Each is held to `match` against the official runtime. Measured between them over
+    // 482 frames per renderer: the worst pixel differs by 5, 0.006% of the pixels of the worst
+    // frame differ by more than 1, none by more than 8. The limits leave room for a longer edge.
+    // Null here would say that the kind is measured and not judged.
+    modes: { max: 6, over1: 0.0005, over8: 0 },
+    // The same two pictures in a scene the official runtime cannot draw, where the mesh mode is
+    // the only reference there is. The limit is the one of `match`: both modes pass that against
+    // the official runtime wherever it can draw.
+    own: { max: 4, over1: 0.0005, over8: 0 },
 };
 /** Failing cases per rig that get their images saved. */
 const SHOTS_PER_RIG = 4;
@@ -152,14 +226,29 @@ const args = parseArgs();
 const wanted = ['webgl', 'webgpu'].includes(args.renderer) ? [args.renderer] : ['webgl', 'webgpu'];
 const outDir = resolve(root, args.out ?? '.shots/render');
 const selfTest = args['self-test'] === 'true';
+/** What a page draws of ours and how it judges, the same for every rig and scene. */
+const pageOptions = {
+    tolerance: TOLERANCE,
+    shots: Number(args.shots ?? SHOTS_PER_RIG),
+    renderMode: ['mesh', 'batched'].includes(args['render-mode']) ? args['render-mode'] : 'both',
+    trustMode: args['trust-mode'] === 'true',
+    strictRebuilds: args['strict-rebuilds'] === 'true',
+};
 
-/** Runs the cases of one rig on a page of its own, so a rig cannot disturb the next one. */
-async function runRig(browser, origin, renderer, rig) {
+/**
+ * Runs the cases of one rig or of one scene on a page of its own, so that it cannot disturb the
+ * next one.
+ *
+ * @param official The Spine version of the official runtime the page loads, or null for none.
+ * @param call The function of `window.renderCheck` to run: `run` for a rig, `scene` for a scene.
+ * @param plan What that function gets: the rig or the scene.
+ * @param options What a job changes of the options of the page, or nothing.
+ */
+async function runPage(browser, origin, renderer, { official, call, plan, options: more }) {
     const page = await browser.newPage();
     const errors = [];
     // the runtimes load before the renderer is created, so the page is told which ones in its address
-    const query = `renderer=${renderer}&official=${rig.official ?? 'none'}&ours=${selfTest ? 'no' : 'yes'}`;
-    let timer;
+    const query = `renderer=${renderer}&official=${official ?? 'none'}&ours=${selfTest ? 'no' : 'yes'}`;
 
     page.on('pageerror', (error) => errors.push(error.message));
     page.on('response', (response) => {
@@ -176,58 +265,125 @@ async function runRig(browser, origin, renderer, rig) {
     try {
         await page.goto(`${origin}/?${query}`);
         await page.waitForFunction(() => window.renderCheck, null, { timeout: 30_000 });
-        const state = await page.evaluate(() => ({ ...window.renderCheck, run: undefined }));
+        const state = await page.evaluate(() => ({ ...window.renderCheck, run: undefined, scene: undefined }));
 
         if (state.error || state.renderer !== renderer) return { state, errors };
         // the renderer is up from here on
-        const options = { tolerance: TOLERANCE, shots: Number(args.shots ?? SHOTS_PER_RIG), extras: rig.extras };
-        const report = await Promise.race([
-            page.evaluate(([plan, opts]) => window.renderCheck.run(plan, opts), [rig, options]),
-            new Promise((_, reject) => {
-                timer = setTimeout(() => reject(new Error('timed out')), RIG_TIMEOUT);
-            }),
-        ]);
+        const options = { ...pageOptions, ...more, extras: plan.extras };
+        const report = await inTime(
+            page.evaluate(([name, it, opts]) => window.renderCheck[name](it, opts), [call, plan, options]),
+            RIG_TIMEOUT,
+        );
 
         return { state, report, errors };
     } catch (error) {
         return { state: { renderer }, crash: error.message.split('\n')[0], errors };
     } finally {
-        clearTimeout(timer);
         await page.close().catch(() => {});
     }
 }
 
-async function main() {
-    ensureBuilt(root, 'check-render');
+/** The line that says what a rig is and what it plays. */
+function describeRig(rig) {
+    const plays = rig.sequences.map((s) => `${s.animation}${s.skin ? ` (${s.skin})` : ''}`).join(', ');
+    const solves = [rig.physics && 'physics', rig.slider && 'slider'].filter(Boolean).join(' and ');
+
+    return `${rig.id}  ${rig.size} px, scale ${rig.placement.scale}, ${solves ? `solves ${solves}, ` : ''}plays ${plays}`;
+}
+
+/** The line that says what a scene holds and what its pictures are judged against. */
+function describeScene(scene) {
+    const rigs = Object.values(scene.rigs).map(
+        (rig) => `${rig.id} plays ${rig.animation}${rig.skin ? ` (${rig.skin})` : ''}`,
+    );
+    const against = scene.official
+        ? `against spine-pixi-v8 for Spine ${scene.official}`
+        : `no official picture, ${scene.why}: the batched mode is judged against the mesh mode`;
+
+    return `${scene.id}  ${scene.size} px, ${scene.title}. ${rigs.join(', ')}, ${against}`;
+}
+
+/** The rigs and the scenes of this run. A rig runs `run` of the page, a scene runs `scene`. */
+async function planJobs(made) {
+    // a scene picks its rigs by id, so the plan holds every rig and --only filters afterwards
     const planned = await planRigs({
         root,
         size: Number(args.size ?? 512),
         animations: args.animations === 'all' ? Number.POSITIVE_INFINITY : Number(args.animations ?? 3),
-        only: args.only ?? null,
+        only: null,
     });
+    const chosen = (id) => !args.only || id.includes(args.only);
     // the tooling proof needs the official runtime, which Spine 4.1 does not have
-    const rigs = selfTest ? planned.filter((rig) => rig.official) : planned;
+    const rigs = planned.filter((rig) => chosen(rig.id) && (!selfTest || rig.official));
+    // the tooling proof of the scenes is the one with two instances swapped
+    const scenes = planScenes({ root, rigs: planned, made }).filter(
+        (scene) => chosen(scene.id) && (!selfTest || scene.proof),
+    );
 
-    if (rigs.length === 0) throw new Error(`no rig matches --only=${args.only}`);
+    if (rigs.length + scenes.length === 0) throw new Error(`no rig and no scene matches --only=${args.only}`);
     // the cases that need no rig run on the page of the first one
-    rigs[0].extras = true;
+    if (rigs.length > 0) rigs[0].extras = true;
+
+    return [
+        ...rigs.map((rig) => ({ official: rig.official, call: 'run', plan: rig, title: describeRig(rig) })),
+        ...scenes.flatMap(sceneJobs),
+    ];
+}
+
+/**
+ * The pages of one scene. A scene that looks for a limit gets a page per render mode of ours, so
+ * that a mode that throws inside Pixi cannot disturb the next one: the two modes by name and the
+ * default options.
+ */
+function sceneJobs(scene) {
+    const job = (plan, options) => ({
+        official: scene.official,
+        call: 'scene',
+        plan,
+        title: describeScene(plan),
+        options,
+    });
+
+    if (!scene.limit || selfTest) return [job(scene)];
+    const modes = pageOptions.renderMode === 'both' ? ['mesh', 'batched', 'auto'] : [pageOptions.renderMode];
+
+    return modes.map((mode) =>
+        job({ ...scene, id: `${scene.id}, ${mode === 'auto' ? 'default options' : mode}` }, { renderMode: mode }),
+    );
+}
+
+async function main() {
+    ensureBuilt(root, 'check-render');
     const bundle = await bundlePage(root);
-    const server = await serve(root, bundle.dir);
-    const browser = await launchChrome();
     let failed = 0;
     let ran = 0;
     let missing = false;
+    let server;
+    let browser;
 
     try {
+        const jobs = await planJobs(bundle.made);
+
+        server = await serve(root, bundle.dir, { made: bundle.made });
+        browser = await launchChrome();
         for (const renderer of wanted) {
             const dir = join(outDir, renderer);
-            const reporter = createReporter({ root, dir, verbose: args.verbose === 'true' });
+            const reporter = createReporter({
+                root,
+                dir,
+                verbose: args.verbose === 'true',
+                modesJudged: TOLERANCE.modes !== null,
+            });
+            const started = Date.now();
+            const seconds = { run: 0, scene: 0 };
             let announced = false;
 
             rmSync(dir, { recursive: true, force: true });
-            for (const rig of rigs) {
-                const { state, report, crash, errors } = await runRig(browser, server.origin, renderer, rig);
+            for (const job of jobs) {
+                const before = Date.now();
+                const { state, report, crash, errors } = await runPage(browser, server.origin, renderer, job);
 
+                seconds[job.call] += (Date.now() - before) / 1000;
                 if (state.step !== 'load' && (state.error || state.renderer !== renderer)) {
                     const why = state.error ?? `the browser gave ${state.renderer}`;
 
@@ -238,33 +394,35 @@ async function main() {
                 }
                 if (!announced) console.log(`check-render: ${renderer}${state.gpu ? ` (${state.gpu})` : ''}`);
                 announced = true;
-                const plays = rig.sequences.map((s) => `${s.animation}${s.skin ? ` (${s.skin})` : ''}`).join(', ');
+                console.log(`  ${job.title}`);
+                // what a scene that looks for a limit runs into is a finding. It fails nothing
+                const limit = job.plan.limit === true;
 
-                const solves = [rig.physics && 'physics', rig.slider && 'slider'].filter(Boolean).join(' and ');
-
-                console.log(
-                    `  ${rig.id}  ${rig.size} px, scale ${rig.placement.scale}, ` +
-                        `${solves ? `solves ${solves}, ` : ''}plays ${plays}`,
-                );
                 if (crash || state.error) {
-                    console.log(`    FAIL the page failed: ${crash ?? state.error}`);
-                    failed++;
+                    console.log(`    ${limit ? 'FOUND' : 'FAIL'} the page failed: ${crash ?? state.error}`);
+                    if (limit) reporter.findings.push(`${job.plan.id}: the page failed`);
+                    else failed++;
                 }
                 if (report) {
-                    failed += reporter.rig(rig, report);
+                    failed += reporter.rig(job.plan, report);
                     missing ||= report.missing;
                 }
                 for (const error of errors) console.log(`    error ${error}`);
-                if (errors.length) failed++;
+                if (errors.length && limit)
+                    reporter.findings.push(`${job.plan.id}: ${errors.length} errors of the page`);
+                else if (errors.length) failed++;
             }
             if (!announced) continue;
             ran++;
-            console.log(`check-render: ${renderer} summary`);
+            console.log(
+                `check-render: ${renderer} summary, ${((Date.now() - started) / 1000).toFixed(0)} s: ` +
+                    `rigs ${seconds.run.toFixed(0)} s, scenes ${seconds.scene.toFixed(0)} s`,
+            );
             reporter.summary();
         }
     } finally {
-        await browser.close();
-        server.close();
+        await browser?.close();
+        server?.close();
         bundle.remove();
     }
     if (ran === 0) {

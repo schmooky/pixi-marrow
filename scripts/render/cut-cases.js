@@ -7,6 +7,7 @@
  * - A multisampled target moves edges inside a pixel, so both cuts must switch themselves off
  *   in the frame that is drawn to it, and the picture must be the one without cuts.
  */
+import { modeOptions } from './mode.js';
 import { BACKGROUNDS, compare, coverage, createStudio } from './pixels.js';
 
 const message = (error) => (error instanceof Error ? `${error.name}: ${error.message}` : String(error));
@@ -159,14 +160,18 @@ export async function premultipliedReadingCase(env, core) {
  * after an update. Both must notice the target while Pixi draws and lay themselves out as quads
  * for that frame. Each picture must then equal the one of an instance without cuts, to the bit.
  * A rig that shows meshes only has no polygon to take back. The report says how many there were.
+ *
+ * @param mode The render mode the instances ask for. In the batched mode the picture is judged
+ * alone: how that mode takes a cut back is its own business, so the counters are information.
  */
-export async function multisampledCase(env, plan) {
+export async function multisampledCase(env, plan, mode = 'mesh') {
     const { PIXI, lib } = env;
     const reasons = [];
     const info = {};
     const url = (file) => `/fixtures/ours/${plan.version}/${file}`;
     const [sequence] = plan.sequences;
     const made = [];
+    const batched = mode === 'batched';
 
     try {
         const asset = await lib.MarrowAsset.load({ skeleton: url(plan.files.skel), atlas: url(plan.files.atlas) });
@@ -180,7 +185,7 @@ export async function multisampledCase(env, plan) {
             ['default', {}],
             ['polygons', { tightMesh: 'on' }],
         ]) {
-            const spine = new lib.MarrowSpine(asset, { autoUpdate: false, ...options });
+            const spine = new lib.MarrowSpine(asset, { autoUpdate: false, ...options, ...modeOptions(mode) });
             const root = new PIXI.Container();
 
             made.push(spine);
@@ -205,7 +210,8 @@ export async function multisampledCase(env, plan) {
 
             info[key].max = max;
             if (max > 0) reasons.push(`${key}: differs from the picture without cuts by ${max}`);
-            if (info[key].tightAfter > 0) reasons.push(`${key}: ${info[key].tightAfter} polygons are still laid out`);
+            if (!batched && info[key].tightAfter > 0)
+                reasons.push(`${key}: ${info[key].tightAfter} polygons are still laid out`);
         }
     } catch (error) {
         reasons.push(message(error));
@@ -213,5 +219,10 @@ export async function multisampledCase(env, plan) {
         for (const spine of made) spine.destroy();
     }
 
-    return { label: 'multisampled target', kind: 'multisampled', reasons, info };
+    return {
+        label: batched ? 'multisampled target, batched' : 'multisampled target',
+        kind: 'multisampled',
+        reasons,
+        info,
+    };
 }

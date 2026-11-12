@@ -13,7 +13,7 @@ import { ClipMask } from './clip-mask';
 import type { ClipShape } from './clip-shape';
 import { MeasuredGeometry } from './measured-geometry';
 import { u8, u16 } from './read';
-import { createMaskShader, createViewShader, MAX_PAGES } from './shader';
+import { createMaskShader, createViewShader, MAX_PAGES, releaseShader } from './shader';
 import { STATIC_STRIDE, type Template } from './template';
 
 /*
@@ -245,7 +245,7 @@ export class DrawRanges {
         return rewritten;
     }
 
-    /** Frees the meshes, the geometries, the index buffers, the masks and the shaders. The vertex buffers stay. */
+    /** Frees the meshes, the geometries, the index buffers and the masks, and gives the shaders back. The vertex buffers stay. */
     destroy(): void {
         for (const range of this.all) {
             const { geometry } = range.mesh;
@@ -259,8 +259,9 @@ export class DrawRanges {
             group.mask.destroy();
             group.container.destroy();
         }
-        for (const shader of this.shaders) shader?.destroy();
-        this.maskShader?.destroy();
+        // the shaders are shared with other instances: the last one to give one back destroys it
+        for (const shader of this.shaders) if (shader !== undefined) releaseShader(shader);
+        if (this.maskShader !== undefined) releaseShader(this.maskShader);
         this.maskShader = undefined;
         this.all.length = 0;
         this.clipped.length = 0;

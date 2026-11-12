@@ -11,8 +11,10 @@ import type { PerfEntry } from './report-base';
  */
 export interface PerfMemory {
     /**
-     * What the asset holds once, however many instances exist: the typed arrays of the skeleton
-     * model and of the atlas, and the triangles that views share for the outlines.
+     * What the asset holds once, however many instances exist. These are the typed arrays of
+     * the skeleton model and of the atlas, and the triangles that views share for the outlines.
+     * The vertex layout of this instance counts here too: all instances that show the same skin
+     * share it.
      *
      * Not counted: names, the polygons and rectangles of the outlines, which are plain arrays,
      * and what a pose engine derives from the model.
@@ -20,8 +22,8 @@ export interface PerfMemory {
     shared: number;
     /**
      * What this instance holds in typed arrays. First `engine.bytes`: the pose and what
-     * constraints add to it. Then the arrays of the view: the vertex layout, the vertex and index
-     * data, the clip masks, the list of visible slots and the test of covered slots.
+     * constraints add to it. Then the arrays of the view: the vertex and index data, the clip
+     * masks, the list of visible slots and the test of covered slots.
      *
      * Not counted: track entries and their handles, and the Pixi objects of the view.
      */

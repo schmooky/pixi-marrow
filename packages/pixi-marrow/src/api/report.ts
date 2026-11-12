@@ -23,7 +23,7 @@ const PHYSICS_REASONS: Readonly<Record<PhysicsMode, string>> = {
 
 /**
  * How many draw ranges the visible slots need. A range ends where the clip, the blend state or
- * the group of 8 pages changes. The blend state and the pages can be left out, to see what each costs.
+ * the group of pages changes. The blend state and the pages can be left out, to see what each costs.
  */
 function countRanges(source: ReportSource, blend: boolean, pages: boolean): number {
     const { blendModes } = source.model.slots;
@@ -42,7 +42,53 @@ function countRanges(source: ReportSource, blend: boolean, pages: boolean): numb
     return ranges;
 }
 
-function drawCallRow({ stats }: ReportSource): PerfEntry {
+/** Why a view draws in its mode, as the reason of the row. */
+function modeWhy({ option, reason, vertices, limit }: ReportSource['view']['mode']): string {
+    const asked = `the option renderMode is "${option}"`;
+    const count = `the skeleton has ${vertices} ${vertices === 1 ? 'vertex' : 'vertices'} in a batch`;
+
+    if (reason === 'option') return asked;
+    if (reason === 'small') return `${asked}: ${count}, which is at most ${limit}`;
+    if (reason === 'large') return `${asked}: ${count}, which is more than ${limit}`;
+
+    if (reason === 'limit') {
+        return `${asked}, and a batch of the renderer samples fewer textures than the skeleton has atlas pages`;
+    }
+
+    return `${asked}, and a clipping attachment cuts a visible slot while the code that clips in a batch is not loaded: the clip draws with meshes and a stencil mask`;
+}
+
+function renderModeRow({ view }: ReportSource): PerfEntry {
+    const { mode } = view.mode;
+    const does =
+        mode === 'batched'
+            ? 'It shares draw calls with the skeletons next to it, and the CPU places its vertices'
+            : 'It has draw calls of its own, and the GPU places its vertices';
+
+    return { feature: 'renderMode', value: mode, reason: `${modeWhy(view.mode)}. ${does}` };
+}
+
+/** The row about draw calls of a view that draws in batches. */
+function batchRow({ stats, view }: ReportSource): PerfEntry {
+    const { batches, sharedBy } = view.mode;
+    const others = sharedBy - 1;
+    let reason = 'Pixi has not built the instructions of the render group with the skeleton yet';
+
+    // a skeleton that shows nothing is in no batch
+    if (stats.drawCalls === 0) return { feature: 'drawCalls', value: '0', reason: 'no slot is visible' };
+    if (batches === 1) {
+        reason = `1 batch of the render group, shared with ${plural(others, 'other skeleton')}: the visible slots share one blend state and one group of pages`;
+    } else if (batches > 1) {
+        reason = `${batches} batches of the render group: a batch ends where the blend state or the group of 16 pages changes. The first one is shared with ${plural(others, 'other skeleton')}`;
+    }
+
+    return { feature: 'drawCalls', value: `${stats.drawCalls} shared`, reason };
+}
+
+function drawCallRow(source: ReportSource): PerfEntry {
+    const { stats } = source;
+
+    if (source.view.mode.mode === 'batched') return batchRow(source);
     const ranges = stats.drawCalls - stats.maskDraws;
     const masks = stats.maskDraws > 0 ? ` and ${plural(stats.maskDraws, 'mask draw')}` : '';
     let reason = 'no slot is visible';
@@ -80,12 +126,14 @@ function pagesRow(source: ReportSource): PerfEntry {
     const count = source.atlas.pages.length;
     const groups = new Set(source.view.visible.map(({ pageGroup }) => pageGroup)).size;
     const extra = countRanges(source, true, true) - countRanges(source, true, false);
-    const used = groups > 1 ? `, and the visible slots use ${groups} groups of 8` : '';
+    const batched = source.view.mode.mode === 'batched';
+    const samples = batched ? 'a batch samples up to 16' : 'a draw range samples up to 8';
+    const used = groups > 1 ? `, and the visible slots use ${groups} groups of ${batched ? 16 : 8}` : '';
 
     return {
         feature: 'pages',
         value: extra > 0 ? plural(extra, 'extra range') : 'no extra range',
-        reason: `the atlas has ${plural(count, 'page')} and a draw range samples up to 8${used}`,
+        reason: `the atlas has ${plural(count, 'page')} and ${samples}${used}`,
     };
 }
 
@@ -99,6 +147,19 @@ function clippingRow(source: ReportSource): PerfEntry {
         return { feature: 'clipping', value: 'off', reason: 'no clipping attachment is applied at the moment' };
     }
     const cutting = [...new Set(view.visible.filter(({ clip }) => clip >= 0).map(({ clip }) => clip))];
+
+    if (view.mode.mode === 'batched') {
+        const { clipVertices, clipIndices } = view.mode;
+
+        return {
+            feature: 'clipping',
+            value: `${plural(stats.clips, 'clip')}, cut on the CPU`,
+            reason:
+                cutting.length === 0
+                    ? 'no visible slot is cut'
+                    : `the clipping attachment of ${slotNames(model, cutting)} cuts visible slots: their triangles are cut as the official runtime cuts them and stay in the batch, which keeps room for ${clipVertices} vertices and ${clipIndices} indices of cut triangles`,
+        };
+    }
     const reason =
         cutting.length === 0
             ? 'no visible slot is cut, so no mask is drawn'
@@ -182,6 +243,14 @@ function verticesRow({ stats, view }: ReportSource): PerfEntry {
     const visible = view.visible.reduce((sum, slot) => sum + slot.vertices, 0);
     const bits = stats.vertices > 65535 ? 32 : 16;
 
+    if (view.mode.mode === 'batched') {
+        return {
+            feature: 'vertices',
+            value: `${stats.vertices} vertices, ${stats.indices} indices`,
+            reason: `${visible} of the vertices are visible. The batch holds the largest attachment of every slot, ${view.mode.batchBytes} bytes for this skeleton`,
+        };
+    }
+
     return {
         feature: 'vertices',
         value: `${stats.vertices} vertices, ${stats.indices} indices`,
@@ -220,6 +289,7 @@ function layoutRow({ stats }: ReportSource): PerfEntry {
  */
 export function buildReport(source: ReportSource): PerfEntry[] {
     return [
+        renderModeRow(source),
         drawCallRow(source),
         blendRow(source),
         pagesRow(source),

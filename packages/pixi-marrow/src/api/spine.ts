@@ -6,7 +6,7 @@ import type { PhysicsMode, PoseEngine } from '../pose/engine';
 import { SkeletonView } from '../render/skeleton-view';
 import type { ViewStats } from '../render/stats';
 import { MarrowAsset, type MarrowLoadOptions } from './asset';
-import { finiteArgument, namedIndex, physicsMode } from './checks';
+import { finiteArgument, namedIndex, physicsMode, renderMode } from './checks';
 import { EventPump } from './events';
 import type { MarrowNames, MarrowSpineOptions, PlayOptions, QueueOptions, StopOptions, UpdateProbe } from './options';
 import { type PlayPlan, planPlay } from './play-fields';
@@ -72,6 +72,7 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends Container 
             outlines: this.outlines,
             tightMesh: options.tightMesh,
             occlusion: options.occlusion,
+            renderMode: renderMode(options.renderMode ?? 'auto'),
         });
         this.addChild(this.skeletonView.container);
         // The setup pose, so that the object draws before its first update. Physics is left out:
@@ -145,6 +146,18 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends Container 
             });
         }
         this.probe = probe;
+    }
+
+    /**
+     * The `renderMode` option: `auto`, `mesh` or `batched`. Setting it takes effect with the next
+     * update. `stats.renderMode` names the mode in use. Any other value throws a `MarrowError`.
+     */
+    get renderMode(): NonNullable<MarrowSpineOptions['renderMode']> {
+        return this.skeletonView.renderMode;
+    }
+
+    set renderMode(mode: NonNullable<MarrowSpineOptions['renderMode']>) {
+        this.skeletonView.renderMode = renderMode(mode);
     }
 
     /** The name of the active skin, or null. Setting it also resets the slots to the setup pose. */

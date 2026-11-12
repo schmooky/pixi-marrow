@@ -3,7 +3,7 @@
 A Spine runtime for PixiJS v8 with its own pose core. It plays Spine 4.1, 4.2 and 4.3 skeletons.
 
 <!-- facts:status -->
-Pre-release, milestone M4. Skeletons of Spine 4.1, 4.2 and 4.3 load, play and draw in PixiJS v8 with every constraint solved: IK, transform, path, physics and sliders. The poses equal the official cores to the bit, and the picture matches the official Pixi runtime.
+Pre-release, milestone M5. Skeletons of Spine 4.1, 4.2 and 4.3 load, play and draw in PixiJS v8 with every constraint solved: IK, transform, path, physics and sliders. The poses equal the official cores to the bit, and the picture matches the official Pixi runtime. Small skeletons share draw calls.
 <!-- /facts:status -->
 
 The plan is in [docs/DESIGN.md](docs/DESIGN.md).
@@ -33,6 +33,17 @@ hero.physicsTranslate(dx, dy);
 ```
 
 `entry` and `track.configure` take any field of the official `TrackEntry` by its official name. `physics` is the official mode: `update`, `pose`, `reset` or `none`. Physics does not follow the Pixi position by itself: tell it with `physicsTranslate` and `physicsRotate`.
+
+## Many skeletons
+
+Skeletons of up to 1024 vertices share draw calls: 200 instances of a small rig draw in one call. Nothing to set up. A Pixi object between two skeletons in draw order ends a batch, so keep skeletons next to each other in the display list where you can.
+
+```ts
+const boss = await MarrowSpine.load({ skeleton: 'boss.skel', atlas: 'boss.atlas', renderMode: 'mesh' });
+console.log(boss.stats.renderMode);
+```
+
+`renderMode` is `auto` by default. `mesh` draws a skeleton with meshes of its own, which pays for large rigs. `batched` forces the batch.
 
 ## Why is it slow
 

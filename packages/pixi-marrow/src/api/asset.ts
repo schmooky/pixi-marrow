@@ -7,6 +7,8 @@ import { describeSkeleton, type SkeletonInfo } from '../model/info';
 import type { SkeletonModel } from '../model/model';
 import type { AtlasOutlines } from '../model/outlines';
 import { loadPoseEngine, type PoseEngineFactory } from '../pose/engine';
+import { loadBatchClipper } from '../render/clip-code';
+import { hasClip } from '../render/mode';
 import { configureTexture, isStillImage, loadPages, releasePage } from './textures';
 
 /** What `MarrowAsset.load` and `MarrowSpine.load` take. */
@@ -158,6 +160,17 @@ async function checkOutlines(outlines: unknown, atlas: AtlasModel): Promise<Atla
     const { readAtlasOutlines } = await import('../geometry/outlines');
 
     return readAtlasOutlines(outlines, atlas);
+}
+
+/**
+ * The code that poses a skeleton, and with it the code that clips in a batch when the skeleton
+ * has a clipping attachment. Both load on demand, so a skeleton without a clip does not pay for
+ * the second one.
+ */
+async function loadCode(model: SkeletonModel): Promise<PoseEngineFactory> {
+    const [createEngine] = await Promise.all([loadPoseEngine(model), hasClip(model) ? loadBatchClipper() : undefined]);
+
+    return createEngine;
 }
 
 /** A scan of the page images that was started. The code that scans loads on demand. */
@@ -321,7 +334,7 @@ export class MarrowAsset {
         const { model, atlas, textures } = data;
         const outlines = await checkOutlines(data.outlines, atlas);
 
-        return new MarrowAsset({ model, atlas, textures, outlines }, await loadPoseEngine(model), []);
+        return new MarrowAsset({ model, atlas, textures, outlines }, await loadCode(model), []);
     }
 
     private static async fetch(options: MarrowLoadOptions, key: string | undefined): Promise<MarrowAsset> {
@@ -334,7 +347,7 @@ export class MarrowAsset {
         const atlas = importAtlas(await atlasFile.text());
         // before the images, so that outlines of another atlas cost no image loads
         const outlines = await checkOutlines(outlinesFile, atlas);
-        const createEngine = await loadPoseEngine(model);
+        const createEngine = await loadCode(model);
         const { textures, loaded } = await loadPages(atlas, options.atlas, options.textures);
 
         return new MarrowAsset({ model, atlas, textures, outlines }, createEngine, loaded, key);

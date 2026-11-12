@@ -9,6 +9,7 @@ import type { SkeletonModel } from '../model/model';
 import type { AttachmentLookup } from '../pose/shared/lookup';
 import { type Cuts, type RegionCut, writeOpaque, writePolygon } from './cuts';
 import { type Draft, type Drawable, draftEntries, isDrawable } from './drafts';
+import { layoutKey, shareLayout } from './layouts';
 import { MAX_PAGES } from './shader';
 
 /*
@@ -19,10 +20,19 @@ import { MAX_PAGES } from './shader';
  *
  * With outlines a region attachment has the range of its polygon, not of a quad. The offsets of
  * the quad stay, since the bounds of the skeleton are those of the quads.
+ *
+ * Most of a template is the same for every instance that shows the same skin with the same
+ * cuts: what an entry is, where its vertices are, its texture coordinates. Those arrays are laid
+ * out once and shared, see `layouts.ts`. An instance has arrays of its own for what its
+ * pose writes: positions, colors, and the frame each entry shows.
  */
 
 /** 32-bit numbers per vertex in {@link Template.statics}: u, v, then four flag bytes. */
 export const STATIC_STRIDE = 3;
+
+/** What a layout holds in place of the arrays an instance writes. */
+const NO_BYTES = new Uint8Array(0);
+const NO_POSITIONS = new Float32Array(0);
 
 /** The slot blend mode that adds. An index into `BLEND_MODES`. */
 const ADDITIVE = 1;
@@ -95,12 +105,19 @@ export interface Template {
     readonly opaqueOffsets: Float64Array;
     /** x, y per vertex. */
     readonly positions: Float32Array;
-    /** u, v and four flag bytes per vertex. See {@link STATIC_STRIDE}. */
+    /**
+     * u, v and four flag bytes per vertex. See {@link STATIC_STRIDE}. The instances of a layout
+     * share the array unless an entry has a sequence, which rewrites its range.
+     */
     readonly statics: Float32Array;
     /** The bytes of {@link statics}. Per vertex, at byte 8: the texture unit, then 255 for additive. */
     readonly flags: Uint8Array;
-    /** Per vertex: the light color as bytes r, g, b, a, and with `hasDark` the dark color after it. */
-    readonly colors: Uint8Array;
+    /**
+     * Per vertex: the light color as bytes r, g, b, a, and with `hasDark` the dark color after it.
+     * Empty for a template that was built without vertex colors: a batch takes the color of an
+     * entry from {@link light} and {@link dark}.
+     */
+    colors: Uint8Array;
     /** Whether {@link colors} holds dark colors. */
     readonly hasDark: boolean;
 }
@@ -135,6 +152,7 @@ function measure(drafts: readonly Draft[], slotCount: number): Sizes {
     return sizes;
 }
 
+/** The arrays of a layout, with no room for what an instance writes: `shareLayout` adds that. */
 function allocate(model: SkeletonModel, skin: number, drafts: readonly Draft[], dark: boolean): Template {
     const sizes = measure(drafts, model.slots.count);
     const entries = drafts.length;
@@ -167,17 +185,17 @@ function allocate(model: SkeletonModel, skin: number, drafts: readonly Draft[], 
         offsetAt: new Int32Array(entries).fill(-1),
         frames: new Int32Array(entries),
         pages: new Int32Array(entries),
-        light: new Uint8Array(entries * 4),
-        dark: new Uint8Array(entries * 4),
+        light: NO_BYTES,
+        dark: NO_BYTES,
         framePages: new Int32Array(sizes.frames),
         frameUVs: new Float32Array(sizes.frameUVs),
         offsets: model.version === '4.3' ? new Float64Array(sizes.offsets) : new Float32Array(sizes.offsets),
         tightOffsets: new Float64Array(sizes.tight),
         opaqueOffsets: new Float64Array(sizes.opaque),
-        positions: new Float32Array(room * 2),
+        positions: NO_POSITIONS,
         statics,
         flags: new Uint8Array(statics.buffer),
-        colors: new Uint8Array(room * (dark ? 8 : 4)),
+        colors: NO_BYTES,
         hasDark: dark,
     };
 }
@@ -277,11 +295,16 @@ function fillEntry(
 /**
  * Lays out a vertex range for every region and mesh attachment each slot can show with a skin: the
  * attachments of that skin, of the default skin, and the ones in `shown`. Texture coordinates,
- * pages and flags are written. Positions and colors start at zero.
+ * pages and flags are written. Positions and colors start at zero. With `vertexColors` false
+ * the template has no color per vertex, which only the buffers of the mesh mode need.
  *
  * With `cuts` a region attachment whose atlas region has an outline gets the range of its
  * polygon: fewer or more than 4 vertices, and none for a region that shows no pixel. Attachments
  * with a sequence and meshes are laid out as without it.
+ *
+ * Instances of one model that ask for the same layout share it: the arrays that say what the
+ * entries are and where, and the texture coordinates. Each call returns a template with its
+ * own arrays for positions, colors and frames. `releaseTemplate` lets a template go.
  *
  * Throws the {@link MarrowError} of the geometry kernel when the atlas misses a region.
  *
@@ -298,8 +321,22 @@ export function buildTemplate(
     shown: readonly (AttachmentData | null)[] | null,
     dark: boolean,
     cuts?: Cuts,
+    vertexColors: boolean = true,
 ): Template {
     const drafts = draftEntries(model, atlas, lookup, skin, shown, cuts);
+    const key = layoutKey(atlas, skin, dark, cuts, drafts);
+
+    return shareLayout(model, key, vertexColors, () => layOut(model, atlas, skin, drafts, dark));
+}
+
+/** Lays the drafts of a skin out: the arrays that every instance of the layout shares. */
+function layOut(
+    model: SkeletonModel,
+    atlas: AtlasModel,
+    skin: number,
+    drafts: readonly Draft[],
+    dark: boolean,
+): Template {
     const template = allocate(model, skin, drafts, dark);
     const cursor: Cursor = { vertex: 0, frame: 0, uv: 0, offset: 0, tight: 0, opaque: 0 };
     let entry = 0;

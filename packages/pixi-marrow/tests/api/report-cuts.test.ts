@@ -27,8 +27,9 @@ describe('the rows of the perf report about the cuts of overdraw', () => {
     const made: MarrowSpine[] = [];
     const assets: MarrowAsset[] = [];
 
+    /** A display object in the mesh mode, whose rows these tests read, unless asked otherwise. */
     function create(asset: MarrowAsset, options: ConstructorParameters<typeof MarrowSpine>[1] = {}): MarrowSpine {
-        const spine = new MarrowSpine(asset, { ...options, autoUpdate: false });
+        const spine = new MarrowSpine(asset, { renderMode: 'mesh', ...options, autoUpdate: false });
 
         made.push(spine);
         assets.push(asset);

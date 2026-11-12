@@ -2,6 +2,10 @@ import { Texture, TextureSource } from 'pixi.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { textureBytes, typedArrayBytes } from '../../src/api/memory';
 import { type MarrowAsset, MarrowSpine } from '../../src/index';
+import { createAttachmentLookup } from '../../src/pose/shared/lookup';
+import { layoutArrayBytes } from '../../src/render/inspect';
+import { buildTemplate } from '../../src/render/template';
+import { createStage } from '../render/batch-stage';
 import type { CoverSlot } from '../render/cover-rig';
 import { PENTAGON, setPolygon } from '../render/cuts';
 import { coverAsset } from './cover-asset';
@@ -31,10 +35,19 @@ const ATLAS = 5 * 11 * 4;
 const VERTEX_DATA = 8 * (8 + 12 + 4);
 /** One range with room for the indices of two quads, 16-bit. */
 const INDEX_DATA = 12 * 2;
-/** Per entry: 13 integers, the hollow flag, an area and a tint. Then the entries of the slots. */
-const LAYOUT = (SLOTS + 1) * 4 + 2 * (13 * 4 + 1 + 8 + 32);
-/** Per entry: the page of its frame, the 8 offsets of its quad and the 8 of its opaque rectangle. */
+/**
+ * The vertex layout, which the instances of the asset share. The entries of the slots, then per
+ * entry 9 integers, the hollow flag, an area and a tint, then the texture coordinates with flags.
+ */
+const LAYOUT = (SLOTS + 1) * 4 + 2 * (9 * 4 + 1 + 8 + 32) + 8 * 12;
+/** Per entry, shared too: the page of its frame, the 8 offsets of its quad and the 8 of its opaque rectangle. */
 const FRAMES = 2 * (4 + 8 * 4 + 8 * 8);
+/** What the asset and its layout hold once, however many instances exist. */
+const SHARED = BONE_TABLE + SLOT_TABLE + ATTACHMENTS + ATLAS + LAYOUT + FRAMES;
+/** What an instance writes per entry: the frame, the page and two colors. Then its positions. */
+const OWN = 2 * (4 * 4) + 8 * 8;
+/** The colors per vertex of an instance in the mesh mode. */
+const COLORS = 8 * 4;
 /** The visible list and the test of covered slots, with its four rectangles, and a flag per page. */
 const LISTS = SLOTS * (4 + 2 + 4) + SLOTS * (1 + 4 + 1) + (16 + 16 + 16 + 4 + 256 + 128) + 1;
 
@@ -100,8 +113,9 @@ describe('the bytes of page textures', () => {
 describe('perf.memory', () => {
     const made: MarrowSpine[] = [];
 
+    /** A display object in the mesh mode, which the sums that were made by hand are about, unless asked otherwise. */
     function create(asset: MarrowAsset, options: ConstructorParameters<typeof MarrowSpine>[1] = {}): MarrowSpine {
-        const spine = new MarrowSpine(asset, { ...options, autoUpdate: false });
+        const spine = new MarrowSpine(asset, { renderMode: 'mesh', ...options, autoUpdate: false });
 
         made.push(spine);
 
@@ -119,14 +133,45 @@ describe('perf.memory', () => {
         const memory = await spine.perf.memory();
 
         expect(memory).toEqual({
-            shared: BONE_TABLE + SLOT_TABLE + ATTACHMENTS + ATLAS,
-            instance: spine.engine.bytes + LAYOUT + FRAMES + VERTEX_DATA + LISTS + INDEX_DATA,
+            shared: SHARED,
+            instance: spine.engine.bytes + OWN + COLORS + LISTS + INDEX_DATA,
             gpu: VERTEX_DATA + INDEX_DATA + 512 * 512 * 4,
             gpuBuffers: VERTEX_DATA + INDEX_DATA,
             gpuTextures: 512 * 512 * 4,
         });
-        expect(memory.shared).toBe(610);
+        expect(memory.shared).toBe(610 + 262 + 200);
         expect(memory.gpuBuffers).toBe(spine.stats.bufferBytes);
+    });
+
+    it('counts a batched instance with its share of the batch buffers, and no buffer of its own', async () => {
+        const stage = createStage();
+        const spine = create(await coverAsset(BEHIND), { renderMode: 'batched' });
+        // what the batch element keeps, as integers: an entry per slot, a flag per entry, a texture number per page, the layout
+        const element = (SLOTS + 2 + 1) * 4 + (SLOTS + 1) * 4;
+        // the vertex data the view draws from: its positions and the texture coordinates of its layout
+        const vertexData = 8 * (8 + 12);
+        // two quads in the batch: positions, then texture coordinates, color, tint and flags. 12 indices and one triangle without area
+        const share = 8 * (8 + 20) + (12 + 3) * 2;
+        // no color per vertex, which only the buffers of the mesh mode need
+        const own = spine.engine.bytes + OWN + LISTS + element;
+
+        spine.update(FRAME);
+        // before Pixi built the instructions the skeleton is in no batch
+        expect(await spine.perf.memory()).toMatchObject({ instance: own, gpuBuffers: 0, gpu: 512 * 512 * 4 });
+        stage.root.addChild(spine);
+        stage.render();
+        const memory = await spine.perf.memory();
+
+        expect(memory).toEqual({
+            shared: SHARED,
+            instance: own + share,
+            gpu: share + 512 * 512 * 4,
+            gpuBuffers: share,
+            gpuTextures: 512 * 512 * 4,
+        });
+        expect(spine.stats).toMatchObject({ renderMode: 'batched', bufferBytes: vertexData + share });
+        // no mesh, no geometry and no buffer below the display object
+        expect(spine.children[0]?.children.map((child) => child.label)).toEqual(['marrow-batch']);
     });
 
     it('counts the pose of the engine in the bytes of the instance', async () => {
@@ -154,7 +199,7 @@ describe('perf.memory', () => {
         expect(one.gpu).toBe(one.gpuBuffers + one.gpuTextures);
         // what the doc says two instances cost
         expect(one.shared + one.gpuTextures + 2 * (one.instance + one.gpuBuffers)).toBe(
-            610 + 512 * 512 * 4 + 2 * (first.engine.bytes + LAYOUT + FRAMES + LISTS + 2 * (VERTEX_DATA + INDEX_DATA)),
+            SHARED + 512 * 512 * 4 + 2 * (first.engine.bytes + OWN + COLORS + LISTS + VERTEX_DATA + 2 * INDEX_DATA),
         );
     });
 
@@ -179,10 +224,13 @@ describe('perf.memory', () => {
         const buffers = 9 * (8 + 12 + 8) - 8 * (8 + 12 + 4) + (16 - 12) * 2 + (6 * 4 + 4 * 2);
 
         expect(more.gpuBuffers - less.gpuBuffers).toBe(buffers);
-        // a slot more in every list and in the layout, and the ten numbers of the pentagon
-        expect(more.instance - less.instance).toBe(before + buffers + 4 + (4 + 2 + 4) + (1 + 4 + 1) + 10 * 8);
+        // a slot more in every list, and what the buffers hold more without the texture coordinates of the layout
+        expect(more.instance - less.instance).toBe(before + buffers - 12 + (4 + 2 + 4) + (1 + 4 + 1));
         // a bone, a slot and a clipping attachment more, and the triangles of the pentagon that views share
-        expect(more.shared - less.shared).toBe(68 + 61 + typedArrayBytes(clipOf(asset)) + 9 * 2);
+        const model = 68 + 61 + typedArrayBytes(clipOf(asset)) + 9 * 2;
+
+        // the layout: a slot more, the texture coordinates of a vertex more, the ten numbers of the pentagon
+        expect(more.shared - less.shared).toBe(model + 4 + 12 + 10 * 8);
     });
 
     it('counts the typed arrays of a fixture model and of its atlas as the shared bytes', async () => {
@@ -192,7 +240,11 @@ describe('perf.memory', () => {
         const tables = model.bones.count * 68 + model.slots.count * 61;
         const memory = await spine.perf.memory();
 
-        expect(memory.shared).toBe(typedArrayBytes(model) + typedArrayBytes(atlas));
+        const lookup = createAttachmentLookup(model);
+        const layout = layoutArrayBytes(buildTemplate(model, atlas, lookup, -1, null, model.slots.hasDark.includes(1)));
+
+        expect(memory.shared).toBe(typedArrayBytes(model) + typedArrayBytes(atlas) + layout);
+        expect(layout).toBeGreaterThan(model.slots.count * 77);
         expect(typedArrayBytes(atlas)).toBe(atlas.regionNames.length * 11 * 4);
         expect(typedArrayBytes({ bones: model.bones, slots: model.slots })).toBe(tables);
         expect(memory.shared).toBeGreaterThan(tables + atlas.regionNames.length * 44);
@@ -210,7 +262,8 @@ describe('perf.memory', () => {
         for (let i = 0; i < 20; i++) spine.update(FRAME);
         const after = await spine.perf.memory();
 
-        expect(after.shared).toBe(before.shared);
+        // the layout of the skin with more attachments is the larger one
+        expect(after.shared).toBeGreaterThan(before.shared);
         expect(after.instance).toBeGreaterThan(before.instance);
         expect(after.gpuBuffers).toBeGreaterThan(before.gpuBuffers);
         expect(after.gpuBuffers).toBeGreaterThanOrEqual(spine.stats.bufferBytes);
@@ -224,7 +277,7 @@ describe('perf.memory', () => {
 
         spine.destroy();
 
-        expect(await perf.memory()).toMatchObject({ gpuBuffers: 0, gpu: 512 * 512 * 4, shared: 610 });
+        expect(await perf.memory()).toMatchObject({ gpuBuffers: 0, gpu: 512 * 512 * 4, shared: SHARED });
     });
 });
 

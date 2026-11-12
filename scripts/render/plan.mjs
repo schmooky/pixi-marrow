@@ -200,6 +200,9 @@ export async function planRigs({ root, size, animations, only }) {
             // only normal and additive slots: the whole skeleton fits one draw call
             oneDraw: !info.features.includes('multiplyBlend') && !info.features.includes('screenBlend'),
             sequences,
+            // every animation with its seconds: a scene picks its animations by name
+            durations: Object.fromEntries(info.animations.map((animation) => [animation.name, animation.duration])),
+            skins: model.skins.map((skin) => skin.name),
             steady: steadyAnimations(info.animations, chosen, played),
             // what the sliders key through the animations they play, on top of every animation
             sliderFeatures: played,

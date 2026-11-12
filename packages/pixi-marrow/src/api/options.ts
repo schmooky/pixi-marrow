@@ -20,6 +20,21 @@ export interface MarrowSpineOptions {
      */
     autoUpdate?: boolean;
     /**
+     * How the skeleton reaches the GPU.
+     *
+     * - `mesh` gives it meshes of its own: one draw call per instance, more where slots multiply,
+     *   screen or are clipped. The GPU places the vertices, and a clip is a stencil mask.
+     * - `batched` writes it into the batch of its render group: skeletons that follow each other
+     *   in the display list share one draw call, as sprites do. The CPU places the vertices and
+     *   copies them in every frame, and it cuts the triangles of clipped slots.
+     * - `auto` (the default) batches a skeleton of up to 1024 vertices and gives a larger one
+     *   meshes.
+     *
+     * `stats.renderMode` names the mode in use, and `perf.report()` says why. The picture is the
+     * same in both modes to the eye and not to the bit: the vertices are placed by other code.
+     */
+    renderMode?: 'auto' | 'mesh' | 'batched';
+    /**
      * What a region attachment is drawn as, once the asset has outlines.
      *
      * - `auto` (the default) keeps the quad. A region without a visible pixel is not drawn at all.

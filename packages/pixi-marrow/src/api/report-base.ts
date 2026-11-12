@@ -10,6 +10,7 @@ import type { OutlinesState } from './asset';
 
 /** What a row of the perf report is about. */
 export type PerfFeature =
+    | 'renderMode'
     | 'drawCalls'
     | 'blend'
     | 'pages'
