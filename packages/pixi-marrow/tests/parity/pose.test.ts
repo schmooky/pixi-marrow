@@ -8,9 +8,10 @@ import { listPoseRigs } from './pose-synthetic';
 
 /*
  * Pose parity: a pose engine gives exactly the pose the official core of the file's version gives
- * for the same calls. Constraints are not part of this: the engine ignores them, and the official
- * numbers are the animated pose before constraints, with world transforms from bones alone.
- * It runs on every fixture and on a rig made for what the fixtures do not have.
+ * for the same calls. The local pose is the animated one, before constraints. The world
+ * transforms have IK, transform and path constraints solved. Physics and slider constraints are
+ * not solved yet: the engine ignores them and the official skeleton has them switched off.
+ * It runs on every fixture and on the rigs made for what the fixtures do not have.
  */
 describe.each(listPoseRigs())('$id', (source) => {
     let rig: OfficialPoseRig;

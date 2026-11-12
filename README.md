@@ -3,7 +3,7 @@
 A Spine runtime for PixiJS v8 with its own pose core. It plays Spine 4.1, 4.2 and 4.3 skeletons.
 
 <!-- facts:status -->
-Pre-release, milestone M2b. Skeletons of Spine 4.1, 4.2 and 4.3 load, play and draw in PixiJS v8, and the picture matches the official runtime. Constraints and clipping are not solved yet: a skeleton with constraints plays only with them ignored.
+Pre-release, milestone M3. Skeletons of Spine 4.1, 4.2 and 4.3 load, play and draw in PixiJS v8, with IK, transform and path constraints and with clipping, and the picture matches the official runtime. Physics and slider constraints are not solved yet: a skeleton that has them plays only with them ignored.
 <!-- /facts:status -->
 
 The plan is in [docs/DESIGN.md](docs/DESIGN.md).
@@ -19,7 +19,19 @@ app.stage.addChild(hero);
 hero.play('run', { loop: true });
 ```
 
-A skeleton with constraints needs `constraints: 'ignore'` in the load options until constraints are solved. It then plays without them.
+A skeleton with physics or slider constraints needs `constraints: 'ignore'` in the load options until those are solved. It then plays without them. IK, transform and path constraints and clipping work.
+
+## Less overdraw
+
+After a load the page images are read in idle time. From then on a region without a visible pixel is not drawn, and a slot behind the opaque part of a later slot is skipped. The picture stays the same, bit for bit.
+
+```ts
+const hero = await MarrowSpine.load({ skeleton: 'hero.skel', atlas: 'hero.atlas', tightMesh: 'on' });
+```
+
+`tightMesh: 'on'` also draws every region as the polygon around its visible pixels. On the example rigs that shades 3 to 19 percent less triangle area. The picture is the same to the eye and not to the bit: some pixels move by 1 of 255 levels.
+
+`pixi-marrow outlines hero.atlas` writes the outlines to `hero.outlines.json` at build time. Pass that URL as `outlines` in the load options and nothing is read at load time.
 
 ## Goals
 
@@ -36,7 +48,7 @@ A skeleton with constraints needs `constraints: 'ignore'` in the load options un
 |---|---|
 | `pixi-marrow` | `MarrowSpine`, the display object, with `MarrowAsset`, `Track` and `MarrowError`. Needs `pixi.js`. |
 | `pixi-marrow/core` | `importSkeleton`, `importAtlas`, `createPoseEngine`, the geometry functions, `describeSkeleton` and the model types. No Pixi. Runs in Node. |
-| `pixi-marrow/optimize` | `generateNames` and the `pixi-marrow` command line tool (`info`, `typegen`). Runs in Node. |
+| `pixi-marrow/optimize` | `generateNames`, `buildAtlasOutlines`, `decodePng` and the `pixi-marrow` command line tool (`info`, `typegen`, `outlines`). Runs in Node. |
 <!-- /facts:entry-points -->
 
 ## Work on it

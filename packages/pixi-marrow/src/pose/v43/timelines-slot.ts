@@ -1,13 +1,18 @@
 import { MarrowError } from '../../base/errors';
 import type { AttachmentData } from '../../model/attachments';
-import { curveValue, f32, f64, sampleKey, search, towardSetup } from './curves';
-import { findAttachment, setSlotAttachment, setupAttachment, slotActive } from './slots';
-import { CURRENT, FIRST, type Pose43, SETUP, type TimelineKernel } from './types';
+import { ALPHA, curveValue, SHARED, sampleValues, search, TIME, towardSetup, VALUES } from './curves';
+import { findAttachment, setSlotAttachment, setupAttachment } from './slots';
+import { CURRENT, FIRST, type Pose43, SETUP, type Timeline43 } from './types';
+
+/*
+ * The timelines that animate the color and the attachment of a slot. Each reads its time and its
+ * alpha from `SHARED`, for the reasons given in curves.ts.
+ */
 
 /** The official `Color.clamp` for `count` channels. */
 function clampChannels(values: Float64Array, index: number, count: number): void {
     for (let i = index; i < index + count; i++) {
-        const value = f64(values, i);
+        const value = Number(values[i]);
 
         if (value < 0) values[i] = 0;
         else if (value > 1) values[i] = 1;
@@ -15,25 +20,26 @@ function clampChannels(values: Float64Array, index: number, count: number): void
 }
 
 /**
- * Mixes `count` sampled channels into a color, like the official color timelines. At full alpha
- * the sample replaces the color. Otherwise it is mixed from the setup color or from the current
- * color. The result is clamped to the range from 0 to 1.
+ * Mixes `count` sampled channels into a color, like the official color timelines. The channels
+ * are read from `SHARED` at `sampleIndex`. At full alpha they replace the color. Otherwise they
+ * are mixed from the setup color or from the current color. The result is clamped to the range
+ * from 0 to 1.
  */
 function mixChannels(
     values: Float64Array,
     setup: Float64Array,
     index: number,
     count: number,
-    sample: Float64Array,
     sampleIndex: number,
-    alpha: number,
     from: number,
 ): void {
+    const alpha = Number(SHARED[ALPHA]);
+
     for (let k = 0; k < count; k++) {
-        let value = f64(sample, sampleIndex + k);
+        let value = Number(SHARED[sampleIndex + k]);
 
         if (alpha !== 1) {
-            const base = from === SETUP ? f64(setup, index + k) : f64(values, index + k);
+            const base = from === SETUP ? Number(setup[index + k]) : Number(values[index + k]);
 
             value = base + (value - base) * alpha;
         }
@@ -45,57 +51,55 @@ function mixChannels(
  * The official rgba, rgb, rgba2 and rgb2 timelines. `offset` is the number of light channels and
  * `dark` says whether the keys hold a dark color after them.
  */
-export const applyColor: TimelineKernel = (pose, timeline, _lastTime, time, _events, alpha, from) => {
+export function applyColor(pose: Pose43, timeline: Timeline43, from: number): void {
+    const state = pose.state;
     const slot = timeline.target;
 
-    if (!slotActive(pose, slot)) return;
-    const { colors, darkColors } = pose.state;
+    if (state.active[timeline.bone] !== 1) return;
+    const { colors, darkColors } = state;
     const setup = pose.rig.model.slots;
     const light = slot * 4;
     const dark = slot * 3;
     const count = timeline.offset;
 
-    if (time < f32(timeline.frames, 0)) {
-        towardSetup(colors, setup.colors, light, count, from, alpha);
+    if (Number(SHARED[TIME]) < Number(timeline.frames[0])) {
+        towardSetup(colors, setup.colors, light, count, from);
         // a full color is mixed with the official Color.add, which clamps
         if (count === 4 && from === FIRST) clampChannels(colors, light, 4);
-        if (timeline.dark) towardSetup(darkColors, setup.darkColors, dark, 3, from, alpha);
+        if (timeline.dark) towardSetup(darkColors, setup.darkColors, dark, 3, from);
 
         return;
     }
-    const sample = pose.rig.scratch.sample;
-
-    sampleKey(timeline, time, sample);
-    mixChannels(colors, setup.colors, light, count, sample, 0, alpha, from);
-    if (timeline.dark) mixChannels(darkColors, setup.darkColors, dark, 3, sample, count, alpha, from);
-};
+    sampleValues(timeline, timeline.entries - 1);
+    mixChannels(colors, setup.colors, light, count, VALUES, from);
+    if (timeline.dark) mixChannels(darkColors, setup.darkColors, dark, 3, VALUES + count, from);
+}
 
 /** The official alpha timeline: the alpha of a slot color. */
-export const applyAlpha: TimelineKernel = (pose, timeline, _lastTime, time, _events, alpha, from) => {
-    const slot = timeline.target;
+export function applyAlpha(pose: Pose43, timeline: Timeline43, from: number): void {
+    const state = pose.state;
 
-    if (!slotActive(pose, slot)) return;
-    const { colors } = pose.state;
+    if (state.active[timeline.bone] !== 1) return;
+    const colors = state.colors;
     const setup = pose.rig.model.slots.colors;
-    const i = slot * 4 + 3;
+    const i = timeline.target * 4 + 3;
+    const frames = timeline.frames;
 
-    if (time < f32(timeline.frames, 0)) {
-        towardSetup(colors, setup, i, 1, from, alpha);
+    if (Number(SHARED[TIME]) < Number(frames[0])) {
+        towardSetup(colors, setup, i, 1, from);
 
         return;
     }
-    const sample = pose.rig.scratch.sample;
-
-    sample[0] = curveValue(timeline.frames, timeline.curves, time);
-    mixChannels(colors, setup, i, 1, sample, 0, alpha, from);
-};
+    curveValue(frames, timeline.curves);
+    mixChannels(colors, setup, i, 1, VALUES, from);
+}
 
 /**
  * Stands in for a two color timeline on a slot that has no dark color. The official runtime
  * fails there with a TypeError. This throws an error that names the slot.
  */
-export const applyColorWithoutDark: TimelineKernel = (pose, timeline) => {
-    if (!slotActive(pose, timeline.target)) return;
+export function applyColorWithoutDark(pose: Pose43, timeline: Timeline43): void {
+    if (pose.state.active[timeline.bone] !== 1) return;
     const name = pose.rig.model.slots.names[timeline.target];
 
     throw new MarrowError(
@@ -105,7 +109,7 @@ export const applyColorWithoutDark: TimelineKernel = (pose, timeline) => {
             fix: 'Turn on the tint black option of the slot in Spine, or remove the timeline, and export again.',
         },
     );
-};
+}
 
 /** The attachment a slot shows for the name of an attachment key. Null clears the slot. */
 export function keyAttachment(pose: Pose43, slot: number, name: string | null): AttachmentData | null {
@@ -122,20 +126,44 @@ export function keyAttachment(pose: Pose43, slot: number, name: string | null): 
 }
 
 /**
+ * The attachment the slot of an attachment timeline shows at key `index`, with the active skin.
+ * Null clears the slot. The answer depends on the model and the skin only, so it is looked up
+ * once per skin and key, and every engine of the model shares it.
+ */
+export function shownAttachment(pose: Pose43, timeline: Timeline43, index: number): AttachmentData | null {
+    const skin = pose.state.skin + 1;
+    let row = timeline.shown[skin];
+
+    if (row === undefined) {
+        row = new Array<AttachmentData | null | undefined>(timeline.names.length).fill(undefined);
+        timeline.shown[skin] = row;
+    }
+    let attachment = row[index];
+
+    if (attachment === undefined) {
+        attachment = keyAttachment(pose, timeline.target, timeline.names[index] ?? null);
+        if (index >= 0 && index < row.length) row[index] = attachment;
+    }
+
+    return attachment;
+}
+
+/**
  * The official `AttachmentTimeline.apply`. The player does not use it: it applies attachment
  * timelines with its own retain rules.
  */
-export const applyAttachment: TimelineKernel = (pose, timeline, _lastTime, time, _events, _alpha, from, _add, out) => {
+export function applyAttachment(pose: Pose43, timeline: Timeline43, from: number, out: boolean): void {
     const slot = timeline.target;
+    const frames = timeline.frames;
 
-    if (!slotActive(pose, slot)) return;
-    if (out || time < f32(timeline.frames, 0)) {
+    if (pose.state.active[timeline.bone] !== 1) return;
+    if (out || Number(SHARED[TIME]) < Number(frames[0])) {
         if (from !== CURRENT) setSlotAttachment(pose, slot, setupAttachment(pose, slot));
 
         return;
     }
-    const name = timeline.names[search(timeline.frames, time, 1)] ?? null;
+    const name = timeline.names[search(frames, 1)] ?? null;
 
     // the official timeline treats an empty name like null here
     setSlotAttachment(pose, slot, name ? keyAttachment(pose, slot, name) : null);
-};
+}

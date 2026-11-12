@@ -1,5 +1,5 @@
 import type { PoseState } from '../state';
-import { curvePercent, search } from './curves';
+import { ALPHA, curvePercent, SHARED, search, TIME } from './curves';
 import { factsOf, type Rig } from './rig';
 import { ADD, FIRST, type LegacyTimeline, SETUP } from './timelines';
 
@@ -58,9 +58,9 @@ function addDeform(
     from: Float32Array,
     to: Float32Array | null,
     values: Float64Array,
-    alpha: number,
     setup: Float32Array | null,
 ): void {
+    const alpha = Number(SHARED[ALPHA]);
     const percent = Number(values[0]);
 
     for (let i = 0; i < count; i++) {
@@ -78,9 +78,9 @@ function mixDeformFromSetup(
     from: Float32Array,
     to: Float32Array | null,
     values: Float64Array,
-    alpha: number,
     setup: Float32Array | null,
 ): void {
+    const alpha = Number(SHARED[ALPHA]);
     const percent = Number(values[0]);
 
     for (let i = 0; i < count; i++) {
@@ -104,8 +104,8 @@ function mixDeform(
     from: Float32Array,
     to: Float32Array | null,
     values: Float64Array,
-    alpha: number,
 ): void {
+    const alpha = Number(SHARED[ALPHA]);
     const percent = Number(values[0]);
 
     for (let i = 0; i < count; i++) {
@@ -118,7 +118,8 @@ function mixDeform(
 }
 
 /** Before the first key with blend `first`: moves the deform toward the setup shape. */
-function mixDeformToSetup(deform: Float64Array, count: number, alpha: number, setup: Float32Array | null): void {
+function mixDeformToSetup(deform: Float64Array, count: number, setup: Float32Array | null): void {
+    const alpha = Number(SHARED[ALPHA]);
     if (setup === null) {
         const rest = 1 - alpha;
 
@@ -137,12 +138,12 @@ function deformBeforeFirstKey(
     pose: PoseState,
     slot: number,
     count: number,
-    alpha: number,
     blend: number,
     setup: Float32Array | null,
 ): void {
+    const alpha = Number(SHARED[ALPHA]);
     if (blend === SETUP || (blend === FIRST && alpha === 1)) pose.deformLengths[slot] = 0;
-    else if (blend === FIRST) mixDeformToSetup(resizeDeform(pose, slot, count), count, alpha, setup);
+    else if (blend === FIRST) mixDeformToSetup(resizeDeform(pose, slot, count), count, setup);
 }
 
 /** The deform at or after the first key of a timeline. `values` is scratch space. */
@@ -150,12 +151,12 @@ function deformFromKeys(
     deform: Float64Array,
     timeline: LegacyTimeline,
     first: Float32Array,
-    time: number,
-    alpha: number,
     blend: number,
     setup: Float32Array | null,
     values: Float64Array,
 ): void {
+    const time = Number(SHARED[TIME]);
+    const alpha = Number(SHARED[ALPHA]);
     const { frames, curves, vertices } = timeline;
     const count = first.length;
     let from = vertices[frames.length - 1] ?? first;
@@ -163,16 +164,16 @@ function deformFromKeys(
 
     if (!(time >= Number(frames[frames.length - 1]))) {
         // between two keys, at the percentage that goes to values[0]
-        const frame = search(frames, time, 1);
+        const frame = search(frames, 1);
 
-        curvePercent(frames, curves, time, frame, values);
+        curvePercent(frames, curves, frame, values);
         from = vertices[frame] ?? first;
         to = vertices[frame + 1] ?? first;
     }
-    if (blend === ADD) addDeform(deform, count, from, to, values, alpha, setup);
+    if (blend === ADD) addDeform(deform, count, from, to, values, setup);
     else if (alpha === 1) setDeform(deform, count, from, to, values);
-    else if (blend === SETUP) mixDeformFromSetup(deform, count, from, to, values, alpha, setup);
-    else mixDeform(deform, count, from, to, values, alpha);
+    else if (blend === SETUP) mixDeformFromSetup(deform, count, from, to, values, setup);
+    else mixDeform(deform, count, from, to, values);
 }
 
 /** The official `DeformTimeline.apply`. `values` is scratch space. */
@@ -180,11 +181,10 @@ export function applyDeform(
     rig: Rig,
     pose: PoseState,
     timeline: LegacyTimeline,
-    time: number,
-    alpha: number,
     mixBlend: number,
     values: Float64Array,
 ): void {
+    const time = Number(SHARED[TIME]);
     const slot = timeline.target;
     const shown = pose.attachments[slot] ?? null;
     const first = timeline.vertices[0];
@@ -199,8 +199,8 @@ export function applyDeform(
     const setup = facts.geometry.bones === null ? facts.geometry.vertices : null;
 
     if (time < Number(timeline.frames[0])) {
-        deformBeforeFirstKey(pose, slot, first.length, alpha, blend, setup);
+        deformBeforeFirstKey(pose, slot, first.length, blend, setup);
     } else {
-        deformFromKeys(resizeDeform(pose, slot, first.length), timeline, first, time, alpha, blend, setup, values);
+        deformFromKeys(resizeDeform(pose, slot, first.length), timeline, first, blend, setup, values);
     }
 }

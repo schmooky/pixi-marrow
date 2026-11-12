@@ -41,10 +41,10 @@ export function countDraws() {
 /**
  * A render texture of `size` by `size` pixels and the means to draw into it and read it back.
  * On WebGPU the texture is copied to a buffer: the extract system of Pixi goes through a 2D canvas
- * there, which divides by alpha and loses the raw values.
+ * there, which divides by alpha and loses the raw values. `antialias` makes the target multisampled.
  */
-export function createStudio(PIXI, renderer, size, draws) {
-    const target = PIXI.RenderTexture.create({ width: size, height: size, resolution: 1, antialias: false });
+export function createStudio(PIXI, renderer, size, draws, antialias = false) {
+    const target = PIXI.RenderTexture.create({ width: size, height: size, resolution: 1, antialias });
     const isGpu = renderer.type === PIXI.RendererType.WEBGPU;
     const bytesPerRow = Math.ceil((size * 4) / 256) * 256;
     const buffer = isGpu
@@ -109,8 +109,9 @@ export function createStudio(PIXI, renderer, size, draws) {
  * Compares two pictures of the same size.
  *
  * @param alpha False leaves the alpha channel out.
- * @returns `max` is the largest channel difference. `over1` and `over8` count the pixels that differ
- * by more than 1 and more than 8 in a channel. `covered` counts the pixels either picture drew on.
+ * @returns `max` is the largest channel difference. `differ` counts the pixels that differ at all,
+ * `over1` and `over8` the ones that differ by more than 1 and more than 8 in a channel. `covered`
+ * counts the pixels either picture drew on.
  * `box` bounds the pixels over 8, and `worst` is the pixel with the largest difference.
  */
 export function compare(a, b, size, background, alpha = true) {
@@ -119,6 +120,7 @@ export function compare(a, b, size, background, alpha = true) {
     const channelMax = [0, 0, 0, 0];
     const box = [size, size, -1, -1];
     let max = 0;
+    let differ = 0;
     let over1 = 0;
     let over8 = 0;
     let covered = 0;
@@ -149,6 +151,7 @@ export function compare(a, b, size, background, alpha = true) {
             max = d;
             worst = p;
         }
+        if (d > 0) differ++;
         if (d > 1) over1++;
         if (d > 8) {
             const x = p % size;
@@ -165,6 +168,7 @@ export function compare(a, b, size, background, alpha = true) {
     return {
         max,
         channelMax: channelMax.slice(0, channels),
+        differ,
         over1,
         over8,
         covered,

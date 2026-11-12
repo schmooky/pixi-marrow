@@ -1,6 +1,6 @@
 import { MarrowError } from '../../base/errors';
 import type { AttachmentData } from '../../model/attachments';
-import type { AttachmentInfo, Pose43, Rig43 } from './types';
+import type { AttachmentInfo, Pose43, Rig43, Timeline43 } from './types';
 
 /** What the engine knows about an attachment. Throws for an attachment that is not from the model. */
 function infoOf(rig: Rig43, attachment: AttachmentData): AttachmentInfo {
@@ -20,7 +20,7 @@ function infoOf(rig: Rig43, attachment: AttachmentData): AttachmentInfo {
 }
 
 /** True when the bone of a slot is active. Timelines leave the slots of other bones alone. */
-export function slotActive(pose: Pose43, slot: number): boolean {
+function slotActive(pose: Pose43, slot: number): boolean {
     const bone = pose.rig.model.slots.bones[slot] ?? -1;
 
     return pose.state.active[bone] === 1;
@@ -66,31 +66,28 @@ function sharesDeform(rig: Rig43, a: AttachmentData, b: AttachmentData): boolean
 
 /**
  * The info of the attachment a slot shows, when the slot is active and the timeline attachment of
- * what it shows is `attachment`. Null otherwise. Deform and sequence timelines apply to such slots only.
+ * what it shows is the attachment of `timeline`. Null otherwise. Deform and sequence timelines
+ * apply to such slots only.
  */
-export function followerInfo(pose: Pose43, slot: number, attachment: AttachmentData | null): AttachmentInfo | null {
+export function followerInfo(pose: Pose43, slot: number, timeline: Timeline43): AttachmentInfo | null {
     if (!slotActive(pose, slot)) return null;
     const shown = pose.state.attachments[slot];
 
     if (shown == null) return null;
-    const info = infoOf(pose.rig, shown);
+    // most slots show the attachment of the timeline itself: its info is at hand
+    const info = shown === timeline.attachment && timeline.info !== null ? timeline.info : infoOf(pose.rig, shown);
 
-    return info.timeline === attachment ? info : null;
+    return info.timeline === timeline.attachment ? info : null;
 }
 
 /**
  * The official `Attachment.isTimelineActive`: true when the slot of a deform or sequence timeline,
  * or one of its other slots, shows an attachment the timeline applies to.
  */
-export function timelineActive(
-    pose: Pose43,
-    slot: number,
-    attachment: AttachmentData | null,
-    others: Int16Array,
-): boolean {
-    if (followerInfo(pose, slot, attachment) !== null) return true;
+export function timelineActive(pose: Pose43, slot: number, timeline: Timeline43, others: Int16Array): boolean {
+    if (followerInfo(pose, slot, timeline) !== null) return true;
     for (let i = 0; i < others.length; i++) {
-        if (followerInfo(pose, others[i] ?? -1, attachment) !== null) return true;
+        if (followerInfo(pose, others[i] ?? -1, timeline) !== null) return true;
     }
 
     return false;

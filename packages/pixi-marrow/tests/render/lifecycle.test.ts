@@ -2,6 +2,8 @@ import { type Buffer, Container } from 'pixi.js';
 import { describe, expect, it } from 'vitest';
 import { MarrowError } from '../../src/base/errors';
 import { syntheticRig } from '../geometry/synthetic';
+import { clipGroups } from './clip-check';
+import { settle, WINDOW } from './heap';
 import {
     createRig,
     loadRig,
@@ -33,34 +35,6 @@ function boxOf(rig: Rig): { minX: number; minY: number; maxX: number; maxY: numb
     }
 
     return box;
-}
-
-/** Updates per measured window. One small object per update would grow the heap by 8 kB a window. */
-const WINDOW = 500;
-/** What a window may grow the heap by: the measurement itself allocates a little. */
-const QUIET = 2048;
-
-/**
- * Runs windows of `run` calls until three in a row leave the heap as it was, and returns how many
- * windows that took. Returns -1 when the heap never settles: then every call allocates.
- *
- * The first windows are the warm-up. The JavaScript engine compiles a function in steps, and only
- * the last step stops allocating: Pixi's event emitter, which every buffer upload goes through,
- * allocates its arguments until it was called about 16,000 times.
- */
-function settle(run: (i: number) => void, limit = 150): number {
-    let quiet = 0;
-
-    for (let window = 0, i = 0; window < limit; window++) {
-        const before = process.memoryUsage().heapUsed;
-
-        for (let n = 0; n < WINDOW; n++, i++) run(i);
-        // a collection shrinks the heap by far more than a quiet window moves it
-        quiet = Math.abs(process.memoryUsage().heapUsed - before) < QUIET ? quiet + 1 : 0;
-        if (quiet === 3) return window + 1;
-    }
-
-    return -1;
 }
 
 describe('bounds', () => {
@@ -162,8 +136,15 @@ describe('memory', () => {
                 (sum, mesh) => sum + mesh.geometry.indexBuffer.data.byteLength,
                 0,
             );
+            // the coin shows a clipping attachment: its mask holds 39 vertices of 8 bytes and 112 indices
+            const maskBytes = clipGroups(rig.view).reduce(
+                (sum, group) =>
+                    sum + group.mask.geometry.buffers.reduce((bytes, buffer) => bytes + buffer.data.byteLength, 0),
+                0,
+            );
 
-            expect(rig.view.stats.bufferBytes).toBe(rig.view.stats.vertices * perVertex + indexBytes);
+            expect(maskBytes).toBe(rig === dark ? 39 * 8 + 112 * 2 : 0);
+            expect(rig.view.stats.bufferBytes).toBe(rig.view.stats.vertices * perVertex + indexBytes + maskBytes);
             expect(indexBytes % 4).toBe(0);
         }
     });

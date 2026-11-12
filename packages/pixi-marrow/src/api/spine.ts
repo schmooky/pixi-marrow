@@ -2,6 +2,7 @@ import { Container, type DestroyOptions, Ticker } from 'pixi.js';
 import { MarrowError } from '../base/errors';
 import { unknownName } from '../base/names';
 import type { SkeletonInfo } from '../model/info';
+import type { AtlasOutlines } from '../model/outlines';
 import type { EventKey } from '../model/timelines';
 import type { PoseEngine, TrackFields } from '../pose/engine';
 import { SkeletonView, type ViewStats } from '../render/skeleton-view';
@@ -80,6 +81,8 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends Container 
      */
     readonly engine: PoseEngine;
     private readonly skeletonView: SkeletonView;
+    /** The outlines of the asset that the view was given last. */
+    private outlines: AtlasOutlines | undefined;
     private readonly book = new TrackBook();
     /** The engine events since the last emit. */
     private pending = new EventList();
@@ -103,11 +106,16 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends Container 
         this.engine = asset.createEngine();
         // Spine's y axis points up and Pixi's points down. The official Pixi runtime flips the pose too
         this.engine.state.scaleY = -1;
-        this.skeletonView = new SkeletonView(asset.model, asset.atlas, asset.textures);
+        this.outlines = asset.outlines;
+        this.skeletonView = new SkeletonView(asset.model, asset.atlas, asset.textures, {
+            outlines: this.outlines,
+            tightMesh: options.tightMesh,
+            occlusion: options.occlusion,
+        });
         this.addChild(this.skeletonView.container);
         // the setup pose, so that the object draws before its first update
         this.engine.update(0);
-        this.skeletonView.update(this.engine.state);
+        this.draw();
         this.autoUpdate = options.autoUpdate ?? true;
     }
 
@@ -130,7 +138,10 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends Container 
         return this.asset.info;
     }
 
-    /** Counters of the render path: draw calls, vertices and how often buffers were rebuilt. */
+    /**
+     * Counters of the render path: draw calls, vertices, how often buffers were rebuilt, and what
+     * the cuts of overdraw do at the moment.
+     */
     get stats(): ViewStats {
         return this.skeletonView.stats;
     }
@@ -293,7 +304,7 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends Container 
         if (this.destroyed) return;
         this.engine.update(seconds);
         this.absorb();
-        this.skeletonView.update(this.engine.state);
+        this.draw();
         this.emitPending();
     }
 
@@ -309,6 +320,18 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends Container 
         this.pending.clear();
         this.skeletonView.destroy();
         super.destroy(options);
+    }
+
+    /** Brings the drawn skeleton in line with the pose, with the outlines the asset has now. */
+    private draw(): void {
+        const { outlines } = this.asset;
+
+        // the scan of the page images ends some time after the load
+        if (outlines !== this.outlines) {
+            this.outlines = outlines;
+            this.skeletonView.setOutlines(outlines);
+        }
+        this.skeletonView.update(this.engine.state);
     }
 
     private onTick(ticker: Ticker): void {

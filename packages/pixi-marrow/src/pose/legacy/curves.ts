@@ -12,15 +12,42 @@ const BEZIER_SIZE = 18;
  *
  * `Number` turns the `undefined` of a read outside the array into NaN. The official runtime
  * computes with `undefined` there, and arithmetic and comparisons treat it as NaN, so both give
- * the same results. The read is written out instead of put into a helper function: once the hot
- * functions of the engine are compiled together, a call that returns a number costs an allocation.
+ * the same results. The read is written out instead of put into a helper function: a call that
+ * returns a number with a fraction allocates unless V8 inlines it.
+ *
+ * For the same reason no function that an update runs takes or returns a time or an alpha. Those
+ * numbers go through `SHARED`. An update must not allocate.
  */
 
 /**
- * The index of the last key at or before `time`, as the official `Timeline.search` finds it.
- * `step` is the number of floats per key.
+ * The numbers the functions of one update share. No call keeps them across a return, so every
+ * engine uses this one array. It is longer than 64 bytes on purpose: V8 stores such an array
+ * outside its heap, and compiled code reads it at a fixed address.
  */
-export function search(frames: Float32Array, time: number, step: number): number {
+export const SHARED: Float64Array = new Float64Array(16);
+/** The official `time` of `Timeline.apply`. */
+export const TIME = 0;
+/** The official `lastTime` of `Timeline.apply`. Only event timelines read it. */
+export const LAST_TIME = 1;
+/** The official `alpha` of `Timeline.apply`. */
+export const ALPHA = 2;
+/** The official `getAnimationTime` of the entry that is applied. */
+export const ANIMATION_TIME = 3;
+/** The alpha of the held timelines of an entry that is mixed out. */
+export const ALPHA_HOLD = 4;
+/** The alpha of the timelines of an entry that fade out with its mix. */
+export const ALPHA_MIX = 5;
+/** The seconds the tracks advance by in this update, times the time scale of the player. */
+export const DELTA = 6;
+/** How far the mix of the entry that is applied is, from 0 to 1. */
+export const MIX = 7;
+
+/**
+ * The index of the last key at or before the time in `SHARED`, as the official `Timeline.search`
+ * finds it. `step` is the number of floats per key.
+ */
+export function search(frames: Float32Array, step: number): number {
+    const time = Number(SHARED[TIME]);
     const n = frames.length;
 
     for (let i = step; i < n; i += step) {
@@ -40,12 +67,12 @@ export function search(frames: Float32Array, time: number, step: number): number
 function bezierValue(
     frames: Float32Array,
     curves: Float32Array,
-    time: number,
     frameIndex: number,
     valueOffset: number,
     entries: number,
     out: Float64Array,
 ): void {
+    const time = Number(SHARED[TIME]);
     const i = Number(curves[frameIndex / entries]) + BEZIER_SIZE * (valueOffset - 1) - BEZIER;
     // the straight piece of the curve that holds `time` runs from x, y to endX, endY
     let x = Number(frames[frameIndex]);
@@ -70,20 +97,24 @@ function bezierValue(
 }
 
 /**
- * The values of a timeline at `time`, written to `out`. `entries` is the number of floats per
+ * The values of a timeline at the time in `SHARED`, written to `out`. `entries` is the number of floats per
  * key: the time plus the values.
  *
  * For a timeline with one value this is the official `CurveTimeline1.getCurveValue`. Results
  * go to an array because a number returned from a call can cost an allocation.
  */
-export function curveValues(
-    frames: Float32Array,
-    curves: Float32Array,
-    time: number,
-    entries: number,
-    out: Float64Array,
-): void {
-    const i = search(frames, time, entries);
+export function curveValues(frames: Float32Array, curves: Float32Array, entries: number, out: Float64Array): void {
+    const time = Number(SHARED[TIME]);
+    const n = frames.length;
+    // the official search, written out: this is the busiest loop of the timelines
+    let i = n - entries;
+
+    for (let ii = entries; ii < n; ii += entries) {
+        if (Number(frames[ii]) > time) {
+            i = ii - entries;
+            break;
+        }
+    }
     const curveType = Number(curves[i / entries]);
 
     if (curveType === LINEAR) {
@@ -98,21 +129,47 @@ export function curveValues(
     } else if (curveType === STEPPED) {
         for (let v = 1; v < entries; v++) out[v - 1] = Number(frames[i + v]);
     } else {
-        for (let v = 1; v < entries; v++) bezierValue(frames, curves, time, i, v, entries, out);
+        for (let v = 1; v < entries; v++) bezierValue(frames, curves, i, v, entries, out);
     }
 }
 
 /**
- * The official `DeformTimeline.getCurvePercent`, written to `out[0]`: how far `time` is between
- * the key at `frame` and the next key, from 0 to 1.
+ * The first `count` values of a timeline at the time in `SHARED`, written to `out`. This is {@link curveValues}
+ * for a timeline whose keys end in values that do not interpolate, as the flags of an IK key.
  */
-export function curvePercent(
+export function leadingCurveValues(
     frames: Float32Array,
     curves: Float32Array,
-    time: number,
-    frame: number,
+    entries: number,
+    count: number,
     out: Float64Array,
 ): void {
+    const time = Number(SHARED[TIME]);
+    const i = search(frames, entries);
+    const curveType = Number(curves[i / entries]);
+
+    if (curveType === LINEAR) {
+        const before = Number(frames[i]);
+        const t = (time - before) / (Number(frames[i + entries]) - before);
+
+        for (let v = 1; v <= count; v++) {
+            const value = Number(frames[i + v]);
+
+            out[v - 1] = value + (Number(frames[i + entries + v]) - value) * t;
+        }
+    } else if (curveType === STEPPED) {
+        for (let v = 1; v <= count; v++) out[v - 1] = Number(frames[i + v]);
+    } else {
+        for (let v = 1; v <= count; v++) bezierValue(frames, curves, i, v, entries, out);
+    }
+}
+
+/**
+ * The official `DeformTimeline.getCurvePercent`, written to `out[0]`: how far the time in `SHARED` is between
+ * the key at `frame` and the next key, from 0 to 1.
+ */
+export function curvePercent(frames: Float32Array, curves: Float32Array, frame: number, out: Float64Array): void {
+    const time = Number(SHARED[TIME]);
     const curveType = Number(curves[frame]);
     const i = curveType - BEZIER;
     const start = Number(frames[frame]);

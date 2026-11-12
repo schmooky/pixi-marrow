@@ -1,15 +1,32 @@
 import { MarrowError } from '../../base/errors';
 import type { AttachmentData, AttachmentRef } from '../../model/attachments';
+import type { ConstraintData } from '../../model/constraints';
 import type { AnimationData, SkeletonModel } from '../../model/model';
 import type { TimelineData, TimelineKind } from '../../model/timelines';
 import { type AttachmentLookup, createAttachmentLookup, meshSource } from '../shared/lookup';
-import { applyInherit, applyPair, applyRelative, applyScale, applyScalePair } from './timelines-bone';
-import { applyDeform } from './timelines-deform';
-import { applyDrawOrder, applyDrawOrderFolder, applyEvent, applySequence } from './timelines-misc';
-import { applyAlpha, applyAttachment, applyColor, applyColorWithoutDark } from './timelines-slot';
+import { prepareSolver } from './solver';
+import { PATH_MIX, PATH_POSITION, PATH_SPACING } from './solver-types';
 import {
     type AttachmentInfo,
     type Clip43,
+    OP_ALPHA,
+    OP_ATTACHMENT,
+    OP_COLOR,
+    OP_DEFORM,
+    OP_DRAW_ORDER,
+    OP_EVENT,
+    OP_FOLDER,
+    OP_IK,
+    OP_INHERIT,
+    OP_MIXES,
+    OP_NO_DARK,
+    OP_NOTHING,
+    OP_PAIR,
+    OP_RELATIVE,
+    OP_SCALE,
+    OP_SCALE_PAIR,
+    OP_SEQUENCE,
+    OP_VALUE,
     type Rig43,
     ROLE_ATTACHMENT,
     ROLE_DRAW_ORDER,
@@ -18,7 +35,6 @@ import {
     ROLE_PLAIN,
     ROLE_ROTATE,
     type Timeline43,
-    type TimelineKernel,
 } from './types';
 
 // The official `Property` numbers. A property id is one of them, then the index of what it animates.
@@ -58,10 +74,13 @@ const P_SLIDER_MIX = 31;
 const NO_FLOATS = new Float32Array(0);
 const NO_SLOTS = new Int16Array(0);
 const NO_FLAGS = new Uint8Array(0);
+/** The `shown` of a timeline that is no attachment timeline. Nothing writes to it. */
+const NO_ROWS: Timeline43['shown'] = [];
 
 /** What the timelines of one kind share. */
 interface KindSpec {
-    kernel: TimelineKernel;
+    /** The kernel: one of the `OP_` constants. */
+    op: number;
     role: number;
     /** Floats per key in `frames`. */
     entries: number;
@@ -71,15 +90,12 @@ interface KindSpec {
     dark: boolean;
     additive: boolean;
     instant: boolean;
+    /** What has to be active for the timeline to apply: its bone, the bone of its slot, or nothing it can name. */
+    gate: 'bone' | 'slot' | null;
 }
 
-const spec = (
-    kernel: TimelineKernel,
-    entries: number,
-    properties: readonly number[],
-    more: Partial<KindSpec> = {},
-): KindSpec => ({
-    kernel,
+const spec = (op: number, entries: number, properties: readonly number[], more: Partial<KindSpec> = {}): KindSpec => ({
+    op,
     role: ROLE_PLAIN,
     entries,
     properties,
@@ -87,65 +103,76 @@ const spec = (
     dark: false,
     additive: false,
     instant: false,
+    gate: null,
     ...more,
 });
 
 /** A bone timeline. `offset` is the position of its first number among the local numbers of a bone. */
-const bone = (kernel: TimelineKernel, entries: number, properties: readonly number[], offset: number): KindSpec =>
-    spec(kernel, entries, properties, { offset, additive: true });
+const bone = (op: number, entries: number, properties: readonly number[], offset: number): KindSpec =>
+    spec(op, entries, properties, { offset, additive: true, gate: 'bone' });
 
 /** A slot color timeline with `light` light channels. */
 const color = (entries: number, properties: readonly number[], light: number, dark: boolean): KindSpec =>
-    spec(applyColor, entries, properties, { offset: light, dark });
+    spec(OP_COLOR, entries, properties, { offset: light, dark, gate: 'slot' });
 
 /**
- * Stands in for a timeline that animates a constraint. This milestone has no constraints, so the
- * timeline changes nothing. It still counts where the player looks at the timelines of an entry.
+ * A timeline of a physics or slider constraint. Those are not solved, so the timeline changes
+ * nothing. It still counts where the player looks at the timelines of an entry. The entries are
+ * not used: the timeline is never read.
  */
-const applyNothing: TimelineKernel = () => {};
+const unsolved = (property: number, additive = false): KindSpec => spec(OP_NOTHING, 1, [property], { additive });
 
-/** A timeline that animates a constraint. The entries are not used: the timeline is never read. */
-const constraint = (property: number, additive = false): KindSpec => spec(applyNothing, 1, [property], { additive });
+/** The constraint type each constraint timeline kind animates, for the kinds this engine applies. */
+const CONSTRAINT_TYPES: Partial<Record<TimelineKind, ConstraintData['type']>> = {
+    ikConstraint: 'ik',
+    transformConstraint: 'transform',
+    pathConstraintPosition: 'path',
+    pathConstraintSpacing: 'path',
+    pathConstraintMix: 'path',
+};
 
 /** Every timeline kind of Spine 4.3. */
 const SPECS: Record<TimelineKind, KindSpec> = {
-    rotate: { ...bone(applyRelative, 2, [P_ROTATE], 2), role: ROLE_ROTATE },
-    translate: bone(applyPair, 3, [P_X, P_Y], 0),
-    translateX: bone(applyRelative, 2, [P_X], 0),
-    translateY: bone(applyRelative, 2, [P_Y], 1),
-    scale: bone(applyScalePair, 3, [P_SCALE_X, P_SCALE_Y], 3),
-    scaleX: bone(applyScale, 2, [P_SCALE_X], 3),
-    scaleY: bone(applyScale, 2, [P_SCALE_Y], 4),
-    shear: bone(applyPair, 3, [P_SHEAR_X, P_SHEAR_Y], 5),
-    shearX: bone(applyRelative, 2, [P_SHEAR_X], 5),
-    shearY: bone(applyRelative, 2, [P_SHEAR_Y], 6),
-    inherit: spec(applyInherit, 2, [P_INHERIT], { instant: true }),
+    rotate: { ...bone(OP_RELATIVE, 2, [P_ROTATE], 2), role: ROLE_ROTATE },
+    translate: bone(OP_PAIR, 3, [P_X, P_Y], 0),
+    translateX: bone(OP_RELATIVE, 2, [P_X], 0),
+    translateY: bone(OP_RELATIVE, 2, [P_Y], 1),
+    scale: bone(OP_SCALE_PAIR, 3, [P_SCALE_X, P_SCALE_Y], 3),
+    scaleX: bone(OP_SCALE, 2, [P_SCALE_X], 3),
+    scaleY: bone(OP_SCALE, 2, [P_SCALE_Y], 4),
+    shear: bone(OP_PAIR, 3, [P_SHEAR_X, P_SHEAR_Y], 5),
+    shearX: bone(OP_RELATIVE, 2, [P_SHEAR_X], 5),
+    shearY: bone(OP_RELATIVE, 2, [P_SHEAR_Y], 6),
+    inherit: spec(OP_INHERIT, 2, [P_INHERIT], { instant: true, gate: 'bone' }),
     rgba: color(5, [P_RGB, P_ALPHA], 4, false),
     rgb: color(4, [P_RGB], 3, false),
-    alpha: spec(applyAlpha, 2, [P_ALPHA]),
+    alpha: spec(OP_ALPHA, 2, [P_ALPHA], { gate: 'slot' }),
     rgba2: color(8, [P_RGB, P_ALPHA, P_RGB2], 4, true),
     rgb2: color(7, [P_RGB, P_RGB2], 3, true),
-    attachment: spec(applyAttachment, 1, [P_ATTACHMENT], { role: ROLE_ATTACHMENT, instant: true }),
-    deform: spec(applyDeform, 1, [], { additive: true }),
-    sequence: spec(applySequence, 3, [], { instant: true }),
-    event: spec(applyEvent, 1, [], { role: ROLE_EVENT, instant: true }),
-    drawOrder: spec(applyDrawOrder, 1, [], { role: ROLE_DRAW_ORDER, instant: true }),
-    drawOrderFolder: spec(applyDrawOrderFolder, 1, [], { role: ROLE_FOLDER, instant: true }),
-    ikConstraint: constraint(P_IK_CONSTRAINT),
-    transformConstraint: constraint(P_TRANSFORM_CONSTRAINT, true),
-    pathConstraintPosition: constraint(P_PATH_CONSTRAINT_POSITION, true),
-    pathConstraintSpacing: constraint(P_PATH_CONSTRAINT_SPACING),
-    pathConstraintMix: constraint(P_PATH_CONSTRAINT_MIX),
-    physicsConstraintInertia: constraint(P_PHYSICS_CONSTRAINT_INERTIA),
-    physicsConstraintStrength: constraint(P_PHYSICS_CONSTRAINT_STRENGTH),
-    physicsConstraintDamping: constraint(P_PHYSICS_CONSTRAINT_DAMPING),
-    physicsConstraintMass: constraint(P_PHYSICS_CONSTRAINT_MASS),
-    physicsConstraintWind: constraint(P_PHYSICS_CONSTRAINT_WIND, true),
-    physicsConstraintGravity: constraint(P_PHYSICS_CONSTRAINT_GRAVITY, true),
-    physicsConstraintMix: constraint(P_PHYSICS_CONSTRAINT_MIX),
-    physicsConstraintReset: spec(applyNothing, 1, [], { instant: true }),
-    slider: constraint(P_SLIDER_TIME),
-    sliderMix: constraint(P_SLIDER_MIX, true),
+    attachment: spec(OP_ATTACHMENT, 1, [P_ATTACHMENT], { role: ROLE_ATTACHMENT, instant: true, gate: 'slot' }),
+    deform: spec(OP_DEFORM, 1, [], { additive: true }),
+    sequence: spec(OP_SEQUENCE, 3, [], { instant: true }),
+    event: spec(OP_EVENT, 1, [], { role: ROLE_EVENT, instant: true }),
+    drawOrder: spec(OP_DRAW_ORDER, 1, [], { role: ROLE_DRAW_ORDER, instant: true }),
+    drawOrderFolder: spec(OP_FOLDER, 1, [], { role: ROLE_FOLDER, instant: true }),
+    ikConstraint: spec(OP_IK, 6, [P_IK_CONSTRAINT]),
+    transformConstraint: spec(OP_MIXES, 7, [P_TRANSFORM_CONSTRAINT], { additive: true }),
+    pathConstraintPosition: spec(OP_VALUE, 2, [P_PATH_CONSTRAINT_POSITION], {
+        offset: PATH_POSITION,
+        additive: true,
+    }),
+    pathConstraintSpacing: spec(OP_VALUE, 2, [P_PATH_CONSTRAINT_SPACING], { offset: PATH_SPACING }),
+    pathConstraintMix: spec(OP_MIXES, 4, [P_PATH_CONSTRAINT_MIX], { offset: PATH_MIX }),
+    physicsConstraintInertia: unsolved(P_PHYSICS_CONSTRAINT_INERTIA),
+    physicsConstraintStrength: unsolved(P_PHYSICS_CONSTRAINT_STRENGTH),
+    physicsConstraintDamping: unsolved(P_PHYSICS_CONSTRAINT_DAMPING),
+    physicsConstraintMass: unsolved(P_PHYSICS_CONSTRAINT_MASS),
+    physicsConstraintWind: unsolved(P_PHYSICS_CONSTRAINT_WIND, true),
+    physicsConstraintGravity: unsolved(P_PHYSICS_CONSTRAINT_GRAVITY, true),
+    physicsConstraintMix: unsolved(P_PHYSICS_CONSTRAINT_MIX),
+    physicsConstraintReset: spec(OP_NOTHING, 1, [], { instant: true }),
+    slider: unsolved(P_SLIDER_TIME),
+    sliderMix: unsolved(P_SLIDER_MIX, true),
 };
 
 const invalid = (message: string): MarrowError =>
@@ -266,6 +293,30 @@ function folderFlags(model: SkeletonModel, slots: Int16Array): Uint8Array {
     return flags;
 }
 
+/** Throws when a timeline animates a constraint the skeleton does not have, or one of another type. */
+function checkConstraint(build: Build, data: TimelineData, user: string): void {
+    const type = CONSTRAINT_TYPES[data.kind];
+
+    if (type === undefined || build.model.constraints[data.target]?.type === type) return;
+    throw invalid(`${user} has a ${data.kind} timeline for constraint ${data.target}, which is no ${type} constraint.`);
+}
+
+/** An empty `shown` for an attachment timeline: one row per skin and one for no skin, none looked up yet. */
+function skinRows(model: SkeletonModel): Timeline43['shown'] {
+    const rows: Timeline43['shown'] = [];
+
+    for (let i = 0; i <= model.skins.length; i++) rows.push(undefined);
+
+    return rows;
+}
+
+/** The bone that has to be active for a timeline to apply: its bone, or the bone of its slot. -1 for none. */
+function gateBone(model: SkeletonModel, kind: KindSpec, target: number): number {
+    if (kind.gate === 'bone') return target;
+
+    return kind.gate === 'slot' ? (model.slots.bones[target] ?? -1) : -1;
+}
+
 function buildTimeline(build: Build, data: TimelineData, user: string): Timeline43 {
     const kind: KindSpec | undefined = SPECS[data.kind];
 
@@ -274,6 +325,7 @@ function buildTimeline(build: Build, data: TimelineData, user: string): Timeline
             fix: 'The pose engine for Spine 4.3 does not know that kind. Update pixi-marrow.',
         });
     }
+    checkConstraint(build, data, user);
     const follows = data.kind === 'deform' || data.kind === 'sequence';
     const [attachment, info] = follows ? animated(build, data.attachment, user) : [null, null];
     const folder = data.kind === 'drawOrderFolder' ? (data.folderSlots ?? NO_SLOTS) : null;
@@ -289,11 +341,14 @@ function buildTimeline(build: Build, data: TimelineData, user: string): Timeline
         ids: propertyIds(build, data, kind, info),
         additive: kind.additive,
         instant: kind.instant,
-        apply: noDark ? applyColorWithoutDark : kind.kernel,
+        op: noDark ? OP_NO_DARK : kind.op,
+        bone: gateBone(build.model, kind, data.target),
         offset: kind.offset,
         dark: kind.dark,
         names: data.attachmentNames ?? [],
+        shown: data.kind === 'attachment' ? skinRows(build.model) : NO_ROWS,
         attachment,
+        info,
         slots: folder ?? info?.timelineSlots ?? NO_SLOTS,
         inFolder: folder ? folderFlags(build.model, folder) : NO_FLAGS,
         vertices: data.vertices ?? [],
@@ -334,8 +389,8 @@ export function prepareRig(model: SkeletonModel): Rig43 {
         empty: { index: -1, name: '<empty>', duration: 0, timelines: [], ids: new Set() },
         info: build.info,
         drawOrderId,
+        solver: prepareSolver(model),
         scratch: {
-            sample: new Float64Array(8),
             owners: new Int32Array(ids.count),
             stamps: new Float64Array(ids.count),
             generation: 0,

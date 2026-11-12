@@ -12,6 +12,8 @@ Change with M2b: the render path uses Pixi meshes with a custom geometry and sha
 
 Change with M2a: there are two pose engines, one for 4.1 and 4.2 and one for 4.3, because the official runtimes mix animations differently (section 5.3). Pose numbers are 64-bit and parity is exact, not within a tolerance (section 15). M2 is split into M2a, which is built, and M2b.
 
+Change with M3: IK, transform and path constraints are solved in both engines, and clipping works through a stencil mask (sections 5.3, 7.5 and 10). Tight meshes turned out not to be exact to the bit, so they are an option and not the default (section 7.4). The overdraw cuts that are exact are on by default.
+
 This document is the plan. Every performance number in it is an estimate until the benchmark measures it. Section 0 lists what has been verified.
 
 ## 0. Verified facts this design rests on
@@ -103,8 +105,8 @@ Price:
 | Attachment or draw-order key | Full instruction rebuild | Index buffer rewrite |
 | Rigid region attachments | Positions computed on CPU and uploaded | Placed in the vertex shader from bone matrices (GPU mode) |
 | Hidden slots (alpha 0) | Left out of the batch, but their vertices are still computed, and each change of visibility rebuilds the instructions | Left out by an index rewrite. No vertex work, no rebuild. |
-| Overdraw | Quads as authored | Tight outlines, covered slots skipped |
-| Clipping | CPU triangle clipping always | CPU or stencil, chosen per clip |
+| Overdraw | Quads as authored | Invisible regions left out, covered slots skipped. Tight outlines as an option. |
+| Clipping | CPU triangle clipping always, so vertex counts change every frame | Stencil mask. The vertex layout stays stable. |
 | Idle skeleton | Full pose and vertex pass every tick | Sleeps: no pose work, no upload |
 | Pose work | Every timeline and every bone, every frame | Only what can change the picture (section 2) |
 | Setup | Extensions register on import | Nothing to call. First use registers. |
@@ -197,7 +199,7 @@ Limits of the model today: indices are 16-bit. A file with more than 32,767 bone
 
 ### 5.3 Pose
 
-Built in M2a, without constraints:
+Built in M2a, with constraints since M3:
 
 | Piece | Responsibility |
 |---|---|
@@ -208,7 +210,24 @@ Built in M2a, without constraints:
 | `src/pose/v43` | The engine for 4.3. The official 4.3 runtime mixes animations with other arguments in every timeline, so it cannot share the 4.1 and 4.2 player. |
 | `createAttachmentLookup`, `meshSource` | Find attachments by skin, slot and name, and the mesh that owns the geometry of a linked mesh. |
 
-Timelines that animate constraints are not applied yet, but they still count in the mixing bookkeeping, as in the official player. Dropping them changes when mixed-out entries end.
+IK, transform and path constraints are solved since M3. Each engine ports the solvers and the update order of its own official runtime, so there is no shared kernel with version modes. The 4.3 engine includes the generalized transform constraints, because 4.3 has no other kind.
+
+Physics and slider constraints are not solved yet. Their timelines change nothing, but they still count in the mixing bookkeeping, as in the official player. Dropping them changes when mixed-out entries end. The constraints also keep their place in the update order: a bone that the order visits twice is posed twice, and in 4.2 that changes the last bits of a sheared bone.
+
+Three rules of the update path, found by profiling in M3:
+
+- Timelines are applied through a `switch` on a small operation number, not through one closure per timeline.
+- No function on the update path takes or returns a fractional number. Time, alpha and sampled values go through one shared `Float64Array`, and kernels get indices. V8 puts a double on the heap when it crosses a call that is not inlined.
+- A bone that is not turned skips its trigonometry. The cosine of 0 is 1 and the sine of 0 is 0, so the result is the same to the bit.
+
+Measured in M3 on an Apple M4, in Node 24: the whole update of each rig's longest animation, against the official core doing the same work.
+
+| Engine | Rigs | Time, ours as a share of official | Bytes allocated per update, ours | Official |
+|---|---|---|---|---|
+| 4.3 | 19 | 27 to 97 percent | 3 to 15, from event objects | 17 to 5,043 |
+| 4.1 and 4.2 | 8 | 80 to 99 percent | 2 to 10, from event objects | 938 to 8,359 |
+
+An update that fires no event allocates nothing once V8 has optimized the path. The rigs nearest to the official time are bound by the same trigonometry calls. Skipping bones that did not change is M5.
 
 Planned for the later milestones:
 
@@ -238,6 +257,8 @@ Planned for the later milestones:
 | `ClipCpu`, `ClipStencil` | Two clipping strategies behind one interface. |
 | `TightMesher` | Builds a tight outline for a region from its alpha. Used by the optimizer and at load time. |
 | `OcclusionIndex` | Opaque inner shapes per attachment. Answers whether a slot is fully covered. |
+
+Built so far, under other names: `SkeletonView` with its template, ranges and shader (M2b). Clip masks, `AtlasOutlines` with `buildAtlasOutlines`, and the covered-slot test (M3). There is one clipping strategy, the stencil mask.
 
 ### 5.5 Control and features
 
@@ -299,18 +320,48 @@ Limit: a skin set with thousands of alternative attachments makes a large templa
 ### 7.4 Overdraw
 
 1. Hidden slots are never drawn: alpha 0, no attachment, inactive bone. Always on.
-2. Tight meshes: a region quad becomes a polygon that follows the alpha outline. Fewer shaded pixels, a few more vertices. Applied when the transparent share of a region is above a threshold.
-3. Covered slots: a slot fully inside the opaque part of a later normal-blend slot at full alpha is skipped. The test runs for large slots only and is conservative.
-4. Later, experimental: an opaque pass with depth test. Not promised for version 1.
+2. Invisible regions: a region attachment whose atlas region shows no pixel is not drawn. Exact. On by default.
+3. Covered slots: a slot fully inside the opaque rectangle of a later slot is skipped. Exact. On by default.
+4. Tight meshes: a region quad becomes a convex polygon of at most 8 vertices around its visible pixels. Fewer shaded pixels, more vertices. Not exact to the bit, so it is an option: `tightMesh: 'on'`.
+5. Later, experimental: an opaque pass with depth test. Not promised for version 1.
 
-Tight outlines and opaque shapes come from the atlas pixels. Two sources, in this order: a sidecar file written by `pixi-marrow/optimize`, or a scan at load time during idle frames.
+Outlines and opaque rectangles come from the atlas pixels, as `AtlasOutlines`. Three sources: a sidecar file written by `pixi-marrow outlines`, an object, or a scan of the page textures in idle time after the load. The scan reads a premultiplied page through a WebGL context, because a 2D canvas loses color under alpha 0, and that color adds light. A page that cannot be read keeps its quads.
+
+Built in M3. What was measured on the 34 example rigs of the pixel check:
+
+| Cut | Triangle area drawn | Picture against no cuts |
+|---|---|---|
+| Invisible regions and covered slots | 100.0 percent. Covered slots appear in one rig. | Equal, every pixel of 384 frames |
+| Tight meshes | 90.5 percent, per rig 80.6 to 96.8 | At most 0.08 percent of pixels off by more than 1 of 255 levels |
+
+Why tight meshes are not exact: a GPU interpolates texture coordinates per triangle, from corners it has moved to its subpixel grid. Other triangles give other last bits. The same quad split along its other diagonal already changes up to 12.5 percent of its pixels by one level. A pixel on the outer edge of a region can also fall to the other side of that edge. One or two pixels per frame do, by up to 53 levels measured. The pixel check bounds both effects for `tightMesh: 'on'`.
+
+The example rigs are mostly meshes, which no outline touches, and their artists left little hidden art. Rigs made of large regions gain more: the regions of the dragon alone lose 78 percent of their area. The default stays exact until the benchmark shows on devices what the polygons buy.
+
+When a cut is off:
+
+- A page keeps its quads when its texture differs from the atlas page in pixel size, has mipmaps or anisotropic filtering, or repeats where the page does not. The one pixel margin of an outline holds for bilinear filtering at full size only.
+- Sequences and meshes keep their geometry.
+- An occluder is a region attachment with normal blending and alpha 255, outside every clip, among the 4 largest opaque rectangles.
+- Covered slots are drawn again in the frame in which any alpha from the object up to the stage is not 1. That is checked again at draw time, after every user callback has run.
+- A view drawn with pixel rounding or to a multisampled target uses no cuts.
+
+Cost: the search for covered slots backs off while it finds nothing, from every 4th to every 64th frame. It then costs under 3 percent of the view update. Building outlines takes 7 to 28 ms per megapixel of page. In Chrome a one-page atlas has its outlines 17 to 33 ms after the load.
 
 ### 7.5 Clipping
 
-| Strategy | Cost | Chosen by `auto` when |
-|---|---|---|
-| CPU | Triangle clipping each frame, no extra draw | Few clipped triangles |
-| Stencil | Two extra draws, no CPU clipping | Many clipped triangles |
+Built in M3 with one strategy, the stencil mask. The slots a clip cuts draw inside a Pixi container whose mask is a mesh of the clip polygon. The polygon is placed and shaped each update as the official `SkeletonClipping` of the file's version does it, and triangulated by a port of the official ear clipping.
+
+| | |
+|---|---|
+| Cost per clip that cuts a visible slot | Two mask draws, one small upload per update, and one draw range per blend or page stretch inside |
+| Cost without a clip | None: the same meshes, buffers and draw calls |
+| Picture | Clipped frames match the official runtime within 2 of 255 levels, at three picture sizes |
+| Not exact | A clip polygon that crosses itself. The official clipper and a stencil mask disagree about such a shape. |
+
+A CPU strategy for clips that cut few triangles, as the first draft planned, is not built. It would bring back vertex counts that change every frame.
+
+The rules that differ between versions, all ported: 4.3 can use a convex polygon whole, can replace a concave one by its hull, and can keep the outside (`inverse`). In 4.3 an end slot that shows a clip ends the active clip and starts the new one. In 4.2 the first clip then runs to the end of the draw order.
 
 ### 7.6 Objects attached to slots
 
@@ -350,9 +401,8 @@ Each item in this list has a parity test that runs with the item on and off.
 |---|---|---|---|
 | `renderMode` | `auto`, `mesh`, `batched` | Vertex count, instance count | Yes |
 | `skinning` | `auto`, `cpu`, `gpu` | Weighted vertex count, influences per vertex, deform keys | Yes, within float tolerance |
-| `clipping` | `auto`, `cpu`, `stencil` | Clipped triangle count | Yes, edge pixels may differ by antialiasing |
-| `tightMesh` | `auto`, `off` | Transparent share and area of each region | Yes |
-| `occlusion` | `auto`, `off` | Slot area, opaque data present | Yes |
+| `tightMesh` | `auto`, `on`, `off` | `auto` drops regions without a visible pixel. `on` is opt-in, see 8.3. | Yes for `auto` |
+| `occlusion` | `auto`, `off` | Opaque rectangles present, the 4 largest occluders, world area of at least 1024 | Yes |
 | `sharedPose` | `auto`, `off` | Instances of one asset in the same animation phase | Yes |
 | `instancing` | `auto`, `off` | Count of baked instances of one asset | Yes for baked clips |
 
@@ -360,6 +410,7 @@ Each item in this list has a parity test that runs with the item on and off.
 
 | Option | Values | Trade |
 |---|---|---|
+| `tightMesh: 'on'` | | Regions drawn as polygons around their visible pixels. Less fill, more vertices. Some pixels move by 1 of 255 levels, a few edge pixels by more (section 7.4). |
 | `bake` | `off`, `auto`, list of animations | No pose cost. Loses long mixes and runtime bone control on baked clips. `auto` bakes only eligible animations: no physics, no handle writes, no layered tracks. |
 | `idleCache` | `off`, `auto` | Idle skeleton drawn as one quad. Uses texture memory. |
 | `offscreen` | `update`, `throttle`, `pause` | Less work off screen. Events fire late or not at all while paused. |
@@ -373,7 +424,7 @@ Each item in this list has a parity test that runs with the item on and off.
 | Preset | Sets |
 |---|---|
 | `exact` (default) | Everything in 8.1 and 8.2. Nothing from 8.3. |
-| `balanced` | `exact` plus `bake: 'auto'`, `idleCache: 'auto'`, `offscreen: 'throttle'` |
+| `balanced` | `exact` plus `tightMesh: 'on'`, `bake: 'auto'`, `idleCache: 'auto'`, `offscreen: 'throttle'` |
 | `fast` | `balanced` plus `lod: 'auto'`, `offscreen: 'pause'`, `updateRate: 30` for small skeletons |
 
 ### 8.5 The report
@@ -412,6 +463,7 @@ Measured, not assumed:
 
 - `spine.perf.memory()` reports bytes shared per asset, bytes per instance and GPU bytes.
 - A memory baseline in `ci/` works like the size baseline. Growth of more than 10 percent in bytes per instance on the fixtures fails the build.
+- Since M3 the baseline counts `engine.bytes`: the pose state and what constraints add to an instance. A constrained bone costs 56 bytes more in 4.1 and 4.2 and 104 bytes more in 4.3. A skeleton without solved constraints pays nothing for them. Of the 104 bytes, 48 keep the world transform that a bone shows between a skin change and the next update equal to the official one. That is a candidate to cut.
 - The spine-benchmark A/B reports heap and GPU memory next to frame time.
 
 ## 9. Public API sketch
@@ -460,18 +512,19 @@ hero.play('idel'); // compile error
 
 ## 10. Version support
 
-One model type for all versions. It is a faithful import, not a conversion: a 4.1 or 4.2 file keeps its own constraint fields, and the fields that exist for some versions only are optional. Whether an older constraint can run on the 4.3 kernel is decided in M3, per constraint, by parity.
+One model type for all versions. It is a faithful import, not a conversion: a 4.1 or 4.2 file keeps its own constraint fields, and the fields that exist for some versions only are optional. An older constraint does not run on the 4.3 kernel. That was decided in M3: each engine has its own solvers.
 
 | Feature | 4.1 | 4.2 | 4.3 | Lands in |
 |---|---|---|---|---|
-| Bones, slots, skins, region and mesh attachments, deform, sequences | yes | yes | yes | M2 |
-| Tracks, queue, mixing, events | yes | yes | yes | M2 |
-| IK, transform and path constraints, clipping | yes | yes | yes | M3 |
+| Bones, slots, skins, region and mesh attachments, deform, sequences | yes | yes | yes | M2, built |
+| Tracks, queue, mixing, events | yes | yes | yes | M2, built |
+| IK, transform and path constraints, clipping | yes | yes | yes | M3, built |
+| Generalized transform constraints | no | no | yes | M3, built |
 | Physics | no | yes | yes | M4 |
-| Sliders, generalized transform constraints | no | no | yes | M4 |
+| Sliders | no | no | yes | M4 |
 | Additive tracks and the remaining track options | yes | yes | yes | M4 |
 
-Where an older solver behaves differently from the 4.3 one, the constraint carries a version mode and the kernel keeps the older math. The first task for each constraint is an experiment: run the 4.3-shaped kernel on 4.1 and 4.2 fixtures and see whether parity holds without a mode.
+The first draft planned one kernel per constraint with a version mode for older behaviour. The official solvers differ in too many small places for that: guards, comparisons of squares against lengths, rotation wrapping, the inherit modes in the applied transform, the sort of path bones. Exact parity is simpler to keep with one port per engine, where 4.1 and 4.2 differ by branches on the version.
 
 ## 11. Package shape
 
@@ -559,6 +612,7 @@ The pose core is only as good as its proof. The parity suite is built before the
 | Optimization parity | Node | Every item in 8.1 produces the same pose with the item on and off |
 | Geometry parity | Node | Positions, UVs and colors per slot equal the official `computeWorldVertices` output |
 | Pixel parity | Headless Chrome, WebGL2 and WebGPU | Our frame equals the official `spine-pixi-v8` frame for 4.2 and 4.3. For 4.1 the reference is our CPU path. |
+| Cut parity | Headless Chrome | Our frame with the exact overdraw cuts equals our frame without them, in every pixel. With tight meshes it stays within stated bounds: at most 0.25 percent of pixels off by more than 1 level, 0.01 percent by more than 8. |
 | Premultiplied parity | Headless Chrome | Straight and premultiplied exports of one rig match |
 | Plan stability | Node | Attachment and draw-order keys cause zero template rebuilds |
 | Allocation | Node | A played loop allocates nothing after warm-up |
@@ -566,7 +620,9 @@ The pose core is only as good as its proof. The parity suite is built before the
 
 No tolerance: pose values are 64-bit, like the numbers of the official JavaScript core, and the engines port its arithmetic in the same order. Pose parity is exact equality. The one bounded difference is in mesh UVs of JSON files, where the model stores `regionUVs` in 32-bit and the official reader keeps 64-bit. The largest difference seen is 5.96e-8, far below one texel.
 
-The pose suite as built: 5,508 scripts and 165,298 compared updates over 117 rigs, in 18 seconds. A run of the official core against itself gives zero differences, and a change of one unit in the last place on either side is reported.
+The pose suite as built in M2a: 5,508 scripts and 165,298 compared updates over 117 rigs, in 18 seconds. Since M3 it runs 17 families of scripts on 129 rigs with constraints solved, in about 45 seconds. Four of the hand-written rigs exist for constraints: IK, transform, path, and the order in which constraints feed each other. A run of the official core against itself gives zero differences, and a change of one unit in the last place on either side is reported.
+
+The pixel check as built in M3: 456 frames against the official runtime per renderer, worst difference 4 of 255 levels, 0.008 percent of pixels off by more than 1. A frame that fails is drawn again, moved by a fraction of a pixel, and fails only when it fails at both places. The two runtimes place vertices in different code, so a vertex on a subpixel boundary can round two ways. Three frames pass at the second place only. A defect does not pass: the check proves that on shifted, tinted and hidden slots.
 
 Fixtures: 57 official example rigs across 4.1, 4.2 and 4.3, each as JSON and binary, listed in `fixtures/manifest.json` at pinned commits with a hash per file. They are downloaded on demand and not committed, because the licence of the example assets has not been read. Your own rigs go into `fixtures/local/`, which is not committed either.
 
@@ -580,8 +636,8 @@ One finding from building the suite: the official binary readers ignore the offs
 | M1 Model | `SkeletonModel`, JSON and binary importers for 4.1 to 4.3, atlas importer, `describeSkeleton`, `generateNames` and the command line tool | Built 2026-11-11. Model parity on all 114 fixtures and atlas parity on all 57 atlases, with exact equality. Hand-written skeletons cover the timeline kinds the fixtures lack. Every feature is imported, even those not yet solved. Not done: a memory baseline, which waits for instances in M2. |
 | M2a Pose, headless | Pose engines for 4.1 and 4.2 and for 4.3: bone transforms, every timeline that does not animate a constraint, tracks, queue, mixing, events, skins, deform, sequences. Geometry kernel: vertex positions and UVs. Memory baseline. | Built 2026-11-11. Pose parity is exact on all 114 fixtures and 3 hand-written rigs. Geometry parity is exact on all fixtures, with the one bounded case for JSON mesh UVs. A rig with constraints throws the typed error unless it is played with constraints ignored. Not done: keyframe cursors, which wait for M5 with the other skipping work. |
 | M2b First frames | Render: `SkeletonView` draws through Pixi meshes with its own geometry and shader. CPU skinning into buffers, premultiplied pipeline, additive in the same draw, pages in one draw, stable vertex layout, hidden slots left out. The display object `MarrowSpine` with `MarrowAsset` and `Track`. Pixel check in headless Chrome (`pnpm check:render`). | Built 2026-11-11. On 12 rigs in 34 versions the picture matches the official Pixi runtime within 4 of 255 levels, on WebGL2 and WebGPU. At most 0.02 percent of pixels are off by more than 1. One draw call for every rig with only normal and additive slots. Known gap: clipping, which is M3. Not done: a custom render pipe, which the design named. Pixi meshes gave the same result with less reliance on Pixi internals. |
-| M3 Constraints and overdraw | Pose: IK, transform, path, clipping. Render: tight meshes, sidecar, covered slots, stencil clipping, perf report. | Parity on constraint fixtures. Benchmark shows fewer shaded pixels and draw ranges. |
-| M4 Complete | Physics, sliders, generalized transform constraints, additive tracks. Perf probes. spine-benchmark A/B against the official runtime. | Parity on every fixture for 4.1 to 4.3. First published numbers per device class. |
+| M3 Constraints and overdraw | Pose: IK, transform and path constraints in both engines, with the generalized transform constraints of 4.3. Render: clipping through a stencil mask, invisible regions left out, covered slots skipped, tight meshes as an option, outlines from a sidecar file or a scan in idle time. | Built 2026-11-11. Pose parity with constraints is exact on all 114 fixtures and 15 hand-written rigs, five per version. The pixel check passes on WebGL2 and WebGPU with constraints and clipping on both sides. The exact cuts change no pixel. Tight meshes draw 90.5 percent of the triangle area and stay opt-in, because they are not exact to the bit. Not done: the perf report, which moves to M4 with the perf probes. |
+| M4 Complete | Physics, sliders, additive tracks. Perf report and perf probes. spine-benchmark A/B against the official runtime, which also decides the default of `tightMesh`. | Parity on every fixture for 4.1 to 4.3. First published numbers per device class. |
 | M5 Pose skipping | Constant folding, needed set, timeline skipping, path cache, shared pose, sleep | Optimization parity passes. A/B shows the gain. |
 | M6 GPU | GPU skinning, slot palette, batched mode | Zero vertex upload for rigid rigs. A/B on low-end and mid devices. |
 | M7 Baked | Baker at build time and run time, baked playback, instancing, `balanced` preset | Eligible fixtures play baked with pixel parity at sample points |
@@ -621,6 +677,6 @@ Open, each with a recommendation the design assumes:
 2. WebGPU from M2, not added later.
 3. Display class name: `MarrowSpine`, in line with `SilkGraphics`.
 4. Default preset: `exact`.
-5. Pose values are 64-bit on the CPU, so parity with the official core is exact. Copies for the GPU are 32-bit. Settled in M2a. A pose costs 1 to 26 KB per instance on the fixtures.
+5. Pose values are 64-bit on the CPU, so parity with the official core is exact. Copies for the GPU are 32-bit. Settled in M2a. A pose costs 1 to 26 KB per instance on the fixtures. With the state of the constraints, counted since M3, an instance costs 1 to 41 KB.
 6. Unported features fail loudly with a typed error. No silent fallback.
 7. Fixtures: your rigs in a private folder outside the public repo until you say otherwise.

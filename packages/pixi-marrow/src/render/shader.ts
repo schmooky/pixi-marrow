@@ -18,6 +18,9 @@ import { GlProgram, GpuProgram, Shader, type TextureSource, type TextureStyle } 
  *   The normal blend state then adds.
  *
  * Attribute `aFlags` holds two bytes: x is the texture unit of the page, y is 255 for additive.
+ *
+ * A clip mask has a shader of its own. It places a vertex with the same statements and writes no
+ * color: Pixi draws a mask into the stencil buffer with color writes turned off.
  */
 
 /** How many atlas pages one draw can sample. More pages split the draw. */
@@ -133,15 +136,8 @@ function wgslSample(pages: number): string {
     }`;
 }
 
-function wgsl(dark: boolean, pages: number): string {
-    const color = dark
-        ? `vec4<f32>(
-        ((texel.a - 1.0) * varyings.dark.a + 1.0 - texel.rgb) * varyings.dark.rgb + texel.rgb * varyings.light.rgb,
-        texel.a * varyings.light.a,
-    )`
-        : 'texel * varyings.light';
-
-    return `struct GlobalUniforms {
+/** The uniforms Pixi fills for a mesh, by these names. */
+const WGSL_UNIFORMS = `struct GlobalUniforms {
     uProjectionMatrix: mat3x3<f32>,
     uWorldTransformMatrix: mat3x3<f32>,
     uWorldColorAlpha: vec4<f32>,
@@ -155,7 +151,21 @@ struct LocalUniforms {
 }
 
 @group(0) @binding(0) var<uniform> globalUniforms: GlobalUniforms;
-@group(1) @binding(0) var<uniform> localUniforms: LocalUniforms;
+@group(1) @binding(0) var<uniform> localUniforms: LocalUniforms;`;
+
+const WGSL_ROUND = `fn roundPixels(position: vec2<f32>, targetSize: vec2<f32>) -> vec2<f32> {
+    return (floor(((position * 0.5 + 0.5) * targetSize) + 0.5) / targetSize) * 2.0 - 1.0;
+}`;
+
+function wgsl(dark: boolean, pages: number): string {
+    const color = dark
+        ? `vec4<f32>(
+        ((texel.a - 1.0) * varyings.dark.a + 1.0 - texel.rgb) * varyings.dark.rgb + texel.rgb * varyings.light.rgb,
+        texel.a * varyings.light.a,
+    )`
+        : 'texel * varyings.light';
+
+    return `${WGSL_UNIFORMS}
 ${range(pages)
     .map(
         (i) =>
@@ -172,9 +182,7 @@ struct Varyings {
     ${pages > 1 ? '@location(3) @interpolate(flat) page: u32,' : ''}
 }
 
-fn roundPixels(position: vec2<f32>, targetSize: vec2<f32>) -> vec2<f32> {
-    return (floor(((position * 0.5 + 0.5) * targetSize) + 0.5) / targetSize) * 2.0 - 1.0;
-}
+${WGSL_ROUND}
 
 @vertex
 fn mainVertex(
@@ -251,5 +259,102 @@ export function createViewShader(sources: readonly TextureSource[], dark: boolea
             fragment: { source, entryPoint: 'mainFragment' },
         }),
         resources,
+    });
+}
+
+const GL_MASK_VERTEX = `#version 300 es
+in vec2 aPosition;
+
+uniform mat3 uProjectionMatrix;
+uniform mat3 uWorldTransformMatrix;
+uniform vec2 uResolution;
+uniform mat3 uTransformMatrix;
+uniform float uRound;
+${GL_ROUND}
+
+void main(void) {
+    // the statements of the view shader, so that the edge of a mask lands where a slot edge would
+    mat3 worldTransformMatrix = uWorldTransformMatrix;
+    mat3 modelMatrix = mat3(
+        1.0, 0.0, 0.0,
+        0.0, 1.0, 0.0,
+        0.0, 0.0, 1.0
+    );
+    vec2 position = (uTransformMatrix * vec3(aPosition, 1.0)).xy;
+    mat3 modelViewProjectionMatrix = uProjectionMatrix * worldTransformMatrix * modelMatrix;
+
+    gl_Position = vec4((modelViewProjectionMatrix * vec3(position, 1.0)).xy, 0.0, 1.0);
+    if (uRound == 1.0) {
+        gl_Position.xy = roundPixels(gl_Position.xy, uResolution);
+    }
+}
+`;
+
+const GL_MASK_FRAGMENT = `#version 300 es
+out vec4 finalColor;
+
+void main(void) {
+    // no color is written: Pixi turns color writes off while a mask draws
+    finalColor = vec4(0.0);
+}
+`;
+
+const WGSL_MASK = `${WGSL_UNIFORMS}
+
+${WGSL_ROUND}
+
+@vertex
+fn mainVertex(
+    @location(0) aPosition: vec2<f32>,
+) -> @builtin(position) vec4<f32> {
+    // the statements of the view shader, so that the edge of a mask lands where a slot edge would
+    var worldTransformMatrix = globalUniforms.uWorldTransformMatrix;
+    var modelMatrix = mat3x3<f32>(
+        1.0, 0.0, 0.0,
+        0.0, 1.0, 0.0,
+        0.0, 0.0, 1.0
+    );
+    var position = (localUniforms.uTransformMatrix * vec3<f32>(aPosition, 1.0)).xy;
+    var modelViewProjectionMatrix = globalUniforms.uProjectionMatrix * worldTransformMatrix * modelMatrix;
+    var clip = (modelViewProjectionMatrix * vec3<f32>(position, 1.0)).xy;
+
+    if (localUniforms.uRound == 1.0) {
+        clip = roundPixels(clip, globalUniforms.uResolution);
+    }
+
+    return vec4<f32>(clip, 0.0, 1.0);
+}
+
+@fragment
+fn mainFragment() -> @location(0) vec4<f32> {
+    // no color is written: Pixi turns color writes off while a mask draws
+    return vec4<f32>(0.0);
+}
+`;
+
+/**
+ * Creates the shader of a clip mask: a WebGL2 program and a WebGPU program that place the
+ * vertices of a polygon as {@link createViewShader} places the vertices of a slot. The one
+ * attribute is `aPosition`. The color it writes is never seen: Pixi draws a mask into the stencil
+ * buffer with color writes turned off.
+ *
+ * Programs are shared between all mask shaders.
+ *
+ * @example
+ * const mask = new Mesh({ geometry: polygon, shader: createMaskShader() });
+ * clipped.addChild(mask);
+ * clipped.mask = mask;
+ */
+export function createMaskShader(): Shader {
+    const name = 'marrow-mask';
+
+    return new Shader({
+        glProgram: GlProgram.from({ name, vertex: GL_MASK_VERTEX, fragment: GL_MASK_FRAGMENT }),
+        gpuProgram: GpuProgram.from({
+            name,
+            vertex: { source: WGSL_MASK, entryPoint: 'mainVertex' },
+            fragment: { source: WGSL_MASK, entryPoint: 'mainFragment' },
+        }),
+        resources: {},
     });
 }

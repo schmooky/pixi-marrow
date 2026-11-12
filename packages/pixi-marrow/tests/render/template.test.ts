@@ -132,7 +132,8 @@ describe('the vertex template', () => {
             }
         }
         expect(rig.view.stats.templateBuilds).toBe(2);
-        expect(rig.view.stats.clippingIgnored).toBe(1);
+        // the clip of the rig ends at its own slot, which never ends it, and no slot after it draws
+        expect(rig.view.stats).toMatchObject({ clips: 1, maskDraws: 0 });
     });
 
     it('keeps an attachment that cannot be drawn out of the picture, without building again', async () => {

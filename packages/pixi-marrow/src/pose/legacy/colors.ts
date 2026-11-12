@@ -1,10 +1,7 @@
 import type { SlotTable } from '../../model/model';
 import type { PoseState } from '../state';
-import { curveValues } from './curves';
+import { ALPHA, curveValues, SHARED, TIME } from './curves';
 import { FIRST, type LegacyTimeline, SETUP } from './timelines';
-
-/** The official `Color.clamp` for one channel. */
-const clamp = (value: number): number => (value < 0 ? 0 : value > 1 ? 1 : value);
 
 /**
  * Moves `count` channels from their current value to `values` by `alpha`. With `fromSetup` the
@@ -18,10 +15,10 @@ function mixChannels(
     values: Float64Array,
     from: number,
     count: number,
-    alpha: number,
     fromSetup: boolean,
     clamped: boolean,
 ): void {
+    const alpha = Number(SHARED[ALPHA]);
     for (let c = 0; c < count; c++) {
         const value = Number(values[from + c]);
         let mixed = value;
@@ -31,7 +28,8 @@ function mixChannels(
 
             mixed = start + (value - start) * alpha;
         }
-        color[at + c] = clamped ? clamp(mixed) : mixed;
+        // the official Color.clamp
+        color[at + c] = clamped && mixed < 0 ? 0 : clamped && mixed > 1 ? 1 : mixed;
     }
 }
 
@@ -44,10 +42,10 @@ function channelsBeforeFirstKey(
     setup: Float64Array,
     at: number,
     count: number,
-    alpha: number,
     blend: number,
     clamped: boolean,
 ): void {
+    const alpha = Number(SHARED[ALPHA]);
     if (blend !== SETUP && blend !== FIRST) return;
     for (let c = 0; c < count; c++) {
         const target = Number(setup[at + c]);
@@ -58,7 +56,8 @@ function channelsBeforeFirstKey(
             const current = Number(color[at + c]);
             const mixed = current + (target - current) * alpha;
 
-            color[at + c] = clamped ? clamp(mixed) : mixed;
+            // the official Color.clamp
+            color[at + c] = clamped && mixed < 0 ? 0 : clamped && mixed > 1 ? 1 : mixed;
         }
     }
 }
@@ -68,20 +67,19 @@ export function applyRgba(
     timeline: LegacyTimeline,
     pose: PoseState,
     slots: SlotTable,
-    time: number,
-    alpha: number,
     blend: number,
     values: Float64Array,
 ): void {
+    const time = Number(SHARED[TIME]);
     const at = timeline.target * 4;
 
     if (time < Number(timeline.frames[0])) {
-        channelsBeforeFirstKey(pose.colors, slots.colors, at, 4, alpha, blend, true);
+        channelsBeforeFirstKey(pose.colors, slots.colors, at, 4, blend, true);
 
         return;
     }
-    curveValues(timeline.frames, timeline.curves, time, 5, values);
-    mixChannels(pose.colors, slots.colors, at, values, 0, 4, alpha, blend === SETUP, true);
+    curveValues(timeline.frames, timeline.curves, 5, values);
+    mixChannels(pose.colors, slots.colors, at, values, 0, 4, blend === SETUP, true);
 }
 
 /** The rgb timeline: the color of a slot without its alpha. `values` is scratch space. */
@@ -89,20 +87,19 @@ export function applyRgb(
     timeline: LegacyTimeline,
     pose: PoseState,
     slots: SlotTable,
-    time: number,
-    alpha: number,
     blend: number,
     values: Float64Array,
 ): void {
+    const time = Number(SHARED[TIME]);
     const at = timeline.target * 4;
 
     if (time < Number(timeline.frames[0])) {
-        channelsBeforeFirstKey(pose.colors, slots.colors, at, 3, alpha, blend, false);
+        channelsBeforeFirstKey(pose.colors, slots.colors, at, 3, blend, false);
 
         return;
     }
-    curveValues(timeline.frames, timeline.curves, time, 4, values);
-    mixChannels(pose.colors, slots.colors, at, values, 0, 3, alpha, blend === SETUP, false);
+    curveValues(timeline.frames, timeline.curves, 4, values);
+    mixChannels(pose.colors, slots.colors, at, values, 0, 3, blend === SETUP, false);
 }
 
 /** The alpha timeline: the alpha of a slot. */
@@ -110,20 +107,19 @@ export function applyAlpha(
     timeline: LegacyTimeline,
     pose: PoseState,
     slots: SlotTable,
-    time: number,
-    alpha: number,
     blend: number,
     values: Float64Array,
 ): void {
+    const time = Number(SHARED[TIME]);
     const at = timeline.target * 4 + 3;
 
     if (time < Number(timeline.frames[0])) {
-        channelsBeforeFirstKey(pose.colors, slots.colors, at, 1, alpha, blend, false);
+        channelsBeforeFirstKey(pose.colors, slots.colors, at, 1, blend, false);
 
         return;
     }
-    curveValues(timeline.frames, timeline.curves, time, 2, values);
-    mixChannels(pose.colors, slots.colors, at, values, 0, 1, alpha, blend === SETUP, false);
+    curveValues(timeline.frames, timeline.curves, 2, values);
+    mixChannels(pose.colors, slots.colors, at, values, 0, 1, blend === SETUP, false);
 }
 
 /** The rgba2 timeline: the color and the dark color of a slot. `values` is scratch space. */
@@ -131,23 +127,22 @@ export function applyRgba2(
     timeline: LegacyTimeline,
     pose: PoseState,
     slots: SlotTable,
-    time: number,
-    alpha: number,
     blend: number,
     values: Float64Array,
 ): void {
+    const time = Number(SHARED[TIME]);
     const light = timeline.target * 4;
     const dark = timeline.target * 3;
 
     if (time < Number(timeline.frames[0])) {
-        channelsBeforeFirstKey(pose.colors, slots.colors, light, 4, alpha, blend, true);
-        channelsBeforeFirstKey(pose.darkColors, slots.darkColors, dark, 3, alpha, blend, false);
+        channelsBeforeFirstKey(pose.colors, slots.colors, light, 4, blend, true);
+        channelsBeforeFirstKey(pose.darkColors, slots.darkColors, dark, 3, blend, false);
 
         return;
     }
-    curveValues(timeline.frames, timeline.curves, time, 8, values);
-    mixChannels(pose.colors, slots.colors, light, values, 0, 4, alpha, blend === SETUP, true);
-    mixChannels(pose.darkColors, slots.darkColors, dark, values, 4, 3, alpha, blend === SETUP, false);
+    curveValues(timeline.frames, timeline.curves, 8, values);
+    mixChannels(pose.colors, slots.colors, light, values, 0, 4, blend === SETUP, true);
+    mixChannels(pose.darkColors, slots.darkColors, dark, values, 4, 3, blend === SETUP, false);
 }
 
 /** The rgb2 timeline: the color without alpha and the dark color of a slot. `values` is scratch space. */
@@ -155,21 +150,20 @@ export function applyRgb2(
     timeline: LegacyTimeline,
     pose: PoseState,
     slots: SlotTable,
-    time: number,
-    alpha: number,
     blend: number,
     values: Float64Array,
 ): void {
+    const time = Number(SHARED[TIME]);
     const light = timeline.target * 4;
     const dark = timeline.target * 3;
 
     if (time < Number(timeline.frames[0])) {
-        channelsBeforeFirstKey(pose.colors, slots.colors, light, 3, alpha, blend, false);
-        channelsBeforeFirstKey(pose.darkColors, slots.darkColors, dark, 3, alpha, blend, false);
+        channelsBeforeFirstKey(pose.colors, slots.colors, light, 3, blend, false);
+        channelsBeforeFirstKey(pose.darkColors, slots.darkColors, dark, 3, blend, false);
 
         return;
     }
-    curveValues(timeline.frames, timeline.curves, time, 7, values);
-    mixChannels(pose.colors, slots.colors, light, values, 0, 3, alpha, blend === SETUP, false);
-    mixChannels(pose.darkColors, slots.darkColors, dark, values, 3, 3, alpha, blend === SETUP, false);
+    curveValues(timeline.frames, timeline.curves, 7, values);
+    mixChannels(pose.colors, slots.colors, light, values, 0, 3, blend === SETUP, false);
+    mixChannels(pose.darkColors, slots.darkColors, dark, values, 3, 3, blend === SETUP, false);
 }

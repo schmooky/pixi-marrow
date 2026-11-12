@@ -3,6 +3,8 @@ import type { AttachmentData, AttachmentRef, VertexData } from '../../model/atta
 import type { AnimationData, SkeletonModel } from '../../model/model';
 import type { TimelineData, TimelineKind } from '../../model/timelines';
 import { type AttachmentLookup, createAttachmentLookup, meshSource } from '../shared/lookup';
+import type { UpdateCache } from './cache';
+import { type ConstraintPlan, createConstraintPlan } from './constraints';
 import {
     type Clip,
     K_ALPHA,
@@ -10,7 +12,11 @@ import {
     K_DEFORM,
     K_DRAW_ORDER,
     K_EVENT,
+    K_IK,
     K_INHERIT,
+    K_PATH_MIX,
+    K_PATH_POSITION,
+    K_PATH_SPACING,
     K_RGB,
     K_RGB2,
     K_RGBA,
@@ -24,6 +30,7 @@ import {
     K_SHEAR_X,
     K_SHEAR_Y,
     K_SKIPPED,
+    K_TRANSFORM,
     K_TRANSLATE,
     K_TRANSLATE_X,
     K_TRANSLATE_Y,
@@ -56,9 +63,14 @@ export interface Rig {
     /** Property names to the numbers the engine compares. */
     readonly propertyIds: Map<string, number>;
     readonly facts: Map<AttachmentData, AttachmentFacts>;
+    /** The constraints, ready to sort and solve. */
+    readonly plan: ConstraintPlan;
+    /** The update cache of each skin that was active so far, by skin index. -1 is no skin. */
+    readonly caches: Map<number, UpdateCache>;
 }
 
-type Target = 'bone' | 'slot' | 'none';
+/** What a timeline animates: a bone, a slot, a constraint of one type, or nothing with an index. */
+type Target = 'bone' | 'slot' | 'none' | 'ik' | 'transform' | 'path';
 
 interface KindSpec {
     code: number;
@@ -97,10 +109,15 @@ const SPECS: Partial<Record<TimelineKind, KindSpec>> = {
     sequence: spec(K_SEQUENCE, 3, 'slot'),
     event: spec(K_EVENT, 1, 'none'),
     drawOrder: spec(K_DRAW_ORDER, 1, 'none'),
+    ikConstraint: spec(K_IK, 6, 'ik'),
+    transformConstraint: spec(K_TRANSFORM, 7, 'transform'),
+    pathConstraintPosition: spec(K_PATH_POSITION, 2, 'path'),
+    pathConstraintSpacing: spec(K_PATH_SPACING, 2, 'path'),
+    pathConstraintMix: spec(K_PATH_MIX, 4, 'path'),
 };
 
-/** Timelines of these kinds animate constraints, which this engine does not solve. */
-const SKIPPED = /^(ikConstraint|transformConstraint|pathConstraint|physicsConstraint)/;
+/** Timelines of these kinds animate physics constraints, which this engine does not solve. */
+const SKIPPED = /^physicsConstraint/;
 
 const rigs = new WeakMap<SkeletonModel, Rig>();
 
@@ -122,6 +139,8 @@ export function rigOf(model: SkeletonModel): Rig {
             clips: [],
             propertyIds: new Map(),
             facts: new Map(),
+            plan: createConstraintPlan(model),
+            caches: new Map(),
         };
         rigs.set(model, rig);
     }
@@ -169,6 +188,11 @@ function idsOf(rig: Rig, data: TimelineData, properties: readonly string[]): num
 
 function checkTarget(rig: Rig, data: TimelineData, target: Target, what: string): void {
     if (target === 'none') return;
+    if (target !== 'bone' && target !== 'slot') {
+        // the official timeline reads its constraint from the list of that type and crashes without one
+        if (rig.model.constraints[data.target]?.type === target) return;
+        throw invalid(`${what} animates the ${target} constraint ${data.target}, which does not exist.`);
+    }
     const count = target === 'bone' ? rig.model.bones.count : rig.model.slots.count;
 
     if (!Number.isInteger(data.target) || data.target < 0 || data.target >= count) {

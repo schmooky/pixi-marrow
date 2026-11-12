@@ -1,5 +1,5 @@
 import { LOCAL_STRIDE } from '../state';
-import { curveValues, search } from './curves';
+import { ALPHA, curveValues, SHARED, search, TIME } from './curves';
 import { ADD, FIRST, type LegacyTimeline, MIX_OUT, SETUP } from './timelines';
 
 /** The offset of x in the local pose of a bone. y follows it. */
@@ -17,15 +17,14 @@ export const LOCAL_SHEAR_X = 5;
 /** The offset of shearY in the local pose of a bone. */
 export const LOCAL_SHEAR_Y = 6;
 
-const signum = (value: number): number => (value > 0 ? 1 : value < 0 ? -1 : 0);
-
 /*
  * The functions below write their result into the pose and take key values from a scratch array.
  * A number that is returned from a call or computed for one can cost an allocation.
  */
 
 /** Sets the local value at `i` before the first key of its timeline, the same way for every kind. */
-function beforeFirstKey(local: Float64Array, setupPose: Float64Array, i: number, alpha: number, blend: number): void {
+function beforeFirstKey(local: Float64Array, setupPose: Float64Array, i: number, blend: number): void {
+    const alpha = Number(SHARED[ALPHA]);
     const setup = Number(setupPose[i]);
 
     if (blend === SETUP) {
@@ -49,21 +48,21 @@ export function applyRelative(
     local: Float64Array,
     setupPose: Float64Array,
     property: number,
-    time: number,
-    alpha: number,
     blend: number,
     sumFirst: boolean,
     values: Float64Array,
 ): void {
+    const time = Number(SHARED[TIME]);
+    const alpha = Number(SHARED[ALPHA]);
     const { frames, curves } = timeline;
     const i = timeline.target * LOCAL_STRIDE + property;
 
     if (time < Number(frames[0])) {
-        beforeFirstKey(local, setupPose, i, alpha, blend);
+        beforeFirstKey(local, setupPose, i, blend);
 
         return;
     }
-    curveValues(frames, curves, time, 2, values);
+    curveValues(frames, curves, 2, values);
     const value = Number(values[0]);
     const current = Number(local[i]);
     const setup = Number(setupPose[i]);
@@ -84,10 +83,10 @@ function mixScale(
     i: number,
     values: Float64Array,
     v: number,
-    alpha: number,
     blend: number,
     direction: number,
 ): void {
+    const alpha = Number(SHARED[ALPHA]);
     const current = Number(local[i]);
     const setup = Number(setupPose[i]);
     const value = Number(values[v]) * setup;
@@ -96,9 +95,11 @@ function mixScale(
     if (blend === ADD) {
         local[i] = current + (value - setup) * alpha;
     } else if (direction === MIX_OUT) {
-        local[i] = base + (Math.abs(value) * signum(base) - base) * alpha;
+        // the official signum of the base
+        local[i] = base + (Math.abs(value) * (base > 0 ? 1 : base < 0 ? -1 : 0) - base) * alpha;
     } else {
-        const start = Math.abs(base) * signum(value);
+        // the official signum of the key value
+        const start = Math.abs(base) * (value > 0 ? 1 : value < 0 ? -1 : 0);
 
         local[i] = start + (value - start) * alpha;
     }
@@ -116,24 +117,24 @@ export function applyScaleValue(
     local: Float64Array,
     setupPose: Float64Array,
     property: number,
-    time: number,
-    alpha: number,
     blend: number,
     direction: number,
     v41: boolean,
     values: Float64Array,
 ): void {
+    const time = Number(SHARED[TIME]);
+    const alpha = Number(SHARED[ALPHA]);
     const { frames, curves } = timeline;
     const i = timeline.target * LOCAL_STRIDE + property;
 
     if (time < Number(frames[0])) {
-        beforeFirstKey(local, setupPose, i, alpha, blend);
+        beforeFirstKey(local, setupPose, i, blend);
 
         return;
     }
-    curveValues(frames, curves, time, 2, values);
+    curveValues(frames, curves, 2, values);
     if (alpha !== 1) {
-        mixScale(local, setupPose, i, values, 0, alpha, blend, direction);
+        mixScale(local, setupPose, i, values, 0, blend, direction);
 
         return;
     }
@@ -155,21 +156,21 @@ export function applyRelativePair(
     local: Float64Array,
     setupPose: Float64Array,
     property: number,
-    time: number,
-    alpha: number,
     blend: number,
     values: Float64Array,
 ): void {
+    const time = Number(SHARED[TIME]);
+    const alpha = Number(SHARED[ALPHA]);
     const { frames, curves } = timeline;
     const i = timeline.target * LOCAL_STRIDE + property;
 
     if (time < Number(frames[0])) {
-        beforeFirstKey(local, setupPose, i, alpha, blend);
-        beforeFirstKey(local, setupPose, i + 1, alpha, blend);
+        beforeFirstKey(local, setupPose, i, blend);
+        beforeFirstKey(local, setupPose, i + 1, blend);
 
         return;
     }
-    curveValues(frames, curves, time, 3, values);
+    curveValues(frames, curves, 3, values);
     for (let v = 0; v < 2; v++) {
         const current = Number(local[i + v]);
         const setup = Number(setupPose[i + v]);
@@ -186,27 +187,27 @@ export function applyScalePair(
     timeline: LegacyTimeline,
     local: Float64Array,
     setupPose: Float64Array,
-    time: number,
-    alpha: number,
     blend: number,
     direction: number,
     values: Float64Array,
 ): void {
+    const time = Number(SHARED[TIME]);
+    const alpha = Number(SHARED[ALPHA]);
     const { frames, curves } = timeline;
     const i = timeline.target * LOCAL_STRIDE + LOCAL_SCALE_X;
 
     if (time < Number(frames[0])) {
-        beforeFirstKey(local, setupPose, i, alpha, blend);
-        beforeFirstKey(local, setupPose, i + 1, alpha, blend);
+        beforeFirstKey(local, setupPose, i, blend);
+        beforeFirstKey(local, setupPose, i + 1, blend);
 
         return;
     }
-    curveValues(frames, curves, time, 3, values);
+    curveValues(frames, curves, 3, values);
     for (let v = 0; v < 2; v++) {
         const setup = Number(setupPose[i + v]);
         const value = Number(values[v]) * setup;
 
-        if (alpha !== 1) mixScale(local, setupPose, i + v, values, v, alpha, blend, direction);
+        if (alpha !== 1) mixScale(local, setupPose, i + v, values, v, blend, direction);
         else if (blend === ADD) local[i + v] = Number(local[i + v]) + (value - setup);
         else local[i + v] = value;
     }
@@ -217,10 +218,10 @@ export function applyInherit(
     timeline: LegacyTimeline,
     inherit: Uint8Array,
     setupInherit: Uint8Array,
-    time: number,
     blend: number,
     direction: number,
 ): void {
+    const time = Number(SHARED[TIME]);
     const { frames, target } = timeline;
     const setup = setupInherit[target] ?? 0;
 
@@ -229,6 +230,6 @@ export function applyInherit(
     } else if (time < Number(frames[0])) {
         if (blend === SETUP || blend === FIRST) inherit[target] = setup;
     } else {
-        inherit[target] = Number(frames[search(frames, time, 2) + 1]);
+        inherit[target] = Number(frames[search(frames, 2) + 1]);
     }
 }

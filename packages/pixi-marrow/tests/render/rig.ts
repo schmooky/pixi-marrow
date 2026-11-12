@@ -11,7 +11,7 @@ import type { MeshAttachmentData, RegionAttachmentData } from '../../src/model/a
 import type { SkeletonModel } from '../../src/model/model';
 import { createPoseEngine, type PoseEngine } from '../../src/pose/engine';
 import { type AttachmentLookup, createAttachmentLookup, meshSource } from '../../src/pose/shared/lookup';
-import { SkeletonView } from '../../src/render/skeleton-view';
+import { SkeletonView, type SkeletonViewOptions } from '../../src/render/skeleton-view';
 import { listFixtures, readFixture } from '../parity/fixtures';
 import type { RigFiles } from '../parity/official';
 
@@ -60,24 +60,31 @@ export function fixtureFiles(id: string): RigFiles {
     return readFixture(fixture);
 }
 
+/** What a rig is drawn with: the page textures and the options of the view. */
+export interface RigView {
+    /** One texture per atlas page. Default: a white texture of one pixel, which allows no cut of overdraw. */
+    textures?: (atlas: AtlasModel) => Texture[];
+    /** The outlines and the cuts of overdraw. Default: none. */
+    options?: (atlas: AtlasModel) => SkeletonViewOptions;
+}
+
 /**
  * Imports files and creates an engine and a view with a white texture per page. `change` can
- * edit the model and the atlas before the view sees them.
+ * edit the model and the atlas before the view sees them. `drawn` gives the view other textures
+ * and options.
  */
 export async function createRig(
     files: RigFiles,
     change?: (model: SkeletonModel, atlas: AtlasModel) => void,
+    drawn: RigView = {},
 ): Promise<Rig> {
     const model = await importSkeleton(files.skeleton);
     const atlas = importAtlas(files.atlas);
 
     change?.(model, atlas);
     const engine = await createPoseEngine(model, { constraints: 'ignore' });
-    const view = new SkeletonView(
-        model,
-        atlas,
-        atlas.pages.map(() => Texture.WHITE),
-    );
+    const textures = drawn.textures?.(atlas) ?? atlas.pages.map(() => Texture.WHITE);
+    const view = new SkeletonView(model, atlas, textures, drawn.options?.(atlas));
 
     return { model, atlas, lookup: createAttachmentLookup(model), engine, view };
 }
@@ -109,9 +116,21 @@ export function slotIndex(rig: Rig, name: string): number {
     return index;
 }
 
-/** The meshes of the view that draw at the moment, in draw order. */
+/**
+ * The meshes of the view that draw at the moment, in draw order. The meshes of clipped slots are
+ * the children of a container with a mask. The mask itself is not listed.
+ */
 export function meshes(view: SkeletonView): Mesh[] {
-    return view.container.children.filter((child): child is Mesh => child instanceof Mesh && child.visible);
+    const drawn: Mesh[] = [];
+
+    for (const child of view.container.children) {
+        if (!child.visible) continue;
+        for (const mesh of child instanceof Mesh ? [child] : child.children) {
+            if (mesh instanceof Mesh && mesh.visible && mesh !== child.mask) drawn.push(mesh);
+        }
+    }
+
+    return drawn;
 }
 
 const isFloat32 = (data: unknown): data is Float32Array => data instanceof Float32Array;

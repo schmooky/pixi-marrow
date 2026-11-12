@@ -23,6 +23,8 @@ export type ScriptOp =
     | { op: 'setupPose' }
     | { op: 'setupPoseBones' }
     | { op: 'setupPoseSlots' }
+    /** The position and the scale of the skeleton: `x`, `y`, `scaleX` and `scaleY` of the pose state. */
+    | { op: 'place'; x: number; y: number; scaleX: number; scaleY: number }
     /** `times` updates of `dt` seconds, each followed by a comparison. */
     | { op: 'update'; dt: number; times: number };
 
@@ -47,6 +49,7 @@ export interface ScriptBuilder {
     setupPose(): void;
     setupPoseBones(): void;
     setupPoseSlots(): void;
+    place(x: number, y: number, scaleX: number, scaleY: number): void;
     update(dt: number, times?: number): void;
 }
 
@@ -78,6 +81,7 @@ export function script(name: string, build: (s: ScriptBuilder) => void): PoseScr
         setupPose: () => push({ op: 'setupPose' }),
         setupPoseBones: () => push({ op: 'setupPoseBones' }),
         setupPoseSlots: () => push({ op: 'setupPoseSlots' }),
+        place: (x, y, scaleX, scaleY) => push({ op: 'place', x, y, scaleX, scaleY }),
         update: (dt, times = 1) => push({ op: 'update', dt, times }),
     });
 

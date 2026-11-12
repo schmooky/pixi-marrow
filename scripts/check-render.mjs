@@ -9,34 +9,68 @@
  *                          [--out=.shots/render] [--size=512]
  *
  * The rigs are the entries of fixtures/manifest.json that have page images. For each one a few
- * animations play on both sides with the same time steps, without constraints. At four steps each
+ * animations play on both sides with the same time steps. Both sides solve IK, transform and path
+ * constraints. Physics constraints and sliders are off on both. At four steps each
  * side is drawn alone into a render texture, once on a transparent and once on a solid background,
  * and the raw pixels are read back. Per frame the check reports the largest channel difference and
  * the share of the covered pixels that differ by more than 1 and by more than 8 (of 255).
  *
+ * Ours is drawn with its defaults, after `asset.optimized` has resolved. The cuts of overdraw
+ * that are on by default are therefore part of every comparison with the official runtime.
+ *
  *   official twice             two official instances. No difference is allowed: the tooling is exact
- *   proof, ...                 an official instance made wrong on purpose. It must be rejected
+ *   proof, ...                 an instance made wrong on purpose. It must be rejected, at both
+ *                              placements
  *   ours                       pixi-marrow against the official runtime, from the binary export
  *   ours, json                 the same from the JSON export
  *   .., json and binary        one runtime, both exports. Spine 4.1 has no official Pixi v8 runtime,
  *                              so for 4.1 this is the only reference
  *   ours is not empty          4.1 only: every animation draws something
  *   .., premultiplied atlas    one runtime, the straight and the premultiplied atlas of a rig
- *   draw calls                 one draw call for a skeleton with normal and additive slots only
+ *   draw calls                 `stats.drawCalls` says what the GPU interface saw. A skeleton with
+ *                              normal and additive slots only is one draw call, plus the ranges
+ *                              and the two mask draws of every clip that cuts a visible slot
  *   buffers while playing      the vertex ranges are built once, and the index buffer stays while
  *                              an animation plays that keys no color, attachment, draw order or
  *                              sequence. With such keys a slot can come and go, for example when
  *                              its alpha reaches 0, and the rewrites are listed as information
+ *   ours, cuts on and off      ours with the default cuts of overdraw against ours with both cuts
+ *                              off. The cuts leave triangles out and change none, so the picture
+ *                              must be the same. The check fails above a difference of 1
+ *   ours, polygons and quads   ours with `tightMesh: 'on'` against ours without cuts. Polygons are
+ *                              not exact and not the default, see TOLERANCE. The shares of the
+ *                              pixels over 1 and over 8 have limits. The largest difference is
+ *                              reported and has none
+ *   ours with polygons, official  the same picture against the official runtime, with limits of
+ *                              its own: what `tightMesh: 'on'` costs in picture terms
+ *   overdraw                   the area of the triangles ours draws, with the default cuts and with
+ *                              polygons, against no cuts, and the slots skipped as covered
+ *   multisampled target        both cuts must take themselves back in the frame that is drawn to a
+ *                              multisampled target, so the picture equals the one without cuts
+ *   premultiplied page reading the outlines of a premultiplied page must see a color under alpha 0,
+ *                              which a 2D canvas returns as black. Runs once per renderer
  *
  * TOLERANCE below holds the pass criteria and what they rest on.
  *
- * Known gap: clipping is not solved before milestone M3. A capture where ours is off while its
- * `stats.clippingIgnored` is above 0 is listed under its own heading and does not fail the check.
- * `--strict-clipping` makes those captures failures again.
+ * The second look: a frame that is outside the tolerance of ours against official is drawn again,
+ * both sides moved by SECOND_PLACEMENT of scripts/render/judge.js, a fraction of a pixel that is
+ * no multiple of the subpixel grid of a GPU. The two runtimes move vertices to the screen in
+ * different arithmetic, so a vertex that lands on the border of two grid cells can be snapped
+ * apart, which no tolerance of a few steps covers. Such a tie is gone at the second placement.
+ * A real difference is not. A frame fails when it is outside the tolerance at both placements.
+ * A frame that passes at the second one only is listed with the numbers of both, and the summary
+ * counts those frames.
  *
- * Images of failing cases (ours or first, official or second, and where they differ), of the known
- * gap and of one passing frame per rig go to `.shots/render/<renderer>/`. `--shots` sets how many
- * cases per rig get images. `--self-test` runs the tooling proof alone and draws nothing of ours.
+ * Clipping: a frame that ours draws through a clip mask (`stats.maskDraws` above 0) is compared
+ * like every other frame. The report also gives the largest differences of those frames on their
+ * own. `--strict-clipping` does nothing: it was the switch that failed clipped frames while they
+ * were a known gap, and it is still accepted so that older command lines keep working.
+ *
+ * Images of failing cases (ours or first, official or second, and where they differ) and of one
+ * passing frame per rig go to `.shots/render/<renderer>/`. `--shots` sets how many cases per rig
+ * get images. `--self-test` runs the tooling proof alone and draws nothing of ours. A proof is a
+ * picture that is wrong on purpose: it must be rejected, and rejected again at the second
+ * placement, so that the second look cannot let a real difference pass.
  *
  * Without --renderer both run. A renderer the browser does not have is skipped with a line that
  * says so, and fails the check only when it was asked for by name.
@@ -67,6 +101,10 @@ const TOLERANCE = {
     // most, and the worst pixel differs by 4. The largest share over 1 is 0.020%: a row of 20 pixels
     // where an edge lies on the pixel centers and the two sides round it to different rows. The
     // limit leaves room for a longer edge. Nothing differs by more than 8.
+    // Clipped frames are held to the same limits. The official runtime cuts the triangles of a
+    // clipped slot on the CPU, ours tests a stencil mask that holds the clip polygon, and both put
+    // the edge on the same pixels. Measured on the three rigs that clip: the coin is the same
+    // picture, the tank and spineboy differ by 1 at most.
     match: { max: 4, over1: 0.0005, over8: 0 },
     // The straight and the premultiplied atlas of a rig. The packer and the browser round the
     // multiplication differently, and layers add up. Measured on both runtimes: 4 at most, over
@@ -78,6 +116,27 @@ const TOLERANCE = {
     // share of pixels a small displacement cannot explain. Measured on the official runtime: 0.035%
     // at most, and 1.08% for the raptor, whose jump moves 0.6 px between the exports.
     formats: { displaced: 0.001, rigs: { 'raptor-pro': 0.015 } },
+    // Ours with the default cuts of overdraw against ours without. A covered slot and a region
+    // without a visible pixel are left out, and the triangles that stay are the same triangles,
+    // so the picture is the same to the bit. Measured: no pixel differs. The limit of 1 is the
+    // room the owner of the project gave to rounding.
+    cuts: { max: 1 },
+    // Ours with polygons against ours with quads, and against the official runtime. Not exact,
+    // and not on by default: a GPU moves the corners of a triangle to its subpixel grid and
+    // interpolates texture coordinates from there, so other triangles give other last bits.
+    // Measured: the same quads split along the other diagonal change up to 12% of the pixels by 1
+    // and a few by 2. A polygon adds pixels whose center lies on the edge of a region and falls to
+    // the other side of it. Those differ by what the region shows at its edge.
+    //
+    // Measured over 384 frames against quads and 228 against official, the same on both renderers.
+    // Over 1: none in half of the frames, 0.005% at the 90th percentile. The worst frame is
+    // dragon-ess flying at step 7 with 0.08%, 27 pixels. Over 8: one pixel in a frame at most,
+    // which is 0.004% in mix-and-match dress-up at step 26. The limits leave about three times
+    // that. `few1` and `few8` are for small pictures: spineboy portal at step 26 covers 698
+    // pixels, and its 3 pixels over 1 are 0.43% of them.
+    // The largest difference is reported and has no limit: one edge pixel differs by up to 53.
+    polygons: { over1: 0.0025, over8: 0.0001, few1: 8, few8: 3 },
+    polygonsOfficial: { over1: 0.0025, over8: 0.0001, few1: 8, few8: 3 },
 };
 /** Failing cases per rig that get their images saved. */
 const SHOTS_PER_RIG = 4;
@@ -123,11 +182,7 @@ async function runRig(browser, origin, renderer, rig) {
 
         if (state.error || state.renderer !== renderer) return { state, errors };
         // the renderer is up from here on
-        const options = {
-            tolerance: TOLERANCE,
-            shots: Number(args.shots ?? SHOTS_PER_RIG),
-            strictClipping: args['strict-clipping'] === 'true',
-        };
+        const options = { tolerance: TOLERANCE, shots: Number(args.shots ?? SHOTS_PER_RIG), extras: rig.extras };
         const report = await Promise.race([
             page.evaluate(([plan, opts]) => window.renderCheck.run(plan, opts), [rig, options]),
             new Promise((_, reject) => {
@@ -178,6 +233,8 @@ async function main() {
     const rigs = selfTest ? planned.filter((rig) => rig.official) : planned;
 
     if (rigs.length === 0) throw new Error(`no rig matches --only=${args.only}`);
+    // the cases that need no rig run on the page of the first one
+    rigs[0].extras = true;
     const bundle = await bundlePage(root);
     const server = await serve(root, bundle.dir);
     const browser = await chromium.launch({
@@ -189,7 +246,6 @@ async function main() {
     });
     let failed = 0;
     let ran = 0;
-    let gaps = 0;
     let missing = false;
 
     try {
@@ -230,7 +286,6 @@ async function main() {
             ran++;
             console.log(`check-render: ${renderer} summary`);
             reporter.summary();
-            gaps += reporter.knownGap(`check-render: ${renderer} known gap: clipping, milestone M3`);
         }
     } finally {
         await browser.close();
@@ -245,10 +300,8 @@ async function main() {
         console.log('check-render: pixi-marrow exports no MarrowSpine, so nothing of ours was drawn');
         failed++;
     }
-    const known = gaps ? `${gaps} captures in the known gap: clipping, milestone M3` : '';
-
-    if (failed) console.log(`check-render: ${failed} failures${known ? `, and ${known}` : ''}`);
-    else console.log(`check-render: ok${known ? `, with ${known}` : ''}`);
+    if (failed) console.log(`check-render: ${failed} failures`);
+    else console.log('check-render: ok');
 
     return failed ? 1 : 0;
 }

@@ -1,7 +1,7 @@
 import { MarrowError } from '../../base/errors';
 import type { SkeletonModel } from '../../model/model';
 import type { PoseEngine, PoseEvent, TrackEntry, TrackFields } from '../engine';
-import { createPoseState, type PoseState } from '../state';
+import { createPoseState, type PoseState, poseStateBytes } from '../state';
 import { applyTracks } from './apply';
 import { configureEntry, LegacyEntry } from './entry';
 import {
@@ -16,19 +16,34 @@ import {
 } from './player';
 import { clipOf, type Rig, rigOf } from './rig';
 import { initPose, setBonesToSetupPose, setSkin, setSlotsToSetupPose } from './skeleton';
+import { createSolver, type Solver, updateWorldTransform } from './solver';
 import { updateTracks } from './update';
-import { updateWorldTransforms } from './world';
+
+/** What `takeEvents` returns when nothing happened. Frozen, because every engine returns this one list. */
+const NO_EVENTS: PoseEvent[] = [];
+
+Object.freeze(NO_EVENTS);
 
 /** The pose engine for 4.1 and 4.2: the official `AnimationState` and `Skeleton` of those versions in one object. */
 class LegacyEngine implements PoseEngine {
     readonly state: PoseState;
     private readonly rig: Rig;
+    private readonly solver: Solver;
     private readonly player: LegacyPlayer;
 
-    constructor(rig: Rig, pose: PoseState) {
+    constructor(rig: Rig, pose: PoseState, solver: Solver) {
         this.rig = rig;
         this.state = pose;
-        this.player = new LegacyPlayer(rig, pose);
+        this.solver = solver;
+        this.player = new LegacyPlayer(rig, pose, solver);
+    }
+
+    get bytes(): number {
+        const { applied, values } = this.solver;
+        // a skeleton without solved constraints has no applied pose of its own
+        const own = applied === this.state.local ? 0 : applied.byteLength;
+
+        return poseStateBytes(this.state) + own + values.byteLength + this.player.attachmentState.byteLength;
     }
 
     get timeScale(): number {
@@ -85,16 +100,16 @@ class LegacyEngine implements PoseEngine {
     }
 
     setSkin(skin: number): void {
-        setSkin(this.rig, this.state, skin);
+        setSkin(this.rig, this.state, this.solver, skin);
     }
 
     setupPose(): void {
-        setBonesToSetupPose(this.rig, this.state);
+        setBonesToSetupPose(this.rig, this.state, this.solver);
         setSlotsToSetupPose(this.rig, this.state);
     }
 
     setupPoseBones(): void {
-        setBonesToSetupPose(this.rig, this.state);
+        setBonesToSetupPose(this.rig, this.state, this.solver);
     }
 
     setupPoseSlots(): void {
@@ -106,12 +121,14 @@ class LegacyEngine implements PoseEngine {
         // the skeleton time exists from 4.2 on
         if (!this.rig.v41) this.state.time += dt;
         applyTracks(this.player);
-        updateWorldTransforms(this.rig.model.bones, this.state, this.rig.v41);
+        updateWorldTransform(this.solver);
     }
 
     takeEvents(): PoseEvent[] {
         const events = this.player.events;
 
+        // nothing happened in most updates: no new list for those
+        if (events.length === 0) return NO_EVENTS;
         this.player.events = [];
 
         return events;
@@ -122,7 +139,11 @@ class LegacyEngine implements PoseEngine {
  * Creates the pose engine for a Spine 4.1 or 4.2 skeleton. It is a port of the official 4.2
  * runtime, with the 4.1 formulas where the two differ. The pose starts as the setup pose without a skin.
  *
- * Constraints are not applied and timelines that animate constraints are skipped.
+ * IK, transform and path constraints are solved as the official runtime solves them. Physics
+ * constraints are not: they keep their place in the update order and change nothing, as in the
+ * official runtime with physics switched off, and their timelines are skipped.
+ *
+ * Throws a {@link MarrowError} for a constraint that points at a bone or a slot the model does not have.
  *
  * @example
  * const engine = createLegacyEngine(await importSkeleton(bytes));
@@ -132,8 +153,9 @@ class LegacyEngine implements PoseEngine {
 export function createLegacyEngine(model: SkeletonModel): PoseEngine {
     const rig = rigOf(model);
     const pose = createPoseState(model);
+    const solver = createSolver(rig, pose);
 
-    initPose(rig, pose);
+    initPose(rig, pose, solver);
 
-    return new LegacyEngine(rig, pose);
+    return new LegacyEngine(rig, pose, solver);
 }

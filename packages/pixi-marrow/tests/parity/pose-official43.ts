@@ -4,16 +4,21 @@ import {
     AtlasAttachmentLoader,
     DeformTimeline,
     type Event,
+    IkConstraint,
+    PathConstraint,
     Physics,
+    PhysicsConstraintData,
     SequenceTimeline,
     Skeleton,
     SkeletonBinary,
     type SkeletonData,
     SkeletonJson,
     Slider,
+    SliderData,
     Texture,
     TextureAtlas,
     type TrackEntry,
+    TransformConstraint,
 } from 'spine-core-4.3';
 import type { AttachmentRef, TrackField } from '../../src/core';
 import { attachmentRefs, eventKey, indexer, skinEntries, timelineKind } from './model-shared';
@@ -28,7 +33,7 @@ import {
     type DriverOptions,
     entryViews,
     eventRecorder,
-    isConstraintKind,
+    isIgnoredKind,
     type OfficialDriver,
     type OfficialPose,
     type OfficialPoseRig,
@@ -110,11 +115,48 @@ export function shieldTimelineSlots(skeleton: Skeleton): void {
     }
 }
 
+/**
+ * Gives the second skeleton everything its IK, transform and path constraints read and an
+ * animation or a setup pose call can change: the pose of every bone (local numbers and inherit
+ * mode), the pose of every constraint of the three kinds, and the pose of every slot, of which a
+ * path constraint reads the attachment and the deform. It copies the animated poses, never the
+ * applied ones, which a slider may have written. Physics and slider poses are not copied.
+ */
+function follow(from: Skeleton, to: Skeleton): void {
+    from.bones.forEach((bone, i) => {
+        const twin = to.bones[i];
+
+        if (twin === undefined) throw new Error('The two skeletons differ');
+        twin.pose.set(bone.pose);
+    });
+    from.slots.forEach((slot, i) => {
+        const twin = to.slots[i];
+
+        if (twin === undefined) throw new Error('The two skeletons differ');
+        twin.pose.set(slot.pose);
+    });
+    from.constraints.forEach((constraint: unknown, i) => {
+        const twin: unknown = to.constraints[i];
+
+        if (constraint instanceof IkConstraint && twin instanceof IkConstraint) twin.pose.set(constraint.pose);
+        else if (constraint instanceof TransformConstraint && twin instanceof TransformConstraint)
+            twin.pose.set(constraint.pose);
+        else if (constraint instanceof PathConstraint && twin instanceof PathConstraint) twin.pose.set(constraint.pose);
+    });
+}
+
+/** The sliders of a skeleton. */
+function sliders(skeleton: Skeleton): Slider[] {
+    return skeleton.constraints.filter((constraint: unknown) => constraint instanceof Slider);
+}
+
 function createDriver(shared: Shared, options: DriverOptions): OfficialDriver {
     const { data } = shared;
     const skeleton = new Skeleton(data);
-    // the world reference: the same bones, no constraints
-    const bare = new Skeleton(data);
+    const { world = 'second' } = options;
+    // the world reference: the same skeleton with physics and sliders off. Without it the played one is.
+    const twin = world === 'second' ? new Skeleton(data) : undefined;
+    const physics = world === 'direct' ? Physics.none : Physics.update;
     const stateData = new AnimationStateData(data);
     const state = new AnimationState(stateData);
     const entries = entryViews<TrackEntry>(shared.animationIndex);
@@ -150,23 +192,16 @@ function createDriver(shared: Shared, options: DriverOptions): OfficialDriver {
         });
     };
     const readWorld = (out: OfficialPose): void => {
-        skeleton.bones.forEach((bone, i) => {
-            const twin = bare.bones[i];
-
-            if (twin === undefined) throw new Error('The two skeletons differ');
-            // the local numbers and the inherit mode
-            twin.pose.set(bone.pose);
-        });
-        bare.updateWorldTransform(Physics.update);
-        bare.bones.forEach((bone, i) => {
+        (twin ?? skeleton).bones.forEach((bone, i) => {
             writeWorld(out.world, i, bone.active, bone.appliedPose);
         });
     };
     const audit = options.audit ? createAudit(skeleton.bones.length, skeleton.slots.length, readPose) : undefined;
 
-    bare.constraints.length = 0;
-    bare.physics.length = 0;
-    bare.updateCache();
+    // nothing animates the second skeleton, so the mix stays: a slider with no mix does nothing
+    for (const slider of twin ? sliders(twin) : []) slider.pose.mix = 0;
+    // animations key the mix of the played skeleton, so its sliders lose their update instead
+    for (const slider of world === 'direct' ? sliders(skeleton) : []) slider.update = () => {};
     shieldTimelineSlots(skeleton);
     state.addListener(recorder.listener);
 
@@ -199,20 +234,37 @@ function createDriver(shared: Shared, options: DriverOptions): OfficialDriver {
         clearTracks: () => state.clearTracks(),
         setSkin(index) {
             setSkin(skeleton, index);
-            setSkin(bare, index);
+            // the same change from the same pose, so that the update order is sorted alike
+            if (twin) twin.setSkin(data.skins[index] ?? null);
         },
-        setupPose: () => skeleton.setupPose(),
-        setupPoseBones: () => skeleton.setupPoseBones(),
-        setupPoseSlots: () => skeleton.setupPoseSlots(),
+        setupPose() {
+            skeleton.setupPose();
+            if (twin) follow(skeleton, twin);
+        },
+        setupPoseBones() {
+            skeleton.setupPoseBones();
+            if (twin) follow(skeleton, twin);
+        },
+        setupPoseSlots() {
+            skeleton.setupPoseSlots();
+            if (twin) follow(skeleton, twin);
+        },
         update(dt) {
             state.update(dt);
             skeleton.update(dt);
             state.apply(skeleton);
             audit?.before();
-            skeleton.updateWorldTransform(Physics.update);
+            skeleton.updateWorldTransform(physics);
             audit?.after();
+            if (twin) {
+                follow(skeleton, twin);
+                twin.updateWorldTransform(Physics.none);
+            }
         },
         takeEvents: recorder.take,
+        place(x, y, scaleX, scaleY) {
+            for (const each of twin ? [skeleton, twin] : [skeleton]) Object.assign(each, { x, y, scaleX, scaleY });
+        },
         read() {
             readPose(pose);
             readWorld(pose);
@@ -233,9 +285,9 @@ export function loadPose43(files: RigFiles, options: RigOptions = {}): OfficialP
         ref: cachedRefs(attachmentRefs(data.skins.map((skin) => skinEntries(skin.attachments)))),
     };
 
-    if (options.stripConstraintTimelines) {
+    if (options.stripIgnoredTimelines) {
         for (const animation of data.animations) {
-            animation.setTimelines(animation.timelines.filter((timeline) => !isConstraintKind(timelineKind(timeline))));
+            animation.setTimelines(animation.timelines.filter((timeline) => !isIgnoredKind(timelineKind(timeline))));
         }
     }
 
@@ -250,6 +302,10 @@ export function loadPose43(files: RigFiles, options: RigOptions = {}): OfficialP
                 duration,
                 events: timelines.some((timeline) => timelineKind(timeline) === 'event'),
             })),
+            ignored: data.constraints.filter(
+                (constraint: unknown) =>
+                    constraint instanceof PhysicsConstraintData || constraint instanceof SliderData,
+            ).length,
         },
         createDriver: (driverOptions = {}) => createDriver(shared, driverOptions),
     };

@@ -26,7 +26,7 @@ import {
     type DriverOptions,
     entryViews,
     eventRecorder,
-    isConstraintKind,
+    isIgnoredKind,
     type OfficialDriver,
     type OfficialPose,
     type OfficialPoseRig,
@@ -92,11 +92,50 @@ function configure(entry: TrackEntry, field: string, value: number | boolean | s
     return false;
 }
 
+/** The numbers of an official object that `follow` copies, by name. */
+function copyFields<T extends object>(from: T, to: T | undefined, fields: readonly (keyof T)[]): void {
+    if (to === undefined) throw new Error('The two skeletons differ');
+    for (const field of fields) to[field] = from[field];
+}
+
+/**
+ * Gives the second skeleton everything its IK, transform and path constraints read and an
+ * animation or a setup pose call can change: the local pose and the inherit mode of every bone,
+ * the values of every constraint of the three kinds, and the attachment and deform of every slot,
+ * which a path constraint reads. Physics constraints are not copied: they do not run there.
+ */
+function follow(from: Skeleton, to: Skeleton): void {
+    from.bones.forEach((bone, i) => {
+        copyFields(bone, to.bones[i], ['x', 'y', 'rotation', 'scaleX', 'scaleY', 'shearX', 'shearY', 'inherit']);
+    });
+    from.ikConstraints.forEach((constraint, i) => {
+        copyFields(constraint, to.ikConstraints[i], ['mix', 'softness', 'bendDirection', 'compress', 'stretch']);
+    });
+    from.transformConstraints.forEach((constraint, i) => {
+        const mixes = ['mixRotate', 'mixX', 'mixY', 'mixScaleX', 'mixScaleY', 'mixShearY'] as const;
+
+        copyFields(constraint, to.transformConstraints[i], mixes);
+    });
+    from.pathConstraints.forEach((constraint, i) => {
+        copyFields(constraint, to.pathConstraints[i], ['position', 'spacing', 'mixRotate', 'mixX', 'mixY']);
+    });
+    from.slots.forEach((slot, i) => {
+        const twin = to.slots[i];
+
+        if (twin === undefined) throw new Error('The two skeletons differ');
+        twin.attachment = slot.attachment;
+        twin.deform.length = 0;
+        for (const value of slot.deform) twin.deform.push(value);
+    });
+}
+
 function createDriver(shared: Shared, options: DriverOptions): OfficialDriver {
     const { data } = shared;
     const skeleton = new Skeleton(data);
-    // the world reference: the same bones, no constraints
-    const bare = new Skeleton(data);
+    const { world = 'second' } = options;
+    // the world reference: the same skeleton with physics off. Without it the played one is.
+    const twin = world === 'second' ? new Skeleton(data) : undefined;
+    const physics = world === 'direct' ? Physics.none : Physics.update;
     const stateData = new AnimationStateData(data);
     const state = new AnimationState(stateData);
     const entries = entryViews<TrackEntry>(shared.animationIndex);
@@ -129,31 +168,12 @@ function createDriver(shared: Shared, options: DriverOptions): OfficialDriver {
         });
     };
     const readWorld = (out: OfficialPose): void => {
-        skeleton.bones.forEach((bone, i) => {
-            const twin = bare.bones[i];
-
-            if (twin === undefined) throw new Error('The two skeletons differ');
-            twin.x = bone.x;
-            twin.y = bone.y;
-            twin.rotation = bone.rotation;
-            twin.scaleX = bone.scaleX;
-            twin.scaleY = bone.scaleY;
-            twin.shearX = bone.shearX;
-            twin.shearY = bone.shearY;
-            twin.inherit = bone.inherit;
-        });
-        bare.updateWorldTransform(Physics.update);
-        bare.bones.forEach((bone, i) => {
+        (twin ?? skeleton).bones.forEach((bone, i) => {
             writeWorld(out.world, i, bone.active, bone);
         });
     };
     const audit = options.audit ? createAudit(skeleton.bones.length, skeleton.slots.length, readPose) : undefined;
 
-    bare.ikConstraints.length = 0;
-    bare.transformConstraints.length = 0;
-    bare.pathConstraints.length = 0;
-    bare.physicsConstraints.length = 0;
-    bare.updateCache();
     state.addListener(recorder.listener);
 
     return {
@@ -185,20 +205,37 @@ function createDriver(shared: Shared, options: DriverOptions): OfficialDriver {
         clearTracks: () => state.clearTracks(),
         setSkin(index) {
             setSkin(skeleton, index);
-            setSkin(bare, index);
+            // the same change from the same pose, so that the update order is sorted alike
+            if (twin) setSkin(twin, index);
         },
-        setupPose: () => skeleton.setToSetupPose(),
-        setupPoseBones: () => skeleton.setBonesToSetupPose(),
-        setupPoseSlots: () => skeleton.setSlotsToSetupPose(),
+        setupPose() {
+            skeleton.setToSetupPose();
+            if (twin) follow(skeleton, twin);
+        },
+        setupPoseBones() {
+            skeleton.setBonesToSetupPose();
+            if (twin) follow(skeleton, twin);
+        },
+        setupPoseSlots() {
+            skeleton.setSlotsToSetupPose();
+            if (twin) follow(skeleton, twin);
+        },
         update(dt) {
             state.update(dt);
             skeleton.update(dt);
             state.apply(skeleton);
             audit?.before();
-            skeleton.updateWorldTransform(Physics.update);
+            skeleton.updateWorldTransform(physics);
             audit?.after();
+            if (twin) {
+                follow(skeleton, twin);
+                twin.updateWorldTransform(Physics.none);
+            }
         },
         takeEvents: recorder.take,
+        place(x, y, scaleX, scaleY) {
+            for (const each of twin ? [skeleton, twin] : [skeleton]) Object.assign(each, { x, y, scaleX, scaleY });
+        },
         read() {
             readPose(pose);
             readWorld(pose);
@@ -219,9 +256,9 @@ export function loadPose42(files: RigFiles, options: RigOptions = {}): OfficialP
         ref: cachedRefs(attachmentRefs(data.skins.map((skin) => skinEntries(skin.attachments)))),
     };
 
-    if (options.stripConstraintTimelines) {
+    if (options.stripIgnoredTimelines) {
         for (const animation of data.animations) {
-            animation.setTimelines(animation.timelines.filter((timeline) => !isConstraintKind(timelineKind(timeline))));
+            animation.setTimelines(animation.timelines.filter((timeline) => !isIgnoredKind(timelineKind(timeline))));
         }
     }
 
@@ -236,6 +273,7 @@ export function loadPose42(files: RigFiles, options: RigOptions = {}): OfficialP
                 duration,
                 events: timelines.some((timeline) => timelineKind(timeline) === 'event'),
             })),
+            ignored: data.physicsConstraints.length,
         },
         createDriver: (driverOptions = {}) => createDriver(shared, driverOptions),
     };

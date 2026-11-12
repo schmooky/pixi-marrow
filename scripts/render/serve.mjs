@@ -89,6 +89,7 @@ export async function bundlePage(root) {
             'start({',
             '    PIXI,',
             "    loadOurs: () => import('pixi-marrow'),",
+            "    loadCore: () => import('pixi-marrow/core'),",
             "    loadOfficial: (version) => (version === '4.2' ? import('spine-pixi-4.2') : import('spine-pixi-4.3')),",
             '});',
             '',

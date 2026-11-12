@@ -17,3 +17,4 @@ export type { Track } from './api/track';
 export type { MarrowErrorCode, MarrowErrorDetails } from './base/errors';
 export { MarrowError } from './base/errors';
 export type { SkeletonInfo } from './model/info';
+export type { AtlasOutlines, PageRect, RegionOutline } from './model/outlines';

@@ -5,38 +5,74 @@ const STEPPED = 1;
 const BEZIER = 2;
 const BEZIER_SIZE = 18;
 
-/**
- * Reads a 32-bit number. A missing index gives NaN, which is what the `undefined` of the official
- * runtime turns into in arithmetic and in comparisons.
+/*
+ * How the code that applies timelines handles numbers.
+ *
+ * A typed array is read in place, as `Number(array[i])`. A read past the end gives NaN, which is
+ * what the `undefined` of the official runtime turns into in arithmetic and in comparisons. The
+ * read is not put into a helper function: a call that returns a number with a fraction allocates
+ * unless V8 inlines it, and V8 does not inline a call on a path that is rarely taken.
+ *
+ * For the same reason no function here takes or returns a time, an alpha or a sampled value.
+ * Those numbers go through `SHARED`. An update must not allocate.
  */
-export function f32(array: Float32Array, index: number): number {
-    return array[index] ?? Number.NaN;
-}
 
-/** Reads a 64-bit number. A missing index gives NaN, like {@link f32}. */
-export function f64(array: Float64Array, index: number): number {
-    return array[index] ?? Number.NaN;
+/**
+ * The numbers the functions of one apply share. No call keeps them across a return, so every
+ * engine uses this one array. It is longer than 64 bytes on purpose: V8 stores such an array
+ * outside its heap, and compiled code reads it at a fixed address.
+ */
+export const SHARED: Float64Array = new Float64Array(16);
+/** The first of the values a sampler read from a key. A key has up to seven. */
+export const VALUES = 0;
+/** The official `DeformTimeline.getCurvePercent` of the key a deform timeline is at. */
+export const PERCENT = 7;
+/** The official `time` of `Timeline.apply`. */
+export const TIME = 8;
+/** The official `lastTime` of `Timeline.apply`. */
+export const LAST_TIME = 9;
+/** The official `alpha` of `Timeline.apply`. */
+export const ALPHA = 10;
+/** The alpha of the timelines of an entry that fade out with its mix. */
+export const ALPHA_MIX = 11;
+/** The alpha of the held timelines of an entry that is mixed out. */
+export const ALPHA_HOLD = 12;
+/** The official `getAnimationTime` of the entry that is applied. */
+export const ANIMATION_TIME = 13;
+/** The seconds the tracks advance by in this update, times the time scale of the player. */
+export const DELTA = 14;
+
+/**
+ * Sets the times and the alpha the timelines read: the `lastTime`, `time` and `alpha` of the
+ * official `Timeline.apply`.
+ */
+export function setClock(lastTime: number, time: number, alpha: number): void {
+    SHARED[LAST_TIME] = lastTime;
+    SHARED[TIME] = time;
+    SHARED[ALPHA] = alpha;
 }
 
 /**
- * The official `Timeline.search`: the index of the last key at or before `time`.
+ * The official `Timeline.search`: the index of the last key at or before the time in `SHARED`.
  *
  * @param step Floats per key.
  */
-export function search(frames: Float32Array, time: number, step: number): number {
+export function search(frames: Float32Array, step: number): number {
+    const time = Number(SHARED[TIME]);
     const n = frames.length;
 
     for (let i = step; i < n; i += step) {
-        if (f32(frames, i) > time) return i - step;
+        if (Number(frames[i]) > time) return i - step;
     }
 
     return n - step;
 }
 
 /**
- * The official `CurveTimeline.getBezierValue`: the value of one curve at `time`.
+ * The official `CurveTimeline.getBezierValue`: the value of one curve at the time in `SHARED`.
+ * Writes it to `SHARED` at `valueOffset - 1`.
  *
- * The key before `time` starts at `frameIndex` in `frames` and takes `entries` floats. The value
+ * The key before the time starts at `frameIndex` in `frames` and takes `entries` floats. The value
  * the curve is for is `valueOffset` floats into the key. The samples of the curve start at `i`
  * in `curves`.
  */
@@ -44,95 +80,111 @@ function bezierValue(
     frames: Float32Array,
     curves: Float32Array,
     entries: number,
-    time: number,
     frameIndex: number,
     valueOffset: number,
     i: number,
-): number {
-    if (f32(curves, i) > time) {
-        const x = f32(frames, frameIndex);
-        const y = f32(frames, frameIndex + valueOffset);
+): void {
+    const time = Number(SHARED[TIME]);
+    const out = valueOffset - 1;
+    const first = Number(curves[i]);
 
-        return y + ((time - x) / (f32(curves, i) - x)) * (f32(curves, i + 1) - y);
+    if (first > time) {
+        const x = Number(frames[frameIndex]);
+        const y = Number(frames[frameIndex + valueOffset]);
+
+        SHARED[out] = y + ((time - x) / (first - x)) * (Number(curves[i + 1]) - y);
+
+        return;
     }
     const n = i + BEZIER_SIZE;
 
     for (i += 2; i < n; i += 2) {
-        if (f32(curves, i) >= time) {
-            const x = f32(curves, i - 2);
-            const y = f32(curves, i - 1);
+        const end = Number(curves[i]);
 
-            return y + ((time - x) / (f32(curves, i) - x)) * (f32(curves, i + 1) - y);
+        if (end >= time) {
+            const x = Number(curves[i - 2]);
+            const y = Number(curves[i - 1]);
+
+            SHARED[out] = y + ((time - x) / (end - x)) * (Number(curves[i + 1]) - y);
+
+            return;
         }
     }
     frameIndex += entries;
-    const x = f32(curves, n - 2);
-    const y = f32(curves, n - 1);
+    const x = Number(curves[n - 2]);
+    const y = Number(curves[n - 1]);
 
-    return y + ((time - x) / (f32(frames, frameIndex) - x)) * (f32(frames, frameIndex + valueOffset) - y);
+    SHARED[out] = y + ((time - x) / (Number(frames[frameIndex]) - x)) * (Number(frames[frameIndex + valueOffset]) - y);
 }
 
-/** The official `CurveTimeline1.getCurveValue`: the value of a timeline with one value per key. */
-export function curveValue(frames: Float32Array, curves: Float32Array, time: number): number {
+/**
+ * The official `CurveTimeline1.getCurveValue`: the value of a timeline with one value per key at
+ * the time in `SHARED`. Writes it to `SHARED` at `VALUES`.
+ */
+export function curveValue(frames: Float32Array, curves: Float32Array): void {
+    const time = Number(SHARED[TIME]);
     let i = frames.length - 2;
 
     for (let ii = 2; ii <= i; ii += 2) {
-        if (f32(frames, ii) > time) {
+        if (Number(frames[ii]) > time) {
             i = ii - 2;
             break;
         }
     }
-    const curveType = f32(curves, i >> 1);
+    const curveType = Number(curves[i >> 1]);
 
     if (curveType === LINEAR) {
-        const before = f32(frames, i);
-        const value = f32(frames, i + 1);
+        const before = Number(frames[i]);
+        const value = Number(frames[i + 1]);
 
-        return value + ((time - before) / (f32(frames, i + 2) - before)) * (f32(frames, i + 3) - value);
-    }
-    if (curveType === STEPPED) return f32(frames, i + 1);
-
-    return bezierValue(frames, curves, 2, time, i, 1, curveType - BEZIER);
+        SHARED[VALUES] = value + ((time - before) / (Number(frames[i + 2]) - before)) * (Number(frames[i + 3]) - value);
+    } else if (curveType === STEPPED) SHARED[VALUES] = Number(frames[i + 1]);
+    else bezierValue(frames, curves, 2, i, 1, curveType - BEZIER);
 }
 
 /**
- * Reads every value of a timeline at `time` into `out`, as the official timelines with more than
- * one value per key do.
+ * Reads the first `count` values of a timeline at the time in `SHARED`, as the official timelines
+ * with more than one value per key do. Writes them to `SHARED` from `VALUES` on. Returns where
+ * the key before the time starts in `frames`.
  */
-export function sampleKey(timeline: Timeline43, time: number, out: Float64Array): void {
+export function sampleValues(timeline: Timeline43, count: number): number {
     const { frames, curves, entries } = timeline;
-    const i = search(frames, time, entries);
-    const curveType = f32(curves, i / entries);
+    const time = Number(SHARED[TIME]);
+    const n = frames.length;
+    let i = n - entries;
 
-    if (curveType === LINEAR) {
-        const before = f32(frames, i);
-        const t = (time - before) / (f32(frames, i + entries) - before);
-
-        for (let k = 1; k < entries; k++) {
-            const value = f32(frames, i + k);
-
-            out[k - 1] = value + (f32(frames, i + entries + k) - value) * t;
-        }
-    } else if (curveType === STEPPED) {
-        for (let k = 1; k < entries; k++) out[k - 1] = f32(frames, i + k);
-    } else {
-        for (let k = 1; k < entries; k++) {
-            out[k - 1] = bezierValue(frames, curves, entries, time, i, k, curveType + BEZIER_SIZE * (k - 1) - BEZIER);
+    for (let ii = entries; ii < n; ii += entries) {
+        if (Number(frames[ii]) > time) {
+            i = ii - entries;
+            break;
         }
     }
-}
+    const curveType = Number(curves[i / entries]);
 
-/** The official `CurveTimeline1.beforeFirstKey`: the value of a property before the first key. */
-export function beforeFirstKey(from: number, alpha: number, current: number, setup: number): number {
-    if (from === SETUP) return setup;
-    if (from === FIRST) return current + (setup - current) * alpha;
+    if (curveType === LINEAR) {
+        const before = Number(frames[i]);
+        const t = (time - before) / (Number(frames[i + entries]) - before);
 
-    return current;
+        for (let k = 1; k <= count; k++) {
+            const value = Number(frames[i + k]);
+
+            SHARED[k - 1] = value + (Number(frames[i + entries + k]) - value) * t;
+        }
+    } else if (curveType === STEPPED) {
+        for (let k = 1; k <= count; k++) SHARED[k - 1] = Number(frames[i + k]);
+    } else {
+        for (let k = 1; k <= count; k++) {
+            bezierValue(frames, curves, entries, i, k, curveType + BEZIER_SIZE * (k - 1) - BEZIER);
+        }
+    }
+
+    return i;
 }
 
 /**
  * What the official timelines do to `count` values before the first key. From the setup pose they
- * take the setup values. From the first pose they mix toward them. Otherwise nothing changes.
+ * take the setup values. From the first pose they mix toward them by the alpha in `SHARED`.
+ * Otherwise nothing changes.
  */
 export function towardSetup(
     values: Float64Array,
@@ -140,15 +192,16 @@ export function towardSetup(
     index: number,
     count: number,
     from: number,
-    alpha: number,
 ): void {
     if (from === SETUP) {
-        for (let i = index; i < index + count; i++) values[i] = f64(setup, i);
+        for (let i = index; i < index + count; i++) values[i] = Number(setup[i]);
     } else if (from === FIRST) {
-        for (let i = index; i < index + count; i++) {
-            const value = f64(values, i);
+        const alpha = Number(SHARED[ALPHA]);
 
-            values[i] = value + (f64(setup, i) - value) * alpha;
+        for (let i = index; i < index + count; i++) {
+            const value = Number(values[i]);
+
+            values[i] = value + (Number(setup[i]) - value) * alpha;
         }
     }
 }

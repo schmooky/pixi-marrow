@@ -1,12 +1,17 @@
+import { updateCache } from './cache';
 import { setSlotAttachment, setupAttachment } from './slots';
 import type { Pose43 } from './types';
 
-/** The official `Skeleton.setupPoseBones`: the local numbers and the inherit mode of every bone. */
+/**
+ * The official `Skeleton.setupPoseBones`: the local numbers and the inherit mode of every bone,
+ * and the pose of every constraint.
+ */
 export function setupPoseBones(pose: Pose43): void {
     const { bones } = pose.rig.model;
 
     pose.state.local.set(bones.setup);
     pose.state.inherit.set(bones.inherit);
+    pose.solve.values.set(pose.rig.solver.setup);
 }
 
 /** The official `Slot.setupPose`: the colors, the sequence index and the attachment of one slot. */
@@ -33,22 +38,6 @@ export function setupPoseSlots(pose: Pose43): void {
 
     for (let i = 0; i < drawOrder.length; i++) drawOrder[i] = i;
     for (let slot = 0; slot < pose.rig.model.slots.count; slot++) setupPoseSlot(pose, slot);
-}
-
-/**
- * The official `Skeleton.updateCache`, for bones: a bone that needs a skin is active while the
- * active skin lists it or one of its descendants. A bone that stops being active keeps its world
- * transform, as in the official runtime.
- */
-export function updateActive(pose: Pose43): void {
-    const { active } = pose.state;
-    const { parents, skinRequired, count } = pose.rig.model.bones;
-    const skin = pose.rig.model.skins[pose.state.skin];
-
-    for (let bone = 0; bone < count; bone++) active[bone] = skinRequired[bone] === 1 ? 0 : 1;
-    for (const listed of skin?.bones ?? []) {
-        for (let bone: number = listed; bone >= 0; bone = parents[bone] ?? -1) active[bone] = 1;
-    }
 }
 
 /** The official `Skin.attachAll`: slots that show an attachment of the old skin show that of the new skin. */
@@ -86,5 +75,5 @@ export function setSkin(pose: Pose43, skin: number): void {
         });
     }
     state.skin = skin;
-    updateActive(pose);
+    updateCache(pose);
 }

@@ -59,8 +59,18 @@ export const K_SEQUENCE = 18;
 export const K_EVENT = 19;
 /** Timeline kind code: `DrawOrderTimeline`. */
 export const K_DRAW_ORDER = 20;
-/** Timeline kind code: a timeline that animates a constraint. It counts for mixing and is not applied. */
+/** Timeline kind code: a timeline that animates a physics constraint. It counts for mixing and is not applied. */
 export const K_SKIPPED = 21;
+/** Timeline kind code: `IkConstraintTimeline`. */
+export const K_IK = 22;
+/** Timeline kind code: `TransformConstraintTimeline`. */
+export const K_TRANSFORM = 23;
+/** Timeline kind code: `PathConstraintPositionTimeline`. */
+export const K_PATH_POSITION = 24;
+/** Timeline kind code: `PathConstraintSpacingTimeline`. */
+export const K_PATH_SPACING = 25;
+/** Timeline kind code: `PathConstraintMixTimeline`. */
+export const K_PATH_MIX = 26;
 
 const NO_FLOATS = new Float32Array(0);
 
@@ -85,7 +95,7 @@ export interface TimelineParts {
 export class LegacyTimeline {
     /** One of the `K_` codes. */
     readonly kind: number;
-    /** The bone or slot index. -1 for kinds without a target. */
+    /** The bone, slot or constraint index. -1 for kinds without a target. */
     readonly target: number;
     /** Floats per key in `frames`. */
     readonly entries: number;

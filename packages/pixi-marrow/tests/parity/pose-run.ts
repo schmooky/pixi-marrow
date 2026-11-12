@@ -20,6 +20,8 @@ import type { OfficialDriver, PoseDriver } from './pose-shared';
 /** One side of a comparison. */
 export interface Subject {
     driver: PoseDriver;
+    /** Sets the position and the scale of the skeleton. */
+    place(x: number, y: number, scaleX: number, scaleY: number): void;
     /** The pose, in the same shape on both sides. Attachments are names, so they compare by identity. */
     read(): Record<string, unknown>;
 }
@@ -30,6 +32,7 @@ const refLabel = (ref: AttachmentRef): string => `skin ${ref.skin}, slot ${ref.s
 export function officialSubject(driver: OfficialDriver, label: (ref: AttachmentRef) => string = refLabel): Subject {
     return {
         driver,
+        place: (x, y, scaleX, scaleY) => driver.place(x, y, scaleX, scaleY),
         read() {
             const pose = driver.read();
 
@@ -52,6 +55,9 @@ export function engineSubject(engine: PoseEngine, label: (attachment: Attachment
 
     return {
         driver: engine,
+        place(x, y, scaleX, scaleY) {
+            Object.assign(state, { x, y, scaleX, scaleY });
+        },
         read() {
             world.set(state.world);
             for (let i = 0; i < bones.count; i++) {
@@ -140,7 +146,9 @@ function configured(driver: PoseDriver, entries: TrackEntry[], index: number, fi
 }
 
 /** Makes one call that is not an update. Returns the entry the call made or changed. */
-function call(driver: PoseDriver, op: ScriptOp, entries: TrackEntry[]): TrackEntry | undefined {
+function call(subject: Subject, op: ScriptOp, entries: TrackEntry[]): TrackEntry | undefined {
+    const { driver } = subject;
+
     switch (op.op) {
         case 'set':
             return made(driver, entries, driver.setAnimation(op.track, op.animation, op.loop), op.fields);
@@ -178,6 +186,9 @@ function call(driver: PoseDriver, op: ScriptOp, entries: TrackEntry[]): TrackEnt
             break;
         case 'setupPoseSlots':
             driver.setupPoseSlots();
+            break;
+        case 'place':
+            subject.place(op.x, op.y, op.scaleX, op.scaleY);
             break;
         case 'update':
             driver.update(op.dt);
@@ -245,8 +256,8 @@ function updateBoth(ours: Side, theirs: Side, dt: number): string[] {
 
 /** One other call on both sides. Returns where the entries it made or changed differ. */
 function callBoth(ours: Side, theirs: Side, op: ScriptOp): string[] {
-    const mine = call(ours.subject.driver, op, ours.entries);
-    const official = call(theirs.subject.driver, op, theirs.entries);
+    const mine = call(ours.subject, op, ours.entries);
+    const official = call(theirs.subject, op, theirs.entries);
     const creates = ENTRY_CALLS.includes(op.op);
 
     collect(ours, creates ? mine : undefined);
