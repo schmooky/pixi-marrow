@@ -9,9 +9,16 @@ const LINES_PER_LABEL = 3;
 const SUMMARY_NAMES = {
     exact: 'official twice',
     match: 'ours against official',
+    // the frames of `match` that ours draws through a clip mask, once more on their own
+    clipped: 'of those, clipped',
     formats: 'json and binary',
     pma: 'premultiplied atlas',
+    cuts: 'cuts on and off',
+    polygons: 'polygons and quads',
+    polygonsOfficial: 'polygons and official',
 };
+/** The kinds that compare ours with polygons to a picture of quads. */
+const POLYGON_KINDS = ['polygons', 'polygonsOfficial'];
 
 const percent = (share) => `${(100 * share).toFixed(3)}%`;
 const slug = (text) => String(text).replace(/[^A-Za-z0-9.]+/g, '-');
@@ -49,6 +56,7 @@ function frameNumbers(entry) {
 
     return {
         max: Math.max(...both.map((m) => m.max)),
+        differ: Math.max(...both.map((m) => (m.differ ?? 0) / of(m))),
         over1: Math.max(...both.map((m) => m.over1 / of(m))),
         over8: Math.max(...both.map((m) => m.over8 / of(m))),
         displaced: Math.max(...both.map((m) => m.displaced ?? 0)),
@@ -61,7 +69,7 @@ function groupNumbers(frames, proof) {
     const all = frames.map(frameNumbers);
     const out = {};
 
-    for (const key of ['max', 'over1', 'over8', 'displaced']) out[key] = pick(...all.map((n) => n[key]));
+    for (const key of ['max', 'differ', 'over1', 'over8', 'displaced']) out[key] = pick(...all.map((n) => n[key]));
 
     return out;
 }
@@ -86,30 +94,119 @@ function describeBuffers(entries) {
     return parts.join('. ');
 }
 
-/** The text after the label of a comparison. `frames` are its frames outside the known gap. */
-function describe(entries, frames, gaps) {
+const megapixels = (area) => `${(area / 1e6).toFixed(3)} Mpx`;
+
+/** One way to cut overdraw against no cuts: the triangle area, the vertices and the indices. */
+function against(name, side, off) {
+    const share = off.area > 0 ? side.area / off.area : 1;
+
+    return (
+        `${name}: triangle area ${megapixels(side.area)} against ${megapixels(off.area)}, ${(100 * share).toFixed(1)}%, ` +
+        `vertices ${side.vertices} against ${off.vertices}, indices ${side.indices} against ${off.indices}`
+    );
+}
+
+/** What the cuts of overdraw saved over the captured frames of a rig. */
+function describeOverdraw(info) {
+    const { on, off, polygons, frames, outlines } = info;
+    const parts = [
+        `${frames} frames`,
+        against('Default cuts', on, off),
+        `Covered slots: ${info.covered}, at most ${info.coveredMost} in a frame. Regions without a pixel: at most ${info.hollowMost}`,
+        against('With polygons', polygons, off),
+        `Polygons: at most ${info.tightMost} in a frame`,
+    ];
+
+    if (outlines) {
+        parts.push(
+            `Outlines: ${outlines.polygons} polygons and ${outlines.opaque} opaque rectangles in ${outlines.regions} regions, ` +
+                `${outlines.unread} regions not read, ${outlines.pages} pages scanned ${outlines.scanMs.toFixed(0)} ms after the load`,
+        );
+    } else parts.push('The asset has no outlines');
+
+    return parts.join('. ');
+}
+
+/** The frame of some frames with the largest value of one of its numbers, as text. */
+function worstFrame(frames, key) {
+    const [frame] = [...frames].sort((a, b) => frameNumbers(b)[key] - frameNumbers(a)[key]);
+    const n = frameNumbers(frame);
+
+    return `${place(frame)} with max ${n.max}, over 1: ${percent(n.over1)}, over 8: ${percent(n.over8)}`;
+}
+
+/** What polygons change against a picture of quads, over the frames of a rig. */
+function describePolygons(frames) {
+    const n = groupNumbers(frames, false);
+
+    return (
+        `${frames.length} frames, ${worst(frames)}, pixels that differ at all: ${percent(n.differ)}. ` +
+        `Most pixels over 1 in ${worstFrame(frames, 'over1')}. Most pixels over 8 in ${worstFrame(frames, 'over8')}`
+    );
+}
+
+/** One frame that passed at the second placement only, with the numbers of both placements. */
+function describeTie(entry) {
+    const side = (n) => `max ${n.max}, ${n.differ} px differ, ${n.over1} px by more than 1`;
+
+    return `tie  ${place(entry)}: ${side(entry.tie.first)}. At the second placement: ${side(entry.tie.second)}`;
+}
+
+/** The largest differences of some frames, as text. */
+function worst(frames, proof = false) {
+    const n = groupNumbers(frames, proof);
+
+    return `max ${n.max}, over 1: ${percent(n.over1)}, over 8: ${percent(n.over8)}`;
+}
+
+/** The text after the label of a comparison. `frames` are its frames with pictures. */
+function describe(entries, frames) {
     const [first] = entries;
     const { kind, info } = first;
-    const known = gaps ? `${gaps} ${gaps === 1 ? 'frame' : 'frames'} in the known gap: clipping` : '';
 
-    if (kind === 'draws') return `ours ${range(info.ours)}, official ${range(info.official)}`;
+    if (kind === 'draws') {
+        const masks = info.masks?.[1] > 0 ? `, of which clip masks ${range(info.masks)}` : '';
+
+        return `ours ${range(info.ours)}${masks}, official ${range(info.official)}`;
+    }
     if (kind === 'steady') return describeBuffers(entries);
+    if (kind === 'overdraw') return describeOverdraw(info);
+    if (kind === 'reading') {
+        return `a red under alpha 0: the 2D canvas returns ${info.canvas?.join(',')}, the scan keeps the ${info.outline}, ${info.lit} px lit, cuts on and off differ by ${info.max}`;
+    }
+    if (kind === 'multisampled') {
+        const side = (name, it) =>
+            it
+                ? `${name} max ${it.max}, polygons ${it.tightBefore} before the draw and ${it.tightAfter} after, ${it.builds} new layout`
+                : '';
+
+        return `against no cuts: ${side('default cuts', info.default)}. ${side('With polygons', info.polygons)}`;
+    }
     if (kind === 'visible') {
         return `${entries.length} animations, each draws ${Math.min(...entries.map((e) => e.info.covered))} px or more`;
     }
-    if (frames.length === 0) return known;
+    if (frames.length === 0) return '';
+    if (POLYGON_KINDS.includes(kind)) return describePolygons(frames);
     const n = groupNumbers(frames, kind === 'proof');
-    const direct = `max ${n.max}, over 1: ${percent(n.over1)}, over 8: ${percent(n.over8)}`;
+    const direct = worst(frames, kind === 'proof');
     const alpha = Math.max(...frames.map((entry) => entry.alphaMax ?? 0));
+    const clipped = frames.filter((entry) => entry.clipped);
     let text = `${frames.length} frames, `;
 
     if (kind === 'proof') text += `weakest ${direct}`;
     else if (kind === 'formats') text += `not explained by a displacement: ${percent(n.displaced)} (${direct})`;
+    else if (kind === 'cuts') text += `max ${n.max}, pixels that differ at all: ${percent(n.differ)}`;
     else text += direct;
     if (kind === 'proof' && frames[0].solid.displaced !== undefined)
         text += `, not explained by a displacement: ${percent(n.displaced)}`;
     if (alpha) text += `. Alpha on a transparent target differs by up to ${alpha}: additive slots add none in ours`;
-    if (known) text += `. And ${known}`;
+    if (clipped.length) text += `. Clipped: ${clipped.length} frames, ${worst(clipped)}`;
+    const ties = frames.filter((entry) => entry.tie);
+    const seconds = frames.filter((entry) => entry.second);
+
+    if (ties.length) text += `. Ties: ${ties.length} frames passed at the second placement only`;
+    if (seconds.length)
+        text += `. At the second placement: weakest max ${Math.min(...seconds.map((e) => e.second.max))}`;
 
     return text;
 }
@@ -123,17 +220,17 @@ function describe(entries, frames, gaps) {
  */
 export function createReporter({ root, dir, verbose }) {
     const totals = new Map();
-    // the captures of the known gap, with the rig and the images of each
-    const known = [];
+    // the triangle area of every rig added up, with the cuts of overdraw and without
+    const overdraw = { rigs: 0, on: 0, off: 0, polygons: 0, covered: 0 };
     const total = (key) => {
-        if (!totals.has(key)) totals.set(key, { frames: 0, failed: 0, gaps: 0, numbers: [] });
+        if (!totals.has(key)) totals.set(key, { frames: 0, failed: 0, numbers: [] });
 
         return totals.get(key);
     };
 
     function saveShots(rig, entry) {
         const name = [
-            entry.gap ? 'gap' : entry.reasons.length ? 'fail' : 'pass',
+            entry.reasons.length ? 'fail' : entry.tie ? 'tie' : 'pass',
             slug(rig.id),
             slug(entry.animation),
             ...(entry.skin ? [slug(entry.skin)] : []),
@@ -164,23 +261,32 @@ export function createReporter({ root, dir, verbose }) {
             }
             for (const [label, entries] of groups) {
                 const bad = entries.filter((entry) => entry.reasons.length);
-                const gaps = entries.filter((entry) => entry.gap);
-                // the known gap has a list of its own and stays out of the worst numbers
-                const frames = entries.filter((entry) => entry.solid && !entry.gap);
-                const { kind } = entries[0];
+                const frames = entries.filter((entry) => entry.solid);
+                const clipped = frames.filter((entry) => entry.clipped);
+                const { kind, info } = entries[0];
 
-                if (frames.length || gaps.length) {
-                    const sum = total(kind === 'proof' ? label : kind);
-
-                    sum.frames += frames.length + gaps.length;
-                    sum.failed += bad.length;
-                    sum.gaps += gaps.length;
-                    sum.proof = kind === 'proof';
-                    if (frames.length) sum.numbers.push(groupNumbers(frames, sum.proof));
+                if (kind === 'overdraw') {
+                    overdraw.rigs++;
+                    overdraw.on += info.on.area;
+                    overdraw.off += info.off.area;
+                    overdraw.polygons += info.polygons.area;
+                    overdraw.covered += info.covered;
                 }
-                console.log(
-                    `    ${bad.length ? 'FAIL' : 'ok  '} ${label.padEnd(30)} ${describe(entries, frames, gaps.length)}`,
-                );
+                // the clipped frames count in their comparison, and once more in a line of their own
+                for (const [key, list] of [
+                    [kind === 'proof' ? label : kind, frames],
+                    ['clipped', clipped],
+                ]) {
+                    if (list.length === 0) continue;
+                    const sum = total(key);
+
+                    sum.frames += list.length;
+                    sum.failed += list.filter((entry) => entry.reasons.length).length;
+                    sum.ties = (sum.ties ?? 0) + list.filter((entry) => entry.tie).length;
+                    sum.proof = kind === 'proof';
+                    sum.numbers.push(groupNumbers(list, sum.proof));
+                }
+                console.log(`    ${bad.length ? 'FAIL' : 'ok  '} ${label.padEnd(30)} ${describe(entries, frames)}`);
                 failed += bad.length;
                 for (const [index, entry] of (verbose ? entries : bad).entries()) {
                     if (!verbose && index === LINES_PER_LABEL) {
@@ -195,11 +301,15 @@ export function createReporter({ root, dir, verbose }) {
                         console.log(`           solid: ${numbers(entry.solid)}`);
                     }
                 }
+                // a frame that passed at the second placement only is listed with both measurements
+                for (const entry of entries) {
+                    if (entry.tie) console.log(`         ${describeTie(entry)}`);
+                }
                 for (const entry of entries) {
                     const images = entry.shots ? saveShots(rig, entry) : null;
 
-                    if (entry.gap) known.push({ rig, entry, images });
-                    if (images && (entry.reasons.length || verbose)) console.log(`         images: ${images}`);
+                    if (images && (entry.reasons.length || entry.tie || verbose))
+                        console.log(`         images: ${images}`);
                 }
             }
             for (const note of report.notes) console.log(`    note ${note}`);
@@ -207,40 +317,32 @@ export function createReporter({ root, dir, verbose }) {
             return failed;
         },
 
-        /** Prints one line per comparison over every rig. Numbers leave the known gap out. */
+        /** Prints one line per comparison over every rig. The clipped frames follow their comparison. */
         summary() {
-            for (const [key, sum] of totals) {
+            const keys = [...totals.keys()].filter((key) => key !== 'clipped');
+
+            if (totals.has('clipped')) keys.splice(keys.indexOf('match') + 1, 0, 'clipped');
+            for (const key of keys) {
+                const sum = totals.get(key);
                 const pick = sum.proof ? Math.min : Math.max;
                 const of = (name) => (sum.numbers.length ? pick(...sum.numbers.map((n) => n[name])) : 0);
                 let line = `  ${(SUMMARY_NAMES[key] ?? key).padEnd(24)} ${sum.frames} frames, ${sum.failed} failed, `;
 
-                if (sum.gaps) line += `${sum.gaps} in the known gap, `;
                 line += `${sum.proof ? 'weakest' : 'worst'} max ${of('max')}, over 1: ${percent(of('over1'))}, over 8: ${percent(of('over8'))}`;
                 if (key === 'formats') line += `, not explained by a displacement: ${percent(of('displaced'))}`;
+                if (key === 'cuts' || POLYGON_KINDS.includes(key))
+                    line += `, pixels that differ at all: ${percent(of('differ'))}`;
+                if (sum.ties) line += `, ${sum.ties} frames passed at the second placement only`;
                 console.log(line);
             }
-        },
+            if (overdraw.rigs > 0 && overdraw.off > 0) {
+                const share = (area) => `${megapixels(area)}, ${((100 * area) / overdraw.off).toFixed(1)}%`;
 
-        /**
-         * Lists the captures of the known gap: ours is off there and reports a clipping attachment
-         * it ignored. Returns how many there are.
-         */
-        knownGap(heading) {
-            if (known.length === 0) return 0;
-            console.log(`${heading} (${known.length} captures, --strict-clipping fails them)`);
-            for (const { rig, entry, images } of known) {
-                const n = frameNumbers(entry);
-                const direct = `max ${n.max}, over 1: ${percent(n.over1)}, over 8: ${percent(n.over8)}`;
-
-                console.log(`  ${rig.id} ${entry.label}, ${place(entry)}: ${direct}`);
-                if (verbose) {
-                    console.log(`      clear: ${numbers(entry.clear)}`);
-                    console.log(`      solid: ${numbers(entry.solid)}`);
-                }
-                if (images) console.log(`      images: ${images}`);
+                console.log(
+                    `  ${'overdraw'.padEnd(24)} ${overdraw.rigs} rigs, triangle area ${megapixels(overdraw.off)} without cuts, ` +
+                        `${share(overdraw.on)} with the default cuts (${overdraw.covered} covered slots), ${share(overdraw.polygons)} with polygons`,
+                );
             }
-
-            return known.length;
         },
     };
 }

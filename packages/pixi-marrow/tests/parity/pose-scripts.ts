@@ -368,6 +368,39 @@ function skins(rig: PoseRigInfo): PoseScript[] {
     ];
 }
 
+/**
+ * The position and the scale of the skeleton, set while animations play: uneven, mirrored on one
+ * axis and on both. The bones that do not inherit everything read the scale, and so do IK and
+ * transform constraints.
+ */
+function placement(rig: PoseRigInfo): PoseScript[] {
+    const { a, b, c } = pick(rig, 1);
+
+    return [
+        script('skeleton position and scale', (s) => {
+            s.place(30, -20, 1.5, 0.75);
+            s.set(0, a, true);
+            s.update(DT, 6);
+            // mirrored on one axis
+            s.place(-10, 5, -1.25, 0.8);
+            s.update(DT, 5);
+            s.defaultMix(0.2);
+            s.set(0, b, true);
+            s.update(DT, 5);
+            s.skin(rig.skins - 1);
+            // mirrored on both axes
+            s.place(4, 4, -0.5, -2);
+            s.set(1, c, true, { alpha: 0.5 });
+            s.update(ODD, 8);
+            s.place(0, 0, 1, -1);
+            s.setupPose();
+            s.update(DT, 3);
+            s.place(0, 0, 1, 1);
+            s.update(DT, 2);
+        }),
+    ];
+}
+
 /** A family of scripts. `seed` makes the random script of a fixture its own. */
 export interface ScriptFamily {
     name: string;
@@ -388,6 +421,7 @@ export const SCRIPT_FAMILIES: readonly ScriptFamily[] = [
     { name: 'clear', scripts: clear },
     { name: 'setup pose', scripts: setupPose },
     { name: 'skins', scripts: skins },
+    { name: 'skeleton', scripts: placement },
     { name: 'dialect', scripts: dialectScripts },
     { name: 'entry fields', scripts: fieldScripts },
     { name: 'random', scripts: (rig, seed) => [1, 2, 3, 4, 5, 6].map((n) => randomScript(rig, `${seed} ${n}`)) },

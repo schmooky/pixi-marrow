@@ -25,7 +25,7 @@ import {
     type DriverOptions,
     entryViews,
     eventRecorder,
-    isConstraintKind,
+    isIgnoredKind,
     type OfficialDriver,
     type OfficialPose,
     type OfficialPoseRig,
@@ -88,9 +88,8 @@ function configure(entry: TrackEntry, field: string, value: number | boolean | s
 
 function createDriver(shared: Shared, options: DriverOptions): OfficialDriver {
     const { data } = shared;
+    // 4.1 has no physics and no sliders: this skeleton is the world reference as it is
     const skeleton = new Skeleton(data);
-    // the world reference: the same bones, no constraints
-    const bare = new Skeleton(data);
     const stateData = new AnimationStateData(data);
     const state = new AnimationState(stateData);
     const entries = entryViews<TrackEntry>(shared.animationIndex);
@@ -105,14 +104,14 @@ function createDriver(shared: Shared, options: DriverOptions): OfficialDriver {
 
         return found;
     };
-    const setSkin = (target: Skeleton, index: number): void => {
+    const setSkin = (index: number): void => {
         const skin = data.skins[index];
 
-        if (skin !== undefined) target.setSkin(skin);
-        else if (target.skin !== null) {
+        if (skin !== undefined) skeleton.setSkin(skin);
+        else if (skeleton.skin !== null) {
             // what setSkin(null) does. The typings do not take null.
-            target.skin = null;
-            target.updateCache();
+            skeleton.skin = null;
+            skeleton.updateCache();
         }
     };
     const readPose = (out: OfficialPose): void => {
@@ -131,28 +130,11 @@ function createDriver(shared: Shared, options: DriverOptions): OfficialDriver {
     };
     const readWorld = (out: OfficialPose): void => {
         skeleton.bones.forEach((bone, i) => {
-            const twin = bare.bones[i];
-
-            if (twin === undefined) throw new Error('The two skeletons differ');
-            twin.x = bone.x;
-            twin.y = bone.y;
-            twin.rotation = bone.rotation;
-            twin.scaleX = bone.scaleX;
-            twin.scaleY = bone.scaleY;
-            twin.shearX = bone.shearX;
-            twin.shearY = bone.shearY;
-        });
-        bare.updateWorldTransform();
-        bare.bones.forEach((bone, i) => {
             writeWorld(out.world, i, bone.active, bone);
         });
     };
     const audit = options.audit ? createAudit(skeleton.bones.length, skeleton.slots.length, readPose) : undefined;
 
-    bare.ikConstraints.length = 0;
-    bare.transformConstraints.length = 0;
-    bare.pathConstraints.length = 0;
-    bare.updateCache();
     state.addListener(recorder.listener);
 
     return {
@@ -182,10 +164,7 @@ function createDriver(shared: Shared, options: DriverOptions): OfficialDriver {
         },
         clearTrack: (track) => state.clearTrack(track),
         clearTracks: () => state.clearTracks(),
-        setSkin(index) {
-            setSkin(skeleton, index);
-            setSkin(bare, index);
-        },
+        setSkin,
         setupPose: () => skeleton.setToSetupPose(),
         setupPoseBones: () => skeleton.setBonesToSetupPose(),
         setupPoseSlots: () => skeleton.setSlotsToSetupPose(),
@@ -197,6 +176,9 @@ function createDriver(shared: Shared, options: DriverOptions): OfficialDriver {
             audit?.after();
         },
         takeEvents: recorder.take,
+        place(x, y, scaleX, scaleY) {
+            for (const each of [skeleton]) Object.assign(each, { x, y, scaleX, scaleY });
+        },
         read() {
             readPose(pose);
             readWorld(pose);
@@ -217,9 +199,9 @@ export function loadPose41(files: RigFiles, options: RigOptions = {}): OfficialP
         ref: cachedRefs(attachmentRefs(data.skins.map((skin) => skinEntries(skin.attachments)))),
     };
 
-    if (options.stripConstraintTimelines) {
+    if (options.stripIgnoredTimelines) {
         for (const animation of data.animations) {
-            animation.setTimelines(animation.timelines.filter((timeline) => !isConstraintKind(timelineKind(timeline))));
+            animation.setTimelines(animation.timelines.filter((timeline) => !isIgnoredKind(timelineKind(timeline))));
         }
     }
 
@@ -234,6 +216,7 @@ export function loadPose41(files: RigFiles, options: RigOptions = {}): OfficialP
                 duration,
                 events: timelines.some((timeline) => timelineKind(timeline) === 'event'),
             })),
+            ignored: 0,
         },
         createDriver: (driverOptions = {}) => createDriver(shared, driverOptions),
     };

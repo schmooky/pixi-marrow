@@ -1,13 +1,21 @@
 import type { SpineVersion } from '../../src/core';
 import { type Fixture, listFixtures, readFixture } from './fixtures';
 import type { RigFiles } from './official';
+import { ikRigs } from './pose-rig-ik';
+import { orderRigs } from './pose-rig-order';
+import { pathRigs } from './pose-rig-path';
+import { transformRigs } from './pose-rig-transform';
 
 /*
- * A rig made here, for what no official example has: the timelines for one scale or shear axis,
- * for rgb, alpha and rgb2, for the inherit mode and for draw order folders, every sequence mode,
- * color curves that leave the range of a color, a 4.3 mesh that follows the timelines of a mesh in
- * another slot, keys on a bone and a slot that need a skin, and bones of every inherit mode. It is
- * written as the JSON of each version.
+ * The skeletons the pose suite runs on: the fixtures and the rigs made here. The rigs made for
+ * constraints are in the `pose-rig-` files, one for IK, one for transform constraints, one for
+ * path constraints and one for the order of constraints.
+ *
+ * This file holds the rig for what no official example has apart from constraints: the timelines
+ * for one scale or shear axis, for rgb, alpha and rgb2, for the inherit mode and for draw order
+ * folders, every sequence mode, color curves that leave the range of a color, a 4.3 mesh that
+ * follows the timelines of a mesh in another slot, keys on a bone and a slot that need a skin, and
+ * bones of every inherit mode. It is written as the JSON of each version.
  */
 
 /** A skeleton the pose suite runs on: a fixture from disk or a rig made here. */
@@ -410,7 +418,14 @@ const fromFixture = (fixture: Fixture): PoseRigSource => ({
     read: () => readFixture(fixture),
 });
 
-/** Every skeleton the pose suite runs on: the fixtures, then the rig made here. */
+/** Every skeleton the pose suite runs on: the fixtures, then the rigs made here. */
 export function listPoseRigs(): PoseRigSource[] {
-    return [...listFixtures().map(fromFixture), ...syntheticRigs()];
+    return [
+        ...listFixtures().map(fromFixture),
+        ...syntheticRigs(),
+        ...ikRigs(),
+        ...transformRigs(),
+        ...pathRigs(),
+        ...orderRigs(),
+    ];
 }

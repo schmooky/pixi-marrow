@@ -4,41 +4,26 @@
  *
  * An instance has: `root` (a container that holds the object alone), `place`, `setSkin`, `play`,
  * `update`, `stats` and `destroy`. Official instances also have `tint` and `hide`, which the
- * tooling proof uses to make a picture wrong on purpose. Ours also has `info`.
+ * tooling proof uses to make a picture wrong on purpose. Ours also has `info`, `outlines` and
+ * `spine`, the display object itself.
  */
-
-/** The constraint lists of an official skeleton: one list plus the physics subset in 4.3, one per kind in 4.2. */
-const CONSTRAINT_LISTS = [
-    'constraints',
-    'physics',
-    'ikConstraints',
-    'transformConstraints',
-    'pathConstraints',
-    'physicsConstraints',
-];
 
 /**
- * Removes every constraint from an official skeleton, the way the pose parity suite builds its
- * reference without constraints: the lists are emptied and the update order is rebuilt.
+ * Switches off what pixi-marrow does not solve yet, the way the pose parity suite builds its
+ * reference: physics constraints get `Physics.none`, which neither steps nor applies them, and
+ * the sliders of 4.3 lose their update, which is what a mix of 0 does. IK, transform and path
+ * constraints stay as they are, and so do all timelines.
  */
-function removeConstraints(skeleton) {
-    for (const list of CONSTRAINT_LISTS) {
-        if (Array.isArray(skeleton[list])) skeleton[list].length = 0;
-    }
-    skeleton.updateCache();
-}
+function switchOffPhysics(lib, skeleton) {
+    const { updateWorldTransform } = lib.Skeleton.prototype;
 
-/**
- * Removes the timelines that animate constraints. They look their constraint up by index and
- * would fail on the emptied lists. Durations stay. The data is shared, so this runs once.
- */
-function stripConstraintTimelines(data) {
-    if (data.constraintTimelinesStripped) return;
-    data.constraintTimelinesStripped = true;
-    for (const animation of data.animations) {
-        const kept = animation.timelines.filter((timeline) => typeof timeline.constraintIndex !== 'number');
-
-        if (kept.length !== animation.timelines.length) animation.setTimelines(kept);
+    // the official display object asks for Physics.update in every update
+    skeleton.updateWorldTransform = function update() {
+        return updateWorldTransform.call(this, lib.Physics.none);
+    };
+    // an animation keys the mix of a slider, so a mix set here would not last
+    for (const constraint of skeleton.constraints ?? []) {
+        if (lib.Slider && constraint instanceof lib.Slider) constraint.update = () => {};
     }
 }
 
@@ -66,8 +51,7 @@ export function officialSide(PIXI, lib) {
                 return slot.pose?.color ?? slot.color;
             };
 
-            stripConstraintTimelines(spine.skeleton.data);
-            removeConstraints(spine.skeleton);
+            switchOffPhysics(lib, spine.skeleton);
             root.addChild(spine);
 
             return {
@@ -108,19 +92,47 @@ export function officialSide(PIXI, lib) {
     };
 }
 
-/** pixi-marrow. `lib` is the loaded package, which must export `MarrowSpine`. */
+/** The options of a display object of ours for each way to cut overdraw. */
+const CUT_OPTIONS = {
+    default: {},
+    off: { tightMesh: 'off', occlusion: 'off' },
+    polygons: { tightMesh: 'on' },
+};
+
+/** Per asset of ours: the milliseconds from the end of its load to the end of the scan of its pages. */
+const scans = new WeakMap();
+
+/**
+ * pixi-marrow. `lib` is the loaded package, which must export `MarrowSpine`.
+ *
+ * An instance is created with the defaults, so the exact cuts of overdraw are on: covered slots
+ * are skipped and a region without a visible pixel is not drawn. `cuts: 'off'` creates it with
+ * both off. That is the picture the cuts must not change. `cuts: 'polygons'` also draws every
+ * region as the polygon around its visible pixels, which is not exact to the bit.
+ */
 export function oursSide(PIXI, lib) {
     return {
         name: 'ours',
-        async create({ skeleton, atlas }) {
-            const spine = await lib.MarrowSpine.load({ skeleton, atlas, constraints: 'ignore' });
+        async create({ skeleton, atlas, cuts = 'default' }) {
+            const asset = await lib.MarrowAsset.load({ skeleton, atlas, constraints: 'ignore' });
+
+            // the outlines are read from the page images in idle time. From here on every instance has them
+            const waited = performance.now();
+
+            await asset.optimized;
+            // the first instance of an asset waits for the scan, idle time included
+            if (!scans.has(asset)) scans.set(asset, performance.now() - waited);
+            const spine = new lib.MarrowSpine(asset, {
+                autoUpdate: false,
+                ...CUT_OPTIONS[cuts],
+            });
             const root = new PIXI.Container();
 
-            spine.autoUpdate = false;
             root.addChild(spine);
 
             return {
                 root,
+                spine,
                 place: (placement) => place(spine, placement),
                 setSkin(name) {
                     spine.skin = name;
@@ -129,6 +141,19 @@ export function oursSide(PIXI, lib) {
                 update: (seconds) => spine.update(seconds),
                 stats: () => (spine.stats ? { ...spine.stats } : null),
                 info: () => spine.info ?? null,
+                /** How many regions of the atlas have a polygon, an opaque rectangle or no outline at all. */
+                outlines() {
+                    const regions = asset.outlines?.regions ?? [];
+
+                    return {
+                        pages: asset.atlas.pages.length,
+                        scanMs: scans.get(asset) ?? 0,
+                        regions: regions.length,
+                        polygons: regions.filter((region) => region?.polygon).length,
+                        opaque: regions.filter((region) => region?.opaque).length,
+                        unread: regions.filter((region) => region === null).length,
+                    };
+                },
                 destroy() {
                     root.removeChild(spine);
                     spine.destroy();

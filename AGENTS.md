@@ -7,7 +7,7 @@ Instructions for AI coding agents and for people working in this repo. Read it b
 pixi-marrow is a Spine runtime for PixiJS v8. It has its own pose core and its own render path, and it plays Spine 4.1, 4.2 and 4.3 skeletons. The plan, the classes and the milestones are in `docs/DESIGN.md`.
 
 <!-- facts:status -->
-Pre-release, milestone M2b. Skeletons of Spine 4.1, 4.2 and 4.3 load, play and draw in PixiJS v8, and the picture matches the official runtime. Constraints and clipping are not solved yet: a skeleton with constraints plays only with them ignored.
+Pre-release, milestone M3. Skeletons of Spine 4.1, 4.2 and 4.3 load, play and draw in PixiJS v8, with IK, transform and path constraints and with clipping, and the picture matches the official runtime. Physics and slider constraints are not solved yet: a skeleton that has them plays only with them ignored.
 <!-- /facts:status -->
 
 ```
@@ -29,7 +29,7 @@ Entry points:
 |---|---|
 | `pixi-marrow` | `MarrowSpine`, the display object, with `MarrowAsset`, `Track` and `MarrowError`. Needs `pixi.js`. |
 | `pixi-marrow/core` | `importSkeleton`, `importAtlas`, `createPoseEngine`, the geometry functions, `describeSkeleton` and the model types. No Pixi. Runs in Node. |
-| `pixi-marrow/optimize` | `generateNames` and the `pixi-marrow` command line tool (`info`, `typegen`). Runs in Node. |
+| `pixi-marrow/optimize` | `generateNames`, `buildAtlasOutlines`, `decodePng` and the `pixi-marrow` command line tool (`info`, `typegen`, `outlines`). Runs in Node. |
 <!-- /facts:entry-points -->
 
 ## 2. What it is not
@@ -51,8 +51,8 @@ A file imports only from its own layer or the layers above it in this table. `pn
 | model | `src/model` | The immutable skeleton model |
 | formats | `src/formats` | Version sniffing and importers |
 | pose | `src/pose` | Timelines, player, constraints, skinning kernels |
-| geometry | `src/geometry` | Templates, tight meshes, clipping |
-| render | `src/render` | The Pixi pipe, batcher and shader |
+| geometry | `src/geometry` | Vertex positions and UVs, region outlines, opaque rectangles, the triangulator |
+| render | `src/render` | The view: Pixi meshes, the shader, clip masks, overdraw cuts |
 | api | `src/api` | The display object and handles |
 | features | `src/bake`, `src/debug`, `src/perf`, `src/optimize` | Optional entry points |
 
@@ -60,11 +60,11 @@ A file imports only from its own layer or the layers above it in this table. `pn
 
 `src/render` turns a pose into Pixi meshes (`SkeletonView`). `src/api` is the public display object (`MarrowSpine`) on top of a pose engine and a view.
 
-`src/pose` has two engines behind one interface: `legacy` plays 4.1 and 4.2 skeletons, `v43` plays 4.3 skeletons. The official runtimes mix animations differently, so they do not share a player.
+`src/pose` has two engines behind one interface: `legacy` plays 4.1 and 4.2 skeletons, `v43` plays 4.3 skeletons. The official runtimes mix animations differently, so they do not share a player. Each engine ports the constraint solvers and the update order of its own official runtime.
 
 `src/formats` has one folder per reader: `json42` and `binary42` read 4.1 and 4.2 files, `json43` and `binary43` read 4.3 files. `shared` holds what they have in common.
 
-`base`, `model`, `formats` and `pose` are the headless core. They never import `pixi.js`.
+`base`, `model`, `formats`, `pose` and `geometry` are the headless core. They never import `pixi.js`.
 
 ## 4. Invariants
 
@@ -75,6 +75,7 @@ A file imports only from its own layer or the layers above it in this table. `pn
 - No runtime dependencies. `pixi.js` will be the one peer.
 - Speed and memory are goals of equal weight. Pose data lives in typed arrays. A played loop allocates nothing after warm-up. Data that all instances can share is stored once.
 - An optimization that is on by default must be exact. It needs a test that runs it on and off.
+- An optimization that is not exact to the bit is an option. Its doc states what changes in the picture, and the pixel check bounds it. `tightMesh: 'on'` is the first one.
 - Never fail silently. Unsupported data throws `MarrowError` with a code, the cause and the fix.
 - Source files stay under 500 lines. No `as any`, no double casts, no TypeScript suppression comments.
 - Public symbols have TSDoc with a one-line summary and an `@example`.
@@ -107,7 +108,9 @@ A change to `src/render`, `src/api` or the shaders also needs the pixel check, w
 pnpm check:render
 ```
 
-It draws rigs with pixi-marrow and with the official Pixi runtime in headless Chrome, on WebGL2 and WebGPU, and compares the pixels. Images of failing cases land in `.shots/render/`.
+It draws rigs with pixi-marrow and with the official Pixi runtime in headless Chrome, on WebGL2 and WebGPU, and compares the pixels. It also compares pixi-marrow with its overdraw cuts on and off. Images of failing cases land in `.shots/render/`.
+
+A frame that fails against the official runtime is drawn again, moved by a fraction of a pixel, and fails only when it fails at both places. The two runtimes place vertices in different code, so a vertex on a subpixel boundary can round two ways. A defect stays wrong after the move.
 
 Library changes need a changeset. Run `pnpm changeset`.
 
@@ -116,4 +119,5 @@ Library changes need a changeset. Run `pnpm changeset`.
 - Read `docs/DESIGN.md` before designing anything. Update it when a decision changes.
 - Write the test first when the official core defines the answer.
 - Keep performance claims out of the docs until spine-benchmark has measured them.
+- In code that runs every update, pass indices into typed arrays, not numbers. V8 puts a double on the heap when it crosses a call that is not inlined.
 - Commit messages follow Conventional Commits.

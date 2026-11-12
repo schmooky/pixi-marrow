@@ -82,6 +82,11 @@ export type TrackFields = Partial<Record<TrackField, number | boolean | string>>
  */
 export interface PoseEngine {
     readonly state: PoseState;
+    /**
+     * The bytes of typed arrays this instance holds: its pose state, the values of its constraints
+     * and the poses they work on. Track entries are objects and are not counted.
+     */
+    readonly bytes: number;
     /** Multiplies the time every track advances by. */
     timeScale: number;
     /** The mix duration between two animations that have none set with {@link setMix}. */
@@ -119,12 +124,16 @@ export interface PoseEngine {
 /** Options for {@link createPoseEngine}. */
 export interface PoseEngineOptions {
     /**
-     * What to do with a skeleton that has constraints, which this milestone cannot solve.
-     * `error` (the default) throws. `ignore` plays the skeleton without them: constraints are not
-     * applied and timelines that animate constraints are skipped.
+     * What to do with a skeleton that has constraints this version cannot solve yet: physics and
+     * slider constraints. `error` (the default) throws. `ignore` plays the skeleton without those:
+     * they are not applied and the timelines that animate them change nothing. IK, transform and
+     * path constraints are always solved.
      */
     constraints?: 'error' | 'ignore';
 }
+
+/** Constraint types the engines do not solve yet. */
+const UNSOLVED: readonly string[] = ['physics', 'slider'];
 
 /** Creates one more pose engine for the model it was loaded for. Synchronous. */
 export type PoseEngineFactory = () => PoseEngine;
@@ -133,7 +142,7 @@ export type PoseEngineFactory = () => PoseEngine;
  * Loads the pose engine code for a model's Spine version and returns a factory that creates
  * engines for that model without waiting. Use it when instances are created synchronously.
  *
- * Throws a {@link MarrowError} for a skeleton with constraints, unless `constraints` is `ignore`.
+ * Throws a {@link MarrowError} for a skeleton with physics or slider constraints, unless `constraints` is `ignore`.
  *
  * @example
  * const createEngine = await loadPoseEngine(model);
@@ -144,11 +153,13 @@ export async function loadPoseEngine(
     model: SkeletonModel,
     options: PoseEngineOptions = {},
 ): Promise<PoseEngineFactory> {
-    if (model.constraints.length > 0 && options.constraints !== 'ignore') {
-        const types = [...new Set(model.constraints.map((constraint) => constraint.type))];
+    const unsolved = [...new Set(model.constraints.map((constraint) => constraint.type))].filter((type) =>
+        UNSOLVED.includes(type),
+    );
 
-        throw new MarrowError('unsupported-feature', `The skeleton has ${types.join(', ')} constraints.`, {
-            fix: 'Constraints arrive with milestone M3. Until then pass { constraints: "ignore" } to play without them.',
+    if (unsolved.length > 0 && options.constraints !== 'ignore') {
+        throw new MarrowError('unsupported-feature', `The skeleton has ${unsolved.join(', ')} constraints.`, {
+            fix: 'Physics and slider constraints arrive with milestone M4. Until then pass { constraints: "ignore" } to play without them.',
         });
     }
     if (model.version === '4.3') {
@@ -165,7 +176,7 @@ export async function loadPoseEngine(
  * Creates a pose engine for a model. The engine for the model's Spine version is loaded on demand:
  * 4.1 and 4.2 share one, 4.3 has its own, because the official runtimes mix animations differently.
  *
- * Throws a {@link MarrowError} for a skeleton with constraints, unless `constraints` is `ignore`.
+ * Throws a {@link MarrowError} for a skeleton with physics or slider constraints, unless `constraints` is `ignore`.
  *
  * @example
  * const engine = await createPoseEngine(await importSkeleton(bytes));

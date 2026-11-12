@@ -1,16 +1,23 @@
 import { clearNext, setTrack } from './commands';
+import { DELTA, SHARED } from './curves';
 import type { Entry } from './entry';
 import { drain, type Player43, queueEnd } from './player';
+
+/*
+ * The seconds an update advances the tracks by go from function to function through `SHARED`,
+ * for the reasons given in curves.ts.
+ */
 
 /**
  * The official `updateMixingFrom`: advances the entries `to` mixes from and ends those whose mix
  * is done. Returns true when every one of them is done.
  */
-function updateMixingFrom(player: Player43, to: Entry, delta: number): boolean {
+function updateMixingFrom(player: Player43, to: Entry): boolean {
     const from = to.mixingFrom;
 
     if (!from) return true;
-    const finished = updateMixingFrom(player, from, delta);
+    const finished = updateMixingFrom(player, from);
+    const delta = Number(SHARED[DELTA]);
 
     from.animationLast = from.nextAnimationLast;
     from.trackLast = from.nextTrackLast;
@@ -34,19 +41,16 @@ function updateMixingFrom(player: Player43, to: Entry, delta: number): boolean {
     return false;
 }
 
-/** Makes the queued entry current once its delay has passed. It keeps the time that is left over. */
-function changeToNext(
-    player: Player43,
-    index: number,
-    current: Entry,
-    next: Entry,
-    nextTime: number,
-    delta: number,
-    currentDelta: number,
-): void {
+/**
+ * Makes the queued entry current once its delay has passed. It keeps the time that is left over:
+ * `current.trackLast` minus its delay.
+ */
+function changeToNext(player: Player43, index: number, current: Entry, next: Entry): void {
+    const delta = Number(SHARED[DELTA]);
+    const nextTime = current.trackLast - next.delay;
+
     next.delay = 0;
     next.trackTime += current.timeScale === 0 ? 0 : (nextTime / current.timeScale + delta) * next.timeScale;
-    current.trackTime += currentDelta;
     setTrack(player, index, next, true);
     let entry = next;
 
@@ -68,10 +72,10 @@ function endMixingFrom(player: Player43, current: Entry): void {
     }
 }
 
-function updateTrack(player: Player43, index: number, current: Entry, delta: number): void {
+function updateTrack(player: Player43, index: number, current: Entry): void {
     current.animationLast = current.nextAnimationLast;
     current.trackLast = current.nextTrackLast;
-    let currentDelta = delta * current.timeScale;
+    let currentDelta = Number(SHARED[DELTA]) * current.timeScale;
 
     if (current.delay > 0) {
         current.delay -= currentDelta;
@@ -82,10 +86,9 @@ function updateTrack(player: Player43, index: number, current: Entry, delta: num
     const next = current.next;
 
     if (next) {
-        const nextTime = current.trackLast - next.delay;
-
-        if (nextTime >= 0) {
-            changeToNext(player, index, current, next, nextTime, delta, currentDelta);
+        if (current.trackLast - next.delay >= 0) {
+            current.trackTime += currentDelta;
+            changeToNext(player, index, current, next);
 
             return;
         }
@@ -97,7 +100,7 @@ function updateTrack(player: Player43, index: number, current: Entry, delta: num
 
         return;
     }
-    if (current.mixingFrom && updateMixingFrom(player, current, delta)) endMixingFrom(player, current);
+    if (current.mixingFrom && updateMixingFrom(player, current)) endMixingFrom(player, current);
     current.trackTime += currentDelta;
 }
 
@@ -105,11 +108,11 @@ function updateTrack(player: Player43, index: number, current: Entry, delta: num
 export function updateTracks(player: Player43, delta: number): void {
     const tracks = player.tracks;
 
-    delta *= player.timeScale;
+    SHARED[DELTA] = delta * player.timeScale;
     for (let i = 0, n = tracks.length; i < n; i++) {
         const current = tracks[i];
 
-        if (current) updateTrack(player, i, current, delta);
+        if (current) updateTrack(player, i, current);
     }
     drain(player);
 }

@@ -65,7 +65,7 @@ describe('SkeletonView', () => {
         }
         // one build for the default skin, one more when a skin was set
         expect(rig.view.stats.templateBuilds).toBe(rig.model.skins.length > 1 ? 2 : 1);
-        expect(rig.view.stats.drawCalls).toBe(meshes(rig.view).length);
+        expect(rig.view.stats.drawCalls).toBe(meshes(rig.view).length + rig.view.stats.maskDraws);
         expect(rig.view.stats.indices).toBe(meshes(rig.view).reduce((sum, mesh) => sum + mesh.geometry.indexCount, 0));
     });
 
@@ -110,15 +110,20 @@ describe('SkeletonView', () => {
         const { positions, statics } = vertexData(rig.view);
         const uvs = Array.from(statics);
 
-        // portal shows and hides the portal pieces and the muzzle flashes
+        // portal shows and hides the portal pieces and the muzzle flashes, and clips spineboy while he comes out
+        const draws = new Set<number>();
+
         play(rig, 'portal');
         for (let frame = 0; frame < 90; frame++) {
             step(rig);
             expectKernel(rig);
+            draws.add(rig.view.stats.drawCalls);
         }
         expect(rig.view.stats.indexRebuilds).toBeGreaterThan(3);
         expect(rig.view.stats.indexRebuilds).toBeLessThan(60);
-        expect(rig.view.stats).toMatchObject({ templateBuilds: 1, uvUploads: 0, drawCalls: 1 });
+        expect(rig.view.stats).toMatchObject({ templateBuilds: 1, uvUploads: 0 });
+        // the portal, the clipped body and the mask twice. A muzzle flash after the clip is one more range
+        expect([...draws].sort()).toEqual([4, 5]);
         expect(vertexData(rig.view).positions).toBe(positions);
         expect(Array.from(vertexData(rig.view).statics)).toEqual(uvs);
     });
@@ -184,27 +189,30 @@ describe('SkeletonView', () => {
         expect(Array.from(vertexData(rig.view).statics)).toEqual(vertices);
     });
 
-    it('draws nothing for a clipping attachment and says that clipping was ignored', async () => {
+    it('draws nothing for a clipping attachment itself, and counts the ones it applies', async () => {
         const rig = await loadRig('4.2/spineboy-pro.skel');
         const { state } = rig.engine;
+        const { stats } = rig.view;
         const clip = rig.model.skins
             .flatMap((skin) => skin.attachments)
             .find((item) => item.attachment.type === 'clipping');
 
         step(rig, 0);
-        expect(rig.view.stats.clippingIgnored).toBe(0);
+        expect(stats).toMatchObject({ clips: 0, maskDraws: 0, maskUploads: 0, maskRebuilds: 0, drawCalls: 1 });
         if (clip === undefined) throw new Error('spineboy has a clipping attachment');
-        const indices = rig.view.stats.indices;
+        const indices = stats.indices;
 
         state.attachments[clip.slot] = clip.attachment;
         rig.view.update(state);
-        expect(rig.view.stats.clippingIgnored).toBe(1);
-        // nothing is clipped and nothing more is drawn
-        expect(rig.view.stats.indices).toBe(indices);
+        // the same triangles as before. Every visible slot is inside the clip: one range and its mask, drawn twice
+        expect(stats).toMatchObject({ clips: 1, maskDraws: 2, maskUploads: 1, maskRebuilds: 1, drawCalls: 3 });
+        expect(stats.indices).toBe(indices);
+        expect(meshes(rig.view).length).toBe(1);
         readDrawn(rig);
         state.active[rig.model.slots.bones[clip.slot] ?? 0] = 0;
         rig.view.update(state);
-        expect(rig.view.stats.clippingIgnored).toBe(0);
+        expect(stats).toMatchObject({ clips: 0, maskDraws: 0, maskUploads: 1, drawCalls: 1 });
+        readDrawn(rig);
     });
 
     it('does not read past the end of an array without a word', () => {

@@ -1,6 +1,6 @@
 import type { EventKey } from '../../model/timelines';
 import type { PoseState } from '../state';
-import { search } from './curves';
+import { LAST_TIME, SHARED, search, TIME } from './curves';
 import { factsOf, type Rig } from './rig';
 import { findAttachment, setSlotAttachment } from './skeleton';
 import { FIRST, type LegacyTimeline, MIX_OUT, SETUP } from './timelines';
@@ -19,10 +19,10 @@ export function applyAttachment(
     rig: Rig,
     pose: PoseState,
     timeline: LegacyTimeline,
-    time: number,
     blend: number,
     direction: number,
 ): void {
+    const time = Number(SHARED[TIME]);
     const slot = timeline.target;
     const setupName = rig.model.slots.attachments[slot] ?? null;
 
@@ -33,20 +33,15 @@ export function applyAttachment(
             setSlotAttachment(rig, pose, slot, findAttachment(rig, pose, slot, setupName));
         }
     } else {
-        const name = timeline.attachmentNames[search(timeline.frames, time, 1)] ?? null;
+        const name = timeline.attachmentNames[search(timeline.frames, 1)] ?? null;
 
         setSlotAttachment(rig, pose, slot, findAttachment(rig, pose, slot, name));
     }
 }
 
 /** The official `DrawOrderTimeline.apply`. */
-export function applyDrawOrder(
-    pose: PoseState,
-    timeline: LegacyTimeline,
-    time: number,
-    blend: number,
-    direction: number,
-): void {
+export function applyDrawOrder(pose: PoseState, timeline: LegacyTimeline, blend: number, direction: number): void {
+    const time = Number(SHARED[TIME]);
     const drawOrder = pose.drawOrder;
     let order: Int16Array | null = null;
 
@@ -55,7 +50,7 @@ export function applyDrawOrder(
     } else if (time < Number(timeline.frames[0])) {
         if (blend !== SETUP && blend !== FIRST) return;
     } else {
-        order = timeline.drawOrders[search(timeline.frames, time, 1)] ?? null;
+        order = timeline.drawOrders[search(timeline.frames, 1)] ?? null;
     }
     if (order === null) {
         for (let i = 0; i < drawOrder.length; i++) drawOrder[i] = i;
@@ -107,10 +102,10 @@ export function applySequence(
     rig: Rig,
     pose: PoseState,
     timeline: LegacyTimeline,
-    time: number,
     blend: number,
     direction: number,
 ): void {
+    const time = Number(SHARED[TIME]);
     const slot = timeline.target;
     const { frames, attachment } = timeline;
     const shown = pose.attachments[slot] ?? null;
@@ -127,7 +122,7 @@ export function applySequence(
 
         return;
     }
-    const i = search(frames, time, SEQUENCE_ENTRIES);
+    const i = search(frames, SEQUENCE_ENTRIES);
     const before = Number(frames[i]);
     const modeAndIndex = Number(frames[i + 1]);
     const delay = Number(frames[i + 2]);
@@ -144,28 +139,25 @@ export function applySequence(
 }
 
 /**
- * The official `EventTimeline.apply`: adds the events after `lastTime` up to `time` to `fired`.
- * A `lastTime` after `time` means the animation looped.
+ * Adds the events of the keys after the last time in `SHARED`, up to the time in `SHARED`, to `fired`.
+ *
+ * @param checkEnd False when the last time is the start of a new loop. Then the official code
+ * does not compare it with the last key.
  */
-export function applyEvents(timeline: LegacyTimeline, lastTime: number, time: number, fired: EventKey[]): void {
+function collectEvents(timeline: LegacyTimeline, fired: EventKey[], checkEnd: boolean): void {
     const { frames, events } = timeline;
     const frameCount = frames.length;
-    let last = lastTime;
+    const last = Number(SHARED[LAST_TIME]);
+    const time = Number(SHARED[TIME]);
 
-    if (last > time) {
-        // fire the events up to the end of the loop first
-        applyEvents(timeline, last, Number.MAX_VALUE, fired);
-        last = -1;
-    } else if (last >= Number(frames[frameCount - 1])) {
-        return;
-    }
+    if (checkEnd && last >= Number(frames[frameCount - 1])) return;
     if (time < Number(frames[0])) return;
     let i = 0;
 
-    if (last < Number(frames[0])) {
-        i = 0;
-    } else {
-        i = search(frames, last, 1) + 1;
+    if (!(last < Number(frames[0]))) {
+        // the official search for the last time, plus one: the first key after it
+        i = 1;
+        while (i < frameCount && !(Number(frames[i]) > last)) i++;
         const frameTime = Number(frames[i]);
 
         // events with the same time fire together
@@ -176,4 +168,26 @@ export function applyEvents(timeline: LegacyTimeline, lastTime: number, time: nu
 
         if (event !== undefined) fired.push(event);
     }
+}
+
+/**
+ * The official `EventTimeline.apply`: adds the events after the last time up to the time to
+ * `fired`. Both times are read from `SHARED`. A last time after the time means the animation looped.
+ */
+export function applyEvents(timeline: LegacyTimeline, fired: EventKey[]): void {
+    const last = Number(SHARED[LAST_TIME]);
+    const time = Number(SHARED[TIME]);
+
+    if (!(last > time)) {
+        collectEvents(timeline, fired, true);
+
+        return;
+    }
+    // fire the events up to the end of the loop first, then those from its start
+    SHARED[TIME] = Number.MAX_VALUE;
+    collectEvents(timeline, fired, true);
+    SHARED[TIME] = time;
+    SHARED[LAST_TIME] = -1;
+    collectEvents(timeline, fired, false);
+    SHARED[LAST_TIME] = last;
 }

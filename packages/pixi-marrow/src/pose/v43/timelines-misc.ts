@@ -1,7 +1,8 @@
 import { MarrowError } from '../../base/errors';
-import { f32, search } from './curves';
+import type { EventKey } from '../../model/timelines';
+import { LAST_TIME, SHARED, search, TIME } from './curves';
 import { followerInfo, timelineActive } from './slots';
-import { CURRENT, type Pose43, type Timeline43, type TimelineKernel } from './types';
+import { CURRENT, type Pose43, type Timeline43 } from './types';
 
 // The official `SequenceMode` values. A sequence key holds one in its low four bits.
 const HOLD = 0;
@@ -11,6 +12,11 @@ const PINGPONG = 3;
 const ONCE_REVERSE = 4;
 const LOOP_REVERSE = 5;
 const PINGPONG_REVERSE = 6;
+
+/*
+ * The sequence, event and draw order timelines. Each reads its times from `SHARED`, for the
+ * reasons given in curves.ts.
+ */
 
 /** Folds a frame number into a sequence of `count` regions that plays forth and back. */
 function pingpong(index: number, count: number): number {
@@ -40,17 +46,14 @@ function sequenceIndex(mode: number, index: number, count: number): number {
     }
 }
 
-/** Writes the sequence index of one slot, when the slot shows an attachment the timeline applies to. */
-function applySequenceToSlot(
-    pose: Pose43,
-    timeline: Timeline43,
-    slot: number,
-    time: number,
-    before: number,
-    modeAndIndex: number,
-    delay: number,
-): void {
-    const info = followerInfo(pose, slot, timeline.attachment);
+/**
+ * Writes the sequence index of one slot, when the slot shows an attachment the timeline applies to.
+ *
+ * @param mode The official `SequenceMode` of the key.
+ * @param index The frame number the key is at by now. A whole number.
+ */
+function applySequenceToSlot(pose: Pose43, timeline: Timeline43, slot: number, mode: number, index: number): void {
+    const info = followerInfo(pose, slot, timeline);
 
     if (info === null) return;
     if (info.sequenceCount < 0) {
@@ -64,113 +67,122 @@ function applySequenceToSlot(
             },
         );
     }
-    const mode = modeAndIndex & 0xf;
-    let index = modeAndIndex >> 4;
-
-    if (mode !== HOLD) {
-        index += ((time - before) / delay + 0.00001) | 0;
-        index = sequenceIndex(mode, index, info.sequenceCount);
-    }
-    pose.state.sequenceIndices[slot] = index;
+    pose.state.sequenceIndices[slot] = mode === HOLD ? index : sequenceIndex(mode, index, info.sequenceCount);
 }
 
 /** The official sequence timeline: the region of an attachment's sequence, in every slot that follows it. */
-export const applySequence: TimelineKernel = (pose, timeline, _lastTime, time, _events, _alpha, from, _add, out) => {
+export function applySequence(pose: Pose43, timeline: Timeline43, from: number, out: boolean): void {
     const { frames, target, slots } = timeline;
+    const time = Number(SHARED[TIME]);
 
-    if (!timelineActive(pose, target, timeline.attachment, slots)) return;
-    if (out || time < f32(frames, 0)) {
+    if (!timelineActive(pose, target, timeline, slots)) return;
+    if (out || time < Number(frames[0])) {
         if (from === CURRENT) return;
         const indices = pose.state.sequenceIndices;
 
-        if (followerInfo(pose, target, timeline.attachment) !== null) indices[target] = -1;
+        if (followerInfo(pose, target, timeline) !== null) indices[target] = -1;
         for (let i = 0; i < slots.length; i++) {
             const slot = slots[i] ?? -1;
 
-            if (followerInfo(pose, slot, timeline.attachment) !== null) indices[slot] = -1;
+            if (followerInfo(pose, slot, timeline) !== null) indices[slot] = -1;
         }
 
         return;
     }
-    const i = search(frames, time, 3);
-    const before = f32(frames, i);
-    const modeAndIndex = f32(frames, i + 1);
-    const delay = f32(frames, i + 2);
+    const i = search(frames, 3);
+    const modeAndIndex = Number(frames[i + 1]);
+    const mode = modeAndIndex & 0xf;
+    let index = modeAndIndex >> 4;
 
-    applySequenceToSlot(pose, timeline, target, time, before, modeAndIndex, delay);
-    for (let k = 0; k < slots.length; k++) {
-        applySequenceToSlot(pose, timeline, slots[k] ?? -1, time, before, modeAndIndex, delay);
-    }
-};
+    // the frames that passed since the key. Whole numbers from here on.
+    if (mode !== HOLD) index += ((time - Number(frames[i])) / Number(frames[i + 2]) + 0.00001) | 0;
+    applySequenceToSlot(pose, timeline, target, mode, index);
+    for (let k = 0; k < slots.length; k++) applySequenceToSlot(pose, timeline, slots[k] ?? -1, mode, index);
+}
 
-/** The official event timeline: collects the events of the keys after `lastTime`, up to `time`. */
-export const applyEvent: TimelineKernel = (pose, timeline, lastTime, time, events, alpha, from, add, out) => {
-    if (!events) return;
+/**
+ * Collects the events of the keys after the last time in `SHARED`, up to the time in `SHARED`.
+ *
+ * @param checkEnd False when the last time is the start of a new loop. Then the official code
+ * does not compare it with the last key.
+ */
+function collectEvents(timeline: Timeline43, events: EventKey[], checkEnd: boolean): void {
     const frames = timeline.frames;
     const frameCount = frames.length;
+    const lastTime = Number(SHARED[LAST_TIME]);
+    const time = Number(SHARED[TIME]);
 
-    if (lastTime > time) {
-        // the animation looped: first the events up to its end
-        applyEvent(pose, timeline, lastTime, Number.MAX_VALUE, events, alpha, from, add, out);
-        lastTime = -1;
-    } else if (lastTime >= f32(frames, frameCount - 1)) return;
-    if (time < f32(frames, 0)) return;
+    if (checkEnd && lastTime >= Number(frames[frameCount - 1])) return;
+    if (time < Number(frames[0])) return;
     let i = 0;
 
-    if (!(lastTime < f32(frames, 0))) {
-        i = search(frames, lastTime, 1) + 1;
-        const frameTime = f32(frames, i);
+    if (!(lastTime < Number(frames[0]))) {
+        // the official search for the last time, plus one: the first key after it
+        i = 1;
+        while (i < frameCount && !(Number(frames[i]) > lastTime)) i++;
+        const frameTime = Number(frames[i]);
 
         // keys at one time fire together
-        while (i > 0 && f32(frames, i - 1) === frameTime) i--;
+        while (i > 0 && Number(frames[i - 1]) === frameTime) i--;
     }
-    for (; i < frameCount && time >= f32(frames, i); i++) {
+    for (; i < frameCount && time >= Number(frames[i]); i++) {
         const event = timeline.events[i];
 
         if (event !== undefined) events.push(event);
     }
-};
+}
+
+/** The official event timeline: collects the events of the keys after the last time, up to the time. */
+export function applyEvent(timeline: Timeline43, events: EventKey[] | null): void {
+    if (!events) return;
+    const lastTime = Number(SHARED[LAST_TIME]);
+    const time = Number(SHARED[TIME]);
+
+    if (!(lastTime > time)) {
+        collectEvents(timeline, events, true);
+
+        return;
+    }
+    // the animation looped: first the events up to its end, then those from its start
+    SHARED[TIME] = Number.MAX_VALUE;
+    collectEvents(timeline, events, true);
+    SHARED[TIME] = time;
+    SHARED[LAST_TIME] = -1;
+    collectEvents(timeline, events, false);
+    SHARED[LAST_TIME] = lastTime;
+}
 
 /** The official draw order timeline: the order of every slot. A null key is the setup order. */
-export const applyDrawOrder: TimelineKernel = (pose, timeline, _lastTime, time, _events, _alpha, from, _add, out) => {
+export function applyDrawOrder(pose: Pose43, timeline: Timeline43, from: number, out: boolean): void {
     const drawOrder = pose.state.drawOrder;
+    const frames = timeline.frames;
     let order: Int16Array | null = null;
 
-    if (out || time < f32(timeline.frames, 0)) {
+    if (out || Number(SHARED[TIME]) < Number(frames[0])) {
         if (from === CURRENT) return;
     } else {
-        order = timeline.orders[search(timeline.frames, time, 1)] ?? null;
+        order = timeline.orders[search(frames, 1)] ?? null;
     }
     if (order === null) {
         for (let i = 0; i < drawOrder.length; i++) drawOrder[i] = i;
     } else {
         drawOrder.set(order);
     }
-};
+}
 
 /**
  * The official draw order folder timeline: the order of the slots of one folder among themselves.
  * The positions the folder takes in the draw order stay. A null key is the setup order.
  */
-export const applyDrawOrderFolder: TimelineKernel = (
-    pose,
-    timeline,
-    _lastTime,
-    time,
-    _events,
-    _alpha,
-    from,
-    _add,
-    out,
-) => {
-    const { slots, inFolder } = timeline;
+export function applyDrawOrderFolder(pose: Pose43, timeline: Timeline43, from: number, out: boolean): void {
+    const { slots, inFolder, frames } = timeline;
     const drawOrder = pose.state.drawOrder;
     let order: Int16Array | null = null;
 
-    if (out || time < f32(timeline.frames, 0)) {
+    if (out || Number(SHARED[TIME]) < Number(frames[0])) {
         if (from === CURRENT) return;
     } else {
-        order = timeline.orders[search(timeline.frames, time, 1)] ?? null;
+        order = timeline.orders[search(frames, 1)] ?? null;
     }
     let found = 0;
 
@@ -191,4 +203,4 @@ export const applyDrawOrderFolder: TimelineKernel = (
             },
         );
     }
-};
+}

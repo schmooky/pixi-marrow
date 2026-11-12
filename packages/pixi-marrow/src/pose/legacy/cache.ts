@@ -1,0 +1,189 @@
+import { C_IK, C_PATH, C_PHYSICS, C_TRANSFORM, type ConstraintPlan, type LegacyConstraint } from './constraints';
+import type { Rig } from './rig';
+
+/**
+ * The official update cache for one skin: the bones and constraints in the order they are
+ * updated, with what the sort found active. Shared by all instances that wear the skin.
+ */
+export interface UpdateCache {
+    /** A bone index, or for a constraint -1 minus its index. A bone can come more than once. */
+    readonly entries: Int32Array;
+    /** 1 for each bone that is posed with this skin. */
+    readonly boneActive: Uint8Array;
+    /** 1 for each constraint that is solved and animated with this skin. */
+    readonly constraintActive: Uint8Array;
+}
+
+/** What the sort functions work on: the official `sorted` and `active` flags and the cache so far. */
+interface Sort {
+    readonly plan: ConstraintPlan;
+    /** The skin the cache is sorted for, and the default skin. -1 is none. */
+    readonly skin: number;
+    readonly defaultSkin: number;
+    readonly parents: Int16Array;
+    readonly sorted: Uint8Array;
+    readonly active: Uint8Array;
+    readonly entries: number[];
+}
+
+/** The official `sortBone`: adds a bone to the cache after its parents, unless it is there. */
+function sortBone(sort: Sort, bone: number): void {
+    if (bone < 0 || sort.sorted[bone] !== 0) return;
+    sortBone(sort, sort.parents[bone] ?? -1);
+    sort.sorted[bone] = 1;
+    sort.entries.push(bone);
+}
+
+/**
+ * The official `sortReset` for the children of a bone: active bones below it are sorted again,
+ * so they update after the constraint that moved the bone.
+ */
+function sortReset(sort: Sort, bone: number): void {
+    const { childStart, childList } = sort.plan;
+
+    for (let i = childStart[bone] ?? 0, n = childStart[bone + 1] ?? 0; i < n; i++) {
+        const child = childList[i] ?? -1;
+
+        if (sort.active[child] !== 1) continue;
+        if (sort.sorted[child] === 1) sortReset(sort, child);
+        sort.sorted[child] = 0;
+    }
+}
+
+/** The official `sortIkConstraint`. */
+function sortIk(sort: Sort, constraint: LegacyConstraint): void {
+    const bones = constraint.bones;
+    const parent = bones[0] ?? -1;
+
+    sortBone(sort, constraint.target);
+    sortBone(sort, parent);
+    if (bones.length === 1) {
+        sort.entries.push(-1 - constraint.index);
+        sortReset(sort, parent);
+    } else {
+        const child = bones[bones.length - 1] ?? -1;
+
+        sortBone(sort, child);
+        sort.entries.push(-1 - constraint.index);
+        sortReset(sort, parent);
+        sort.sorted[child] = 1;
+    }
+}
+
+/** What the official sort functions do after the bones a constraint reads: add it, then sort the bones below again. */
+function pushConstraint(sort: Sort, constraint: LegacyConstraint, solved: boolean): void {
+    const bones = constraint.bones;
+
+    if (solved) sort.entries.push(-1 - constraint.index);
+    for (let i = 0; i < bones.length; i++) sortReset(sort, bones[i] ?? -1);
+    for (let i = 0; i < bones.length; i++) sort.sorted[bones[i] ?? -1] = 1;
+}
+
+/** The official `sortTransformConstraint`. A local constraint also needs the parent of each bone. */
+function sortTransform(sort: Sort, constraint: LegacyConstraint): void {
+    const bones = constraint.bones;
+
+    sortBone(sort, constraint.target);
+    for (let i = 0; i < bones.length; i++) {
+        const bone = bones[i] ?? -1;
+
+        if (constraint.local) sortBone(sort, sort.parents[bone] ?? -1);
+        sortBone(sort, bone);
+    }
+    pushConstraint(sort, constraint, true);
+}
+
+/** Sorts the bones the path attachments of one skin follow: the official `sortPathConstraintAttachment`. */
+function sortPathBones(sort: Sort, bones: Int16Array | undefined): void {
+    if (bones === undefined) return;
+    for (let i = 0; i < bones.length; i++) sortBone(sort, bones[i] ?? -1);
+}
+
+/**
+ * The official `sortPathConstraint`. It sorts the bones of the path attachments the slot has in
+ * the active skin, in the default skin and then in every skin, and after them the constrained
+ * bones. The official code also sorts for the attachment the slot shows. That one comes from a
+ * skin, so its bones are sorted by then, and the cache depends on the skin alone.
+ */
+function sortPath(sort: Sort, constraint: LegacyConstraint): void {
+    const { bones, pathBones } = constraint;
+
+    if (sort.skin >= 0) sortPathBones(sort, pathBones[sort.skin]);
+    if (sort.defaultSkin >= 0 && sort.defaultSkin !== sort.skin) sortPathBones(sort, pathBones[sort.defaultSkin]);
+    for (const each of pathBones) sortPathBones(sort, each);
+    for (let i = 0; i < bones.length; i++) sortBone(sort, bones[i] ?? -1);
+    pushConstraint(sort, constraint, true);
+}
+
+/**
+ * The official `sortPhysicsConstraint`, without the constraint itself. The official runtime keeps
+ * a physics constraint that is switched off in the cache. So its bone is sorted here and the
+ * bones below are sorted again, which decides when and how often they update.
+ */
+function sortPhysics(sort: Sort, constraint: LegacyConstraint): void {
+    sortBone(sort, constraint.targetBone);
+    pushConstraint(sort, constraint, false);
+}
+
+/** Sorts one constraint if it is active: its target bone is, and a skin lists it if it needs one. */
+function sortConstraint(sort: Sort, constraint: LegacyConstraint, listed: boolean, active: Uint8Array): void {
+    if (sort.active[constraint.targetBone] !== 1 || (constraint.skinRequired && !listed)) return;
+    active[constraint.index] = 1;
+    if (constraint.kind === C_IK) sortIk(sort, constraint);
+    else if (constraint.kind === C_TRANSFORM) sortTransform(sort, constraint);
+    else if (constraint.kind === C_PATH) sortPath(sort, constraint);
+    else if (constraint.kind === C_PHYSICS) sortPhysics(sort, constraint);
+}
+
+/** The official `Skeleton.updateCache` for a skin. -1 is no skin. */
+function buildCache(rig: Rig, skinIndex: number): UpdateCache {
+    const { count, parents, skinRequired } = rig.model.bones;
+    const plan = rig.plan;
+    const skin = rig.model.skins[skinIndex];
+    const sort: Sort = {
+        plan,
+        skin: skin === undefined ? -1 : skinIndex,
+        defaultSkin: rig.lookup.defaultSkin,
+        parents,
+        sorted: new Uint8Array(count),
+        active: new Uint8Array(count),
+        entries: [],
+    };
+    const constraintActive = new Uint8Array(plan.constraints.length);
+
+    for (let i = 0; i < count; i++) {
+        sort.sorted[i] = skinRequired[i] === 1 ? 1 : 0;
+        sort.active[i] = skinRequired[i] === 1 ? 0 : 1;
+    }
+    for (const skinBone of skin?.bones ?? []) {
+        // a parent index is below its bone, so the walk ends at a root
+        for (let bone = skinBone; bone >= 0 && bone < count; bone = parents[bone] ?? -1) {
+            sort.sorted[bone] = 0;
+            sort.active[bone] = 1;
+        }
+    }
+    for (const index of plan.order) {
+        const constraint = plan.constraints[index];
+
+        if (constraint === undefined) continue;
+        sortConstraint(sort, constraint, skin?.constraints.includes(index) === true, constraintActive);
+    }
+    for (let i = 0; i < count; i++) sortBone(sort, i);
+
+    return { entries: Int32Array.from(sort.entries), boneActive: sort.active, constraintActive };
+}
+
+/**
+ * The update cache of a skin. Built the first time a skin is active and kept for every instance:
+ * the official cache depends on the skin alone.
+ */
+export function cacheOf(rig: Rig, skinIndex: number): UpdateCache {
+    let cache = rig.caches.get(skinIndex);
+
+    if (cache === undefined) {
+        cache = buildCache(rig, skinIndex);
+        rig.caches.set(skinIndex, cache);
+    }
+
+    return cache;
+}

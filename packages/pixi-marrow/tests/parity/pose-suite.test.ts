@@ -1,18 +1,23 @@
 import { Physics, SequenceTimeline, Skeleton, Slider } from 'spine-core-4.3';
 import { describe, expect, it } from 'vitest';
-import type { PoseEvent, TrackEntry } from '../../src/core';
+import { importSkeleton, type SpineVersion, type TrackEntry, WORLD_STRIDE } from '../../src/core';
+import { differences } from './compare';
+import { officialModel } from './model-official';
+import type { RigFiles } from './official';
 import { loadPoseRig } from './pose-official';
 import { readData43, shieldTimelineSlots } from './pose-official43';
 import { NO_SCRIPT_ENTRY, officialSubject, runScript, type Subject } from './pose-run';
 import { DT, type PoseScript, script } from './pose-script';
 import { SCRIPT_FAMILIES } from './pose-scripts';
 import { createAudit, type PoseDriver } from './pose-shared';
+import { next, numbers, oneUnitOff, parts, withEvents, withoutConstraints, withPose } from './pose-suite-kit';
 import { listPoseRigs, type PoseRigSource } from './pose-synthetic';
 
 /*
  * The pose parity suite checks itself here, without our engine. Every script runs on two official
- * drivers and must give the same poses, a wrong value on one side must be reported, and the
- * constraints of the official skeleton must leave alone what the suite compares.
+ * drivers and must give the same poses, a wrong value on one side must be reported, the world
+ * reference must hold what it says, and the constraints of the official skeleton must leave alone
+ * what the suite compares.
  */
 
 const sources = listPoseRigs();
@@ -22,57 +27,33 @@ const rigs = sources.filter(
 );
 const seedOf = (source: PoseRigSource): string => `${source.version}/${source.rig}`;
 
+/*
+ * The world reference comes from a second skeleton that is given what the constraints read. Here
+ * it runs against the played skeleton itself. For a rig without physics and sliders that is the
+ * plain official skeleton with every constraint on. For a rig with them it is a skeleton played
+ * with its physics and sliders switched off. A value the second skeleton is not given shows as a
+ * difference.
+ */
 describe.each(rigs)('$version/$rig', (source) => {
-    it('gives the same poses twice, and its constraints leave the animated pose alone', { timeout: 30_000 }, () => {
+    it('gives the same poses both ways, and its constraints leave the animated pose alone', { timeout: 30_000 }, () => {
         const rig = loadPoseRig(source.version, source.read());
-        let updates = 0;
+        const world = rig.info.ignored > 0 ? 'direct' : 'full';
+        const scripts = SCRIPT_FAMILIES.flatMap((family) => family.scripts(rig.info, seedOf(source)));
+        const updates = scripts
+            .flatMap((each) => each.ops)
+            .reduce((sum, op) => sum + (op.op === 'update' ? op.times : 0), 0);
 
-        for (const family of SCRIPT_FAMILIES) {
-            for (const each of family.scripts(rig.info, seedOf(source))) {
-                const audited = rig.createDriver({ audit: true });
-                const failure = runScript(each, officialSubject(audited), officialSubject(rig.createDriver()));
+        for (const each of scripts) {
+            const audited = rig.createDriver({ audit: true });
+            const failure = runScript(each, officialSubject(audited), officialSubject(rig.createDriver({ world })));
 
-                if (failure !== null) expect.fail(`${source.id}, ${failure}`);
-                expect(audited.leaks, `${source.id}, script "${each.name}"`).toEqual([]);
-                for (const op of each.ops) updates += op.op === 'update' ? op.times : 0;
-            }
+            if (failure !== null) expect.fail(`${source.id}, ${failure}`);
+            expect(audited.leaks, `${source.id}, script "${each.name}"`).toEqual([]);
         }
         // every family ran
         expect(updates).toBeGreaterThan(SCRIPT_FAMILIES.length * 10);
     });
 });
-
-/** A side whose pose is changed at one read, counted from 1. */
-function withPose(subject: Subject, at: number, change: (pose: Record<string, unknown>) => object): Subject {
-    let reads = 0;
-
-    return {
-        driver: subject.driver,
-        read() {
-            const pose = subject.read();
-
-            return ++reads === at ? { ...pose, ...change(pose) } : pose;
-        },
-    };
-}
-
-/** A side whose events go through `change`. */
-function withEvents(subject: Subject, change: (events: PoseEvent[]) => PoseEvent[]): Subject {
-    const driver: PoseDriver = new Proxy(subject.driver, {
-        get: (target, key) => (key === 'takeEvents' ? () => change(target.takeEvents()) : Reflect.get(target, key)),
-    });
-
-    return { driver, read: subject.read };
-}
-
-/** The next number after a value: the smallest difference there is. */
-const next = (value: number): number => (value === 0 ? Number.MIN_VALUE : value + Math.abs(value) * Number.EPSILON);
-
-function numbers(values: unknown): Float64Array {
-    if (!(values instanceof Float64Array)) throw new Error('The pose holds no such numbers');
-
-    return values;
-}
 
 describe('the comparison', () => {
     const source = sources[0];
@@ -122,6 +103,18 @@ describe('the comparison', () => {
 
         expect(runScript(loop, longer, expected)).toContain('deform: length 1, expected');
         expect(runScript(loop, swapped, sides().expected)).toContain('\n    drawOrder[0]: 1, expected 0');
+    });
+
+    it('reports a skeleton that is moved and scaled on one side only', () => {
+        const placed = script('placed', (s) => {
+            s.place(3, -2, -1.5, 0.75);
+            s.set(0, 0, true);
+            s.update(DT, 2);
+        });
+        const { actual, expected } = sides();
+
+        expect(runScript(placed, actual, expected)).toBeNull();
+        expect(parts(runScript(placed, { ...sides().actual, place() {} }, sides().expected))).toEqual(['world']);
     });
 
     it('reports another attachment in a slot', () => {
@@ -221,7 +214,7 @@ describe('the comparison', () => {
             s.update(DT, 2);
         });
 
-        expect(runScript(turns, { driver, read: actual.read }, expected)).toBeNull();
+        expect(runScript(turns, { ...actual, driver }, expected)).toBeNull();
     });
 
     it('reports a wrong field of a new track entry at the call that made it', () => {
@@ -237,10 +230,144 @@ describe('the comparison', () => {
                           target.addAnimation(track, animation, isLoop, delay + 0.25)
                     : Reflect.get(target, key),
         });
-        const failure = runScript(queue, { driver: late, read: actual.read }, expected);
+        const failure = runScript(queue, { ...actual, driver: late }, expected);
 
         expect(failure).toContain('step 2 of 2, add track 0 animation 0 loop false delay 0.5');
         expect(failure).toContain('entry.delay: 0.75, expected 0.5');
+    });
+});
+
+describe('the world reference', () => {
+    const loop = script('loop the first animation', (s) => {
+        s.set(0, 0, true);
+        s.update(DT, 6);
+    });
+    const made = (version: SpineVersion, name: string): PoseRigSource => {
+        const source = sources.find((candidate) => candidate.version === version && candidate.rig === name);
+
+        if (source === undefined) throw new Error(`There is no rig ${name}`);
+
+        return source;
+    };
+    /** The world transforms a rig has after the third update of `loop`. */
+    const worldOf = (files: RigFiles, version: SpineVersion): Float64Array => {
+        const rig = loadPoseRig(version, files);
+        let world = new Float64Array(0);
+        const seen = withPose(officialSubject(rig.createDriver()), 3, (pose) => {
+            world = numbers(pose.world).slice();
+
+            return {};
+        });
+
+        expect(runScript(loop, seen, officialSubject(rig.createDriver()))).toBeNull();
+
+        return world;
+    };
+    const versions: SpineVersion[] = ['4.1', '4.2', '4.3'];
+
+    it.each(versions)('has the constraints of %s in it, and nothing else of the pose does', (version) => {
+        for (const name of ['made-ik', 'made-transform', 'made-path', 'made-order']) {
+            const files = made(version, name).read();
+            const full = loadPoseRig(version, files);
+            const bare = loadPoseRig(version, withoutConstraints(files));
+            const failure = runScript(loop, officialSubject(bare.createDriver()), officialSubject(full.createDriver()));
+
+            expect(parts(failure), name).toEqual(['world']);
+        }
+    });
+
+    it.each(versions)('reports a constrained bone of %s that is off by one unit in the last place', async (version) => {
+        const files = made(version, 'made-ik').read();
+        const constraint = (await importSkeleton(files.skeleton)).constraints.find(({ type }) => type === 'ik');
+
+        if (constraint?.type !== 'ik') throw new Error('The rig has no IK constraint');
+        const at = (constraint.bones[0] ?? 0) * WORLD_STRIDE;
+        const right = worldOf(files, version)[at] ?? 0;
+        const rig = loadPoseRig(version, files);
+        const wrong = withPose(officialSubject(rig.createDriver()), 3, (pose) => {
+            const world = numbers(pose.world).slice();
+
+            world[at] = oneUnitOff(right);
+
+            return { world };
+        });
+        const failure = runScript(loop, wrong, officialSubject(rig.createDriver()));
+
+        // the constraint turned the bone: without it the number is another one
+        expect(worldOf(withoutConstraints(files), version)[at]).not.toBe(right);
+        expect(Math.abs(oneUnitOff(right) - right)).toBeLessThanOrEqual(Math.abs(right) * Number.EPSILON);
+        expect(failure).toContain('step 2 of 2, update 3 of 6');
+        expect(failure?.split('\n').slice(1)).toEqual([`    world[${at}]: ${oneUnitOff(right)}, expected ${right}`]);
+    });
+
+    /*
+     * A pose engine does not solve physics and sliders yet, so the reference has them switched off.
+     * These rigs have such constraints above or among bones that IK, transform and path constraints
+     * move. With every constraint on, the official skeleton poses them differently.
+     */
+    const ignoring = [
+        '4.2/celestial-circus-pro.json',
+        '4.3/diamond-pro.json',
+        '4.2/made-order.json',
+        '4.3/made-order.json',
+    ];
+
+    it.each(ignoring)('leaves out the physics and sliders of %s, which move its bones', (id) => {
+        const source = sources.find((candidate) => candidate.id === id);
+
+        // the rig is not in the manifest any more
+        if (source === undefined) return;
+        const rig = loadPoseRig(source.version, source.read());
+        const failures = SCRIPT_FAMILIES.flatMap((family) =>
+            family.name === 'loops' ? family.scripts(rig.info, id) : [],
+        )
+            .map((each) =>
+                runScript(
+                    each,
+                    officialSubject(rig.createDriver()),
+                    officialSubject(rig.createDriver({ world: 'full' })),
+                ),
+            )
+            .filter((failure) => failure !== null);
+
+        expect(rig.info.ignored).toBeGreaterThan(0);
+        expect(failures.length).toBeGreaterThan(0);
+        for (const failure of failures) expect(parts(failure)).toEqual(['world']);
+    });
+});
+
+describe('the rigs made here', () => {
+    const made = sources.filter((source) => source.rig.startsWith('made-'));
+
+    // an importer that reads a rig wrong would show as a pose that differs
+    it.each(made)('$id is imported like the official reader reads it', async (source) => {
+        const files = source.read();
+
+        expect(differences(await importSkeleton(files.skeleton), officialModel(source.version, files))).toEqual([]);
+    });
+
+    // a number that is not finite equals any other that is not: it would compare nothing
+    it.each(made)('$id poses with finite numbers', (source) => {
+        const rig = loadPoseRig(source.version, source.read());
+        let reads = 0;
+        const finite = (subject: Subject): Subject => ({
+            ...subject,
+            read() {
+                const pose = subject.read();
+
+                reads++;
+                expect(numbers(pose.world).every(Number.isFinite)).toBe(true);
+
+                return pose;
+            },
+        });
+
+        for (const family of SCRIPT_FAMILIES.filter(({ name }) => ['loops', 'mixes', 'skins'].includes(name))) {
+            for (const each of family.scripts(rig.info, seedOf(source))) {
+                runScript(each, finite(officialSubject(rig.createDriver())), officialSubject(rig.createDriver()));
+            }
+        }
+        expect(reads).toBeGreaterThan(100);
     });
 });
 
@@ -301,26 +428,28 @@ describe('a 4.3 slider and the extra slots of a timeline', () => {
 });
 
 /*
- * A pose engine that ignores constraints must still count the timelines that animate them when it
- * mixes. The official core sums the alpha of every timeline of an entry that mixes out, and keeps
- * the entry while the sum is not zero. These rigs pose differently, or end an entry at another
- * update, once the constraint timelines are gone.
+ * A pose engine does not apply the timelines that animate physics and sliders, but it must still
+ * count them when it mixes. The official core sums the alpha of every timeline of an entry that
+ * mixes out, and keeps the entry while the sum is not zero. These rigs end an entry at another
+ * update, or pose differently, once those timelines are gone. `loud` is what differs first, `quiet`
+ * what differs first when the events are left out.
  */
-describe('timelines that animate constraints', () => {
+describe('timelines that animate physics and sliders', () => {
     const cases = [
-        { id: '4.2/cloud-pot.json', family: 'default mix', name: 'default mix chain', bones: true },
-        { id: '4.3/raptor-pro.json', family: 'dialect', name: 'additive', bones: false },
+        { id: '4.2/cloud-pot.json', family: 'default mix', name: 'default mix chain', loud: 'events', quiet: 'local' },
+        // the mixes of its IK and transform constraints end up different
+        { id: '4.2/made-order.json', family: 'default mix', name: 'default mix chain', loud: 'world', quiet: 'world' },
     ];
     const silent = (subject: Subject): Subject => withEvents(subject, () => []);
 
-    it.each(cases)('change what $id does in "$name"', ({ id, family, name, bones }) => {
+    it.each(cases)('change what $id does in "$name"', ({ id, family, name, loud, quiet }) => {
         const source = sources.find((candidate) => candidate.id === id);
 
         // the rig is not in the manifest any more
         if (source === undefined) return;
         const files = source.read();
         const full = loadPoseRig(source.version, files);
-        const stripped = loadPoseRig(source.version, files, { stripConstraintTimelines: true });
+        const stripped = loadPoseRig(source.version, files, { stripIgnoredTimelines: true });
         const found: PoseScript | undefined = SCRIPT_FAMILIES.find((candidate) => candidate.name === family)
             ?.scripts(full.info, seedOf(source))
             .find((candidate) => candidate.name === name);
@@ -333,10 +462,7 @@ describe('timelines that animate constraints', () => {
                 wrap(officialSubject(full.createDriver())),
             );
 
-        // an entry ends at another update
-        expect(run((subject) => subject)).toMatch(/\n {4}events: length \d+, expected \d+/);
-        // and for the first rig the bones differ too
-        if (bones) expect(run(silent)).toMatch(/\n {4}local\[\d+\]: /);
-        else expect(run(silent)).toBeNull();
+        expect(parts(run((subject) => subject))[0]).toBe(loud);
+        expect(parts(run(silent))[0]).toBe(quiet);
     });
 });

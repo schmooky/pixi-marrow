@@ -82,7 +82,7 @@
       }
     },
     {
-      "includes": ["packages/pixi-marrow/src/formats/**"],
+      "includes": ["packages/pixi-marrow/src/formats/**", "packages/pixi-marrow/src/pose/**"],
       "linter": {
         "rules": {
           "complexity": {

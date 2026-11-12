@@ -3,6 +3,7 @@ import type { SkeletonModel } from '../../model/model';
 import type { EventKey, TimelineKind } from '../../model/timelines';
 import type { AttachmentLookup } from '../shared/lookup';
 import type { PoseState } from '../state';
+import type { Solve43, Solver43 } from './solver-types';
 
 /** Official `MixFrom.current`. Alpha mixes from the current pose. Before the first key nothing changes. */
 export const CURRENT = 0;
@@ -28,21 +29,48 @@ export const ROLE_FOLDER = 4;
 /** The official `EventTimeline`. */
 export const ROLE_EVENT = 5;
 
-/**
- * Applies one timeline to a pose. The arguments are those of the official `Timeline.apply`,
- * without the applied pose flag: this engine writes the animated pose only.
+/*
+ * The kernels: the functions that apply a timeline. A timeline names its kernel with one of these
+ * numbers, and `applyTimeline` calls it. The numbers are small and dense, so that the choice
+ * compiles to a jump.
  */
-export type TimelineKernel = (
-    pose: Pose43,
-    timeline: Timeline43,
-    lastTime: number,
-    time: number,
-    events: EventKey[] | null,
-    alpha: number,
-    from: number,
-    add: boolean,
-    out: boolean,
-) => void;
+
+/** Rotate, translateX, translateY, shearX and shearY timelines. */
+export const OP_RELATIVE = 0;
+/** Translate and shear timelines. */
+export const OP_PAIR = 1;
+/** The scale timeline. */
+export const OP_SCALE_PAIR = 2;
+/** ScaleX and scaleY timelines. */
+export const OP_SCALE = 3;
+/** Rgba, rgb, rgba2 and rgb2 timelines. */
+export const OP_COLOR = 4;
+/** The alpha timeline. */
+export const OP_ALPHA = 5;
+/** The attachment timeline, applied on its own. */
+export const OP_ATTACHMENT = 6;
+/** The deform timeline. */
+export const OP_DEFORM = 7;
+/** The sequence timeline. */
+export const OP_SEQUENCE = 8;
+/** The event timeline. */
+export const OP_EVENT = 9;
+/** The draw order timeline. */
+export const OP_DRAW_ORDER = 10;
+/** The draw order folder timeline. */
+export const OP_FOLDER = 11;
+/** The inherit timeline. */
+export const OP_INHERIT = 12;
+/** The IK constraint timeline. */
+export const OP_IK = 13;
+/** Transform constraint and path constraint mix timelines. */
+export const OP_MIXES = 14;
+/** Path constraint position and spacing timelines. */
+export const OP_VALUE = 15;
+/** A two color timeline on a slot without a dark color. It throws. */
+export const OP_NO_DARK = 16;
+/** A timeline of a constraint that is not solved. It changes nothing. */
+export const OP_NOTHING = 17;
 
 /**
  * One timeline, ready to apply. Every timeline has every field, so all of them share one shape.
@@ -52,7 +80,7 @@ export interface Timeline43 {
     readonly kind: TimelineKind;
     /** One of the `ROLE_` constants. */
     readonly role: number;
-    /** The bone or slot index. -1 when the kind has none. */
+    /** The bone, slot or constraint index. -1 when the kind has none. */
     readonly target: number;
     /** The official `frames` array. */
     readonly frames: Float32Array;
@@ -66,18 +94,33 @@ export interface Timeline43 {
     readonly additive: boolean;
     /** The official `instant` flag. */
     readonly instant: boolean;
-    readonly apply: TimelineKernel;
+    /** The kernel that applies the timeline: one of the `OP_` constants. */
+    readonly op: number;
+    /**
+     * The bone that has to be active for the timeline to apply. A bone timeline names its bone and
+     * a slot timeline the bone of its slot. -1 when the kind has none.
+     */
+    readonly bone: number;
     /**
      * Bone timelines: the position of the first animated number among the local numbers of a bone.
      * Color timelines: the number of light channels, 3 or 4.
+     * Constraint timelines: the position of the first animated number among those of a constraint.
      */
     readonly offset: number;
     /** Color timelines: true when the keys hold a dark color too. */
     readonly dark: boolean;
     /** Attachment timelines: the name of each key. */
     readonly names: readonly (string | null)[];
+    /**
+     * Attachment timelines: per skin, the attachment each key shows. The first row is for no skin,
+     * then one row per skin of the model. A row is filled in when its skin first plays the timeline,
+     * and an entry when its key is first reached. Undefined stands for not looked up yet.
+     */
+    readonly shown: ((AttachmentData | null | undefined)[] | undefined)[];
     /** Deform and sequence timelines: the attachment that is animated. */
     readonly attachment: AttachmentData | null;
+    /** Deform and sequence timelines: what the engine knows about `attachment`. */
+    readonly info: AttachmentInfo | null;
     /**
      * Deform and sequence timelines: the other slots the timeline applies to.
      * Draw order folder timelines: the slots of the folder.
@@ -122,8 +165,6 @@ export interface AttachmentInfo {
 
 /** Working memory that every engine of one model shares. No call keeps it across a return. */
 export interface Scratch43 {
-    /** The values of one key. */
-    readonly sample: Float64Array;
     /** Per property id: the track that set the property first. It counts while `stamps` holds `generation`. */
     readonly owners: Int32Array;
     readonly stamps: Float64Array;
@@ -142,10 +183,14 @@ export interface Rig43 {
     /** The property id of the official `DrawOrderTimeline`. */
     readonly drawOrderId: number;
     readonly scratch: Scratch43;
+    /** The constraints of the model, ready to solve. */
+    readonly solver: Solver43;
 }
 
 /** The pose of one engine and what its timelines need to write it. */
 export interface Pose43 {
     readonly rig: Rig43;
     readonly state: PoseState;
+    /** The constraint poses and the update order of this engine. */
+    readonly solve: Solve43;
 }

@@ -17,6 +17,25 @@ export interface MarrowSpineOptions {
      * where there are no animation frames, as in Node, and call `update` yourself.
      */
     autoUpdate?: boolean;
+    /**
+     * What a region attachment is drawn as, once the asset has outlines.
+     *
+     * - `auto` (the default) keeps the quad. A region without a visible pixel is not drawn at all.
+     *   The picture stays the same.
+     * - `on` draws a region as the polygon around its visible pixels: fewer pixels are shaded. The
+     *   picture is the same to the eye and not to the bit. A GPU interpolates texture coordinates
+     *   per triangle, so other triangles round some pixels to the next of 255 steps. A pixel on
+     *   the edge of a region can also fall to the other side of that edge.
+     * - `off` keeps every quad.
+     */
+    tightMesh?: 'auto' | 'on' | 'off';
+    /**
+     * `auto` (the default) skips a slot that lies behind the opaque part of a later slot, once
+     * the asset has outlines. The picture stays the same. A slot that goes behind is found
+     * within about a second and is drawn until then. A slot that comes out again is drawn in
+     * the same frame. `off` draws every slot.
+     */
+    occlusion?: 'auto' | 'off';
 }
 
 /** Options for playing an animation now. */

@@ -16,10 +16,18 @@ import { differences } from './compare';
 /*
  * What the three official pose drivers share. A driver takes the calls of a pose engine and makes
  * them on the official Skeleton and AnimationState of one Spine version.
+ *
+ * The world transforms are those of the official skeleton with its physics and slider constraints
+ * switched off, because a pose engine does not solve these two yet. The played skeleton runs all
+ * its constraints. A second skeleton gets what the IK, transform and path constraints read after
+ * every call, and updates with physics mode `none` and, in 4.3, a slider mix of zero. Both are
+ * what the official core offers to switch a constraint off: the constraint keeps its place in the
+ * update order and changes nothing. 4.1 has neither kind, so there the played skeleton is the
+ * reference.
  */
 
 /** The calls a script makes. A pose engine and an official driver both take them. */
-export type PoseDriver = Omit<PoseEngine, 'state'>;
+export type PoseDriver = Omit<PoseEngine, 'state' | 'bytes'>;
 
 /** A pose copied out of an official skeleton, in the layout of `PoseState`. */
 export interface OfficialPose {
@@ -28,8 +36,9 @@ export interface OfficialPose {
     inherit: Uint8Array;
     active: Uint8Array;
     /**
-     * a, b, c, d, worldX, worldY per bone, from a second skeleton that has no constraints and the
-     * same local pose. Zero for a bone that is not active: the official value is stale there.
+     * a, b, c, d, worldX, worldY per bone, with IK, transform and path constraints solved and with
+     * physics and slider constraints switched off. Zero for a bone that is not active: the official
+     * value is stale there.
      */
     world: Float64Array;
     colors: Float64Array;
@@ -51,9 +60,13 @@ export interface PoseRigInfo {
     skins: number;
     /** `events` says whether the animation has an event timeline. */
     animations: { name: string; duration: number; events: boolean }[];
+    /** How many physics and slider constraints the rig has: the ones a pose engine does not solve yet. */
+    ignored: number;
 }
 
 export interface OfficialDriver extends PoseDriver {
+    /** Sets the position and the scale of the skeleton, as writing them to the state of a pose engine does. */
+    place(x: number, y: number, scaleX: number, scaleY: number): void;
     /** Copies the pose out. The next call reuses the arrays. */
     read(): OfficialPose;
     /** With `audit` on: every change a constraint made to the animated pose during an update. */
@@ -63,11 +76,18 @@ export interface OfficialDriver extends PoseDriver {
 export interface DriverOptions {
     /** Compares the animated pose before and after the constraints of every update. */
     audit?: boolean;
+    /**
+     * Where the world transforms come from. `second`, the default, is the second skeleton.
+     * `direct` is the played skeleton with its own physics and slider constraints switched off,
+     * and no second skeleton: it must give what `second` gives. `full` is the played skeleton
+     * with every constraint on.
+     */
+    world?: 'second' | 'direct' | 'full';
 }
 
 export interface RigOptions {
-    /** Removes the timelines that animate constraints from every animation. Durations stay. */
-    stripConstraintTimelines?: boolean;
+    /** Removes the timelines that animate physics and slider constraints from every animation. Durations stay. */
+    stripIgnoredTimelines?: boolean;
 }
 
 /** A skeleton file loaded by the official core of its version, ready to make drivers. */
@@ -427,5 +447,6 @@ export function createAudit(bones: number, slots: number, readPose: (out: Offici
     };
 }
 
-/** Whether a timeline of this kind animates a constraint. A pose engine without constraints skips it. */
-export const isConstraintKind = (kind: string): boolean => kind.includes('Constraint') || kind.startsWith('slider');
+/** Whether a timeline of this kind animates a physics or slider constraint. A pose engine does not apply it yet. */
+export const isIgnoredKind = (kind: string): boolean =>
+    kind.startsWith('physicsConstraint') || kind.startsWith('slider');

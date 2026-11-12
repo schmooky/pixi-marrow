@@ -1,85 +1,43 @@
-import { Bounds, Buffer, BufferUsage, Container, type Texture, type TextureSource } from 'pixi.js';
+import { Bounds, type Buffer, Container, RenderContainer, type Texture } from 'pixi.js';
 import { MarrowError } from '../base/errors';
 import { resolveSequenceIndex } from '../geometry/atlas-regions';
-import { f32, f64, i16, i32 } from '../geometry/read';
-import { computeRegionWorldVertices } from '../geometry/region';
-import { computeWorldVertices } from '../geometry/vertices';
+import { i16, i32 } from '../geometry/read';
 import type { AtlasModel } from '../model/atlas';
 import type { AttachmentData } from '../model/attachments';
 import type { SkeletonModel } from '../model/model';
+import type { AtlasOutlines } from '../model/outlines';
 import { type AttachmentLookup, createAttachmentLookup } from '../pose/shared/lookup';
 import type { PoseState } from '../pose/state';
-import { writeDark, writeLight } from './colors';
+import { measureEntries } from './bounds';
+import { ClipShape } from './clip-shape';
+import { CoverTest } from './cover';
+import { type CutChoice, CutState } from './cut-state';
+import { placeEntry, tintEntry } from './entry-pose';
+import { bendsEdges, drawsPlain } from './gate';
+import { pageSources, vertexBuffer } from './pages';
 import { DrawRanges } from './ranges';
 import { u8 } from './read';
 import { MAX_PAGES } from './shader';
-import { buildTemplate, findEntry, showFrame, type Template, templateBytes } from './template';
+import { createViewStats, type ViewStats } from './stats';
+import { buildTemplate, showFrame, type Template, templateBytes } from './template';
+import { VisibleList } from './visible';
 
-/** Counters a view keeps, for the perf report and for tests. Where not said otherwise they only grow. */
-export interface ViewStats {
-    /** Draw calls the view issues per frame at the moment. */
-    drawCalls: number;
-    /** Vertices in the buffers at the moment. */
-    vertices: number;
-    /** How often the vertex ranges were built: once, and again when the skin changes. */
-    templateBuilds: number;
-    /** How often the index buffer was rewritten: on attachment, draw order and visibility changes. */
-    indexRebuilds: number;
-    /** How often vertex positions were uploaded. */
-    positionUploads: number;
-    /** How often vertex colors were uploaded. */
-    colorUploads: number;
-    /** How often texture coordinates were uploaded after the build: when a sequence showed another region. */
-    uvUploads: number;
-    /** Indices the view draws at the moment. */
-    indices: number;
-    /** Bytes of vertex and index data the view holds at the moment. */
-    bufferBytes: number;
-    /**
-     * Clipping attachments shown at the moment. Clipping is not solved yet: such an attachment
-     * draws nothing and clips nothing.
-     */
-    clippingIgnored: number;
-}
+export type { ViewStats } from './stats';
 
-/** What a slot shows when it is no entry of the template. */
-const NONE = -1;
-/** A region or mesh attachment the template has no range for. */
-const FOREIGN = -2;
-/** A clipping attachment. */
-const CLIPPING = -3;
+/**
+ * How a view cuts overdraw. The cuts need outlines. The defaults are exact: the picture stays
+ * the same. Polygons in place of quads are asked for with `tightMesh: 'on'`.
+ */
+export type SkeletonViewOptions = CutChoice;
+
+/** A view looks at its page textures in one update of this many. A power of two. */
+const PAGE_POLL = 64;
 
 /** The deform of a slot that has none. */
 const NO_DEFORM = new Float64Array(0);
 
-/** The sources of the page textures. Throws when a page has no texture or a texture is not premultiplied. */
-function pageSources(atlas: AtlasModel, textures: readonly Texture[]): TextureSource[] {
-    return atlas.pages.map((page, index) => {
-        const texture = textures[index];
-
-        if (texture === undefined) {
-            throw new MarrowError(
-                'invalid-data',
-                `The atlas has ${atlas.pages.length} pages and the view got ${textures.length} textures.`,
-                { fix: 'Pass one texture per atlas page, in page order.' },
-            );
-        }
-        if (texture.source.alphaMode === 'no-premultiply-alpha') {
-            throw new MarrowError(
-                'invalid-data',
-                `The texture of the atlas page "${page.name}" is not premultiplied.`,
-                {
-                    fix: 'Set the alphaMode of its source to "premultiply-alpha-on-upload", or to "premultiplied-alpha" for a premultiplied image.',
-                },
-            );
-        }
-
-        return texture.source;
-    });
-}
-
-const vertexBuffer = (data: Float32Array | Uint8Array, label: string): Buffer =>
-    new Buffer({ data, label, usage: BufferUsage.VERTEX | BufferUsage.COPY_DST, shrinkToFit: false });
+/** The scratch arrays all views shape their clip polygons with. Created when a skeleton first clips. */
+let clipShape: ClipShape | undefined;
 
 /**
  * Draws one skeleton instance with Pixi from its pose, in mesh mode: one Pixi mesh per draw range,
@@ -90,8 +48,20 @@ const vertexBuffer = (data: Float32Array | Uint8Array, label: string): Buffer =>
  * showing, hiding and reordering slots rewrites the index buffer only. Positions upload on every
  * update, colors when they change, texture coordinates when a sequence shows another region.
  *
+ * A clipping attachment cuts the slots after it, by the rules of the official runtime of the
+ * model's version. Those slots are draw ranges of their own behind a stencil mask that holds the
+ * clip polygon. A clip costs two more draw calls and one small upload per update, and a skeleton
+ * that shows no clipping attachment pays nothing. See {@link ViewStats.maskDraws}.
+ *
+ * With outlines the view cuts overdraw in two ways that leave the picture as it is. A slot that
+ * lies inside the opaque rectangle of a later slot is left out of the index buffer. A region
+ * attachment whose region shows no pixel has no vertex. With `tightMesh: 'on'` a region
+ * attachment is drawn as the polygon around its visible pixels, which is not exact to the bit.
+ * A child of {@link container} that draws nothing tells the view how Pixi is about to draw it,
+ * see {@link beforeDraw}.
+ *
  * The textures must hold premultiplied colors on the GPU. The view samples the whole source of
- * each texture. Clipping attachments are not solved yet, see {@link ViewStats.clippingIgnored}.
+ * each texture.
  *
  * @example
  * const model = await importSkeleton(bytes);
@@ -118,16 +88,24 @@ export class SkeletonView {
     private readonly colors: Buffer;
     private readonly ranges: DrawRanges;
     private readonly bounds: Bounds = new Bounds();
-    /** Per slot: the attachment `entries` was resolved for. */
-    private readonly shown: (AttachmentData | null)[];
-    /** Per slot: the entry of the attachment it shows, or a negative code. */
-    private readonly entries: Int32Array;
-    /** The visible entries in draw order. The index buffers hold this list. */
-    private readonly visible: Int32Array;
-    private visibleCount = 0;
+    /** The outlines, the options and what Pixi did to the last draw. */
+    private readonly cutState: CutState;
+    /** Finds the slots a later slot covers. Its marks are all 0 while nothing is covered. */
+    private readonly cover: CoverTest;
+    /** The slots that are drawn, in draw order. The index buffers hold this list. */
+    private readonly seen: VisibleList;
+    /** The child that calls {@link beforeDraw}. It exists once the view cuts. */
+    private probe: RenderContainer | undefined;
+    /** The pose of the last update. */
+    private last: PoseState | undefined;
     private template: Template;
-    private indexDirty = true;
     private boundsDirty = true;
+    /** True when the alpha of a slot that can hide others changed since the covered slots were tested. */
+    private recolored = true;
+    /** True when the layout holds polygons or regions without a vertex: cuts that every draw makes. */
+    private baked = false;
+    /** Counts the updates between two looks at the page textures. */
+    private polled = 0;
     private destroyed = false;
 
     /**
@@ -136,19 +114,24 @@ export class SkeletonView {
      * premultiplied.
      *
      * @param textures One texture per atlas page, in page order, premultiplied on the GPU.
+     * @param options The outlines of the atlas, and which cuts to make with them.
      */
-    constructor(model: SkeletonModel, atlas: AtlasModel, textures: readonly Texture[]) {
-        const slots = model.slots.count;
+    constructor(
+        model: SkeletonModel,
+        atlas: AtlasModel,
+        textures: readonly Texture[],
+        options: SkeletonViewOptions = {},
+    ) {
         const pages = pageSources(atlas, textures);
 
         this.model = model;
         this.atlas = atlas;
         this.lookup = createAttachmentLookup(model);
         this.dark = model.slots.hasDark.includes(1);
-        this.template = buildTemplate(model, atlas, this.lookup, -1, null, this.dark);
-        this.shown = new Array<AttachmentData | null>(slots).fill(null);
-        this.entries = new Int32Array(slots).fill(NONE);
-        this.visible = new Int32Array(slots);
+        this.cutState = new CutState(atlas, pages, options);
+        this.cover = new CoverTest(model.slots.count);
+        this.template = buildTemplate(model, atlas, this.lookup, -1, null, this.dark, this.cutState.take());
+        this.seen = new VisibleList(model);
         this.container = new Container({ label: 'marrow-skeleton' });
         this.positions = vertexBuffer(this.template.positions, 'marrow-positions');
         this.statics = vertexBuffer(this.template.statics, 'marrow-uvs');
@@ -162,36 +145,75 @@ export class SkeletonView {
             measure: () => this.measure(),
         });
         this.ranges.resize(this.template);
-        this.stats = {
-            drawCalls: 0,
-            vertices: this.template.vertexCount,
-            templateBuilds: 1,
-            indexRebuilds: 0,
-            positionUploads: 0,
-            colorUploads: 0,
-            uvUploads: 0,
-            indices: 0,
-            bufferBytes: templateBytes(this.template),
-            clippingIgnored: 0,
-        };
+        this.baked = this.template.tightOffsets.length > 0 || this.template.hollow.includes(1);
+        this.stats = createViewStats(this.template.vertexCount, templateBytes(this.template));
+        this.watch();
     }
 
     /**
      * Brings the buffers in line with a pose. Call after the pose engine has updated. Allocates
      * nothing once every draw range the skeleton needs has been used.
      *
-     * Throws a `MarrowError` for a pose of another model and after {@link destroy}.
+     * Throws a `MarrowError` for a pose of another model, after {@link destroy}, and for a
+     * clipping attachment with fewer than three vertices, which it names.
      */
     update(state: PoseState): void {
         this.check(state);
-        if (state.skin !== this.template.skin || !this.resolve(state)) {
-            this.rebuild(state);
-            this.resolve(state);
+        this.last = state;
+        if (state.skin !== this.template.skin || this.outdated() || !this.seen.resolve(this.template, state)) {
+            this.layout(state.skin, state.attachments);
+            this.seen.reset();
+            this.seen.resolve(this.template, state);
         }
-        const count = this.collect(state);
+        this.finish(state, this.seen.collect(this.template, state));
+    }
 
-        if (count > 0) this.pose(state, count);
-        if (this.indexDirty) this.reindex(count);
+    /**
+     * Gives the view the outlines of its atlas, other ones, or none. The next update lays the
+     * vertex ranges out again, once, and so does a draw that comes first. The picture stays
+     * the same.
+     *
+     * @example
+     * await asset.optimized;
+     * view.setOutlines(asset.outlines);
+     */
+    setOutlines(outlines: AtlasOutlines | undefined): void {
+        this.cutState.setOutlines(outlines);
+    }
+
+    /**
+     * Checks what the pose does not say, right before Pixi draws the meshes. Pixi calls it
+     * through a child of {@link container}, at the time it draws that child, when the alpha and
+     * the blend mode of every ancestor are final for the frame.
+     *
+     * An alpha below 1 or a blend mode on an ancestor puts the covered slots back at once. Only
+     * index data changes then, never the list of meshes, so it is in time for this draw. A
+     * renderer that moves edges inside a pixel turns both cuts off for good: the vertex ranges are
+     * laid out again as quads, for the pose of the last update.
+     *
+     * @param bends Whether the renderer rounds positions to pixels or draws to a multisampled target.
+     *
+     * @example
+     * hero.alpha = 0.5;
+     * view.beforeDraw(false);
+     * console.log(view.stats.coveredSlots); // 0
+     */
+    beforeDraw(bends: boolean): void {
+        const state = this.last;
+        const { cutState, cover } = this;
+
+        if (this.destroyed) return;
+        if (bends) cutState.forbid();
+        // nothing is drawn before the first update, which then lays the quads out
+        if (state === undefined) return;
+        // only a draw that skips a slot has to ask how Pixi blends it
+        if (cover.covered > 0 && !drawsPlain(this.container) && cover.clear()) this.reindex(this.seen.count);
+        // and only a draw that leaves something out has to look at the page textures
+        const cuts = this.baked || cover.covered > 0;
+        const outdated = cutState.changed || (cuts && cutState.pagesMoved());
+
+        // a pose that moved on without an update keeps its buffers until that update
+        if (outdated && this.seen.inStep(this.template, state)) this.redraw(state);
     }
 
     /** Frees the buffers, the meshes and the shaders. The textures belong to the caller. */
@@ -203,12 +225,16 @@ export class SkeletonView {
         this.statics.destroy();
         this.colors.destroy();
         this.container.destroy({ children: true });
-        this.shown.fill(null);
-        this.visibleCount = 0;
+        this.seen.reset();
+        this.last = undefined;
         this.stats.drawCalls = 0;
+        this.stats.maskDraws = 0;
+        this.stats.clips = 0;
         this.stats.indices = 0;
         this.stats.vertices = 0;
         this.stats.bufferBytes = 0;
+        this.stats.tightRanges = 0;
+        this.stats.coveredSlots = 0;
     }
 
     private check(state: PoseState): void {
@@ -224,86 +250,74 @@ export class SkeletonView {
         }
     }
 
-    /** Builds the vertex ranges again: for the skin of the pose and for what its slots show now. */
-    private rebuild(state: PoseState): void {
-        const template = buildTemplate(this.model, this.atlas, this.lookup, state.skin, state.attachments, this.dark);
+    /**
+     * Whether the vertex ranges must be laid out again for other outlines or other page textures.
+     * The textures are looked at in one update of {@link PAGE_POLL}. A draw that leaves something
+     * out looks at them itself, so a texture that changed never reaches the screen with a cut.
+     */
+    private outdated(): boolean {
+        if (this.cutState.changed) return true;
+        this.polled = (this.polled + 1) & (PAGE_POLL - 1);
+
+        return this.polled === 1 && this.cutState.pagesMoved();
+    }
+
+    /** Adds the child that calls {@link beforeDraw}, once the view cuts. It stays the first child. */
+    private watch(): void {
+        if (this.probe !== undefined || !this.cutState.wanted) return;
+        this.probe = new RenderContainer({
+            label: 'marrow-probe',
+            render: (renderer) => this.beforeDraw(bendsEdges(renderer)),
+        });
+        this.container.addChildAt(this.probe, 0);
+        this.ranges.lead = 1;
+    }
+
+    /** Lays the vertex ranges out for a skin and for what the slots show, with the cuts that hold now. */
+    private layout(skin: number, shown: readonly (AttachmentData | null)[]): void {
+        const { model, atlas, lookup, dark, cutState } = this;
+        const template = buildTemplate(model, atlas, lookup, skin, shown, dark, cutState.take());
 
         this.template = template;
+        this.baked = template.tightOffsets.length > 0 || template.hollow.includes(1);
         this.positions.data = template.positions;
         this.statics.data = template.statics;
         this.colors.data = template.colors;
         this.ranges.resize(template);
-        this.shown.fill(null);
-        this.entries.fill(NONE);
-        this.visibleCount = 0;
-        this.indexDirty = true;
+        this.cover.clear();
+        this.seen.dirty = true;
         this.boundsDirty = true;
         this.stats.templateBuilds++;
         this.stats.vertices = template.vertexCount;
+        this.watch();
     }
 
     /**
-     * Finds the entry of every slot whose attachment changed since the last update. Returns false
-     * when a slot shows a region or a mesh the template has no range for.
+     * Lays the vertex ranges out again while Pixi draws. The visible slots, their order and their
+     * clips stay, so the list of meshes stays. Only the data of the buffers changes.
      */
-    private resolve(state: PoseState): boolean {
-        const { shown, entries, template } = this;
-        const { attachments } = state;
-        let known = true;
+    private redraw(state: PoseState): void {
+        const before = this.template;
 
-        for (let slot = 0; slot < shown.length; slot++) {
-            const attachment = attachments[slot] ?? null;
-
-            if (attachment === shown[slot]) continue;
-            const entry = attachment?.type === 'clipping' ? CLIPPING : findEntry(template, slot, attachment);
-
-            // not remembered: when the template cannot be built, the next update asks again
-            if (entry === FOREIGN) known = false;
-            else {
-                shown[slot] = attachment;
-                entries[slot] = entry;
-            }
-        }
-
-        return known;
+        this.layout(before.skin, state.attachments);
+        this.seen.carry(before, this.template, state);
+        this.finish(state, this.seen.count);
     }
 
-    /**
-     * Lists the visible entries in draw order. A slot is hidden without a region or mesh
-     * attachment, on an inactive bone, and when its alpha times the alpha of the attachment is 0.
-     * Marks the index buffer dirty when the list differs from the one before.
-     */
-    private collect(state: PoseState): number {
-        const { entries, visible } = this;
-        const { tints } = this.template;
-        const { bones } = this.model.slots;
-        const { drawOrder, active, colors } = state;
-        let count = 0;
-        let clipping = 0;
-
-        for (let i = 0; i < drawOrder.length; i++) {
-            const slot = i16(drawOrder, i);
-            const entry = i32(entries, slot);
-
-            if (u8(active, i16(bones, slot)) === 0) continue;
-            if (entry === CLIPPING) clipping++;
-            if (entry < 0 || f64(colors, slot * 4 + 3) * f64(tints, entry * 4 + 3) === 0) continue;
-            if (visible[count] !== entry) {
-                visible[count] = entry;
-                this.indexDirty = true;
-            }
-            count++;
-        }
-        if (count !== this.visibleCount) this.indexDirty = true;
-        this.visibleCount = count;
-        this.stats.clippingIgnored = clipping;
-
-        return count;
+    /** What follows the list of visible entries: vertex data, covered slots, index buffers, clip masks. */
+    private finish(state: PoseState, count: number): void {
+        this.stats.clips = this.seen.applied;
+        if (count > 0) this.pose(state, count);
+        if (this.hide(state, count)) this.seen.dirty = true;
+        if (this.seen.dirty) this.reindex(count);
+        if (this.ranges.masks > 0) this.clip(state);
     }
 
     /** Positions, sequence frames and colors of the visible entries, then the uploads. */
     private pose(state: PoseState, count: number): void {
-        const { visible, template, stats } = this;
+        const { template, stats } = this;
+        const { bones, hasDark } = this.model.slots;
+        const visible = this.seen.list;
         let colorsChanged = false;
         let uvsChanged = false;
 
@@ -311,9 +325,17 @@ export class SkeletonView {
             const entry = i32(visible, i);
             const slot = i32(template.slots, entry);
 
+            // a hollow entry has no vertex to place or to color
+            if (i32(template.counts, entry) === 0) continue;
             if (i32(template.frameCounts, entry) > 1 && this.sequence(state, entry, slot)) uvsChanged = true;
-            this.place(state, entry, slot);
-            if (this.tint(state, entry, slot)) colorsChanged = true;
+            placeEntry(template, state, bones, entry, slot);
+            const alpha = u8(template.light, entry * 4 + 3);
+
+            if (!tintEntry(template, state, hasDark, entry, slot)) continue;
+            colorsChanged = true;
+            // the alpha of a slot with an opaque rectangle decides whether it can hide others
+            if (u8(template.light, entry * 4 + 3) !== alpha && i32(template.opaqueAt, entry) >= 0)
+                this.recolored = true;
         }
         this.positions.update();
         this.boundsDirty = true;
@@ -340,84 +362,110 @@ export class SkeletonView {
             return false;
         }
         // a frame on a page of another group of 8 moves the entry to another draw range
-        if (Math.floor(i32(template.pages, entry) / MAX_PAGES) !== before) this.indexDirty = true;
+        if (Math.floor(i32(template.pages, entry) / MAX_PAGES) !== before) this.seen.dirty = true;
 
         return true;
     }
 
-    /** Writes the world positions of one entry with the geometry kernel. */
-    private place(state: PoseState, entry: number, slot: number): void {
-        const { template } = this;
-        const source = template.sources[entry];
-        const bone = i16(this.model.slots.bones, slot);
-        const at = i32(template.first, entry) * 2;
+    /**
+     * Marks the visible slots that a later opaque slot covers. Most frames have nothing to do
+     * here: no slot is skipped and it is not the turn of a search, see `CoverTest`. Nothing is
+     * covered while Pixi multiplies an alpha below 1 into the skeleton or blends it in another
+     * mode than normal. Returns whether a mark changed.
+     */
+    private hide(state: PoseState, count: number): boolean {
+        const { cover, template, seen } = this;
+        // the slots that can hide others are chosen again when the list or their alpha changed
+        const moved = seen.dirty || this.recolored;
 
-        if (source == null) {
-            const offsets = i32(template.offsetAt, entry) + i32(template.frames, entry) * 8;
+        this.recolored = false;
+        // a layout without an opaque rectangle has nothing to test with
+        if (template.opaqueCount === 0 || !cover.begin(moved)) return false;
+        let changed = false;
 
-            computeRegionWorldVertices(template.offsets, offsets, state.world, bone, template.positions, at);
+        if (drawsPlain(this.container)) {
+            changed = cover.run(template, seen.list, seen.clips, count, state.world, this.model.slots.bones);
         } else {
-            const deform = state.deform[slot] ?? NO_DEFORM;
-
-            computeWorldVertices(
-                source,
-                state.world,
-                bone,
-                deform,
-                i32(state.deformLengths, slot),
-                template.positions,
-                at,
-            );
+            changed = cover.clear();
+            cover.rest(false);
         }
-    }
+        this.stats.coveredSlots = cover.covered;
 
-    /** Writes the colors of one entry when they differ from what its vertices hold. Returns whether it wrote. */
-    private tint(state: PoseState, entry: number, slot: number): boolean {
-        const { template } = this;
-        const light = writeLight(template, entry, state.colors, slot);
-
-        if (!template.hasDark) return light;
-        const dark = writeDark(template, entry, state.darkColors, slot, u8(this.model.slots.hasDark, slot) === 1);
-
-        return light || dark;
+        return changed;
     }
 
     /** Rewrites the index buffers for the visible entries. Vertex data stays where it is. */
     private reindex(count: number): void {
-        const { ranges, stats } = this;
+        const { ranges, stats, template, seen } = this;
+        const visible = seen.list;
+        let tight = 0;
 
-        ranges.build(this.template, this.visible, count);
-        this.indexDirty = false;
+        ranges.build(template, visible, seen.clips, this.cover.skipped, count);
+        for (let i = 0; i < count; i++) {
+            const entry = i32(visible, i);
+
+            if (i32(template.tightAt, entry) >= 0 || u8(template.hollow, entry) === 1) tight++;
+        }
+        seen.dirty = false;
         stats.indexRebuilds++;
-        stats.drawCalls = ranges.active;
+        stats.maskDraws = ranges.masks * 2;
+        stats.drawCalls = ranges.active + stats.maskDraws;
         stats.indices = ranges.indices;
+        stats.bufferBytes = templateBytes(template) + ranges.bytes;
+        stats.tightRanges = tight;
+        stats.coveredSlots = this.cover.covered;
+    }
+
+    /**
+     * Moves the clip masks with their bones: shapes the polygon of each clipping attachment that
+     * cuts a visible slot, as the official clipper does, and uploads it.
+     */
+    private clip(state: PoseState): void {
+        const { ranges, stats, model } = this;
+
+        clipShape ??= new ClipShape();
+        for (let index = 0; index < ranges.masks; index++) {
+            const slot = ranges.maskSlot(index);
+            const attachment = this.seen.shown[slot];
+
+            if (attachment?.type !== 'clipping') {
+                throw new MarrowError(
+                    'invalid-data',
+                    `Slot ${slot} cuts other slots and shows no clipping attachment.`,
+                    {
+                        fix: 'Report this as a bug of pixi-marrow.',
+                    },
+                );
+            }
+            clipShape.compute(
+                model.version,
+                attachment,
+                state.world,
+                i16(model.slots.bones, slot),
+                state.deform[slot] ?? NO_DEFORM,
+                i32(state.deformLengths, slot),
+            );
+            if (ranges.placeMask(index, clipShape)) stats.maskRebuilds++;
+            stats.maskUploads++;
+        }
+        // a mask grows when its slot shows a polygon with more vertices
         stats.bufferBytes = templateBytes(this.template) + ranges.bytes;
     }
 
     /**
-     * The bounds of the visible vertices. Pixi asks for them through the geometry of each mesh.
-     * The vertices are scanned once after an update, and only when somebody asks.
+     * The bounds of the visible slots. Pixi asks for them through the geometry of each mesh. They
+     * are measured once after an update, and only when somebody asks.
      */
     private measure(): Bounds {
-        const { bounds, visible, template } = this;
+        const { bounds, last } = this;
 
         if (!this.boundsDirty) return bounds;
         this.boundsDirty = false;
-        bounds.clear();
-        for (let i = 0; i < this.visibleCount; i++) {
-            const entry = i32(visible, i);
-            const first = i32(template.first, entry) * 2;
-            const end = first + i32(template.counts, entry) * 2;
+        if (last === undefined) bounds.clear();
+        else {
+            const { list, count } = this.seen;
 
-            for (let at = first; at < end; at += 2) {
-                const x = f32(template.positions, at);
-                const y = f32(template.positions, at + 1);
-
-                if (x < bounds.minX) bounds.minX = x;
-                if (x > bounds.maxX) bounds.maxX = x;
-                if (y < bounds.minY) bounds.minY = y;
-                if (y > bounds.maxY) bounds.maxY = y;
-            }
+            measureEntries(bounds, this.template, list, count, last.world, this.model.slots.bones);
         }
 
         return bounds;

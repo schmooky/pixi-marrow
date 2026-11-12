@@ -6,6 +6,12 @@ A change in this file is a change to the public surface.
 ## pixi-marrow
 
 ```ts
+export interface AtlasOutlines {
+  version: 1;
+  margin: number;
+  opaqueMargin: number;
+  regions: (RegionOutline | null)[];
+}
 export declare class MarrowAsset {
   readonly model: SkeletonModel;
   readonly atlas: AtlasModel;
@@ -15,19 +21,28 @@ export declare class MarrowAsset {
   private readonly key;
   private description;
   private gone;
+  private found;
+  private scan;
+  private work;
+  private readonly scans;
   private constructor();
   get info(): SkeletonInfo;
   get destroyed(): boolean;
+  get outlines(): AtlasOutlines | undefined;
+  get optimized(): Promise<void>;
   static load(options: MarrowLoadOptions): Promise<MarrowAsset>;
   static from(data: MarrowAssetData): Promise<MarrowAsset>;
   private static fetch;
   destroy(): void;
+  private startScan;
+  private onPageUpdate;
 }
 export interface MarrowAssetData {
   model: SkeletonModel;
   atlas: AtlasModel;
   textures: readonly Texture[];
   constraints?: "error" | "ignore";
+  outlines?: "auto" | "off" | AtlasOutlines;
 }
 export declare class MarrowError extends Error {
   override readonly name: string;
@@ -57,6 +72,7 @@ export interface MarrowLoadOptions {
   atlas: string;
   textures?: Readonly<Record<string, Texture | string>>;
   constraints?: "error" | "ignore";
+  outlines?: "auto" | "off" | string | AtlasOutlines;
 }
 export interface MarrowNames {
   animations: string;
@@ -69,6 +85,7 @@ export declare class MarrowSpine<N extends MarrowNames = MarrowNames> extends Co
   readonly asset: MarrowAsset;
   readonly engine: PoseEngine;
   private readonly skeletonView;
+  private outlines;
   private readonly book;
   private pending;
   private spare;
@@ -92,6 +109,7 @@ export declare class MarrowSpine<N extends MarrowNames = MarrowNames> extends Co
   stop(options?: StopOptions): void;
   update(seconds: number): void;
   override destroy(options?: DestroyOptions): void;
+  private draw;
   private onTick;
   private animationIndex;
   private durationOf;
@@ -112,6 +130,14 @@ export interface MarrowSpineEvents<N extends MarrowNames = MarrowNames> {
 }
 export interface MarrowSpineOptions {
   autoUpdate?: boolean;
+  tightMesh?: "auto" | "on" | "off";
+  occlusion?: "auto" | "off";
+}
+export interface PageRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 export interface PlayOptions {
   track?: number;
@@ -123,6 +149,14 @@ export interface PlayOptions {
 }
 export interface QueueOptions extends PlayOptions {
   delay?: number;
+}
+export interface RegionOutline {
+  name: string;
+  rect: PageRect;
+  polygon: number[] | null;
+  triangles: number[];
+  coverage: number;
+  opaque: PageRect | null;
 }
 export interface SkeletonInfo {
   version: SpineVersion;
@@ -384,6 +418,7 @@ export interface PointAttachmentData {
 }
 export interface PoseEngine {
   readonly state: PoseState;
+  readonly bytes: number;
   timeScale: number;
   defaultMix: number;
   setMix(from: number, to: number, duration: number): void;
@@ -619,18 +654,71 @@ export declare const WORLD_STRIDE = 6;
 ## pixi-marrow/optimize
 
 ```ts
+export declare const ATLAS_OUTLINES_VERSION = 1;
+export interface AtlasOutlines {
+  version: 1;
+  margin: number;
+  opaqueMargin: number;
+  regions: (RegionOutline | null)[];
+}
+export declare function buildAtlasOutlines(atlas: AtlasModel, pages: readonly (PagePixels | null | undefined)[], options?: OutlinesOptions): AtlasOutlines;
 export interface CliHost {
   read(path: string): string | Uint8Array;
   write(path: string, text: string): void;
   print(line: string): void;
   printError(line: string): void;
 }
+export declare function decodePng(bytes: Uint8Array, name?: string): Promise<PngImage>;
 export declare function generateNames(info: SkeletonInfo, options: NamesOptions): string;
 export interface NamesOptions {
   typeName: string;
   source?: string;
 }
+export interface OutlinesOptions {
+  margin?: number;
+  maxVertices?: number;
+  threshold?: number;
+  opaqueMargin?: number;
+  minOpaqueArea?: number;
+}
+export interface OutlinesSummary {
+  regions: number;
+  outlined: number;
+  empty: number;
+  opaque: number;
+  skippedPages: number;
+  quadArea: number;
+  outlineArea: number;
+  savedArea: number;
+  savedShare: number;
+}
+export interface PagePixels {
+  width: number;
+  height: number;
+  data: Uint8Array | Uint8ClampedArray;
+}
+export interface PageRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+export interface PngImage {
+  width: number;
+  height: number;
+  data: Uint8Array;
+}
+export declare function readAtlasOutlines(json: unknown, atlas: AtlasModel): AtlasOutlines;
+export interface RegionOutline {
+  name: string;
+  rect: PageRect;
+  polygon: number[] | null;
+  triangles: number[];
+  coverage: number;
+  opaque: PageRect | null;
+}
 export declare function runCli(args: readonly string[], host: CliHost): Promise<number>;
+export declare function summarizeOutlines(atlas: AtlasModel, outlines: AtlasOutlines): OutlinesSummary;
 export declare function typeNameFor(fileName: string): string;
 ```
 

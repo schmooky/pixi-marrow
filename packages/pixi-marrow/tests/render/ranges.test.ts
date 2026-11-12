@@ -2,6 +2,7 @@ import { Texture, TextureSource } from 'pixi.js';
 import { describe, expect, it } from 'vitest';
 import { createPoseEngine } from '../../src/pose/engine';
 import { SkeletonView } from '../../src/render/skeleton-view';
+import { walkOfficial } from './clip-official';
 import {
     type Drawn,
     expectKernel,
@@ -26,36 +27,53 @@ const PIXI_BLEND = ['inherit', 'inherit', 'multiply', 'screen'];
 
 const blendOf = (rig: Rig, slot: number): number => rig.model.slots.blendModes[slot] ?? NORMAL;
 
+/** A stretch of slots that one mesh must draw. */
+interface ExpectedRange {
+    blend: number;
+    group: number;
+    /** The slot whose clipping attachment cuts the range, or -1. */
+    clip: number;
+    slots: number[];
+}
+
 /**
  * The ranges the visible slots must fall into, worked out here: a new range starts where the
- * blend state or the group of 8 pages changes. Additive counts as normal.
+ * blend state, the group of 8 pages or the clip changes. Additive counts as normal. The clip of
+ * each slot is what the official clipper says.
  */
-function expectedRanges(rig: Rig, drawn: readonly Drawn[]): { blend: number; group: number; slots: number[] }[] {
-    const ranges: { blend: number; group: number; slots: number[] }[] = [];
+function expectedRanges(rig: Rig, drawn: readonly Drawn[]): ExpectedRange[] {
+    const ranges: ExpectedRange[] = [];
+    const { cuts } = walkOfficial(rig);
 
-    for (const { slot, attachment } of drawn) {
+    drawn.forEach(({ slot, attachment }, i) => {
         const blend = blendOf(rig, slot) === ADDITIVE ? NORMAL : blendOf(rig, slot);
         const group = Math.floor(kernelUVs(rig, slot, attachment).page / 8);
+        const clip = cuts[i] ?? -1;
         const open = ranges.at(-1);
 
-        if (open !== undefined && open.blend === blend && open.group === group) open.slots.push(slot);
-        else ranges.push({ blend, group, slots: [slot] });
-    }
+        if (open !== undefined && open.blend === blend && open.group === group && open.clip === clip) {
+            open.slots.push(slot);
+        } else ranges.push({ blend, group, clip, slots: [slot] });
+    });
 
     return ranges;
 }
 
 /** Checks the meshes of the view against {@link expectedRanges}: which slots, and which blend mode. */
-function expectRanges(rig: Rig): { blend: number; group: number; slots: number[] }[] {
+function expectRanges(rig: Rig): ExpectedRange[] {
     const drawn = expectKernel(rig);
     const expected = expectedRanges(rig, drawn);
     const actual = meshes(rig.view);
+    // a clip mask is drawn before its ranges and again after them
+    const masks = new Set(expected.map((range) => range.clip).filter((clip) => clip !== -1)).size;
 
-    expect(rig.view.stats.drawCalls).toBe(expected.length);
+    expect(rig.view.stats.maskDraws).toBe(masks * 2);
+    expect(rig.view.stats.drawCalls).toBe(expected.length + masks * 2);
     expect(actual.length).toBe(expected.length);
     expected.forEach((range, index) => {
         expect(drawn.filter((item) => item.range === index).map((item) => item.slot)).toEqual(range.slots);
         expect(actual[index]?.blendMode).toBe(PIXI_BLEND[range.blend]);
+        expect(actual[index]?.parent === rig.view.container).toBe(range.clip === -1);
     });
 
     return expected;

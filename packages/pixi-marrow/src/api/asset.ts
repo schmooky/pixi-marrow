@@ -1,12 +1,13 @@
-import { DOMAdapter, type Texture } from 'pixi.js';
+import { DOMAdapter, type Texture, type TextureSource } from 'pixi.js';
 import { MarrowError } from '../base/errors';
 import { importAtlas } from '../formats/atlas';
 import { importSkeleton } from '../formats/import';
 import type { AtlasModel } from '../model/atlas';
 import { describeSkeleton, type SkeletonInfo } from '../model/info';
 import type { SkeletonModel } from '../model/model';
+import type { AtlasOutlines } from '../model/outlines';
 import { loadPoseEngine, type PoseEngineFactory, type PoseEngineOptions } from '../pose/engine';
-import { configureTexture, loadPages, releasePage } from './textures';
+import { configureTexture, isStillImage, loadPages, releasePage } from './textures';
 
 /** What `MarrowAsset.load` and `MarrowSpine.load` take. */
 export interface MarrowLoadOptions {
@@ -23,10 +24,24 @@ export interface MarrowLoadOptions {
      */
     textures?: Readonly<Record<string, Texture | string>>;
     /**
-     * What to do with a skeleton that has constraints, which are not solved yet. `error` (the
-     * default) throws. `ignore` plays the skeleton without them.
+     * What to do with a skeleton that has physics or slider constraints, which are not solved
+     * yet. `error` (the default) throws. `ignore` plays the skeleton without those. IK, transform
+     * and path constraints are always solved.
      */
     constraints?: 'error' | 'ignore';
+    /**
+     * Where the outlines of the atlas regions come from. With them a slot behind an opaque one
+     * is skipped and a region without a visible pixel is not drawn. The picture stays the same.
+     * `tightMesh: 'on'` of a display object also needs them.
+     *
+     * - `auto` (the default) reads the page images in idle time after the load. See `MarrowAsset.optimized`.
+     * - `off` loads none: every region stays a quad and every slot is drawn.
+     * - A string is the URL of the file that `pixi-marrow outlines` wrote. It is fetched during the load.
+     * - An object is the parsed content of such a file.
+     *
+     * A file or an object that does not fit the atlas throws.
+     */
+    outlines?: 'auto' | 'off' | string | AtlasOutlines;
 }
 
 /** What `MarrowAsset.from` takes: a skeleton and an atlas that are in memory. */
@@ -35,8 +50,21 @@ export interface MarrowAssetData {
     atlas: AtlasModel;
     /** One texture per atlas page, in page order. */
     textures: readonly Texture[];
-    /** What to do with a skeleton that has constraints. `error` (the default) throws. */
+    /** What to do with a skeleton that has physics or slider constraints. `error` (the default) throws. */
     constraints?: 'error' | 'ignore';
+    /**
+     * Where the outlines of the atlas regions come from: `auto` (the default) reads the page
+     * textures in idle time, `off` uses none, an object is checked against the atlas and used.
+     */
+    outlines?: 'auto' | 'off' | AtlasOutlines;
+}
+
+/** What an asset is made of: the files, and the outlines or the word that says how to get them. */
+interface AssetParts {
+    model: SkeletonModel;
+    atlas: AtlasModel;
+    textures: readonly Texture[];
+    outlines: AtlasOutlines | 'auto' | undefined;
 }
 
 /** The assets loaded from URLs, by what was asked for. Loads of the same things share one asset. */
@@ -45,6 +73,23 @@ const shared = new Map<string, Promise<MarrowAsset>>();
 const engineOptions = (constraints: 'error' | 'ignore' | undefined): PoseEngineOptions =>
     constraints === undefined ? {} : { constraints };
 
+/** Numbers for the outline objects that loads were asked with, so that a load can be told from another. */
+const outlineIds = new WeakMap<object, number>();
+let nextOutlineId = 1;
+
+/** How the outlines option reads in the key of a load. Two objects are two keys. */
+function outlinesKey(outlines: MarrowLoadOptions['outlines']): string {
+    if (outlines === undefined || typeof outlines === 'string') return outlines ?? 'auto';
+    let id = outlineIds.get(outlines);
+
+    if (id === undefined) {
+        id = nextOutlineId++;
+        outlineIds.set(outlines, id);
+    }
+
+    return `object ${id}`;
+}
+
 /** What identifies a load, or undefined when the skeleton is not a URL. */
 function loadKey(options: MarrowLoadOptions): string | undefined {
     if (typeof options.skeleton !== 'string') return undefined;
@@ -52,7 +97,13 @@ function loadKey(options: MarrowLoadOptions): string | undefined {
         .map(([name, texture]) => [name, typeof texture === 'string' ? texture : `texture ${texture.uid}`])
         .sort(([a = ''], [b = '']) => a.localeCompare(b));
 
-    return JSON.stringify([options.skeleton, options.atlas, options.constraints ?? 'error', textures]);
+    return JSON.stringify([
+        options.skeleton,
+        options.atlas,
+        options.constraints ?? 'error',
+        textures,
+        outlinesKey(options.outlines),
+    ]);
 }
 
 async function fetchFile(url: string, what: string): Promise<Response> {
@@ -86,9 +137,45 @@ async function readSkeleton(
     return /\.json(?:[?#]|$)/i.test(skeleton) ? response.text() : new Uint8Array(await response.arrayBuffer());
 }
 
+/** The parsed outlines file of a load, or what the option says when it names no file. */
+async function readOutlines(outlines: MarrowLoadOptions['outlines']): Promise<unknown> {
+    if (typeof outlines !== 'string' || outlines === 'auto' || outlines === 'off') return outlines ?? 'auto';
+    const response = await fetchFile(outlines, 'outlines file');
+
+    try {
+        return await response.json();
+    } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+
+        throw new MarrowError('invalid-data', `The outlines file at ${outlines} is not JSON: ${reason}`, {
+            fix: 'Write the file again for this atlas: pixi-marrow outlines <atlas>.',
+        });
+    }
+}
+
 /**
- * What all instances of one skeleton share: the model, the atlas, one texture per atlas page and
- * the code that poses the skeleton. Create display objects from it with `new MarrowSpine(asset)`.
+ * What an asset starts with: the outlines of an object, checked against the atlas, or the word
+ * for none or later. The code that checks loads on demand, so a load without outlines does not
+ * pay for it.
+ */
+async function checkOutlines(outlines: unknown, atlas: AtlasModel): Promise<AtlasOutlines | 'auto' | undefined> {
+    if (outlines === 'off') return undefined;
+    if (outlines === undefined || outlines === 'auto') return 'auto';
+    const { readAtlasOutlines } = await import('../geometry/outlines');
+
+    return readAtlasOutlines(outlines, atlas);
+}
+
+/** A scan of the page images that was started. The code that scans loads on demand. */
+interface StartedScan {
+    /** Ends the scan before its next page, or before it begins. */
+    stop(): void;
+}
+
+/**
+ * What all instances of one skeleton share: the model, the atlas, one texture per atlas page,
+ * the outlines of the atlas regions and the code that poses the skeleton. Create display
+ * objects from it with `new MarrowSpine(asset)`.
  *
  * @example
  * const asset = await MarrowAsset.load({ skeleton: 'hero.skel', atlas: 'hero.atlas' });
@@ -111,9 +198,16 @@ export class MarrowAsset {
     private readonly key: string | undefined;
     private description: SkeletonInfo | undefined;
     private gone = false;
+    private found: AtlasOutlines | undefined;
+    /** The scan that reads the pages at the moment. */
+    private scan: StartedScan | undefined;
+    /** Resolves when the scan has ended. */
+    private work: Promise<void> = Promise.resolve();
+    /** True when the outlines come from the pixels of the textures, and follow them. */
+    private readonly scans: boolean;
 
-    private constructor(data: MarrowAssetData, createEngine: PoseEngineFactory, loaded: string[], key?: string) {
-        const { model, atlas, textures } = data;
+    private constructor(parts: AssetParts, createEngine: PoseEngineFactory, loaded: string[], key?: string) {
+        const { model, atlas, textures, outlines } = parts;
 
         if (textures.length !== atlas.pages.length) {
             throw new MarrowError(
@@ -135,6 +229,11 @@ export class MarrowAsset {
         this.createEngine = createEngine;
         this.loaded = loaded;
         this.key = key;
+        this.scans = outlines === 'auto';
+        if (outlines === 'auto') {
+            for (const texture of this.textures) texture.source.on('update', this.onPageUpdate, this);
+            this.startScan();
+        } else this.found = outlines;
     }
 
     /** The names, counts and features of the skeleton, as plain data. */
@@ -150,13 +249,41 @@ export class MarrowAsset {
     }
 
     /**
+     * The outlines of the atlas regions, or undefined when there are none. With `outlines: 'auto'`
+     * they are undefined until the page images were read, and again while they are read once
+     * more after a page texture got other pixels.
+     */
+    get outlines(): AtlasOutlines | undefined {
+        return this.found;
+    }
+
+    /**
+     * Resolves when the work in the background has ended: with `outlines: 'auto'` the scan of the
+     * page images, which sets {@link outlines}. Resolves at once when there is no such work. It
+     * never rejects: a page that cannot be read keeps its quads.
+     *
+     * Display objects take the outlines at their next update.
+     *
+     * @example
+     * const asset = await MarrowAsset.load({ skeleton: 'hero.skel', atlas: 'hero.atlas' });
+     * await asset.optimized;
+     * console.log(asset.outlines?.regions.length);
+     */
+    get optimized(): Promise<void> {
+        return this.work;
+    }
+
+    /**
      * Loads a skeleton, its atlas and the page images. The images are loaded with Pixi `Assets`
      * from next to the atlas, unless `textures` names them. Each page texture is set up from its
      * atlas page: alpha mode, filters, mipmaps and wrap.
      *
      * Loads of the same skeleton URL, atlas URL and options share one asset. Throws a
-     * `MarrowError` when a file does not load or is not valid. A skeleton with constraints throws
-     * too, unless `constraints` is `ignore`.
+     * `MarrowError` when a file does not load or is not valid. A skeleton with physics or slider
+     * constraints throws too, unless `constraints` is `ignore`.
+     *
+     * The outlines of the atlas regions are read from the page images after the load, in idle
+     * time, unless `outlines` names a file, gives them or is `off`.
      *
      * @example
      * const asset = await MarrowAsset.load({ skeleton: 'hero.json', atlas: 'hero.atlas' });
@@ -189,31 +316,88 @@ export class MarrowAsset {
      * const asset = await MarrowAsset.from({ model, atlas, textures: [pageTexture] });
      */
     static async from(data: MarrowAssetData): Promise<MarrowAsset> {
-        return new MarrowAsset(data, await loadPoseEngine(data.model, engineOptions(data.constraints)), []);
+        const { model, atlas, textures } = data;
+        const outlines = await checkOutlines(data.outlines, atlas);
+
+        return new MarrowAsset(
+            { model, atlas, textures, outlines },
+            await loadPoseEngine(model, engineOptions(data.constraints)),
+            [],
+        );
     }
 
     private static async fetch(options: MarrowLoadOptions, key: string | undefined): Promise<MarrowAsset> {
-        const [source, atlasFile] = await Promise.all([
+        const [source, atlasFile, outlinesFile] = await Promise.all([
             readSkeleton(options.skeleton),
             fetchFile(options.atlas, 'atlas'),
+            readOutlines(options.outlines),
         ]);
         const model = await importSkeleton(source);
         const atlas = importAtlas(await atlasFile.text());
-        // before the images, so that a skeleton that cannot play costs no image loads
+        // before the images, so that outlines of another atlas and a skeleton that cannot play cost no image loads
+        const outlines = await checkOutlines(outlinesFile, atlas);
         const createEngine = await loadPoseEngine(model, engineOptions(options.constraints));
         const { textures, loaded } = await loadPages(atlas, options.atlas, options.textures);
 
-        return new MarrowAsset({ model, atlas, textures }, createEngine, loaded, key);
+        return new MarrowAsset({ model, atlas, textures, outlines }, createEngine, loaded, key);
     }
 
     /**
      * Unloads the page images this asset loaded and stops sharing the asset. Textures that were
-     * passed in are left alone. Destroy the display objects made from the asset first.
+     * passed in are left alone. A scan of the page images ends before its next page. Destroy the
+     * display objects made from the asset first.
      */
     destroy(): void {
         if (this.gone) return;
         this.gone = true;
+        this.scan?.stop();
+        this.scan = undefined;
+        if (this.scans) {
+            for (const texture of this.textures) texture.source.off('update', this.onPageUpdate, this);
+        }
         if (this.key !== undefined) shared.delete(this.key);
         for (const url of this.loaded) releasePage(url);
+    }
+
+    /** Reads the page images in idle time and keeps the outlines they give. */
+    private startScan(): void {
+        let stopped = false;
+        let running: StartedScan | undefined;
+        const scan: StartedScan = {
+            stop() {
+                stopped = true;
+                running?.stop();
+            },
+        };
+
+        this.scan = scan;
+        this.work = import('./outline-scan')
+            .then(({ scanOutlines }) => {
+                if (stopped) return undefined;
+                const started = scanOutlines(this.atlas, this.textures);
+
+                running = started;
+
+                return started.done;
+            })
+            // code that did not load gives no outlines, and every region keeps its quad
+            .catch(() => undefined)
+            .then((outlines) => {
+                // a scan that was stopped or replaced gives nothing
+                if (this.scan !== scan) return;
+                this.scan = undefined;
+                this.found = outlines;
+            });
+    }
+
+    /**
+     * A page texture got other pixels, so outlines of the pixels before could cut visible ones.
+     * They are dropped at once and read again. A canvas or a video has no outlines to drop.
+     */
+    private onPageUpdate(source: TextureSource): void {
+        if (this.gone || !isStillImage(source.resource)) return;
+        this.found = undefined;
+        this.scan?.stop();
+        this.startScan();
     }
 }

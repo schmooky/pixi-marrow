@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { createPoseEngine, importSkeleton, poseStateBytes } from '../../src/core';
+import { createPoseEngine, importSkeleton } from '../../src/core';
 import { listFixtures, readFixture } from '../parity/fixtures';
 
 /** Where the accepted bytes per instance are kept, next to the size baseline. */
@@ -10,8 +10,9 @@ export const BASELINE_PATH: string = fileURLToPath(new URL('../../../../ci/memor
 export const TOLERANCE = 0.1;
 
 /**
- * The bytes one more instance of each official fixture costs: the typed arrays of its pose, after
- * every animation has played for a few updates so that deform arrays have their size.
+ * The bytes one more instance of each official fixture costs: the typed arrays of its pose and of
+ * its constraints, after every animation has played for a few updates so that deform arrays have
+ * their size.
  * Rigs under fixtures/local are left out, because the baseline is committed and they are not.
  */
 export async function measureInstanceBytes(): Promise<Record<string, number>> {
@@ -26,7 +27,7 @@ export async function measureInstanceBytes(): Promise<Record<string, number>> {
             engine.setAnimation(0, animation, true);
             for (let step = 0; step < 3; step++) engine.update(1 / 30);
         }
-        bytes[fixture.id] = poseStateBytes(engine.state);
+        bytes[fixture.id] = engine.bytes;
     }
 
     return bytes;

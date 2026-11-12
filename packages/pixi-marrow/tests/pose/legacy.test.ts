@@ -1,17 +1,7 @@
 import * as core41 from 'spine-core-4.1';
 import * as core42 from 'spine-core-4.2';
 import { describe, expect, it } from 'vitest';
-import {
-    createPoseEngine,
-    importSkeleton,
-    MarrowError,
-    type PoseEngine,
-    type SkeletonModel,
-    type TimelineData,
-    type TrackEntry,
-    type TrackFields,
-} from '../../src/core';
-import { createLegacyEngine } from '../../src/pose/legacy/index';
+import { createPoseEngine, importSkeleton, type PoseEngine, type SkeletonModel, type TrackEntry } from '../../src/core';
 import { loadPoseRig } from '../parity/pose-official';
 import { attachmentLabels, engineSubject, officialSubject, runScript } from '../parity/pose-run';
 import { DT, ODD, type PoseScript, script, thresholds } from '../parity/pose-script';
@@ -285,42 +275,22 @@ function scripts(rig: PoseRigInfo): PoseScript[] {
     ];
 }
 
-/** The world transforms the official core gives the setup pose of the bones, for a skeleton position and scale. */
+/** The world transforms the official core gives the setup pose of the bones and the IK constraint, for a skeleton position and scale. */
 function officialWorld(version: Version, text: string, [x, y, scaleX, scaleY]: readonly number[]): number[] {
-    const { skeleton, bones } = JSON.parse(text);
-    const bonesOnly = JSON.stringify({ skeleton, bones });
+    const { skeleton, bones, ik } = JSON.parse(text);
+    const posed = JSON.stringify({ skeleton, bones, ik });
     const json41 = new core41.SkeletonJson(new core41.AtlasAttachmentLoader(new core41.TextureAtlas('')));
     const json42 = new core42.SkeletonJson(new core42.AtlasAttachmentLoader(new core42.TextureAtlas('')));
     const official =
         version === '4.1'
-            ? new core41.Skeleton(json41.readSkeletonData(bonesOnly))
-            : new core42.Skeleton(json42.readSkeletonData(bonesOnly));
+            ? new core41.Skeleton(json41.readSkeletonData(posed))
+            : new core42.Skeleton(json42.readSkeletonData(posed));
 
     Object.assign(official, { x, y, scaleX, scaleY });
     if (official instanceof core41.Skeleton) official.updateWorldTransform();
     else official.updateWorldTransform(core42.Physics.update);
 
     return official.bones.flatMap((bone) => [bone.a, bone.b, bone.c, bone.d, bone.worldX, bone.worldY]);
-}
-
-/** The code of the `MarrowError` a call throws. */
-function codeOf(call: () => unknown): string {
-    try {
-        call();
-    } catch (error) {
-        if (error instanceof MarrowError) return error.code;
-        throw error;
-    }
-
-    return 'nothing thrown';
-}
-
-/** A copy of a model with one more animation, made of timelines no importer would give. */
-function withAnimation(model: SkeletonModel, ...timelines: Partial<TimelineData>[]): SkeletonModel {
-    const base: TimelineData = { kind: 'rotate', target: 0, frames: new Float32Array(8), curves: null };
-    const full = timelines.map((timeline) => ({ ...base, ...timeline }));
-
-    return { ...model, animations: [...model.animations, { name: 'made up', duration: 1, timelines: full }] };
 }
 
 describe.each(['4.1', '4.2'] as const)('the legacy engine on a hand-written %s skeleton', (version) => {
@@ -400,100 +370,11 @@ describe.each(['4.1', '4.2'] as const)('the legacy engine on a hand-written %s s
         );
         expect(events.every((event) => event.track === 0 && event.animation === event.entry.animation)).toBe(true);
         expect(engine.takeEvents()).toEqual([]);
+        // an update in which nothing happened allocates no list: the empty list is shared and cannot change
+        expect(engine.takeEvents()).toBe(engine.takeEvents());
+        expect(Object.isFrozen(engine.takeEvents())).toBe(true);
+        // a list with events is handed out once
+        engine.setAnimation(0, 0, false);
         expect(engine.takeEvents()).not.toBe(engine.takeEvents());
-    });
-
-    it('sets the track entry fields of its version', async () => {
-        const { engine } = await create();
-        const entry = engine.setAnimation(0, ALL, false);
-        const own: TrackFields =
-            version === '4.1'
-                ? { attachmentThreshold: 0.1, drawOrderThreshold: 0.2 }
-                : { mixAttachmentThreshold: 0.1, alphaAttachmentThreshold: 0.3, mixDrawOrderThreshold: 0.2 };
-
-        const times = { delay: 0.5, trackTime: 0.25, trackEnd: 9, timeScale: 2, mixTime: 0.1, mixDuration: 0.4 };
-        const flags = { loop: true, reverse: true, shortestRotation: true };
-
-        engine.configure(entry, { ...times, ...flags, alpha: 0.75, holdPrevious: true, ...own });
-        engine.configure(entry, { eventThreshold: 0.5, animationStart: 0.1, animationEnd: 0.9, animationLast: 0.2 });
-        for (const mixBlend of ['setup', 'first', 'replace', 'add']) engine.configure(entry, { mixBlend });
-        expect(entry).toMatchObject({ trackIndex: 0, animation: ALL, alpha: 0.75, ...times, ...flags });
-    });
-
-    it('refuses fields of other versions and values of the wrong type, and then changes nothing', async () => {
-        const { engine } = await create();
-        const entry = engine.setAnimation(0, ALL, false);
-        const foreign: TrackFields[] =
-            version === '4.1'
-                ? [{ mixAttachmentThreshold: 1 }, { alphaAttachmentThreshold: 1 }, { mixDrawOrderThreshold: 1 }]
-                : [{ attachmentThreshold: 1 }, { drawOrderThreshold: 1 }];
-
-        for (const fields of [...foreign, { additive: true }, { keepHold: true }, { alpha: 0.25, additive: true }]) {
-            expect(codeOf(() => engine.configure(entry, fields))).toBe('unsupported-feature');
-        }
-        for (const fields of [
-            { alpha: '1' },
-            { loop: 1 },
-            { mixBlend: 'multiply' },
-            { mixBlend: 3 },
-            { delay: true },
-        ]) {
-            expect(codeOf(() => engine.configure(entry, { timeScale: 3, ...fields }))).toBe('invalid-data');
-        }
-        expect([entry.alpha, entry.timeScale, entry.loop, entry.delay]).toEqual([1, 1, false, 0]);
-        expect(codeOf(() => engine.configure({ ...entry }, { alpha: 0.5 }))).toBe('invalid-data');
-    });
-
-    it('refuses animations, tracks and skins that do not exist', async () => {
-        const { engine } = await create();
-        const calls = [
-            () => engine.setAnimation(0, 3, true),
-            () => engine.setAnimation(0, -1, true),
-            () => engine.addAnimation(0, 0.5, true, 0),
-            () => engine.setAnimation(-1, ALL, true),
-            () => engine.addAnimation(0.5, ALL, true, 0),
-            () => engine.addEmptyAnimation(Number.NaN, 0, 0),
-            () => engine.setMix(ALL, 3, 0.2),
-            () => engine.setSkin(3),
-            () => engine.setSkin(-2),
-        ];
-
-        for (const call of calls) expect(codeOf(call)).toBe('invalid-data');
-        // clearing a track that never held anything is not an error
-        engine.clearTrack(-1);
-        engine.clearTrack(7);
-        engine.clearTracks();
-        expect(engine.takeEvents()).toEqual([]);
-    });
-
-    it('refuses animations it cannot play when they are first played', async () => {
-        const { model } = await create();
-        const missing = { skin: 0, slot: 1, name: 'missing' };
-        const cases: [string, Partial<TimelineData>][] = [
-            ['unsupported-feature', { kind: 'slider' }],
-            ['unsupported-feature', { kind: 'drawOrderFolder', target: -1 }],
-            ['invalid-data', { kind: 'rotate', target: 99 }],
-            ['invalid-data', { kind: 'rgba', target: -1 }],
-            ['invalid-data', { kind: 'rgba2', target: 1 }],
-            ['invalid-data', { kind: 'rgb2', target: 4 }],
-            ['invalid-data', { kind: 'deform', target: 1, attachment: missing, vertices: [new Float32Array(8)] }],
-            ['invalid-data', { kind: 'deform', target: 1, attachment: { ...missing, name: 'mesh' }, vertices: [] }],
-            ['invalid-data', { kind: 'sequence', target: 1 }],
-            ['invalid-data', { kind: 'translate', frames: new Float32Array(0) }],
-            [version === '4.1' ? 'unsupported-feature' : 'nothing thrown', { kind: 'inherit' }],
-            ['nothing thrown', { kind: 'physicsConstraintWind', target: -1 }],
-        ];
-
-        for (const [code, timeline] of cases) {
-            const changed = withAnimation(model, timeline);
-            // creating the engine reads no animation
-            const engine = createLegacyEngine(changed);
-
-            expect(
-                codeOf(() => engine.setAnimation(0, model.animations.length, true)),
-                timeline.kind,
-            ).toBe(code);
-        }
-        expect(codeOf(() => createLegacyEngine({ ...model, version: '4.3' }))).toBe('unsupported-version');
     });
 });

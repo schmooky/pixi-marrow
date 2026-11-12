@@ -1,8 +1,9 @@
 import { MarrowError } from '../../base/errors';
 import type { SkeletonModel } from '../../model/model';
 import type { PoseEngine, PoseEvent, TrackEntry, TrackFields } from '../engine';
-import { createPoseState, type PoseState } from '../state';
+import { createPoseState, type PoseState, poseStateBytes } from '../state';
 import { applyTracks } from './apply';
+import { updateCache } from './cache';
 import {
     addAnimation,
     addEmptyAnimation,
@@ -16,10 +17,11 @@ import { configureEntry } from './configure';
 import { Entry } from './entry';
 import { createPlayer, type Player43 } from './player';
 import { prepareRig } from './rig';
-import { setSkin, setupPoseBones, setupPoseSlots, updateActive } from './skeleton';
+import { setSkin, setupPoseBones, setupPoseSlots } from './skeleton';
+import { updateWorld } from './solve';
+import { createSolve } from './solver';
 import type { Clip43, Pose43 } from './types';
 import { updateTracks } from './update';
-import { updateWorld } from './world';
 
 const invalid = (message: string, fix: string): MarrowError => new MarrowError('invalid-data', message, { fix });
 
@@ -47,12 +49,20 @@ class Engine43 implements PoseEngine {
         const rig = prepareRig(model);
 
         this.state = createPoseState(model);
-        this.pose = { rig, state: this.state };
+        this.pose = { rig, state: this.state, solve: createSolve(rig) };
         this.player = createPlayer(this.pose);
         // what a new official Skeleton holds: the setup pose, found through the default skin
         setupPoseBones(this.pose);
         setupPoseSlots(this.pose);
-        updateActive(this.pose);
+        updateCache(this.pose);
+    }
+
+    get bytes(): number {
+        const { values, active, local, constrained, spare, worldStamps, localStamps, cache } = this.pose.solve;
+        const arrays = [values, active, local, constrained, spare, worldStamps, localStamps, cache];
+        const solve = arrays.reduce((sum, array) => sum + array.byteLength, 0);
+
+        return poseStateBytes(this.state) + solve + this.player.attachmentStates.byteLength;
     }
 
     get timeScale(): number {
@@ -165,8 +175,9 @@ class Engine43 implements PoseEngine {
 
 /**
  * Creates the pose engine for Spine 4.3 skeletons: a port of the official 4.3 `AnimationState`
- * and `Skeleton`. It starts in the setup pose. Constraints are not applied. The timelines that
- * animate them change nothing, but they count when entries mix, as in the official runtime.
+ * and `Skeleton`. It starts in the setup pose. IK, transform and path constraints are solved.
+ * Physics and slider constraints are left out. The timelines that animate those change nothing,
+ * but they count when entries mix, as in the official runtime.
  *
  * @example
  * const engine = createEngine43(await importSkeleton(bytes));

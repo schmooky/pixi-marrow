@@ -1,145 +1,160 @@
 import { LOCAL_STRIDE } from '../state';
-import { beforeFirstKey, curveValue, f32, f64, sampleKey, search, towardSetup } from './curves';
-import { CURRENT, SETUP, type Timeline43, type TimelineKernel } from './types';
+import { ALPHA, curveValue, SHARED, sampleValues, search, TIME, towardSetup, VALUES } from './curves';
+import { CURRENT, FIRST, type Pose43, SETUP, type Timeline43 } from './types';
 
-/** The official `CurveTimeline1.getRelativeValue`: a timeline value that is added to the setup value. */
-function relativeValue(
-    timeline: Timeline43,
-    time: number,
-    alpha: number,
-    from: number,
-    add: boolean,
-    current: number,
-    setup: number,
-): number {
-    if (time < f32(timeline.frames, 0)) return beforeFirstKey(from, alpha, current, setup);
-    const value = curveValue(timeline.frames, timeline.curves, time);
-
-    if (from === SETUP) return setup + value * alpha;
-
-    return current + (add ? value : value + setup - current) * alpha;
-}
-
-/**
- * The mixing of the official scale timelines.
- *
- * @param value The timeline value times the setup scale.
+/*
+ * The timelines that animate the local numbers of a bone. Each reads its time and its alpha from
+ * `SHARED`, for the reasons given in curves.ts.
  */
-function mixScale(
-    value: number,
-    alpha: number,
-    from: number,
-    add: boolean,
-    out: boolean,
-    current: number,
-    setup: number,
-): number {
-    if (alpha === 1 && !add) return value;
-    let base = from === SETUP ? setup : current;
-
-    if (add) return base + (value - setup) * alpha;
-    if (out) return base + (Math.abs(value) * Math.sign(base) - base) * alpha;
-    base = Math.abs(base) * Math.sign(value);
-
-    return base + (value - base) * alpha;
-}
 
 /**
  * The official rotate, translateX, translateY, shearX and shearY timelines: one number of a bone,
- * relative to its setup value.
+ * relative to its setup value. This is the official `CurveTimeline1.getRelativeValue`.
  */
-export const applyRelative: TimelineKernel = (pose, timeline, _lastTime, time, _events, alpha, from, add) => {
+export function applyRelative(pose: Pose43, timeline: Timeline43, from: number, add: boolean): void {
     const { local, active } = pose.state;
-
-    if (active[timeline.target] !== 1) return;
-    const i = timeline.target * LOCAL_STRIDE + timeline.offset;
-
-    local[i] = relativeValue(timeline, time, alpha, from, add, f64(local, i), f64(pose.rig.model.bones.setup, i));
-};
-
-/** The official scaleX and scaleY timelines: one scale of a bone, as a factor of its setup scale. */
-export const applyScale: TimelineKernel = (pose, timeline, _lastTime, time, _events, alpha, from, add, out) => {
-    const { local, active } = pose.state;
-
-    if (active[timeline.target] !== 1) return;
-    const i = timeline.target * LOCAL_STRIDE + timeline.offset;
-    const current = f64(local, i);
-    const setup = f64(pose.rig.model.bones.setup, i);
-
-    if (time < f32(timeline.frames, 0)) {
-        local[i] = beforeFirstKey(from, alpha, current, setup);
-
-        return;
-    }
-    const value = curveValue(timeline.frames, timeline.curves, time) * setup;
-
-    local[i] = mixScale(value, alpha, from, add, out, current, setup);
-};
-
-/** The official translate and shear timelines: two numbers of a bone, relative to their setup values. */
-export const applyPair: TimelineKernel = (pose, timeline, _lastTime, time, _events, alpha, from, add) => {
-    const { local, active } = pose.state;
-
-    if (active[timeline.target] !== 1) return;
-    const setup = pose.rig.model.bones.setup;
-    const i = timeline.target * LOCAL_STRIDE + timeline.offset;
-
-    if (time < f32(timeline.frames, 0)) {
-        towardSetup(local, setup, i, 2, from, alpha);
-
-        return;
-    }
-    const sample = pose.rig.scratch.sample;
-
-    sampleKey(timeline, time, sample);
-    const x = f64(sample, 0);
-    const y = f64(sample, 1);
-
-    if (from === SETUP) {
-        local[i] = f64(setup, i) + x * alpha;
-        local[i + 1] = f64(setup, i + 1) + y * alpha;
-    } else if (add) {
-        local[i] = f64(local, i) + x * alpha;
-        local[i + 1] = f64(local, i + 1) + y * alpha;
-    } else {
-        local[i] = f64(local, i) + (f64(setup, i) + x - f64(local, i)) * alpha;
-        local[i + 1] = f64(local, i + 1) + (f64(setup, i + 1) + y - f64(local, i + 1)) * alpha;
-    }
-};
-
-/** The official scale timeline: both scales of a bone, as factors of their setup scales. */
-export const applyScalePair: TimelineKernel = (pose, timeline, _lastTime, time, _events, alpha, from, add, out) => {
-    const { local, active } = pose.state;
-
-    if (active[timeline.target] !== 1) return;
-    const setup = pose.rig.model.bones.setup;
-    const i = timeline.target * LOCAL_STRIDE + timeline.offset;
-
-    if (time < f32(timeline.frames, 0)) {
-        towardSetup(local, setup, i, 2, from, alpha);
-
-        return;
-    }
-    const sample = pose.rig.scratch.sample;
-
-    sampleKey(timeline, time, sample);
-    const setupX = f64(setup, i);
-    const setupY = f64(setup, i + 1);
-
-    local[i] = mixScale(f64(sample, 0) * setupX, alpha, from, add, out, f64(local, i), setupX);
-    local[i + 1] = mixScale(f64(sample, 1) * setupY, alpha, from, add, out, f64(local, i + 1), setupY);
-};
-
-/** The official inherit timeline: how a bone inherits its parent transform. It does not interpolate. */
-export const applyInherit: TimelineKernel = (pose, timeline, _lastTime, time, _events, _alpha, from, _add, out) => {
-    const { inherit, active } = pose.state;
     const bone = timeline.target;
 
     if (active[bone] !== 1) return;
-    if (out || time < f32(timeline.frames, 0)) {
+    const i = bone * LOCAL_STRIDE + timeline.offset;
+    const setup = Number(pose.rig.model.bones.setup[i]);
+    const frames = timeline.frames;
+    const alpha = Number(SHARED[ALPHA]);
+
+    if (Number(SHARED[TIME]) < Number(frames[0])) {
+        // the official beforeFirstKey
+        if (from === SETUP) local[i] = setup;
+        else if (from === FIRST) {
+            const current = Number(local[i]);
+
+            local[i] = current + (setup - current) * alpha;
+        }
+
+        return;
+    }
+    curveValue(frames, timeline.curves);
+    const value = Number(SHARED[VALUES]);
+
+    if (from === SETUP) local[i] = setup + value * alpha;
+    else {
+        const current = Number(local[i]);
+
+        local[i] = current + (add ? value : value + setup - current) * alpha;
+    }
+}
+
+/**
+ * The mixing of the official scale timelines, for one scale of a bone. The sampled factor is read
+ * from `SHARED` at `k` and the result is written to `local` at `i`.
+ */
+function mixScale(
+    local: Float64Array,
+    setups: Float64Array,
+    i: number,
+    k: number,
+    from: number,
+    add: boolean,
+    out: boolean,
+): void {
+    const alpha = Number(SHARED[ALPHA]);
+    const setup = Number(setups[i]);
+    const value = Number(SHARED[k]) * setup;
+
+    if (alpha === 1 && !add) {
+        local[i] = value;
+
+        return;
+    }
+    let base = from === SETUP ? setup : Number(local[i]);
+
+    if (add) local[i] = base + (value - setup) * alpha;
+    else if (out) local[i] = base + (Math.abs(value) * Math.sign(base) - base) * alpha;
+    else {
+        base = Math.abs(base) * Math.sign(value);
+        local[i] = base + (value - base) * alpha;
+    }
+}
+
+/** The official scaleX and scaleY timelines: one scale of a bone, as a factor of its setup scale. */
+export function applyScale(pose: Pose43, timeline: Timeline43, from: number, add: boolean, out: boolean): void {
+    const { local, active } = pose.state;
+
+    if (active[timeline.target] !== 1) return;
+    const i = timeline.target * LOCAL_STRIDE + timeline.offset;
+    const setups = pose.rig.model.bones.setup;
+    const frames = timeline.frames;
+
+    if (Number(SHARED[TIME]) < Number(frames[0])) {
+        towardSetup(local, setups, i, 1, from);
+
+        return;
+    }
+    curveValue(frames, timeline.curves);
+    mixScale(local, setups, i, VALUES, from, add, out);
+}
+
+/** The official translate and shear timelines: two numbers of a bone, relative to their setup values. */
+export function applyPair(pose: Pose43, timeline: Timeline43, from: number, add: boolean): void {
+    const { local, active } = pose.state;
+
+    if (active[timeline.target] !== 1) return;
+    const setup = pose.rig.model.bones.setup;
+    const i = timeline.target * LOCAL_STRIDE + timeline.offset;
+
+    if (Number(SHARED[TIME]) < Number(timeline.frames[0])) {
+        towardSetup(local, setup, i, 2, from);
+
+        return;
+    }
+    sampleValues(timeline, 2);
+    const x = Number(SHARED[VALUES]);
+    const y = Number(SHARED[VALUES + 1]);
+    const alpha = Number(SHARED[ALPHA]);
+
+    if (from === SETUP) {
+        local[i] = Number(setup[i]) + x * alpha;
+        local[i + 1] = Number(setup[i + 1]) + y * alpha;
+    } else if (add) {
+        local[i] = Number(local[i]) + x * alpha;
+        local[i + 1] = Number(local[i + 1]) + y * alpha;
+    } else {
+        const currentX = Number(local[i]);
+        const currentY = Number(local[i + 1]);
+
+        local[i] = currentX + (Number(setup[i]) + x - currentX) * alpha;
+        local[i + 1] = currentY + (Number(setup[i + 1]) + y - currentY) * alpha;
+    }
+}
+
+/** The official scale timeline: both scales of a bone, as factors of their setup scales. */
+export function applyScalePair(pose: Pose43, timeline: Timeline43, from: number, add: boolean, out: boolean): void {
+    const { local, active } = pose.state;
+
+    if (active[timeline.target] !== 1) return;
+    const setups = pose.rig.model.bones.setup;
+    const i = timeline.target * LOCAL_STRIDE + timeline.offset;
+
+    if (Number(SHARED[TIME]) < Number(timeline.frames[0])) {
+        towardSetup(local, setups, i, 2, from);
+
+        return;
+    }
+    sampleValues(timeline, 2);
+    mixScale(local, setups, i, VALUES, from, add, out);
+    mixScale(local, setups, i + 1, VALUES + 1, from, add, out);
+}
+
+/** The official inherit timeline: how a bone inherits its parent transform. It does not interpolate. */
+export function applyInherit(pose: Pose43, timeline: Timeline43, from: number, out: boolean): void {
+    const { inherit, active } = pose.state;
+    const bone = timeline.target;
+    const frames = timeline.frames;
+
+    if (active[bone] !== 1) return;
+    if (out || Number(SHARED[TIME]) < Number(frames[0])) {
         if (from !== CURRENT) inherit[bone] = pose.rig.model.bones.inherit[bone] ?? 0;
 
         return;
     }
-    inherit[bone] = f32(timeline.frames, search(timeline.frames, time, 2) + 1);
-};
+    inherit[bone] = Number(frames[search(frames, 2) + 1]);
+}

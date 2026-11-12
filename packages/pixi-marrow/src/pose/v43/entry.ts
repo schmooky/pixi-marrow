@@ -41,6 +41,8 @@ export class Entry implements TrackEntry {
     mixTime = 0;
     mixDuration = 0;
     totalAlpha = 0;
+    /** The official `mix()` of the entry when it was last applied: how far the mix from the entry before it is. */
+    mixed = 0;
     /** The official `timelineMode`: per timeline the `MixFrom` bits and the hold bit. */
     modes: Uint8Array = NO_MODES;
     /** How many numbers of `modes` are in use: the official `timelineMode.length`. */
@@ -69,24 +71,6 @@ export class Entry implements TrackEntry {
         this.modeCount = 0;
         this.holdMix.length = 0;
         this.rotationCount = 0;
-    }
-
-    /** The official `mix`: how far the mix from the previous entry is, from 0 to 1. */
-    mix(): number {
-        if (this.mixDuration === 0) return 1;
-        const mix = this.mixTime / this.mixDuration;
-
-        return mix >= 1 ? 1 : mix;
-    }
-
-    /** The official `getAnimationTime`: the track time as a time between the start and the end of the animation. */
-    getAnimationTime(): number {
-        if (!this.loop) return Math.min(this.trackTime + this.animationStart, this.animationEnd);
-        const duration = this.animationEnd - this.animationStart;
-
-        if (duration === 0) return this.animationStart;
-
-        return (this.trackTime % duration) + this.animationStart;
     }
 
     /** The official `getTrackComplete`: the track time at which the animation ends, or ends its current loop. */

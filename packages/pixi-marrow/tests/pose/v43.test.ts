@@ -12,7 +12,10 @@ import {
     type TimelineKind,
     WORLD_STRIDE,
 } from '../../src/core';
+import { setClock } from '../../src/pose/v43/curves';
 import { prepareRig } from '../../src/pose/v43/rig';
+import { createSolve } from '../../src/pose/v43/solver';
+import { applyTimeline } from '../../src/pose/v43/timelines';
 import { CURRENT, SETUP } from '../../src/pose/v43/types';
 import { loadPoseRig } from '../parity/pose-official';
 import { attachmentLabels, engineSubject, officialSubject, runScript } from '../parity/pose-run';
@@ -229,17 +232,13 @@ class FakeTexture extends Texture {
     dispose(): void {}
 }
 
-/** An official skeleton of the lab file without its constraint, in the setup pose. */
+/** An official skeleton of the lab file, in the setup pose. */
 function officialSkeleton(): Skeleton {
     const atlas = new TextureAtlas(ATLAS);
 
     for (const page of atlas.pages) page.setTexture(new FakeTexture({ width: 8, height: 8, close() {} }));
-    const skeleton = new Skeleton(new SkeletonJson(new AtlasAttachmentLoader(atlas)).readSkeletonData(LAB));
 
-    skeleton.constraints.length = 0;
-    skeleton.updateCache();
-
-    return skeleton;
+    return new Skeleton(new SkeletonJson(new AtlasAttachmentLoader(atlas)).readSkeletonData(LAB));
 }
 
 const play = (model: SkeletonModel): Promise<PoseEngine> => createPoseEngine(model, { constraints: 'ignore' });
@@ -475,12 +474,14 @@ describe('the attachment timeline of the 4.3 pose engine', () => {
     it('applies like the official AttachmentTimeline when it is applied on its own', async () => {
         const model = await importSkeleton(LAB);
         const { state } = await play(model);
-        const pose = { rig: prepareRig(model), state };
+        const rig = prepareRig(model);
+        const pose = { rig, state, solve: createSolve(rig) };
         const shown = (animation: number, time: number, from: number, out: boolean): string | undefined => {
             const timeline = pose.rig.clips[animation]?.timelines.find((candidate) => candidate.kind === 'attachment');
 
             if (timeline === undefined) throw new Error('The animation has no attachment timeline');
-            timeline.apply(pose, timeline, -1, time, null, 1, from, false, out);
+            setClock(-1, time, 1);
+            applyTimeline(pose, timeline, null, from, false, out);
 
             return state.attachments[timeline.target]?.name;
         };

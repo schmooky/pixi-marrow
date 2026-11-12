@@ -66,19 +66,6 @@ export class LegacyEntry implements TrackEntry {
         this.timelineMode = new Uint8Array(clip.timelines.length).fill(MODE_UNSET);
     }
 
-    /** The official `getAnimationTime`: the track time mapped into the animation, looped or clamped. */
-    getAnimationTime(): number {
-        if (this.loop) {
-            const duration = this.animationEnd - this.animationStart;
-
-            if (duration === 0) return this.animationStart;
-
-            return (this.trackTime % duration) + this.animationStart;
-        }
-
-        return Math.min(this.trackTime + this.animationStart, this.animationEnd);
-    }
-
     /** The official `getTrackComplete`: the track time at which the animation or its current loop ends. */
     getTrackComplete(): number {
         const duration = this.animationEnd - this.animationStart;

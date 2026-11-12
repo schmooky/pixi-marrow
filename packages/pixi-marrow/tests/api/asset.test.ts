@@ -7,6 +7,7 @@ import { blankTexture, fixtureFiles, importRig } from './helpers';
 const BOY = fixtureFiles('4.2/spineboy-pro.skel');
 const BOY_JSON = fixtureFiles('4.2/spineboy-pro.json');
 const DRAGON = fixtureFiles('4.3/dragon-ess.skel');
+const SACK = fixtureFiles('4.2/sack-pro.skel');
 
 /** Three pages that differ in everything a page can ask of its texture. */
 const PAGES = importAtlas(
@@ -73,14 +74,30 @@ describe('MarrowAsset.from', () => {
         expect(error.fix).toContain('dragon.png, dragon_2.png');
     });
 
-    it('throws for a skeleton with constraints, unless they are ignored', async () => {
-        const { model, atlas } = await importRig('4.2/spineboy-pro.skel');
-        const data = { model, atlas, textures: [Texture.WHITE] };
+    it.each([
+        ['4.2/sack-pro.skel', 'physics'],
+        ['4.3/diamond-pro.skel', 'slider'],
+    ])('throws for the %s skeleton with %s constraints, unless they are ignored', async (id, kind) => {
+        const { model, atlas } = await importRig(id);
+        const data = { model, atlas, textures: atlas.pages.map(() => Texture.WHITE) };
         const error = await rejection(MarrowAsset.from(data));
 
         expect(error.code).toBe('unsupported-feature');
+        expect(error.message).toContain(`The skeleton has ${kind} constraints.`);
         expect(await rejection(MarrowAsset.from({ ...data, constraints: 'error' }))).toBeInstanceOf(MarrowError);
         await expect(MarrowAsset.from({ ...data, constraints: 'ignore' })).resolves.toBeInstanceOf(MarrowAsset);
+    });
+
+    it('takes a skeleton with IK, transform and path constraints as it is: they are solved', async () => {
+        for (const id of ['4.2/spineboy-pro.skel', '4.3/tank-pro.skel']) {
+            const { model, atlas } = await importRig(id);
+            const kinds = new Set(model.constraints.map((constraint) => constraint.type));
+
+            expect(kinds.size).toBeGreaterThan(1);
+            await expect(MarrowAsset.from({ model, atlas, textures: [Texture.WHITE] })).resolves.toBeInstanceOf(
+                MarrowAsset,
+            );
+        }
     });
 
     it('sets up each texture from its atlas page: alpha mode, filters, mipmaps and wrap', async () => {
@@ -160,6 +177,8 @@ describe('MarrowAsset.load', () => {
         ['art/boy.atlas?v=2', BOY.atlas],
         ['dragon.skel', DRAGON.skeleton],
         ['dragon.atlas', DRAGON.atlas],
+        ['sack.skel', SACK.skeleton],
+        ['sack.atlas', SACK.atlas],
     ]);
     /** How each fetched body was read, for example `art/boy.json text`. */
     let reads: string[];
@@ -394,11 +413,14 @@ describe('MarrowAsset.load', () => {
         expect(unloadImage).toHaveBeenCalledExactlyOnceWith('art/spineboy.png');
     });
 
-    it('throws for a skeleton with constraints before it loads an image', async () => {
-        const error = await rejection(MarrowAsset.load({ skeleton: 'art/boy.skel', atlas: 'art/boy.atlas' }));
+    it('throws for a skeleton with physics constraints before it loads an image', async () => {
+        const error = await rejection(MarrowAsset.load({ skeleton: 'sack.skel', atlas: 'sack.atlas' }));
 
         expect(error.code).toBe('unsupported-feature');
+        expect(error.message).toContain('The skeleton has physics constraints.');
         expect(loadImage).not.toHaveBeenCalled();
+        // spineboy has IK and transform constraints, which are solved
+        await expect(load({ skeleton: 'art/boy.skel', atlas: 'art/boy.atlas' })).resolves.toBeInstanceOf(MarrowAsset);
     });
 
     describe('MarrowSpine.load', () => {

@@ -29,6 +29,19 @@ const alphaModeOf = (page: AtlasPage): PageAlphaMode =>
 const reasonOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
 /**
+ * Whether the image behind a texture keeps its pixels: an image, a bitmap or bytes in memory.
+ * A canvas and a video change, and outlines of one moment would cut the next one wrong.
+ *
+ * @example
+ * if (isStillImage(texture.source.resource)) console.log('the page can have outlines');
+ */
+export function isStillImage(resource: unknown): boolean {
+    if (typeof resource !== 'object' || resource === null) return false;
+
+    return !('getContext' in resource) && !('videoWidth' in resource) && !('displayWidth' in resource);
+}
+
+/**
  * Sets up a texture the way its atlas page asks, as the official Pixi runtime does: alpha mode,
  * min and mag filter, mipmaps and wrap.
  *

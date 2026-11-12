@@ -155,8 +155,10 @@ function report(player: Player43, type: number, entry: Entry, key: EventKey | nu
  * Nothing happens while draining is turned off.
  */
 export function drain(player: Player43): void {
-    if (player.drainDisabled) return;
     const { queueTypes, queueEntries, queueKeys } = player;
+
+    // most updates queue nothing: setting the length of an empty list is not free
+    if (player.drainDisabled || queueTypes.length === 0) return;
 
     for (let i = 0; i < queueTypes.length; i++) {
         const entry = queueEntries[i];

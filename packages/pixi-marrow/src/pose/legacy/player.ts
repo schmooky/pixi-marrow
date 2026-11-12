@@ -4,6 +4,7 @@ import type { PoseEvent, PoseEventType } from '../engine';
 import type { PoseState } from '../state';
 import { LegacyEntry } from './entry';
 import { clipOf, type Rig } from './rig';
+import type { Solver } from './solver';
 import type { Clip } from './timelines';
 
 /**
@@ -13,6 +14,8 @@ import type { Clip } from './timelines';
 export class LegacyPlayer {
     readonly rig: Rig;
     readonly pose: PoseState;
+    /** The constraint values the constraint timelines animate. */
+    readonly solver: Solver;
     /** The current entry of each track, or null. */
     readonly tracks: (LegacyEntry | null)[] = [];
     timeScale = 1;
@@ -25,11 +28,6 @@ export class LegacyPlayer {
     unkeyedState = 0;
     /** The official `Slot.attachmentState` of each slot. */
     readonly attachmentState: Float64Array;
-    /**
-     * The `animationLast` of the entry whose timelines are being applied: the official `lastTime`
-     * argument. It is kept here because a number passed to every timeline costs an allocation each.
-     */
-    lastTime = 0;
     /** The events the timelines of one entry fired. Emptied after each entry. */
     readonly fired: EventKey[] = [];
     /** The listener calls since the last `takeEvents`. */
@@ -39,9 +37,10 @@ export class LegacyPlayer {
     /** Scratch: the values of one key of a timeline with several values. */
     readonly values: Float64Array = new Float64Array(8);
 
-    constructor(rig: Rig, pose: PoseState) {
+    constructor(rig: Rig, pose: PoseState, solver: Solver) {
         this.rig = rig;
         this.pose = pose;
+        this.solver = solver;
         this.attachmentState = new Float64Array(rig.model.slots.count);
     }
 }

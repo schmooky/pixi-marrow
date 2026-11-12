@@ -2,6 +2,7 @@ import { MarrowError } from '../../base/errors';
 import type { AttachmentData } from '../../model/attachments';
 import type { PoseState } from '../state';
 import { factsOf, type Rig } from './rig';
+import { type Solver, setConstraintsToSetupPose, useSkin } from './solver';
 
 /**
  * The official `Slot.setAttachment`. A changed attachment resets the sequence index. The deform
@@ -26,10 +27,11 @@ export function findAttachment(rig: Rig, pose: PoseState, slot: number, name: st
     return rig.lookup.find(pose.skin, slot, name) ?? null;
 }
 
-/** The official `Skeleton.setBonesToSetupPose`, without constraints. */
-export function setBonesToSetupPose(rig: Rig, pose: PoseState): void {
+/** The official `Skeleton.setBonesToSetupPose`: the bones, then the values of every constraint. */
+export function setBonesToSetupPose(rig: Rig, pose: PoseState, solver: Solver): void {
     pose.local.set(rig.model.bones.setup);
     pose.inherit.set(rig.model.bones.inherit);
+    setConstraintsToSetupPose(solver);
 }
 
 /** The official `Slot.setToSetupPose`. A slot without a setup attachment keeps its deform and sequence index. */
@@ -50,24 +52,6 @@ export function setSlotsToSetupPose(rig: Rig, pose: PoseState): void {
     for (let i = 0; i < count; i++) setSlotToSetupPose(rig, pose, i);
 }
 
-/**
- * Marks the bones that are posed, as the official `Skeleton.updateCache` does. A bone that
- * needs a skin is active only while the active skin lists it or one of its descendants.
- */
-function updateActiveBones(rig: Rig, pose: PoseState): void {
-    const { count, parents, skinRequired } = rig.model.bones;
-    const active = pose.active;
-
-    for (let i = 0; i < count; i++) active[i] = skinRequired[i] === 1 ? 0 : 1;
-    const skin = rig.model.skins[pose.skin];
-
-    if (skin === undefined) return;
-    for (const skinBone of skin.bones) {
-        // a parent index is below its bone, so the walk ends at a root
-        for (let bone = skinBone; bone >= 0; bone = parents[bone] ?? -1) active[bone] = 1;
-    }
-}
-
 /** The official `Skin.attachAll`: slots that show an attachment of the old skin get the one the new skin has under that name. */
 function attachAll(rig: Rig, pose: PoseState, newSkin: number, oldSkin: number): void {
     const entries = rig.model.skins[oldSkin]?.attachments ?? [];
@@ -83,8 +67,11 @@ function attachAll(rig: Rig, pose: PoseState, newSkin: number, oldSkin: number):
     }
 }
 
-/** The official `Skeleton.setSkin`. -1 is no skin. */
-export function setSkin(rig: Rig, pose: PoseState, skin: number): void {
+/**
+ * The official `Skeleton.setSkin`. -1 is no skin. A new skin gets the update cache sorted for it,
+ * which decides the bones and constraints that are active.
+ */
+export function setSkin(rig: Rig, pose: PoseState, solver: Solver, skin: number): void {
     const { skins, slots } = rig.model;
 
     if (!Number.isInteger(skin) || skin < -1 || skin >= skins.length) {
@@ -106,13 +93,13 @@ export function setSkin(rig: Rig, pose: PoseState, skin: number): void {
         }
     }
     pose.skin = skin;
-    updateActiveBones(rig, pose);
+    useSkin(solver);
 }
 
 /** Puts a new pose into the state a new official `Skeleton` is in: setup pose, no skin, no world transforms. */
-export function initPose(rig: Rig, pose: PoseState): void {
+export function initPose(rig: Rig, pose: PoseState, solver: Solver): void {
     pose.sequenceIndices.fill(-1);
-    setBonesToSetupPose(rig, pose);
+    setBonesToSetupPose(rig, pose, solver);
     setSlotsToSetupPose(rig, pose);
-    updateActiveBones(rig, pose);
+    useSkin(solver);
 }
