@@ -1,7 +1,7 @@
 import type { Ticker } from 'pixi.js';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { type MarrowAsset, MarrowSpine } from '../../src/index';
-import { fixtureAsset, holdTicker } from './helpers';
+import { MarrowAsset, MarrowSpine } from '../../src/index';
+import { blankTexture, fixtureAsset, holdTicker, importRig } from './helpers';
 
 describe('MarrowSpine.autoUpdate', () => {
     let asset: MarrowAsset;
@@ -123,6 +123,29 @@ describe('MarrowSpine.autoUpdate', () => {
 
         expect(firstUpdate).toHaveBeenCalledOnce();
         expect(secondUpdate).not.toHaveBeenCalled();
+    });
+
+    it('stops updating once its asset was destroyed, and takes its callback off the ticker', async () => {
+        const { model, atlas } = await importRig('4.2/spineboy-pro.skel');
+        const textures = atlas.pages.map(() => blankTexture());
+        const own = await MarrowAsset.from({ model, atlas, textures });
+        const spine = new MarrowSpine(own);
+        const walk = spine.play('walk', { loop: true });
+
+        made.push(spine);
+        tick(16);
+        expect(walk.time).toBeCloseTo(0.016, 10);
+
+        // what a load of the asset does when it is destroyed: the page textures go with it
+        own.destroy();
+        for (const texture of textures) texture.destroy(true);
+        expect(() => tick(16)).not.toThrow();
+
+        expect(walk.time).toBeCloseTo(0.016, 10);
+        expect(spine.autoUpdate).toBe(false);
+        expect(ticker.count).toBe(listeners);
+        expect(() => spine.update(0.25)).not.toThrow();
+        expect(walk.time).toBeCloseTo(0.016, 10);
     });
 
     it('takes its callback off the ticker when it is destroyed', () => {

@@ -379,7 +379,7 @@ export class MarrowAsset {
     /**
      * Unloads the page images this asset loaded and stops sharing the asset. Textures that were
      * passed in are left alone. A scan of the page images ends before its next page. Destroy the
-     * display objects made from the asset first.
+     * display objects made from the asset first. One that is left no longer updates.
      */
     destroy(): void {
         if (this.gone) return;

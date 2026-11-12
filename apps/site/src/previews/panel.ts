@@ -77,12 +77,20 @@ function rove(group: HTMLElement, follow: boolean): void {
     });
 }
 
+/** The controls of one preview with the way to end them. */
+export interface Panel extends Controls {
+    /** Ends the controls: what a preview adds from now on reaches no page. */
+    close(): void;
+}
+
 /** The controls of one preview, which write into the panel under its canvas. */
-export function panel(bar: HTMLElement): Controls {
+export function panel(bar: HTMLElement): Panel {
+    /** Where the rows go: the panel, and an element of no page once the controls were closed. */
+    let host = bar;
     /** The choices of a row, which is made when its label is named for the first time. */
     const row = (label: string, kind: string, role: string): HTMLElement => {
         const id = `${bar.id}-${label.toLowerCase()}`;
-        let choices = bar.querySelector<HTMLElement>(`[data-row="${label}"] > div`);
+        let choices = host.querySelector<HTMLElement>(`[data-row="${label}"] > div`);
 
         if (choices === null) {
             const line = document.createElement('div');
@@ -95,7 +103,7 @@ export function panel(bar: HTMLElement): Controls {
             name.id = id;
             name.textContent = label;
             line.append(name, choices);
-            bar.append(line);
+            host.append(line);
             if (role !== '') rove(choices, role === 'radiogroup');
         }
         choices.className = kind;
@@ -152,6 +160,9 @@ export function panel(bar: HTMLElement): Controls {
     };
 
     return {
+        close() {
+            host = document.createElement('div');
+        },
         // with one option there is nothing to pick. One animation is still shown: it says what plays
         pick: (label, options, choose, picked) =>
             radios(options.length > FEW ? 'preview-chips' : 'preview-segments', 2, label, options, choose, picked),
