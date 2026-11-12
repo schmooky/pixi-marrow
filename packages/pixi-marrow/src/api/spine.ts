@@ -325,7 +325,8 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpineLinks
 
     /**
      * Advances the animations by `seconds`, brings the drawn skeleton in line with the new pose,
-     * then emits the events. Call it once per frame when {@link autoUpdate} is false.
+     * then emits the events. Call it once per frame when {@link autoUpdate} is false. Once the
+     * asset was destroyed it does nothing, and {@link autoUpdate} turns off.
      *
      * @example
      * hero.autoUpdate = false;
@@ -333,17 +334,17 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpineLinks
      */
     update(seconds: number): void {
         if (this.destroyed) return;
-        if (this.probe !== null) {
-            this.measure(seconds, this.probe);
-
-            return;
+        // the page textures went with the asset: nothing of the pose could be drawn
+        if (this.asset.destroyed) this.autoUpdate = false;
+        else if (this.probe !== null) this.measure(seconds, this.probe);
+        else {
+            this.engine.update(seconds);
+            if (this.afterReset !== null) this.endReset(this.afterReset);
+            this.absorb();
+            this.links?.move(this.engine.state);
+            this.draw();
+            this.pump.flush(this, this.asset.model.events);
         }
-        this.engine.update(seconds);
-        if (this.afterReset !== null) this.endReset(this.afterReset);
-        this.absorb();
-        this.links?.move(this.engine.state);
-        this.draw();
-        this.pump.flush(this, this.asset.model.events);
     }
 
     /**

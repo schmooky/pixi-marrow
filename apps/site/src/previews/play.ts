@@ -53,14 +53,22 @@ export default definePreview({
         hero.defaultMix = 0.2;
         hero.on('event', onEvent);
         fit(hero, size, 0.7);
-        pick(
+        const rigs = pick(
             'Rig',
             ['bee', 'big bee'],
             async (name) => {
                 if (name === 'big bee') big ??= loadBig();
-                const next = name === 'bee' ? bee : await big;
+                // A load ends without its files when the page is left meanwhile. The rig that
+                // shows stays then, and the next press loads again
+                const next = name === 'bee' ? bee : await big?.catch(() => undefined);
 
-                if (next === undefined || next === shown) return;
+                if (next === undefined) {
+                    big = undefined;
+                    rigs.select(shown === bee ? 'bee' : 'big bee');
+
+                    return;
+                }
+                if (next === shown) return;
                 // the rig that leaves mixes out to its setup pose and rests
                 shown.hero.stop({ mix: 0.1 });
                 shown.hero.visible = false;
