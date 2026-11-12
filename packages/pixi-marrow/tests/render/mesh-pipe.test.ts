@@ -51,7 +51,7 @@ function fakeRenderer(
     const fake = {
         renderPipes: pipes,
         config: { renderPipeAdaptors: adaptors },
-        runners: { destroy: { add: (item: unknown) => destroyed.push(item) } },
+        runners: { destroy: { add: (item: unknown) => destroyed.push(item) }, prerender: { add: () => undefined } },
     };
 
     return { renderer: fake as unknown as Renderer, destroyed };
@@ -125,7 +125,10 @@ describe('the link of the mesh pipe', () => {
             expect(pipes.mesh).toBeUndefined();
             expect(destroyed).toEqual([]);
         }
-        const bare = { renderPipes: {}, runners: { destroy: { add: () => undefined } } };
+        const bare = {
+            renderPipes: {},
+            runners: { destroy: { add: () => undefined }, prerender: { add: () => undefined } },
+        };
 
         expect(() => linkMeshPipe(bare as unknown as Renderer)).not.toThrow();
         expect(bare.renderPipes).toEqual({});
@@ -141,7 +144,10 @@ describe('a view in the mesh mode below a renderer that has no mesh pipe', () =>
         // the renderer of a game: created before the code of the mesh mode, and `Mesh` with it, was there
         Reflect.deleteProperty(stage.renderer.renderPipes, 'mesh');
         Reflect.set(stage.renderer, 'config', { renderPipeAdaptors: [{ name: 'mesh', value: Adaptor }] });
-        Reflect.set(stage.renderer, 'runners', { destroy: { add: (item: unknown) => destroyed.push(item) } });
+        Reflect.set(stage.renderer, 'runners', {
+            destroy: { add: (item: unknown) => destroyed.push(item) },
+            prerender: { add: () => undefined },
+        });
         await loadMeshCode();
         const family = await loadFamily('4.2/speedy-ess.skel');
         const rig = await createBare(family, { renderMode: 'mesh' });

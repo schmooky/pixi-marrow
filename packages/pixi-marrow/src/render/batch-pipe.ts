@@ -11,6 +11,7 @@ import type { BatchBody } from './batch-body';
 import { BatchElement } from './batch-element';
 import { uploadsStretch } from './batch-upload';
 import { MarrowBatcher, MarrowDarkBatcher, PIPE_ID } from './batcher';
+import { contextLost, watchContext } from './context-watch';
 import { bendsEdges } from './gate';
 
 /*
@@ -107,12 +108,15 @@ export class MarrowPipe {
      * Runs one batch of skeletons. Every skeleton first learns how Pixi is about to draw it, as
      * in the mesh mode, and writes what that changes. Then the buffers upload what was written
      * since Pixi uploaded them, and the batch pipe of Pixi draws.
+     *
+     * A batch does not run while the WebGL context is lost, see `context-watch.ts`. What its
+     * skeletons have to write waits for the first batch that runs again.
      */
     execute(batch: Batch): void {
         const { renderer } = this;
         const { batcher } = batch;
 
-        if (renderer === null) return;
+        if (renderer === null || contextLost()) return;
         if (batcher instanceof MarrowBatcher) {
             const bends = bendsEdges(renderer);
 
@@ -157,6 +161,7 @@ export function linkRenderer(renderer: Renderer): MarrowPipe {
     // what a renderer does with the pipes it finds at its creation
     Reflect.set(renderer.renderPipes, PIPE_ID, pipe);
     renderer.runners.destroy.add(pipe);
+    watchContext(renderer);
 
     return pipe;
 }

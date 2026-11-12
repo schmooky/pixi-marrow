@@ -123,6 +123,12 @@
  * made as a game makes one: it imports `Application` and `MarrowSpine` by name, with the tree
  * shaken. Pixi registers pipes when their modules load, so a chunk that arrives after the
  * renderer exists can miss one. Each case equals the same case from a bundle with all of Pixi.
+ * A lost context. Last, `render/restore-check.mjs` takes the WebGL context of a running game
+ * away with the `WEBGL_lose_context` extension and gives it back, in both render modes: with
+ * skeletons at rest and playing, with a clip, with several instances of one asset, with attached
+ * containers, and with skeletons that are first drawn while the context is away. The frames
+ * after the restore equal the frames of a run that kept its context. It runs on WebGL alone:
+ * the loss of a WebGPU device is another event, and nothing checks it.
  * The lazy mesh mode. The code of the mesh mode is a chunk that loads on demand. The scenes
  * whose name starts with `lazy` draw the default options alone, each on a page of its own:
  *
@@ -197,6 +203,7 @@ import { checkGame } from './render/game-check.mjs';
 import { planRigs } from './render/plan.mjs';
 import { createReporter } from './render/report.mjs';
 import { describeHead, describeRig, describeScene, strayPixi } from './render/report-modes.mjs';
+import { checkRestore } from './render/restore-check.mjs';
 import { planScenes } from './render/scene-plan.mjs';
 import { bundlePage, serve } from './render/serve.mjs';
 import { builtPackage, inTime, launchChrome, parseArgs, pixiPackage } from './render/setup.mjs';
@@ -484,6 +491,16 @@ async function main() {
             pixi,
             renderers: wanted,
             outDir: join(outDir, 'game'),
+            only: args.only ?? null,
+        });
+    // a context is lost and restored with an extension of WebGL
+    if (!selfTest && wanted.includes('webgl'))
+        failed += await checkRestore({
+            root,
+            pkg,
+            pixi,
+            modes: pageOptions.renderMode === 'both' ? ['batched', 'mesh'] : [pageOptions.renderMode],
+            outDir: join(outDir, 'restore'),
             only: args.only ?? null,
         });
     if (ran === 0) {

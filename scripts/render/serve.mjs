@@ -156,7 +156,8 @@ function alive(pid) {
  * the two official runtimes. There is one per process and name, so the check and the bench can
  * run at the same time.
  *
- * @param name What the project is for: `page`, or `game` for scripts/render/game-bundle.mjs.
+ * @param name What the project is for: `page`, `game` for scripts/render/game-bundle.mjs, or
+ * `restore` for scripts/render/restore-check.mjs.
  * @param pkg The folder of the built pixi-marrow, see `bundlePage`.
  * @returns The folder of the project.
  */
@@ -169,7 +170,7 @@ export function scratchProject(root, name, pkg) {
     mkdirSync(cache, { recursive: true });
     // a run that was killed could not remove its scratch project
     for (const entry of readdirSync(cache)) {
-        const pid = /^marrow-(?:page|game)-(\d+)$/.exec(entry)?.[1];
+        const pid = /^marrow-(?:page|game|restore)-(\d+)$/.exec(entry)?.[1];
 
         if (pid && !alive(Number(pid))) rmSync(join(cache, entry), { recursive: true, force: true });
     }

@@ -1,4 +1,4 @@
-import { Buffer, type Container, RenderContainer, VERSION } from 'pixi.js';
+import { Buffer, type Container, RenderContainer, type Renderer, VERSION } from 'pixi.js';
 import { MarrowError } from '../base/errors';
 import { i16, i32 } from '../geometry/read';
 import type { SkeletonModel } from '../model/model';
@@ -46,13 +46,19 @@ export class MeshPaint {
     private readonly colors: Buffer;
     /** The child that calls the view before every draw. It exists once the view cuts. */
     private probe: RenderContainer | undefined;
+    /** The renderer that drew the paint last. It has a pipe for meshes and says when its context is lost. */
+    private linked: Renderer | null = null;
 
     constructor(options: MeshPaintOptions) {
         const { template, ...rest } = options;
 
         this.container = options.container;
         // a renderer that was created before this code loaded may have no pipe for meshes
-        this.container.onRender = linkMeshPipe;
+        this.container.onRender = (renderer): void => {
+            if (renderer === this.linked) return;
+            this.linked = renderer;
+            linkMeshPipe(renderer);
+        };
         this.positions = vertexBuffer(template.positions, 'marrow-positions');
         this.statics = vertexBuffer(template.statics, 'marrow-uvs');
         this.colors = vertexBuffer(template.colors, 'marrow-colors');
@@ -147,6 +153,7 @@ export class MeshPaint {
 
     /** Frees the buffers, the meshes and the shaders. */
     destroy(): void {
+        this.linked = null;
         this.ranges.destroy();
         this.positions.destroy();
         this.statics.destroy();

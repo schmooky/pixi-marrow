@@ -1,7 +1,8 @@
-import { type Bounds, Buffer, BufferUsage, Mesh, type Shader } from 'pixi.js';
+import { type Bounds, Buffer, BufferUsage, type Shader } from 'pixi.js';
 import { f64, i32 } from '../geometry/read';
 import type { ClipShape } from './clip-shape';
 import { MeasuredGeometry } from './measured-geometry';
+import { RangeMesh } from './range-mesh';
 
 /** Room for one triangle, so that the GPU buffers are never empty. */
 const MIN_VERTICES = 3;
@@ -35,7 +36,7 @@ const NO_INDICES = new Uint16Array(MIN_INDICES);
  */
 export class ClipMask {
     /** The mesh Pixi draws into the stencil buffer. */
-    readonly mesh: Mesh<MeasuredGeometry, Shader>;
+    readonly mesh: RangeMesh;
     /**
      * The bytes of the vertex and index data the mask holds on the GPU: its polygon, and the
      * longest list of triangles it has shown.
@@ -69,7 +70,7 @@ export class ClipMask {
             usage: BufferUsage.INDEX | BufferUsage.COPY_DST,
             shrinkToFit: false,
         });
-        this.mesh = new Mesh({
+        this.mesh = new RangeMesh({
             geometry: new MeasuredGeometry(
                 {
                     attributes: {
