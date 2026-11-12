@@ -1,0 +1,34 @@
+---
+import Nav from '../components/Nav.astro';
+import { SITE } from '../lib/site';
+import '../styles/global.css';
+
+interface Props {
+    title?: string;
+    description?: string;
+}
+const { title = `${SITE.name}: ${SITE.tagline}`, description = SITE.description } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>{title}</title>
+        <meta name="description" content={description} />
+        <link rel="canonical" href={new URL(Astro.url.pathname, Astro.site)} />
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    </head>
+    <body>
+        <a href="#content" class="skip-link">Skip to content</a>
+        <Nav />
+        <main id="content"><slot /></main>
+        <footer class="footer">
+            <div class="container-page footer-row">
+                <span>Pre-release. The licence is not chosen yet.</span>
+                <span>The bee is a symbol of the slot game Bzzz. The ring and the mark around it are drawn with pixi-silk.</span>
+            </div>
+        </footer>
+    </body>
+</html>

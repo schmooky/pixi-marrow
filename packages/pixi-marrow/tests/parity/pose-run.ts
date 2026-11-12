@@ -1,6 +1,8 @@
 import {
     type AttachmentData,
     type AttachmentRef,
+    LOCAL_STRIDE,
+    nextVersion,
     type PoseEngine,
     type SkeletonModel,
     type TrackEntry,
@@ -10,7 +12,7 @@ import {
 import { createAttachmentLookup } from '../../src/pose/shared/lookup';
 import { differences } from './compare';
 import { describeOp, type PoseScript, type ScriptOp } from './pose-script';
-import type { OfficialDriver, PoseDriver } from './pose-shared';
+import { BONE_FIELDS, type BoneField, type OfficialDriver, type PoseDriver } from './pose-shared';
 import { stampWatch } from './pose-stamps';
 
 /*
@@ -28,6 +30,8 @@ export interface Subject {
     yDown(value: boolean): void;
     /** Sets the directions of wind and gravity. */
     forces(windX: number, windY: number, gravityX: number, gravityY: number): void;
+    /** Writes one field of the local pose of a bone from outside the engine, between two updates. */
+    writeBone(bone: number, field: BoneField, value: number): void;
     /** The pose, in the same shape on both sides. Attachments are names, so they compare by identity. */
     read(): Record<string, unknown>;
     /**
@@ -47,6 +51,7 @@ export function officialSubject(driver: OfficialDriver, label: (ref: AttachmentR
         place: (x, y, scaleX, scaleY) => driver.place(x, y, scaleX, scaleY),
         yDown: (value) => driver.yDown(value),
         forces: (windX, windY, gravityX, gravityY) => driver.forces(windX, windY, gravityX, gravityY),
+        writeBone: (bone, field, value) => driver.writeBone(bone, field, value),
         read() {
             const pose = driver.read();
 
@@ -79,6 +84,12 @@ export function engineSubject(engine: PoseEngine, label: (attachment: Attachment
         },
         forces(windX, windY, gravityX, gravityY) {
             Object.assign(state, { windX, windY, gravityX, gravityY });
+        },
+        writeBone(bone, field, value) {
+            state.local[bone * LOCAL_STRIDE + BONE_FIELDS.indexOf(field)] = value;
+            // the mark the doc of `version` asks of code that writes an array. The local pose has no
+            // stamp, and no world transform has changed yet, so the version is all there is to raise.
+            state.version = nextVersion(state.version);
         },
         read() {
             world.set(state.world);
@@ -249,6 +260,9 @@ function call(subject: Subject, op: ScriptOp, entries: TrackEntry[]): TrackEntry
             break;
         case 'yDown':
             subject.yDown(op.value);
+            break;
+        case 'bone':
+            subject.writeBone(op.bone, op.field, op.value);
             break;
         case 'physics':
             driver.physics = op.mode;

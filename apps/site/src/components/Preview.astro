@@ -1,0 +1,32 @@
+---
+interface Props {
+    /** The name of a module of src/previews, as `PREVIEWS` of its runtime lists it. */
+    name: string;
+    /** The largest height of the canvas in CSS pixels. A narrow frame is lower: it keeps the shape of the scene. */
+    height?: number;
+    /** What the canvas shows, as a line under it and for screen readers. */
+    caption: string;
+    /** How many rows the panel under the canvas has, so that the page does not jump when they arrive. */
+    rows?: number;
+}
+const { name, height = 360, caption, rows = 3 } = Astro.props;
+const sources = import.meta.glob<string>('../previews/*.ts', { query: '?raw', import: 'default', eager: true });
+// the design size of the scene, read from the source: the frame has its shape before the module loads
+const size = /\bsize:\s*\[(\d+),\s*(\d+)\]/.exec(sources[`../previews/${name}.ts`] ?? '');
+
+if (size === null) throw new Error(`<Preview name="${name}"> names no module of src/previews with a size.`);
+const style = `aspect-ratio:${size[1]} / ${size[2]};max-height:${height}px`;
+---
+
+<figure class="preview">
+    <div class="preview-frame" data-preview={name}>
+        <div class="preview-canvas" data-preview-canvas style={style} role="img" aria-label={caption}></div>
+        <div class="preview-panel" id={`preview-${name}-panel`} data-preview-bar style={`--rows:${rows}`}></div>
+    </div>
+    <figcaption>{caption}</figcaption>
+</figure>
+<script>
+    import { mountPreviews } from '../previews/runtime';
+
+    mountPreviews();
+</script>

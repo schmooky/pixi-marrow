@@ -1,0 +1,50 @@
+---
+layout: ../layouts/Docs.astro
+title: Good to know
+description: What the runtime does on its own, the few options, the supported versions and the limits.
+---
+
+import Snippet from '../components/Snippet.astro';
+import source from '../snippets/good-to-know.ts?raw';
+
+## What is automatic
+
+- **Skeletons share draw calls.** Skeletons of up to 1024 vertices are batched: 200 instances of a small rig draw in one call. A Pixi object between two skeletons in the draw order ends a batch, so keep skeletons next to each other in the display list.
+- **A skeleton at rest costs close to nothing.** When its animation ended, or it never played one, no timeline runs and nothing is uploaded. It wakes with the next `play`.
+- **Less overdraw.** After a load the page images are read in idle time. From then on a region without a visible pixel is not drawn, and a slot behind the opaque part of a later slot is skipped. The picture stays the same.
+
+## Render mode
+
+<Snippet source={source} regions="render-mode" />
+
+`renderMode` is `auto` by default: a skeleton of up to 1024 vertices is batched, and a larger one gets meshes of its own. `mesh` and `batched` force one mode. `stats.renderMode` names the mode in use.
+
+## Physics
+
+<Snippet source={source} regions="physics" />
+
+`physics` is the official mode: `update`, `pose`, `reset` or `none`. Physics does not follow the Pixi position by itself, so tell it with `physicsTranslate` and `physicsRotate`. A skeleton with physics constraints keeps simulating at rest.
+
+## Why is it slow
+
+<Snippet source={source} regions="report" />
+
+The report lists what the runtime decided for this instance and why: draw calls, blend ranges, clipping, physics and more.
+
+## Versions
+
+| What | Supported |
+|---|---|
+| Spine | Exports of 4.1, 4.2 and 4.3, as `.json` or `.skel` |
+| PixiJS | Version 8, from 8.16 |
+| Renderer | WebGL2 and WebGPU |
+
+Every constraint is solved: IK, transform, path, physics and sliders. Clipping works.
+
+## Limits
+
+- No Canvas 2D and no WebGL1.
+- No Spine 3.8 and no Spine 4.0.
+- The runtime plays skeletons. Editing them stays in the Spine editor.
+- The speed was measured on one desktop machine. There are no numbers for phones yet.
+- The licence is not chosen yet. A runtime ported from the official Spine Runtimes falls under the Spine Runtimes License, and its users need a Spine licence.

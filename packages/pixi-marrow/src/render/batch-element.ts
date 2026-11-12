@@ -57,6 +57,8 @@ const RUN_BLEND: readonly (BLEND_MODES | undefined)[] = [undefined, undefined, '
 
 /** The blend keys of the runs a plan found. All elements share it: a plan is read before the next one. */
 let planned = new Uint8Array(4);
+/** The visible entry each of those runs starts with. */
+let plannedFirsts = new Int32Array(4);
 
 /** What an element reads and marks of the batcher that holds it. */
 export interface BatchHome {
@@ -118,6 +120,18 @@ export interface BatchElementOptions {
  * element.prepare(false, template.hasDark);
  * renderer.renderPipes.batch.addToBatch(element, instructionSet);
  */
+/**
+ * The runs of a skeleton behind a container that is attached between two slots. Pixi collects
+ * the container between the skeleton and this part, so the part is added to the batcher on its
+ * own, after the skeleton. It has no room of its own: its runs are in the room of the skeleton.
+ */
+export interface BatchPart {
+    /** The element of the skeleton. */
+    readonly owner: BatchElement;
+    /** Which attached container the part follows: an index into {@link BatchElement.partRuns}. */
+    readonly index: number;
+}
+
 export class BatchElement implements BatchableElement, PackSource {
     /**
      * The batcher that draws the element. It is the one with dark colors for a skeleton that
@@ -157,6 +171,12 @@ export class BatchElement implements BatchableElement, PackSource {
      * group above. Plain arrays: nearly every skeleton has one run.
      */
     readonly runKeys: number[] = [0];
+    /**
+     * Per container that is attached between two slots: the first run that draws after it. The
+     * runs before the first of them are drawn where the skeleton is collected, the others where
+     * the tail behind each container is. Empty for a skeleton without such containers.
+     */
+    readonly partRuns: number[] = [];
     readonly runSizes: number[] = [0];
     staticWords: number = STATIC_WORDS;
     tint = 0xffffffff;
@@ -259,6 +279,15 @@ export class BatchElement implements BatchableElement, PackSource {
     }
 
     /** The first atlas page of the group of 16 pages a run samples. */
+    /** The indices of the runs before a run: where that run starts, from the first index of the skeleton. */
+    runOffset(run: number): number {
+        let offset = 0;
+
+        for (let before = 0; before < run; before++) offset += Number(this.runSizes[before]);
+
+        return offset;
+    }
+
     firstPage(run: number): number {
         return ((this.runKeys[run] ?? 0) >> 2) << PAGE_SHIFT;
     }
@@ -320,10 +349,14 @@ export class BatchElement implements BatchableElement, PackSource {
 
         this.listDirty = true;
         this.dirty = true;
-        if (runs !== this.runs) this.resized = true;
+        if (runs !== this.runs || this.seen.cutCount !== this.partRuns.length) this.resized = true;
         else {
             for (let run = 0; run < runs; run++) {
                 if (planned[run] !== this.runKeys[run]) this.resized = true;
+            }
+            // a container between two slots is drawn between two runs: Pixi must hear when those are other runs
+            for (let part = 0; part < this.partRuns.length; part++) {
+                if (this.partRuns[part] !== this.firstRunAfter(part, runs)) this.resized = true;
             }
         }
 
@@ -343,6 +376,8 @@ export class BatchElement implements BatchableElement, PackSource {
         this.batcherName = dark ? DARK_BATCHER : BATCHER;
         this.staticWords = dark ? STATIC_WORDS + 1 : STATIC_WORDS;
         for (let run = 0; run < runs; run++) this.runKeys[run] = Number(planned[run]);
+        this.partRuns.length = this.seen.cutCount;
+        for (let part = 0; part < this.partRuns.length; part++) this.partRuns[part] = this.firstRunAfter(part, runs);
         this.runKeys.length = runs;
         this.runSizes.length = runs;
         this.runs = runs;
@@ -379,13 +414,27 @@ export class BatchElement implements BatchableElement, PackSource {
         spreadRuns(this.batches, this.runSizes, this.runs, this._indexStart);
     }
 
+    /**
+     * The first run that draws after an attached container, from the runs that were planned a
+     * moment ago: the first one that starts at or after the visible entries the container follows.
+     */
+    private firstRunAfter(part: number, runs: number): number {
+        const cut = Number(this.seen.cuts[part]);
+        let run = 0;
+
+        while (run < runs && Number(plannedFirsts[run]) < cut) run++;
+
+        return run;
+    }
+
     /** The runs of the visible slots, into the shared plan. Returns how many there are. */
     private findRuns(): number {
-        let runs = planRuns(this, this.seen.count, planned);
+        let runs = planRuns(this, this.seen.count, planned, plannedFirsts);
 
         if (runs > planned.length) {
             planned = new Uint8Array(runs * 2);
-            runs = planRuns(this, this.seen.count, planned);
+            plannedFirsts = new Int32Array(runs * 2);
+            runs = planRuns(this, this.seen.count, planned, plannedFirsts);
         }
 
         return runs;

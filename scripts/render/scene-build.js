@@ -48,6 +48,17 @@ function makeShape(PIXI, node) {
 export const modeOf = (side, node) => (side.mode === 'batched' || side.picks ? (node.mode ?? side.mode) : side.mode);
 
 /**
+ * What an instance holds on a side. The wrong side of a proof that misplaces hangs the object of
+ * the proof on another slot: one of the same bone, so that its place in the draw order is all
+ * that differs.
+ */
+function heldBy(scene, side, name, hold) {
+    const misplace = side.wrong ? scene.proof?.misplace : undefined;
+
+    return misplace && misplace.name === name && misplace.key === hold.key ? { ...hold, slot: misplace.slot } : hold;
+}
+
+/**
  * Creates the instance of a node and moves it to its place in time. It plays the animation of
  * its rig in a loop, or once with `loop: false`. A node with `play: false` plays nothing and
  * shows its setup pose.
@@ -68,6 +79,7 @@ async function makeInstance(scene, side, node) {
     instance.node = node;
     if (rig.skin) instance.setSkin(rig.skin);
     instance.place(node);
+    for (const hold of node.holds ?? []) await instance.hold(heldBy(scene, side, node.name, hold));
     if (node.play !== false) instance.play(rig.animation, node.loop ?? true);
     // every instance at another time of its animation
     instance.update(node.time ?? 0);
@@ -180,6 +192,8 @@ export async function applyEvent(env, scene, side, event) {
     } else if (event.op === 'play') target.play(event.animation, event.loop ?? true);
     else if (event.op === 'skin') target.setSkin(event.skin);
     else if (event.op === 'mode') target.setMode(event.mode);
+    else if (event.op === 'hold') await target.hold(heldBy(scene, side, event.name, event.hold));
+    else if (event.op === 'release') target.release(event.key);
     else if (event.op === 'shift') shiftGroup(side.groups.get(event.group), event);
     else if (event.op === 'destroy') {
         target.destroy();

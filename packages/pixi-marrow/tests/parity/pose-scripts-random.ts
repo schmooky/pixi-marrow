@@ -1,10 +1,10 @@
 import type { TrackFields } from '../../src/core';
-import { DT, ODD, type PoseScript, script, thresholds } from './pose-script';
-import type { PoseRigInfo } from './pose-shared';
+import { DT, ODD, type PoseScript, type ScriptBuilder, script, thresholds } from './pose-script';
+import { BONE_FIELDS, type PoseRigInfo } from './pose-shared';
 
 /*
  * The random script: every kind of call in an order no hand-written script has, the calls for
- * physics and for the place and the y direction of the skeleton among them. It is seeded, so a fixture gets the same
+ * physics, for the place and the y direction of the skeleton and for writes to bones among them. It is seeded, so a fixture gets the same
  * script on every run and on every machine.
  */
 
@@ -18,6 +18,9 @@ const MODES = ['update', 'update', 'update', 'pose', 'none', 'reset'] as const;
 const PLACES = [-60, -7.5, 0, 0, 12, 90] as const;
 const SCALES = [1, 1, -1, 0.6, -1.5, 2] as const;
 const DIRECTIONS = [-1, 0, 0, 0.5, 1, 3] as const;
+/** Values for a write to a bone, by the kind of its field. No scale of zero: the official core divides by it. */
+const TURNS = [-170, -30, 15, 90, 400] as const;
+const SHEARS = [-30, 0, 20] as const;
 
 /** mulberry32, seeded with a hash of the text. */
 function generator(seed: string): () => number {
@@ -76,6 +79,21 @@ function randomFields(rig: PoseRigInfo, { chance, of }: Dice): TrackFields {
     return fields;
 }
 
+/** A write to one field of any bone of the rig, a bone that is not active or that a constraint writes among them. */
+function writeBone(s: ScriptBuilder, rig: PoseRigInfo, { below, of }: Dice): void {
+    const field = of(BONE_FIELDS);
+    const value =
+        field === 'rotation'
+            ? of(TURNS)
+            : field === 'x' || field === 'y'
+              ? of(PLACES)
+              : field === 'scaleX' || field === 'scaleY'
+                ? of(SCALES)
+                : of(SHEARS);
+
+    s.bone(below(rig.bones), field, value);
+}
+
 /** A seeded script that mixes every kind of call on four tracks. */
 export function randomScript(rig: PoseRigInfo, seed: string): PoseScript {
     const roll = dice(seed);
@@ -88,8 +106,8 @@ export function randomScript(rig: PoseRigInfo, seed: string): PoseScript {
     return script(`random, seed ${seed}`, (s) => {
         // weight, call. The weights add up to 100.
         const calls: [number, () => void][] = [
-            [37, () => s.update(of(STEPS), 1 + below(4))],
-            [16, () => s.set(track(), animation(), loop(), fields())],
+            [35, () => s.update(of(STEPS), 1 + below(4))],
+            [15, () => s.set(track(), animation(), loop(), fields())],
             [9, () => s.add(track(), animation(), loop(), of(DELAYS), fields())],
             [4, () => s.setEmpty(track(), of(MIXES))],
             [4, () => s.addEmpty(track(), of(MIXES), of(DELAYS))],
@@ -108,6 +126,7 @@ export function randomScript(rig: PoseRigInfo, seed: string): PoseScript {
             [2, () => s.place(of(PLACES), of(PLACES), of(SCALES), of(SCALES))],
             [1, () => s.forces(of(DIRECTIONS), of(DIRECTIONS), of(DIRECTIONS), of(DIRECTIONS))],
             [1, () => s.yDown(chance(0.6))],
+            [3, () => writeBone(s, rig, roll)],
         ];
 
         s.defaultMix(of(MIXES));

@@ -8,7 +8,7 @@
  *             place it, `time` is where in its animation it starts. It plays the animation of
  *             its rig in a loop, once with `loop: false`, and not at all with `play: false`.
  *             `visible` and `renderable` set those flags. `mode` asks for a render mode on the
- *             batched side
+ *             batched side. `holds` lists Pixi objects the instance holds, see `held`
  *   group     a container with `children`, and any of `alpha`, `tint`, `mask`, `filter`,
  *             `renderGroup` and a transform. With a `name` an event can move it
  *   graphics  a rectangle of one color
@@ -23,6 +23,7 @@
  *   play      an animation on an instance, in a loop or once with `loop: false`
  *   skin      another skin on an instance
  *   mode      asks an instance of ours for another render mode
+ *   hold      hangs an object on an instance, see `held`. `release` takes the one with a `key` off
  *   shift     moves a named group: any of `x`, `y`, `scale` and `rotation`
  *   destroy   destroys an instance
  */
@@ -90,6 +91,17 @@ export function spine(name, key, rig, { cx, cy, size, rotation = 0, at = 0, ...f
         ...flags,
     };
 }
+
+/**
+ * A Pixi `Graphics` an instance holds, for `holds` of a node and for an event of kind `hold`.
+ * `on.slot` attaches it to a slot: it is drawn at the place of that slot in the draw order.
+ * `on.bone` makes it a child of the display object that follows a bone.
+ *
+ * @param key What an event of kind `release` and a proof name it by.
+ * @param shape A circle with `radius`, or a rectangle with `x`, `y`, `width` and `height`, around
+ * the origin of the bone and in its units. Both have a `color` and can have an `alpha`.
+ */
+export const held = (key, on, shape) => ({ key, ...on, shape });
 
 /** A scene with the defaults: 16 frames, three of them captured, judged against the official runtime. */
 export function scene(id, title, official, rigs, nodes, more = {}) {

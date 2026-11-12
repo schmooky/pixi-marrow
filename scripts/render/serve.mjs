@@ -78,7 +78,7 @@ function officialCore(pkgDir) {
  *
  * @param pixiDir The folder of that pixi.js.
  */
-function onePixi(pixiDir) {
+export function onePixi(pixiDir) {
     const manifest = JSON.parse(readFileSync(join(pixiDir, 'package.json'), 'utf8'));
 
     return {
@@ -151,6 +151,47 @@ function alive(pid) {
 }
 
 /**
+ * An empty scratch project below `node_modules/.cache`, so that the bare imports of an entry
+ * written into it resolve to the packages the library uses: the built pixi-marrow, pixi.js and
+ * the two official runtimes. There is one per process and name, so the check and the bench can
+ * run at the same time.
+ *
+ * @param name What the project is for: `page`, or `game` for scripts/render/game-bundle.mjs.
+ * @param pkg The folder of the built pixi-marrow, see `bundlePage`.
+ * @returns The folder of the project.
+ */
+export function scratchProject(root, name, pkg) {
+    const pkgDir = join(root, 'packages/pixi-marrow');
+    const cache = join(root, 'node_modules/.cache');
+    const work = join(cache, `marrow-${name}-${process.pid}`);
+    const modules = join(work, 'node_modules');
+
+    mkdirSync(cache, { recursive: true });
+    // a run that was killed could not remove its scratch project
+    for (const entry of readdirSync(cache)) {
+        const pid = /^marrow-(?:page|game)-(\d+)$/.exec(entry)?.[1];
+
+        if (pid && !alive(Number(pid))) rmSync(join(cache, entry), { recursive: true, force: true });
+    }
+    rmSync(work, { recursive: true, force: true });
+    mkdirSync(modules, { recursive: true });
+    // a junction needs no privilege on Windows. Elsewhere the type is ignored
+    if (!pkg || pkg === pkgDir) symlinkSync(pkgDir, join(modules, 'pixi-marrow'), 'junction');
+    else {
+        // A build that was kept is copied in, so that its import of pixi.js resolves to the one
+        // of this scratch project. A link would resolve it from the folder the build was kept in
+        mkdirSync(join(modules, 'pixi-marrow'));
+        cpSync(join(pkg, 'package.json'), join(modules, 'pixi-marrow/package.json'));
+        cpSync(join(pkg, 'dist'), join(modules, 'pixi-marrow/dist'), { recursive: true });
+    }
+    for (const dependency of ['pixi.js', 'spine-pixi-4.2', 'spine-pixi-4.3']) {
+        symlinkSync(realpathSync(join(pkgDir, 'node_modules', dependency)), join(modules, dependency), 'junction');
+    }
+
+    return work;
+}
+
+/**
  * Bundles a page into `<work>/dist`. The two official runtimes register the same Pixi extension
  * names, so each sits behind a dynamic import and a page loads one of them.
  *
@@ -169,35 +210,9 @@ export async function bundlePage(root, page = 'scripts/render/page.js', { pkg, p
     const pkgDir = join(root, 'packages/pixi-marrow');
     const developedOn = realpathSync(join(pkgDir, 'node_modules/pixi.js'));
     const pixiDir = pixi ?? developedOn;
-    const cache = join(root, 'node_modules/.cache');
-    // one scratch project per process, so the check and the bench can run at the same time
-    const work = join(cache, `marrow-page-${process.pid}`);
-    const modules = join(work, 'node_modules');
-
-    mkdirSync(cache, { recursive: true });
-    // a run that was killed could not remove its scratch project
-    for (const name of readdirSync(cache)) {
-        const pid = /^marrow-page-(\d+)$/.exec(name)?.[1];
-
-        if (pid && !alive(Number(pid))) rmSync(join(cache, name), { recursive: true, force: true });
-    }
+    const work = scratchProject(root, 'page', pkg);
     const entry = join(work, 'entry.js');
 
-    // a scratch project, so the bare imports of the entry resolve to the packages the library uses
-    rmSync(work, { recursive: true, force: true });
-    mkdirSync(modules, { recursive: true });
-    // a junction needs no privilege on Windows. Elsewhere the type is ignored
-    if (!pkg || pkg === pkgDir) symlinkSync(pkgDir, join(modules, 'pixi-marrow'), 'junction');
-    else {
-        // A build that was kept is copied in, so that its import of pixi.js resolves to the one
-        // of this scratch project. A link would resolve it from the folder the build was kept in
-        mkdirSync(join(modules, 'pixi-marrow'));
-        cpSync(join(pkg, 'package.json'), join(modules, 'pixi-marrow/package.json'));
-        cpSync(join(pkg, 'dist'), join(modules, 'pixi-marrow/dist'), { recursive: true });
-    }
-    for (const name of ['pixi.js', 'spine-pixi-4.2', 'spine-pixi-4.3']) {
-        symlinkSync(realpathSync(join(pkgDir, 'node_modules', name)), join(modules, name), 'junction');
-    }
     writeFileSync(
         entry,
         [

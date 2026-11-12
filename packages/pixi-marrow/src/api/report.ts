@@ -1,3 +1,4 @@
+import type { Container } from 'pixi.js';
 import type { ConstraintData } from '../model/constraints';
 import type { PhysicsMode } from '../pose/engine';
 import { type PerfEntry, plural, type ReportSource, slotNames } from './report-base';
@@ -104,6 +105,42 @@ function motionRow({ model, stats, view }: ReportSource): PerfEntry {
         value: `${bones} of ${model.bones.count} bones, ${slots} of ${model.slots.count} slots`,
         reason: `the pose engine marked them as changed for the last update. The view placed the vertices of ${stats.placedSlots} of ${plural(view.visible.length, 'visible slot')} and wrote the colors of ${stats.coloredSlots}. ${rested}`,
     };
+}
+
+/** How a container is named in a reason: by its label, else by its class. */
+const labelOf = (container: Container): string => `"${container.label || container.constructor.name}"`;
+
+/** The row about the containers of the user: the ones on a slot, the ones behind a bone, and what they cost. */
+function linksRow({ model, stats, view, links, attachCode }: ReportSource): PerfEntry {
+    const attached = links.filter((link) => link.slot >= 0);
+    const following = links.filter((link) => link.slot < 0);
+    const row = (reason: string): PerfEntry => ({
+        feature: 'links',
+        value: links.length === 0 ? 'none' : `${attached.length} attached, ${following.length} following`,
+        reason,
+    });
+
+    if (links.length === 0) return row('no container is attached to a slot or follows a bone');
+    const on = attached.map((link) => `${labelOf(link.container)} on slot "${model.slots.names[link.slot]}"`);
+    const behind = following.map((link) => `${labelOf(link.container)} behind bone "${model.bones.names[link.bone]}"`);
+    const free =
+        following.length === 0 ? '' : `${behind.join(', ')}: a container that follows a bone costs no draw call`;
+
+    if (attached.length === 0) return row(free);
+    const names = `${on.join(', ')}. `;
+
+    if (attachCode !== 'loaded') {
+        const why =
+            attachCode === 'failed'
+                ? 'did not load. Check the network, and that the bundler wrote the chunks of pixi-marrow next to its entry and the server sends them'
+                : 'is loading';
+
+        return row(`${names}The attached containers are hidden: the chunk of pixi-marrow that draws them ${why}`);
+    }
+    const unit = view.mode.mode === 'batched' ? 'a batch' : 'a draw range';
+    const cost = `Each one that is drawn ends ${unit} of the skeleton at its slot: the skeleton is ${plural(stats.drawCalls, 'draw call')} now, and each container adds its own`;
+
+    return row(`${names}${cost}${free === '' ? '' : `. ${free}`}`);
 }
 
 /** The row about draw calls of a view that draws in batches. */
@@ -329,6 +366,7 @@ export function buildReport(source: ReportSource): PerfEntry[] {
     return [
         renderModeRow(source),
         motionRow(source),
+        linksRow(source),
         drawCallRow(source),
         blendRow(source),
         pagesRow(source),

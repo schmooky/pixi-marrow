@@ -105,6 +105,7 @@ export function sleeping(subject: Subject, makeUp: boolean): Subject {
         place: awake(subject.place),
         yDown: awake(subject.yDown),
         forces: awake(subject.forces),
+        writeBone: awake(subject.writeBone),
     };
 }
 

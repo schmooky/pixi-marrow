@@ -11,7 +11,7 @@ import {
     type TrackFields,
     WORLD_STRIDE,
 } from '../../src/core';
-import type { AnimationInfo } from './pose-info';
+import type { AnimationInfo, BoneInfo } from './pose-info';
 
 /*
  * What the three official pose drivers share. A driver takes the calls of a pose engine and makes
@@ -26,6 +26,12 @@ import type { AnimationInfo } from './pose-info';
  * pose a driver reads is the animated one, the world transforms are those of the applied one, and
  * the slot values and the draw order are the applied ones: what is drawn.
  */
+
+/** The fields of the local pose of a bone, in the order they have in `PoseState.local`. */
+export const BONE_FIELDS = ['x', 'y', 'rotation', 'scaleX', 'scaleY', 'shearX', 'shearY'] as const;
+
+/** One field of the local pose of a bone. */
+export type BoneField = (typeof BONE_FIELDS)[number];
 
 /** The calls a script makes. A pose engine and an official driver both take them. */
 export type PoseDriver = Omit<PoseEngine, 'state' | 'bytes'>;
@@ -54,7 +60,7 @@ export interface OfficialPose {
 }
 
 /** What a script needs to know about a rig. */
-export interface PoseRigInfo {
+export interface PoseRigInfo extends BoneInfo {
     version: SpineVersion;
     bones: number;
     slots: number;
@@ -69,6 +75,11 @@ export interface PoseRigInfo {
 export interface OfficialDriver extends PoseDriver {
     /** Sets the position and the scale of the skeleton, as writing them to the state of a pose engine does. */
     place(x: number, y: number, scaleX: number, scaleY: number): void;
+    /**
+     * Writes one field of the local pose of a bone, as code outside the official runtime does
+     * between two updates: `bone.rotation = value` in 4.1 and 4.2, `bone.pose.rotation = value` in 4.3.
+     */
+    writeBone(bone: number, field: BoneField, value: number): void;
     /**
      * Says whether the y axis of the world points down, as writing `yDown` to the state of a pose
      * engine does. The official flag is the static `Skeleton.yDown`, one for the whole process. A

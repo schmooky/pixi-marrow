@@ -3,8 +3,10 @@
  */
 export type { MarrowAssetData, MarrowLoadOptions, OutlinesState } from './api/asset';
 export { MarrowAsset } from './api/asset';
+export type { Bone } from './api/bone';
 export type { MarrowSpineEvents } from './api/events';
 export type {
+    AttachOptions,
     MarrowEvent,
     MarrowNames,
     MarrowSpineOptions,
@@ -15,6 +17,7 @@ export type {
 } from './api/options';
 export type { PerfEntry, PerfFeature } from './api/report-base';
 export { MarrowSpine } from './api/spine';
+export type { SpineLinks } from './api/spine-links';
 export type { MarrowPerf, PerfMemory } from './api/spine-perf';
 export type { Track } from './api/track';
 export type { MarrowErrorCode, MarrowErrorDetails } from './base/errors';

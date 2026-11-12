@@ -10,6 +10,10 @@ import { findEntry, type Template } from './template';
 /** The clip of a visible entry that no clipping attachment cuts. */
 export const NO_CLIP = -1;
 
+/** The cuts of a list without a container between its slots. All such lists share the two arrays. */
+const NO_CUTS = new Int32Array(0);
+const NO_STARTS = new Uint8Array(0);
+
 /** What a slot shows when it is no entry of the template. */
 const NONE = -1;
 /** A region or mesh attachment the template has no range for. */
@@ -47,6 +51,15 @@ export class VisibleList {
     clipped = 0;
     /** True when the list differs from the one the index buffers were written for. */
     dirty = true;
+    /**
+     * Where the containers that are attached to slots are drawn: for each one the number of
+     * visible entries before it, ascending. Valid up to {@link cutCount}. A draw range and a run
+     * of a batch end at a cut, and no slot is left out for a slot on the other side of one.
+     */
+    cuts: Int32Array = NO_CUTS;
+    /** Per visible entry: 1 when a container is drawn right before it. Empty without attached containers. */
+    starts: Uint8Array = NO_STARTS;
+    cutCount = 0;
     /**
      * Per slot: the entry of the attachment it shows, or a negative code. An entry has
      * {@link SHOWS} added while the alpha of its slot let it show in the pose that was collected last.

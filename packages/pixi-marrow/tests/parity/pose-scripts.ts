@@ -1,4 +1,5 @@
 import { DT, ODD, type PoseScript, pick, script } from './pose-script';
+import { boneScripts } from './pose-scripts-bones';
 import { dialectScripts, fieldScripts } from './pose-scripts-fields';
 import { keyScripts } from './pose-scripts-keys';
 import { physicsScripts } from './pose-scripts-physics';
@@ -432,5 +433,6 @@ export const SCRIPT_FAMILIES: readonly ScriptFamily[] = [
     { name: 'rest', scripts: restScripts },
     { name: 'keys', scripts: keyScripts },
     { name: 'still bones', scripts: stillScripts },
+    { name: 'bone writes', scripts: boneScripts },
     { name: 'random', scripts: (rig, seed) => [1, 2, 3, 4, 5, 6].map((n) => randomScript(rig, `${seed} ${n}`)) },
 ];

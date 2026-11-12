@@ -293,7 +293,7 @@ function writeElement(element: BatchElement, home: BatchHome, mark: boolean): vo
         const next = runKey(Number(blendModes[slot]), i32(pages, entry));
         const from = i32(plan, at);
 
-        if (next !== key && i > 0) {
+        if ((next !== key || seen.starts[i] === 1) && i > 0) {
             for (let pad = 0; pad < RUN_PAD; pad++) indexBuffer[cursor++] = vertex;
             runSizes[run++] = cursor - start;
             start = cursor;

@@ -25,7 +25,7 @@ const MORE_VERTICES = 400;
  * @param dir A folder the page server serves like fixtures/.cache.
  * @returns The file name of the copy.
  */
-function writeLargeRig(root, dir) {
+export function writeLargeRig(root, dir) {
     const file = 'raptor-large.json';
     const rig = JSON.parse(readFileSync(join(root, 'fixtures/.cache/4.3/raptor-pro.json'), 'utf8'));
     const skin = rig.skins.find((entry) => entry.name === 'default').attachments;

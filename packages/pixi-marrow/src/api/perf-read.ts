@@ -1,3 +1,5 @@
+import { attachCodeState } from '../render/attach-code';
+import type { Link } from '../render/attach-work';
 import { inspectView } from '../render/inspect';
 import type { SkeletonView } from '../render/skeleton-view';
 import { sharedBytes, textureBytes } from './memory';
@@ -18,7 +20,7 @@ import type { PerfMemory, PerfOwner } from './spine-perf';
  * const { readReport } = await import('./perf-read');
  * console.table(readReport(spine, view));
  */
-export function readReport(owner: PerfOwner, view: SkeletonView): PerfEntry[] {
+export function readReport(owner: PerfOwner, view: SkeletonView, links: readonly Link[] = []): PerfEntry[] {
     const { asset, engine, stats, physics } = owner;
 
     return buildReport({
@@ -30,6 +32,8 @@ export function readReport(owner: PerfOwner, view: SkeletonView): PerfEntry[] {
         state: engine.state,
         stats,
         view: inspectView(view),
+        links,
+        attachCode: attachCodeState(),
         physics,
         // the engine runs one update in mode reset, then the mode of the display object returns
         resetPending: engine.physics !== physics,

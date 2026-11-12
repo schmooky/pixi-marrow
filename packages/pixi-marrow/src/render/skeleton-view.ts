@@ -6,6 +6,7 @@ import type { SkeletonModel } from '../model/model';
 import type { AtlasOutlines } from '../model/outlines';
 import { type AttachmentLookup, createAttachmentLookup } from '../pose/shared/lookup';
 import type { PoseState } from '../pose/state';
+import type { ViewInserts } from './attach-work';
 import { layoutSlots, type SlotLayout } from './batch-layout';
 import { measureEntries } from './bounds';
 import { clipCode, clipCodeMissing } from './clip-code';
@@ -87,6 +88,8 @@ export class SkeletonView implements DrawGate {
     readonly container: Container;
     /** What the view did and what it holds. */
     readonly stats: ViewStats;
+    /** The containers that are attached between slots, once there is one. See `attach-work.ts`. */
+    inserts: ViewInserts | undefined;
     private readonly model: SkeletonModel;
     private readonly atlas: AtlasModel;
     private readonly lookup: AttachmentLookup;
@@ -385,6 +388,7 @@ export class SkeletonView implements DrawGate {
         const { pass, seen, stats, template, cover } = this;
         const { bones, hasDark } = this.model.slots;
 
+        if (listed) this.inserts?.cut(seen, template, state);
         // the code that clips loads with an asset whose skeleton has a clipping attachment
         if (seen.clipped > 0 && clipCode() === undefined) throw clipCodeMissing();
         stats.clips = seen.applied;
@@ -432,10 +436,7 @@ export class SkeletonView implements DrawGate {
         }
     }
 
-    /**
-     * Brings the indices in line with the visible entries: the index buffers of the meshes are
-     * rewritten, or the batch is told to rewrite its part. Vertex data stays where it is.
-     */
+    /** Brings the indices in line with the visible entries, in the meshes or in the batch. Vertex data stays where it is. */
     private reindex(count: number): void {
         const { stats, template, seen } = this;
         const visible = seen.list;
@@ -464,13 +465,14 @@ export class SkeletonView implements DrawGate {
         } else if (mesh !== undefined) {
             const { ranges } = mesh;
 
-            ranges.build(template, visible, seen.clips, skipped, count);
+            ranges.build(template, visible, seen.clips, skipped, count, seen);
             stats.maskDraws = ranges.masks * 2;
             stats.drawCalls = ranges.active + stats.maskDraws;
             stats.indices = ranges.indices;
             stats.bufferBytes = templateBytes(template) + ranges.bytes;
         }
         seen.dirty = false;
+        this.inserts?.place(this.paints, this.container);
         stats.indexRebuilds++;
         stats.tightRanges = tight;
         stats.coveredSlots = this.cover.covered;

@@ -4,6 +4,8 @@ import type { SkeletonModel } from '../model/model';
 import type { AtlasOutlines } from '../model/outlines';
 import type { PhysicsMode } from '../pose/engine';
 import type { PoseState } from '../pose/state';
+import type { AttachCodeState } from '../render/attach-code';
+import type { Link } from '../render/attach-work';
 import type { ViewReport } from '../render/inspect';
 import type { ViewStats } from '../render/stats';
 import type { OutlinesState } from './asset';
@@ -12,6 +14,7 @@ import type { OutlinesState } from './asset';
 export type PerfFeature =
     | 'renderMode'
     | 'motion'
+    | 'links'
     | 'drawCalls'
     | 'blend'
     | 'pages'
@@ -52,6 +55,10 @@ export interface ReportSource {
     state: PoseState;
     stats: ViewStats;
     view: ViewReport;
+    /** The containers that follow a bone or are attached to a slot. */
+    links: readonly Link[];
+    /** Where the code that draws attached containers stands. */
+    attachCode: AttachCodeState;
     /** The physics mode that holds. */
     physics: PhysicsMode;
     /** Whether the next update resets the physics before that mode returns. */

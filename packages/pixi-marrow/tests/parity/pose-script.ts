@@ -1,5 +1,5 @@
 import type { PhysicsMode, TrackFields } from '../../src/core';
-import type { PoseRigInfo } from './pose-shared';
+import type { BoneField, PoseRigInfo } from './pose-shared';
 
 /*
  * A script is a list of calls on a pose engine, as data. The same list runs on our engine and on
@@ -30,6 +30,11 @@ export type ScriptOp =
      * `Skeleton.yDown`. The scale `place` sets stays the effective one.
      */
     | { op: 'yDown'; value: boolean }
+    /**
+     * A write to the local pose of a bone from outside the engine, as a bone handle of the display
+     * object makes it: one field of one bone gets a value, between two updates.
+     */
+    | { op: 'bone'; bone: number; field: BoneField; value: number }
     /** How physics constraints run from the next update on. */
     | { op: 'physics'; mode: PhysicsMode }
     | { op: 'physicsTranslate'; x: number; y: number }
@@ -62,6 +67,7 @@ export interface ScriptBuilder {
     setupPoseSlots(): void;
     place(x: number, y: number, scaleX: number, scaleY: number): void;
     yDown(value: boolean): void;
+    bone(bone: number, field: BoneField, value: number): void;
     physics(mode: PhysicsMode): void;
     physicsTranslate(x: number, y: number): void;
     physicsRotate(x: number, y: number, degrees: number): void;
@@ -99,6 +105,7 @@ export function script(name: string, build: (s: ScriptBuilder) => void): PoseScr
         setupPoseSlots: () => push({ op: 'setupPoseSlots' }),
         place: (x, y, scaleX, scaleY) => push({ op: 'place', x, y, scaleX, scaleY }),
         yDown: (value) => push({ op: 'yDown', value }),
+        bone: (bone, field, value) => push({ op: 'bone', bone, field, value }),
         physics: (mode) => push({ op: 'physics', mode }),
         physicsTranslate: (x, y) => push({ op: 'physicsTranslate', x, y }),
         physicsRotate: (x, y, degrees) => push({ op: 'physicsRotate', x, y, degrees }),

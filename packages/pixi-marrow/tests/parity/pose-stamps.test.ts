@@ -51,7 +51,7 @@ function holdFirst(now: Uint32Array, before: Uint32Array): void {
 
 describe('the stamp check', () => {
     const ids = ['4.1/made-for-pose.json', '4.3/made-slider-slots.json', '4.2/made-physics-order.json'];
-    const families = ['loops', 'setup pose', 'skins', 'skeleton', 'rest', 'still bones', 'random'];
+    const families = ['loops', 'setup pose', 'skins', 'skeleton', 'rest', 'still bones', 'bone writes', 'random'];
     /** The first animation of `made-for-pose` keys bones, slots and the draw order. */
     const play = script('loop the first animation', (s) => {
         s.set(0, 0, true);

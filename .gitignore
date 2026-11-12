@@ -29,3 +29,8 @@ packages/*/LICENSE
 
 # Raw numbers of the A/B bench, written by scripts/bench/ab.mjs
 .bench/
+
+# The docs site: what Astro generates, and the rigs that
+# apps/site/scripts/copy-rigs.mjs copies from fixtures/bzzz. Not committed twice.
+.astro/
+apps/site/public/rigs/

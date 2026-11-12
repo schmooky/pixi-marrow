@@ -16,7 +16,7 @@ import {
 import type { AttachmentRef, PhysicsMode, TrackField } from '../../src/core';
 import { attachmentRefs, eventKey, indexer, skinEntries, timelineKind } from './model-shared';
 import type { RigFiles } from './official';
-import { describeAnimation } from './pose-info';
+import { describeAnimation, describeBones } from './pose-info';
 import {
     animationIndexer,
     COMMON_FLAGS,
@@ -192,6 +192,12 @@ function createDriver(shared: Shared): OfficialDriver {
             yDown.place(scaleY);
         },
         yDown: (value) => yDown.set(value),
+        writeBone(index, field, value) {
+            const bone = skeleton.bones[index];
+
+            if (bone === undefined) throw new Error(`The rig has no bone ${index}`);
+            bone[field] = value;
+        },
         read() {
             readPose(pose);
             readWorld(pose);
@@ -220,6 +226,21 @@ export function loadPose42(files: RigFiles): OfficialPoseRig {
             animations: data.animations.map((animation) => describeAnimation(animation, timelineKind)),
             physics: data.physicsConstraints.length,
             sliders: 0,
+            ...describeBones(
+                data.bones,
+                [
+                    ...[data.ikConstraints, data.transformConstraints, data.pathConstraints].flatMap((list) =>
+                        list.flatMap((constraint) => constraint.bones),
+                    ),
+                    ...data.physicsConstraints.map((constraint) => constraint.bone),
+                ],
+                [
+                    ...[data.ikConstraints, data.transformConstraints].flatMap((list) =>
+                        list.map((constraint) => constraint.target),
+                    ),
+                    ...data.pathConstraints.map((constraint) => constraint.target.boneData),
+                ],
+            ),
         },
         createDriver: () => createDriver(shared),
     };

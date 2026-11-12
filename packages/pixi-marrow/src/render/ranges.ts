@@ -2,9 +2,8 @@ import {
     type BLEND_MODES,
     type Bounds,
     Buffer,
-    BufferUsage,
     Container,
-    Mesh,
+    type Mesh,
     type Shader,
     type TextureSource,
     VERSION,
@@ -13,11 +12,12 @@ import { i16, i32 } from '../geometry/read';
 import { uploadsStretch } from './batch-upload';
 import { ClipMask } from './clip-mask';
 import type { ClipShape } from './clip-shape';
-import { MeasuredGeometry } from './measured-geometry';
+import type { MeasuredGeometry } from './measured-geometry';
+import { createRangeMesh, type VertexBuffers } from './range-mesh';
 import { u8, u16 } from './read';
 import { createMaskShader, createViewShader, releaseShader } from './shader';
-import { MAX_PAGES, STATIC_STRIDE, type Template } from './template';
-import { NO_CLIP } from './visible';
+import { MAX_PAGES, type Template } from './template';
+import { NO_CLIP, type VisibleList } from './visible';
 
 /*
  * The draw ranges of one skeleton instance. A range is one Pixi mesh with its own index buffer.
@@ -44,21 +44,8 @@ import { NO_CLIP } from './visible';
  * upload reaches that far.
  */
 
-/**
- * Whether a buffer of this Pixi uploads at once when it is told that it changed. An older Pixi
- * uploads a WebGL buffer when its geometry is bound, and keeps the size it was told last alone.
- */
+/** Whether a buffer of this Pixi uploads at once when it is told that it changed, see `uploadsStretch`. */
 const AT_ONCE = uploadsStretch(Buffer.prototype.update, VERSION);
-
-/** The vertex buffers every range reads. */
-interface VertexBuffers {
-    /** x, y per vertex. */
-    readonly positions: Buffer;
-    /** u, v and four flag bytes per vertex. */
-    readonly statics: Buffer;
-    /** The light color per vertex, and with dark colors the dark color after it. */
-    readonly colors: Buffer;
-}
 
 /** What {@link DrawRanges} draws with. */
 export interface DrawRangesOptions {
@@ -146,8 +133,11 @@ export class DrawRanges {
      * triangle without area, which counts as 3.
      */
     indices = 0;
-    /** How many children the container holds before the ranges and clip groups. They stay first. */
-    lead = 0;
+    /**
+     * Per attached container, in draw order: the position its ranges behind it start at. The
+     * container belongs in front of the child {@link anchor} names for that position.
+     */
+    readonly cutPositions: number[] = [];
     /** The bytes of the index data of all ranges and of the data of all masks. */
     bytes = 0;
     private readonly options: DrawRangesOptions;
@@ -206,15 +196,29 @@ export class DrawRanges {
      * Rewrites the index buffers for the visible entries of a template, given in draw order, and
      * splits them into ranges. Vertex data does not move.
      *
+     * A range ends before an entry that follows an attached container, and so does a clip group.
+     * So the container is drawn between two ranges and no clip cuts it. The list `seen` says
+     * where attached containers are drawn. The field {@link cutPositions} then says where each
+     * container belongs among the children.
+     *
      * @param clips Per visible entry: the slot whose clipping attachment cuts it, or {@link NO_CLIP}.
      * @param skipped Per visible entry, 1 when a later slot covers it.
      */
-    build(template: Template, visible: Int32Array, clips: Int16Array, skipped: Uint8Array, count: number): void {
+    build(
+        template: Template,
+        visible: Int32Array,
+        clips: Int16Array,
+        skipped: Uint8Array,
+        count: number,
+        seen?: VisibleList,
+    ): void {
         const { blendModes } = this.options;
+        const starts = seen?.starts;
         let range: DrawRange | undefined;
         let clip = NO_CLIP;
         let written = 0;
         let total = 0;
+        let cut = 0;
 
         this.serial++;
         this.position = 0;
@@ -225,18 +229,23 @@ export class DrawRanges {
             const entry = i32(visible, i);
             const blend = blendKey(u8(blendModes, i32(template.slots, entry)));
             const group = Math.floor(i32(template.pages, entry) / MAX_PAGES);
-            const cut = i16(clips, i);
+            const by = i16(clips, i);
+            const parted = starts?.[i] === 1;
 
-            if (range === undefined || cut !== clip || range.blend !== blend || range.group !== group) {
+            if (range === undefined || parted || by !== clip || range.blend !== blend || range.group !== group) {
                 if (range !== undefined) total += this.close(range, written);
                 written = 0;
-                if (cut !== clip) this.enter(cut);
-                clip = cut;
+                // a container is drawn here: the clip group before it ends, and the entry starts another one
+                if (parted && seen !== undefined) cut = this.part(seen, cut, i);
+                if (by !== clip || parted) this.enter(by);
+                clip = by;
                 range = this.next(blend, group);
             }
             if (u8(skipped, i) === 0) written = append(range.indices, written, template, entry);
         }
         if (range !== undefined) total += this.close(range, written);
+        // the containers behind the last visible entry
+        if (seen !== undefined && cut < seen.cutCount) this.part(seen, cut, count);
         this.hideUnused();
         this.indices = total;
     }
@@ -294,6 +303,38 @@ export class DrawRanges {
         this.masks = 0;
         this.indices = 0;
         this.bytes = 0;
+    }
+
+    /**
+     * Notes where the containers that are drawn before a visible entry belong: behind every range
+     * and clip group the build has used so far. Returns the first cut behind that entry.
+     */
+    private part(seen: VisibleList, from: number, entry: number): number {
+        let cut = from;
+
+        this.open = undefined;
+        // a group that is taken sits before the next position
+        if (this.groups[this.position]?.build === this.serial) this.position++;
+        while (cut < seen.cutCount && i32(seen.cuts, cut) <= entry) this.cutPositions[cut++] = this.position;
+
+        return cut;
+    }
+
+    /**
+     * The first child of the ranges that draws at a position or behind it, or undefined. A
+     * container before that position stays in front of it. `plain` leaves the clip group of the position out.
+     */
+    anchor(position: number, plain: boolean): Container | undefined {
+        const last = Math.max(this.groups.length, this.plain.length);
+
+        for (let at = position; at < last; at++) {
+            const group = at > position || !plain ? this.groups[at]?.container : undefined;
+            const found = group ?? this.plain[at]?.mesh;
+
+            if (found !== undefined) return found;
+        }
+
+        return undefined;
     }
 
     /** Leaves the clip group that is being filled and enters the one of another clip, or none. */
@@ -390,17 +431,18 @@ export class DrawRanges {
 
     /**
      * Where a new child of the container goes, so that the children keep their order: per
-     * position the clip group, then the plain range.
+     * position the clip group, then the plain range. It goes in front of the next child of the
+     * ranges that exists, and to the end when there is none. Children that are no ranges, like a
+     * container that is attached between two slots, stay where they are.
      */
     private childIndex(position: number, plain: boolean): number {
-        let index = this.lead + (plain && this.groups[position] !== undefined ? 1 : 0);
+        const { container } = this.options;
+        // the range of a position is behind the clip group of that position
+        const behind = plain
+            ? this.anchor(position + 1, false)
+            : (this.plain[position]?.mesh ?? this.anchor(position + 1, false));
 
-        for (let before = 0; before < position; before++) {
-            if (this.groups[before] !== undefined) index++;
-            if (this.plain[before] !== undefined) index++;
-        }
-
-        return index;
+        return behind === undefined ? container.children.length : container.getChildIndex(behind);
     }
 
     /** A clip group for a position, with its mask. The mask is a child, so both share a transform. */
@@ -426,30 +468,7 @@ export class DrawRanges {
     private create(group: number, parent: ClipGroup | undefined): DrawRange {
         const { container, buffers, dark, measure } = this.options;
         const indices = this.createIndices();
-        const buffer = new Buffer({
-            data: indices,
-            label: 'marrow-indices',
-            usage: BufferUsage.INDEX | BufferUsage.COPY_DST,
-            shrinkToFit: false,
-        });
-        const colorStride = dark ? 8 : 4;
-        const staticStride = STATIC_STRIDE * 4;
-        const geometry = new MeasuredGeometry(
-            {
-                attributes: {
-                    aPosition: { buffer: buffers.positions, format: 'float32x2', stride: 8, offset: 0 },
-                    aUV: { buffer: buffers.statics, format: 'float32x2', stride: staticStride, offset: 0 },
-                    aFlags: { buffer: buffers.statics, format: 'unorm8x4', stride: staticStride, offset: 8 },
-                    aColor: { buffer: buffers.colors, format: 'unorm8x4', stride: colorStride, offset: 0 },
-                    ...(dark
-                        ? { aDark: { buffer: buffers.colors, format: 'unorm8x4', stride: colorStride, offset: 4 } }
-                        : {}),
-                },
-                indexBuffer: buffer,
-            },
-            measure,
-        );
-        const mesh = new Mesh({ geometry, shader: this.shader(group), label: 'marrow-range' });
+        const { mesh, buffer } = createRangeMesh(buffers, dark, measure, this.shader(group), indices, 'marrow-range');
         const range: DrawRange = { mesh, buffer, indices, count: 0, held: 0, blend: 0, group, build: 0 };
 
         if (parent === undefined) {

@@ -30,6 +30,8 @@
     "check:dead": "knip",
     "check:render": "node scripts/fixtures.mjs && node scripts/check-render.mjs",
     "bench:ab": "node scripts/fixtures.mjs && node scripts/bench/ab.mjs",
+    "site:dev": "pnpm build && pnpm --filter @pixi-marrow/site dev",
+    "site:build": "pnpm build && pnpm --filter @pixi-marrow/site build",
     "size": "node scripts/size-check.mjs",
     "size:check": "node scripts/size-check.mjs --check",
     "size:update": "node scripts/size-check.mjs --update",

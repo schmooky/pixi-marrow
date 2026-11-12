@@ -8,6 +8,12 @@
  * a picture wrong on purpose. Ours also has `info`, `outlines`, `mode` and `spine`, which is the
  * display object once more.
  *
+ * `hold` hangs a Pixi `Graphics` on an instance and `release` takes it off again. With a `slot`
+ * it is drawn at the place of that slot in the draw order: `addSlotObject` of the official
+ * runtime, `attach` of ours. With a `bone` it is a child of the display object that gets the
+ * transform of that bone after every update: `follow` of ours. The official runtime has no call
+ * for that, so its side writes the matrix `addSlotObject` writes, from that bone.
+ *
  * Both sides run as they ship: every constraint is solved, physics and sliders included.
  * Physics has state, so a picture depends on every update since the object was made. The
  * two sides therefore get the same updates from the same start, see `officialSide`.
@@ -18,6 +24,16 @@ function place(view, { x, y, scale, rotation = 0 }) {
     view.position.set(x, y);
     view.scale.set(scale);
     view.rotation = rotation;
+}
+
+/** What `hold` hangs on an instance: a circle with a `radius`, else a rectangle, of one color, in the units of the bone. */
+function makeHeld(PIXI, shape) {
+    const graphics = new PIXI.Graphics();
+
+    if (shape.radius) graphics.circle(shape.x ?? 0, shape.y ?? 0, shape.radius);
+    else graphics.rect(shape.x, shape.y, shape.width, shape.height);
+
+    return graphics.fill({ color: shape.color, alpha: shape.alpha ?? 1 });
 }
 
 /**
@@ -39,6 +55,17 @@ export function officialSide(PIXI, lib) {
             const root = new PIXI.Container();
             // what the tooling proof changes after every update, since an animation can key the same values
             const changes = [];
+            // the objects of `hold`, by key, and the ones that follow a bone: those are moved after every update
+            const held = new Map();
+            const followers = new Map();
+            const matrix = new PIXI.Matrix();
+            const follow = (shape, bone) => {
+                // 4.3 keeps the world transform in the applied pose of the bone
+                const pose = bone.appliedPose ?? bone;
+
+                // what `addSlotObject` writes for the bone of a slot
+                shape.setFromMatrix(matrix.set(pose.a, pose.c, -pose.b, -pose.d, pose.worldX, pose.worldY));
+            };
             const slotColor = (name) => {
                 const slot = spine.skeleton.findSlot(name);
 
@@ -65,6 +92,29 @@ export function officialSide(PIXI, lib) {
                 update(seconds) {
                     spine.update(seconds);
                     for (const change of changes) change();
+                    for (const [shape, bone] of followers) follow(shape, bone);
+                },
+                hold({ key, slot, bone, shape: look }) {
+                    const shape = makeHeld(PIXI, look);
+
+                    held.set(key, shape);
+                    if (slot) spine.addSlotObject(slot, shape);
+                    else {
+                        const found = spine.skeleton.findBone(bone);
+
+                        if (!found) throw new Error(`The official skeleton has no bone ${bone}`);
+                        spine.addChild(shape);
+                        followers.set(shape, found);
+                        follow(shape, found);
+                    }
+                },
+                release(key) {
+                    const shape = held.get(key);
+
+                    if (followers.delete(shape)) spine.removeChild(shape);
+                    else spine.removeSlotObject(shape);
+                    held.delete(key);
+                    shape.destroy();
                 },
                 tint(name, factor) {
                     let base = 1;
@@ -105,6 +155,33 @@ const CUT_OPTIONS = {
 /** Per asset of ours: the milliseconds from the end of its load to the end of the scan of its pages. */
 const scans = new WeakMap();
 
+/** Resolves once the code of ours for attached containers is loaded. One per page. */
+let attachCode = null;
+
+/**
+ * Loads the code of ours that draws attached containers. It loads with the first `attach` of a
+ * page, and a container is hidden until it is there. The runtime has no call that waits for it.
+ * So an instance nobody draws attaches a container and updates until the container has a
+ * parent. The instances of a scene then get no update the official side does not get.
+ */
+function loadAttachCode(PIXI, lib, asset, slot) {
+    attachCode ??= (async () => {
+        const probe = new lib.MarrowSpine(asset, { autoUpdate: false });
+        const container = new PIXI.Container();
+
+        probe.attach(slot, container);
+        for (let tries = 0; container.parent === null; tries++) {
+            if (tries > 1000) throw new Error('the code for attached containers did not load');
+            await new Promise((next) => setTimeout(next, 10));
+            probe.update(0);
+        }
+        probe.destroy();
+        container.destroy();
+    })();
+
+    return attachCode;
+}
+
 /**
  * pixi-marrow. `lib` is the loaded package, which must export `MarrowSpine`.
  *
@@ -144,6 +221,7 @@ export function oursSide(PIXI, lib) {
                 ...modeOptions(mode),
             });
             const root = new PIXI.Container();
+            const held = new Map();
 
             root.addChild(spine);
 
@@ -151,6 +229,29 @@ export function oursSide(PIXI, lib) {
                 view: spine,
                 root,
                 spine,
+                async hold({ key, slot, bone, shape: look }) {
+                    const shape = makeHeld(PIXI, look);
+
+                    held.set(key, { shape, slot });
+                    if (slot) {
+                        await loadAttachCode(PIXI, lib, asset, slot);
+                        spine.attach(slot, shape);
+                    } else {
+                        spine.addChild(shape);
+                        spine.follow(bone, shape);
+                    }
+                },
+                release(key) {
+                    const { shape, slot } = held.get(key);
+
+                    if (slot) spine.detach(shape);
+                    else {
+                        spine.unfollow(shape);
+                        spine.removeChild(shape);
+                    }
+                    held.delete(key);
+                    shape.destroy();
+                },
                 /** The render mode the runtime reports for this instance, see scripts/render/mode.js. */
                 mode: () => readMode(spine),
                 place: (placement) => place(spine, placement),
@@ -181,6 +282,9 @@ export function oursSide(PIXI, lib) {
                 destroy() {
                     // a scene may have put the object under another parent, or have destroyed it already
                     if (!spine.destroyed) spine.destroy();
+                    // ours lets go of what it holds and destroys none of it
+                    for (const { shape } of held.values()) shape.destroy();
+                    held.clear();
                     root.destroy();
                 },
             };

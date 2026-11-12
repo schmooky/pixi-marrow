@@ -1,6 +1,7 @@
 import type { Matrix } from 'pixi.js';
 import { PAGE_SHIFT, POSITION_WORDS, RUN_PAD, type SlotLayout, STATIC_WORDS } from './batch-layout';
 import { STATIC_STRIDE, type Template } from './template';
+import type { VisibleList } from './visible';
 
 /*
  * The loops that write one skeleton into the buffers of a batch. They are the cost of the batched
@@ -48,6 +49,8 @@ export interface PackSource {
     layout: SlotLayout;
     /** The visible entries in draw order. Valid up to `count`. */
     readonly visible: Int32Array;
+    /** The list those entries are of: it says where a run must start for a container between two slots. */
+    readonly seen: VisibleList;
     /** Per visible entry, 1 when a later slot covers it. */
     readonly skipped: Uint8Array;
     /** The blend mode of each slot: an index into `BLEND_MODES` of the model. */
@@ -246,17 +249,20 @@ export function placeMoved(words: Float32Array, at: number, count: number, trans
 
 /**
  * Lists the runs of the visible entries: a run ends where the blend state or the group of 16
- * pages changes. A covered entry keeps its place, so the runs are the same with and without it.
+ * pages changes, and before an entry that follows an attached container. A covered entry keeps
+ * its place, so the runs are the same with and without it. For every run that `keys` has room
+ * for, `firsts` gets the visible entry the run starts with.
  *
  * @param keys Gets the key of every run it has room for: the blend state and the page group.
  * @returns How many runs there are, 1 at least.
  *
  * @example
- * const runs = planRuns(source, count, keys);
+ * const runs = planRuns(source, count, keys, firsts);
  * if (runs > keys.length) console.log('the keys need more room');
  */
-export function planRuns(source: PackSource, count: number, keys: Uint8Array): number {
+export function planRuns(source: PackSource, count: number, keys: Uint8Array, firsts: Int32Array): number {
     const { visible, blendModes } = source;
+    const { starts } = source.seen;
     const { slots, pages } = source.template;
     let runs = 0;
     let key = -1;
@@ -265,12 +271,18 @@ export function planRuns(source: PackSource, count: number, keys: Uint8Array): n
         const entry = Number(visible[i]);
         const next = runKey(Number(blendModes[Number(slots[entry])]), Number(pages[entry]));
 
-        if (next === key) continue;
+        if (next === key && starts[i] !== 1) continue;
         key = next;
-        if (runs < keys.length) keys[runs] = next;
+        if (runs < keys.length) {
+            keys[runs] = next;
+            firsts[runs] = i;
+        }
         runs++;
     }
-    if (runs === 0 && keys.length > 0) keys[0] = 0;
+    if (runs === 0 && keys.length > 0) {
+        keys[0] = 0;
+        firsts[0] = 0;
+    }
 
     return Math.max(runs, 1);
 }
@@ -298,6 +310,7 @@ export function writeIndices(
     count: number,
 ): number {
     const { template, visible, skipped, blendModes, runSizes } = source;
+    const { starts } = source.seen;
     const { slots, triangles, pages } = template;
     const slotAt = source.layout.at;
     const end = at + size;
@@ -312,7 +325,7 @@ export function writeIndices(
         const slot = Number(slots[entry]);
         const next = runKey(Number(blendModes[slot]), Number(pages[entry]));
 
-        if (next !== key && i > 0) {
+        if ((next !== key || starts[i] === 1) && i > 0) {
             for (let pad = 0; pad < RUN_PAD; pad++) out[cursor++] = vertex;
             runSizes[run++] = cursor - start;
             start = cursor;

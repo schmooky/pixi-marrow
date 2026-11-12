@@ -1,0 +1,58 @@
+---
+layout: ../layouts/Docs.astro
+title: Start
+description: Install the package, load a skeleton and play it. These are the calls most games need.
+---
+
+import Snippet from '../components/Snippet.astro';
+import source from '../snippets/start.ts?raw';
+
+## Install
+
+```bash
+npm install pixi-marrow pixi.js
+```
+
+`pixi.js` is the one peer dependency, from version 8.16. The package is a pre-release and is not on npm yet.
+
+## Load
+
+<Snippet source={source} regions="import load" />
+
+`skeleton` is a `.skel` or `.json` export of Spine 4.1, 4.2 or 4.3. The page images load from next to the atlas.
+
+`hero` is a Pixi `Container`. Move it, scale it and add it to the stage like any other. A second load of the same files shares one asset with the first.
+
+## Play
+
+<Snippet source={source} regions="play" />
+
+`play` starts an animation now and returns a `Track`, the handle on that animation. Each track holds one animation, and a higher track is applied on top of the lower ones. `stop` clears one track, or all of them when you name none.
+
+A name the skeleton lacks throws a `MarrowError` that lists the valid names.
+
+## Queue
+
+<Snippet source={source} regions="queue" />
+
+`queue` plays an animation after what the track holds. On an empty track it plays now.
+
+## Mix
+
+<Snippet source={source} regions="mix" />
+
+A mix is the time in seconds one animation takes to blend into the next. `defaultMix` holds for every pair of animations, `setMix` for one pair and the `mix` option for one call.
+
+## Events
+
+<Snippet source={source} regions="events" />
+
+The display object emits `start`, `interrupt`, `end`, `dispose`, `complete` and `event`. A looping animation completes once per loop. `event` carries a key that the animator placed in the animation, such as a footstep.
+
+`finished` resolves when an animation that does not loop has played to its end.
+
+## Skins
+
+<Snippet source={source} regions="skins" />
+
+`info` lists the names of the skeleton: skins, animations, bones, slots and events. Setting `skin` also resets the slots to the setup pose.

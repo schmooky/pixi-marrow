@@ -7,6 +7,7 @@ import { uploadStretch, uploadsStretch } from './batch-upload';
 import { clipCode, clipCodeMissing } from './clip-code';
 import { bendsEdges, type DrawGate } from './gate';
 import type { MeshCode } from './mesh-code';
+import { linkMeshPipe } from './mesh-pipe';
 import { vertexBuffer } from './pages';
 import type { PosePass } from './pose-pass';
 import { DrawRanges, type DrawRangesOptions } from './ranges';
@@ -50,6 +51,8 @@ export class MeshPaint {
         const { template, ...rest } = options;
 
         this.container = options.container;
+        // a renderer that was created before this code loaded may have no pipe for meshes
+        this.container.onRender = linkMeshPipe;
         this.positions = vertexBuffer(template.positions, 'marrow-positions');
         this.statics = vertexBuffer(template.statics, 'marrow-uvs');
         this.colors = vertexBuffer(template.colors, 'marrow-colors');
@@ -89,7 +92,6 @@ export class MeshPaint {
             render: (renderer) => gate.beforeDraw(bendsEdges(renderer)),
         });
         this.container.addChildAt(this.probe, 0);
-        this.ranges.lead = 1;
     }
 
     /**
@@ -97,7 +99,7 @@ export class MeshPaint {
      * buffers and the meshes stay for the next time.
      */
     rest(template: Template, seen: VisibleList, skipped: Uint8Array): void {
-        this.ranges.build(template, seen.list, seen.clips, skipped, 0);
+        this.ranges.build(template, seen.list, seen.clips, skipped, 0, seen);
         if (this.probe !== undefined) this.probe.visible = false;
     }
 
