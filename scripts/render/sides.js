@@ -6,33 +6,27 @@
  * `update`, `stats` and `destroy`. Official instances also have `tint` and `hide`, which the
  * tooling proof uses to make a picture wrong on purpose. Ours also has `info`, `outlines` and
  * `spine`, the display object itself.
+ *
+ * Both sides run as they ship: every constraint is solved, physics and sliders included.
+ * Physics has state, so a picture depends on every update since the object was made. The
+ * two sides therefore get the same updates from the same start, see `officialSide`.
  */
-
-/**
- * Switches off what pixi-marrow does not solve yet, the way the pose parity suite builds its
- * reference: physics constraints get `Physics.none`, which neither steps nor applies them, and
- * the sliders of 4.3 lose their update, which is what a mix of 0 does. IK, transform and path
- * constraints stay as they are, and so do all timelines.
- */
-function switchOffPhysics(lib, skeleton) {
-    const { updateWorldTransform } = lib.Skeleton.prototype;
-
-    // the official display object asks for Physics.update in every update
-    skeleton.updateWorldTransform = function update() {
-        return updateWorldTransform.call(this, lib.Physics.none);
-    };
-    // an animation keys the mix of a slider, so a mix set here would not last
-    for (const constraint of skeleton.constraints ?? []) {
-        if (lib.Slider && constraint instanceof lib.Slider) constraint.update = () => {};
-    }
-}
 
 function place(view, { x, y, scale }) {
     view.position.set(x, y);
     view.scale.set(scale);
 }
 
-/** The official runtime of one Spine version. `lib` is the loaded `@esotericsoftware/spine-pixi-v8`. */
+/**
+ * The official runtime of one Spine version. `lib` is the loaded `@esotericsoftware/spine-pixi-v8`.
+ *
+ * A display object of pixi-marrow runs one update of 0 seconds when it is created, to show the
+ * setup pose. The official one runs none until it is asked, or until its bounds are read. A
+ * physics constraint takes its start from the pose of its first update. When the next pose turns
+ * its bone, it swings by a part of that turn, even after 0 seconds. So the official object gets
+ * the same first update here, before a skin is set or an animation plays. From there on a case
+ * steps both sides alike.
+ */
 export function officialSide(PIXI, lib) {
     return {
         name: 'official',
@@ -51,7 +45,6 @@ export function officialSide(PIXI, lib) {
                 return slot.pose?.color ?? slot.color;
             };
 
-            switchOffPhysics(lib, spine.skeleton);
             root.addChild(spine);
 
             return {
@@ -114,7 +107,7 @@ export function oursSide(PIXI, lib) {
     return {
         name: 'ours',
         async create({ skeleton, atlas, cuts = 'default' }) {
-            const asset = await lib.MarrowAsset.load({ skeleton, atlas, constraints: 'ignore' });
+            const asset = await lib.MarrowAsset.load({ skeleton, atlas });
 
             // the outlines are read from the page images in idle time. From here on every instance has them
             const waited = performance.now();

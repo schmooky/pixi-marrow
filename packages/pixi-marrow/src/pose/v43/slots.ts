@@ -46,15 +46,14 @@ export function setupAttachment(pose: Pose43, slot: number): AttachmentData | nu
  * is kept only when both attachments have vertices and share their timeline attachment.
  */
 export function setSlotAttachment(pose: Pose43, slot: number, attachment: AttachmentData | null): void {
-    const { state, rig } = pose;
-    const current = state.attachments[slot] ?? null;
+    const current = pose.attachments[slot] ?? null;
 
     if (current === attachment) return;
-    if (attachment === null || current === null || !sharesDeform(rig, attachment, current)) {
-        state.deformLengths[slot] = 0;
+    if (attachment === null || current === null || !sharesDeform(pose.rig, attachment, current)) {
+        pose.deformLengths[slot] = 0;
     }
-    state.attachments[slot] = attachment;
-    state.sequenceIndices[slot] = -1;
+    pose.attachments[slot] = attachment;
+    pose.sequenceIndices[slot] = -1;
 }
 
 function sharesDeform(rig: Rig43, a: AttachmentData, b: AttachmentData): boolean {
@@ -71,7 +70,7 @@ function sharesDeform(rig: Rig43, a: AttachmentData, b: AttachmentData): boolean
  */
 export function followerInfo(pose: Pose43, slot: number, timeline: Timeline43): AttachmentInfo | null {
     if (!slotActive(pose, slot)) return null;
-    const shown = pose.state.attachments[slot];
+    const shown = pose.attachments[slot];
 
     if (shown == null) return null;
     // most slots show the attachment of the timeline itself: its info is at hand

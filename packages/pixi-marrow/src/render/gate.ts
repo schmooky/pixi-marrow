@@ -33,9 +33,13 @@ export function drawsPlain(container: Container): boolean {
     return true;
 }
 
+/** What a renderer does that moves edges inside a pixel: it rounds positions, or its target is multisampled. */
+export type EdgeBend = 'roundPixels' | 'multisample';
+
 /**
- * Whether a renderer is about to draw in a way that moves edges inside a pixel: it rounds
- * vertex positions to whole pixels, or the target it draws to is multisampled.
+ * Whether a renderer is about to draw in a way that moves edges inside a pixel, and what it does.
+ * It rounds vertex positions to whole pixels, or the target it draws to is multisampled. The
+ * result is false for a draw that does neither.
  *
  * Rounding moves every vertex on its own. The corners of a polygon then map the texture in
  * another way than the corners of the quad would. A multisampled target shades a pixel once and
@@ -45,8 +49,9 @@ export function drawsPlain(container: Container): boolean {
  * @example
  * const probe = new RenderContainer({ render: (renderer) => view.beforeDraw(bendsEdges(renderer)) });
  */
-export function bendsEdges(renderer: Renderer): boolean {
+export function bendsEdges(renderer: Renderer): EdgeBend | false {
+    if (renderer.roundPixels) return 'roundPixels';
     const target: TextureSource | undefined = renderer.renderTarget.renderTarget.colorTextures[0];
 
-    return renderer.roundPixels || target?.antialias === true;
+    return target?.antialias === true ? 'multisample' : false;
 }

@@ -12,7 +12,8 @@ import { CURRENT, FIRST, type Pose43, SETUP, type Timeline43 } from './types';
  * relative to its setup value. This is the official `CurveTimeline1.getRelativeValue`.
  */
 export function applyRelative(pose: Pose43, timeline: Timeline43, from: number, add: boolean): void {
-    const { local, active } = pose.state;
+    const { local } = pose;
+    const { active } = pose.state;
     const bone = timeline.target;
 
     if (active[bone] !== 1) return;
@@ -77,7 +78,8 @@ function mixScale(
 
 /** The official scaleX and scaleY timelines: one scale of a bone, as a factor of its setup scale. */
 export function applyScale(pose: Pose43, timeline: Timeline43, from: number, add: boolean, out: boolean): void {
-    const { local, active } = pose.state;
+    const { local } = pose;
+    const { active } = pose.state;
 
     if (active[timeline.target] !== 1) return;
     const i = timeline.target * LOCAL_STRIDE + timeline.offset;
@@ -95,7 +97,8 @@ export function applyScale(pose: Pose43, timeline: Timeline43, from: number, add
 
 /** The official translate and shear timelines: two numbers of a bone, relative to their setup values. */
 export function applyPair(pose: Pose43, timeline: Timeline43, from: number, add: boolean): void {
-    const { local, active } = pose.state;
+    const { local } = pose;
+    const { active } = pose.state;
 
     if (active[timeline.target] !== 1) return;
     const setup = pose.rig.model.bones.setup;
@@ -128,7 +131,8 @@ export function applyPair(pose: Pose43, timeline: Timeline43, from: number, add:
 
 /** The official scale timeline: both scales of a bone, as factors of their setup scales. */
 export function applyScalePair(pose: Pose43, timeline: Timeline43, from: number, add: boolean, out: boolean): void {
-    const { local, active } = pose.state;
+    const { local } = pose;
+    const { active } = pose.state;
 
     if (active[timeline.target] !== 1) return;
     const setups = pose.rig.model.bones.setup;
@@ -146,7 +150,8 @@ export function applyScalePair(pose: Pose43, timeline: Timeline43, from: number,
 
 /** The official inherit timeline: how a bone inherits its parent transform. It does not interpolate. */
 export function applyInherit(pose: Pose43, timeline: Timeline43, from: number, out: boolean): void {
-    const { inherit, active } = pose.state;
+    const { inherit } = pose;
+    const { active } = pose.state;
     const bone = timeline.target;
     const frames = timeline.frames;
 

@@ -1,5 +1,4 @@
 import { MarrowError } from '../../base/errors';
-import type { PoseState } from '../state';
 import { ALPHA, PERCENT, SHARED, search, TIME } from './curves';
 import { followerInfo, timelineActive } from './slots';
 import { type AttachmentInfo, FIRST, type Pose43, SETUP, type Timeline43 } from './types';
@@ -70,19 +69,19 @@ function curvePercent(timeline: Timeline43, frame: number): void {
  * `deform.length = length`. Numbers that come into use hold NaN, as an official array holds
  * `undefined` there. Every caller that grows an empty deform writes all of it.
  */
-function resizeDeform(state: PoseState, slot: number, length: number): Float64Array {
-    const used = state.deformLengths[slot] ?? 0;
-    let deform = state.deform[slot];
+function resizeDeform(pose: Pose43, slot: number, length: number): Float64Array {
+    const used = pose.deformLengths[slot] ?? 0;
+    let deform = pose.deform[slot];
 
     if (deform === undefined || deform.length < length) {
         const longer = new Float64Array(length);
 
         if (deform !== undefined) longer.set(deform.subarray(0, used));
-        state.deform[slot] = longer;
+        pose.deform[slot] = longer;
         deform = longer;
     }
     if (used > 0 && length > used) deform.fill(Number.NaN, used, length);
-    state.deformLengths[slot] = length;
+    pose.deformLengths[slot] = length;
 
     return deform;
 }
@@ -186,18 +185,17 @@ function applyBeforeFirst(pose: Pose43, timeline: Timeline43, slot: number, from
     const info = followerInfo(pose, slot, timeline);
 
     if (info === null) return;
-    const { state } = pose;
     const alpha = Number(SHARED[ALPHA]);
 
     // an empty deform counts as the setup pose
-    if (state.deformLengths[slot] === 0 || from === SETUP || (from === FIRST && alpha === 1)) {
-        state.deformLengths[slot] = 0;
+    if (pose.deformLengths[slot] === 0 || from === SETUP || (from === FIRST && alpha === 1)) {
+        pose.deformLengths[slot] = 0;
 
         return;
     }
     if (from !== FIRST) return;
     const count = timeline.vertices[0]?.length ?? 0;
-    const deform = resizeDeform(state, slot, count);
+    const deform = resizeDeform(pose, slot, count);
     const setup = setupVertices(pose, slot, info);
 
     if (setup === null) {
@@ -226,12 +224,11 @@ function applyToSlot(
     const info = followerInfo(pose, slot, timeline);
 
     if (info === null) return;
-    const { state } = pose;
     // an empty deform counts as the setup pose
-    const fromSetup = from === SETUP || state.deformLengths[slot] === 0;
+    const fromSetup = from === SETUP || pose.deformLengths[slot] === 0;
     const count = timeline.vertices[0]?.length ?? 0;
     const setup = setupVertices(pose, slot, info);
-    const deform = resizeDeform(state, slot, count);
+    const deform = resizeDeform(pose, slot, count);
 
     if (add && !fromSetup) addKeyed(deform, v1, v2, setup, count);
     else if (Number(SHARED[ALPHA]) === 1) setKeyed(deform, v1, v2, count);

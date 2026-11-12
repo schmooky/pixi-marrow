@@ -69,8 +69,14 @@ export const OP_MIXES = 14;
 export const OP_VALUE = 15;
 /** A two color timeline on a slot without a dark color. It throws. */
 export const OP_NO_DARK = 16;
-/** A timeline of a constraint that is not solved. It changes nothing. */
-export const OP_NOTHING = 17;
+/** Physics constraint inertia, strength, damping, wind, gravity and mix timelines. */
+export const OP_PHYSICS = 17;
+/** The physics constraint mass timeline. */
+export const OP_PHYSICS_MASS = 18;
+/** The physics constraint reset timeline. */
+export const OP_PHYSICS_RESET = 19;
+/** Slider time and slider mix timelines. */
+export const OP_SLIDER = 20;
 
 /**
  * One timeline, ready to apply. Every timeline has every field, so all of them share one shape.
@@ -104,7 +110,8 @@ export interface Timeline43 {
     /**
      * Bone timelines: the position of the first animated number among the local numbers of a bone.
      * Color timelines: the number of light channels, 3 or 4.
-     * Constraint timelines: the position of the first animated number among those of a constraint.
+     * Constraint timelines: where the first animated number is among the constraint poses. For a
+     * timeline of every physics constraint it is the position among the numbers of one constraint.
      */
     readonly offset: number;
     /** Color timelines: true when the keys hold a dark color too. */
@@ -187,10 +194,34 @@ export interface Rig43 {
     readonly solver: Solver43;
 }
 
-/** The pose of one engine and what its timelines need to write it. */
+/**
+ * One pose of an engine, as the timelines write it, with what every pose of the engine shares.
+ *
+ * An engine without sliders has one pose. Its arrays are those of `state` and the constraint
+ * poses of `solve`. An engine with sliders has two. The player writes the animated pose and the
+ * sliders write the applied pose. The two share the arrays that no slider of the model animates.
+ */
 export interface Pose43 {
     readonly rig: Rig43;
+    /** The public pose state: where the skeleton is, its skin and its time, and the pose that is drawn. */
     readonly state: PoseState;
-    /** The constraint poses and the update order of this engine. */
+    /** The constraint state and the update order of the engine. */
     readonly solve: Solve43;
+    /** The local numbers of every bone, in the layout of `PoseState.local`. */
+    readonly local: Float64Array;
+    /** The inherit mode of every bone. */
+    readonly inherit: Uint8Array;
+    /** The color of every slot: r, g, b, a. */
+    readonly colors: Float64Array;
+    /** The dark color of every slot: r, g, b. */
+    readonly darkColors: Float64Array;
+    /** The attachment of every slot, or null. */
+    readonly attachments: (AttachmentData | null)[];
+    readonly sequenceIndices: Int32Array;
+    /** The deform of every slot. Only the first `deformLengths[slot]` numbers count. */
+    readonly deform: Float64Array[];
+    readonly deformLengths: Int32Array;
+    readonly drawOrder: Int16Array;
+    /** The pose of every constraint, each at `at` of its plan. */
+    readonly values: Float64Array;
 }

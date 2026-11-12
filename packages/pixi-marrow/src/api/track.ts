@@ -17,6 +17,11 @@ export interface Track<N extends MarrowNames = MarrowNames> {
     speed: number;
     /** How much of the animation is applied, from 0 to 1. */
     alpha: number;
+    /**
+     * True when the animation adds to the pose that lower tracks gave. Set it with the `additive`
+     * option of `play` and `queue`: the official runtime takes it for a new animation only.
+     */
+    readonly additive: boolean;
     /** Seconds the animation has played. */
     readonly time: number;
     /**
@@ -26,6 +31,19 @@ export interface Track<N extends MarrowNames = MarrowNames> {
     readonly finished: Promise<void>;
     /** Stops the track this animation is on. Does nothing once the animation was disposed. */
     stop(options?: Pick<StopOptions, 'mix'>): void;
+    /**
+     * Sets fields of the official `TrackEntry` by their official names, for what the properties
+     * above do not cover. Does nothing once the animation was disposed.
+     *
+     * Throws a `MarrowError` for a value of the wrong type, and for a field the Spine version
+     * of the skeleton lacks. The error names the fields of that version. The rules of the
+     * official runtime hold: `mixBlend` and `additive` are for an animation before its first update.
+     *
+     * @example
+     * const aim = hero.play('aim', { track: 1 });
+     * aim.configure({ trackEnd: 2, eventThreshold: 0.5 });
+     */
+    configure(fields: TrackFields): void;
 }
 
 /** What a handle needs from the display object that made it. */
@@ -56,8 +74,12 @@ export class TrackHandle<N extends MarrowNames = MarrowNames> implements Track<N
     /** The entry of the pose engine, or null once it was disposed. */
     entry: TrackEntry | null;
     private readonly owner: TrackOwner;
-    /** The duration of the animation in seconds. */
-    private readonly duration: number;
+    /** The official `animationStart` of the entry, in seconds. The entry of the engine does not show it. */
+    private start = 0;
+    /** The official `animationEnd` of the entry, in seconds. */
+    private end: number;
+    /** What {@link additive} answers. The entry of the engine does not show it. */
+    private adds = false;
     /** The values the entry had when it was disposed. */
     private lastLoop = false;
     private lastSpeed = 1;
@@ -67,13 +89,14 @@ export class TrackHandle<N extends MarrowNames = MarrowNames> implements Track<N
     private promise: Promise<void> | null = null;
     private resolve: (() => void) | null = null;
 
+    /** @param duration The duration of the animation in seconds. */
     constructor(owner: TrackOwner, entry: TrackEntry, animation: N['animations'], duration: number) {
         this.owner = owner;
         this.entry = entry;
         this.animation = animation;
         this.track = entry.trackIndex;
         this.hidden = entry.animation === -1;
-        this.duration = duration;
+        this.end = duration;
     }
 
     get loop(): boolean {
@@ -100,6 +123,10 @@ export class TrackHandle<N extends MarrowNames = MarrowNames> implements Track<N
         this.configure({ alpha: value });
     }
 
+    get additive(): boolean {
+        return this.adds;
+    }
+
     get time(): number {
         return this.entry === null ? this.lastTime : this.entry.trackTime;
     }
@@ -121,9 +148,16 @@ export class TrackHandle<N extends MarrowNames = MarrowNames> implements Track<N
         if (this.entry !== null) this.owner.stop({ ...options, track: this.track });
     }
 
-    /** Sets fields of the entry through the engine. Does nothing once the entry is gone. */
     configure(fields: TrackFields): void {
-        if (this.entry !== null) this.owner.engine.configure(this.entry, fields);
+        if (this.entry === null) return;
+        this.owner.engine.configure(this.entry, fields);
+        // after the engine took the fields: what its entry does not show is remembered here
+        const { animationStart, animationEnd, additive, mixBlend } = fields;
+
+        if (typeof animationStart === 'number') this.start = animationStart;
+        if (typeof animationEnd === 'number') this.end = animationEnd;
+        if (typeof additive === 'boolean') this.adds = additive;
+        if (mixBlend !== undefined) this.adds = mixBlend === 'add';
     }
 
     /** Resolves {@link finished}. */
@@ -151,11 +185,11 @@ export class TrackHandle<N extends MarrowNames = MarrowNames> implements Track<N
 
     /**
      * The official `getTrackComplete`: the track time at which the animation ends, or ends its
-     * current loop. It assumes the entry plays the whole animation.
+     * current loop.
      */
     trackComplete(): number {
         const time = this.time;
-        const duration = this.duration;
+        const duration = this.end - this.start;
 
         if (duration !== 0) {
             if (this.loop) return duration * (1 + ((time / duration) | 0));

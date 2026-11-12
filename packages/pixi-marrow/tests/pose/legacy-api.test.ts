@@ -3,6 +3,7 @@ import {
     createPoseEngine,
     importSkeleton,
     MarrowError,
+    type PhysicsMode,
     type PoseEngine,
     type SkeletonModel,
     type TimelineData,
@@ -73,7 +74,7 @@ describe.each(['4.1', '4.2'] as const)('the calls of the legacy engine on a %s s
     const create = async (): Promise<{ model: SkeletonModel; engine: PoseEngine }> => {
         const model = await importSkeleton(rigJson(version));
 
-        return { model, engine: await createPoseEngine(model, { constraints: 'ignore' }) };
+        return { model, engine: await createPoseEngine(model) };
     };
 
     it('sets the track entry fields of its version', async () => {
@@ -139,6 +140,43 @@ describe.each(['4.1', '4.2'] as const)('the calls of the legacy engine on a %s s
         expect(engine.takeEvents()).toEqual([]);
     });
 
+    it('takes the four physics modes and refuses anything else', async () => {
+        const { engine } = await create();
+        const modes: readonly PhysicsMode[] = ['none', 'reset', 'update', 'pose'];
+
+        expect(engine.physics).toBe('update');
+        for (const mode of modes) {
+            engine.physics = mode;
+            expect(engine.physics).toBe(mode);
+        }
+        const wrong: string = 'paused';
+
+        expect(codeOf(() => Object.assign(engine, { physics: wrong }))).toBe('invalid-data');
+        expect(engine.physics).toBe('pose');
+    });
+
+    it('takes physics calls that change nothing on a skeleton without physics', async () => {
+        const { engine: plain } = await create();
+        const { engine: called } = await create();
+        const modes: readonly PhysicsMode[] = ['none', 'reset', 'update', 'pose'];
+
+        expect(called.bytes).toBe(plain.bytes);
+        // the direction of the y axis counts for physics only
+        called.state.yDown = true;
+        for (const engine of [plain, called]) engine.setAnimation(0, ALL, true);
+        for (let step = 0; step < 16; step++) {
+            called.physics = modes[step % modes.length] ?? 'update';
+            called.physicsTranslate(step, -step);
+            called.physicsRotate(3, 4, step * 25);
+            plain.update(0.05);
+            called.update(0.05);
+            expect(called.state.world).toEqual(plain.state.world);
+        }
+        // the skeleton time counts in both versions
+        expect(called.state.time).toBeCloseTo(0.8, 10);
+        expect(called.state.time).toBe(plain.state.time);
+    });
+
     it('refuses animations it cannot play when they are first played', async () => {
         const { model } = await create();
         const missing = { skin: 0, slot: 1, name: 'missing' };
@@ -154,7 +192,20 @@ describe.each(['4.1', '4.2'] as const)('the calls of the legacy engine on a %s s
             ['invalid-data', { kind: 'sequence', target: 1 }],
             ['invalid-data', { kind: 'translate', frames: new Float32Array(0) }],
             [version === '4.1' ? 'unsupported-feature' : 'nothing thrown', { kind: 'inherit' }],
-            ['nothing thrown', { kind: 'physicsConstraintWind', target: -1 }],
+            // 4.2 has physics timelines. One with the target -1 is for every physics constraint
+            [
+                version === '4.1' ? 'unsupported-feature' : 'nothing thrown',
+                { kind: 'physicsConstraintWind', target: -1 },
+            ],
+            [
+                version === '4.1' ? 'unsupported-feature' : 'nothing thrown',
+                { kind: 'physicsConstraintReset', target: -1 },
+            ],
+            [version === '4.1' ? 'unsupported-feature' : 'invalid-data', { kind: 'physicsConstraintMix', target: 0 }],
+            [
+                version === '4.1' ? 'unsupported-feature' : 'invalid-data',
+                { kind: 'physicsConstraintReset', target: 99 },
+            ],
         ];
 
         for (const [code, timeline] of cases) {

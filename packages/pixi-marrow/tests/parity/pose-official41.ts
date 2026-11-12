@@ -20,21 +20,18 @@ import {
     COMMON_FLAGS,
     COMMON_NUMBERS,
     cachedRefs,
-    createAudit,
     createPose,
-    type DriverOptions,
     entryViews,
     eventRecorder,
-    isIgnoredKind,
     type OfficialDriver,
     type OfficialPose,
     type OfficialPoseRig,
-    type RigOptions,
     setEntryFields,
     writeAttachment,
     writeColors,
     writeLocal,
     writeWorld,
+    yDownKeeper,
 } from './pose-shared';
 
 /** Stands in for a GPU texture. Posing needs page sizes only. */
@@ -86,9 +83,8 @@ function configure(entry: TrackEntry, field: string, value: number | boolean | s
     return false;
 }
 
-function createDriver(shared: Shared, options: DriverOptions): OfficialDriver {
+function createDriver(shared: Shared): OfficialDriver {
     const { data } = shared;
-    // 4.1 has no physics and no sliders: this skeleton is the world reference as it is
     const skeleton = new Skeleton(data);
     const stateData = new AnimationStateData(data);
     const state = new AnimationState(stateData);
@@ -97,6 +93,7 @@ function createDriver(shared: Shared, options: DriverOptions): OfficialDriver {
         eventKey(event, shared.eventIndex(event.data)),
     );
     const pose = createPose(skeleton.bones.length, skeleton.slots.length);
+    const yDown = yDownKeeper(skeleton, Skeleton);
     const animation = (index: number) => {
         const found = data.animations[index];
 
@@ -133,7 +130,6 @@ function createDriver(shared: Shared, options: DriverOptions): OfficialDriver {
             writeWorld(out.world, i, bone.active, bone);
         });
     };
-    const audit = options.audit ? createAudit(skeleton.bones.length, skeleton.slots.length, readPose) : undefined;
 
     state.addListener(recorder.listener);
 
@@ -171,26 +167,30 @@ function createDriver(shared: Shared, options: DriverOptions): OfficialDriver {
         update(dt) {
             state.update(dt);
             state.apply(skeleton);
-            audit?.before();
-            skeleton.updateWorldTransform();
-            audit?.after();
+            yDown.solve(() => skeleton.updateWorldTransform());
         },
+        // 4.1 has no physics: the mode is kept and changes nothing
+        physics: 'update',
+        physicsTranslate() {},
+        physicsRotate() {},
+        forces() {},
         takeEvents: recorder.take,
         place(x, y, scaleX, scaleY) {
-            for (const each of [skeleton]) Object.assign(each, { x, y, scaleX, scaleY });
+            Object.assign(skeleton, { x, y, scaleX });
+            yDown.place(scaleY);
         },
+        yDown: (value) => yDown.set(value),
         read() {
             readPose(pose);
             readWorld(pose);
 
             return pose;
         },
-        leaks: audit?.leaks ?? [],
     };
 }
 
 /** Loads a 4.1 skeleton for posing with the official 4.1 core. */
-export function loadPose41(files: RigFiles, options: RigOptions = {}): OfficialPoseRig {
+export function loadPose41(files: RigFiles): OfficialPoseRig {
     const data = readData(files);
     const shared: Shared = {
         data,
@@ -198,12 +198,6 @@ export function loadPose41(files: RigFiles, options: RigOptions = {}): OfficialP
         eventIndex: indexer(data.events, 'event'),
         ref: cachedRefs(attachmentRefs(data.skins.map((skin) => skinEntries(skin.attachments)))),
     };
-
-    if (options.stripIgnoredTimelines) {
-        for (const animation of data.animations) {
-            animation.setTimelines(animation.timelines.filter((timeline) => !isIgnoredKind(timelineKind(timeline))));
-        }
-    }
 
     return {
         info: {
@@ -216,8 +210,9 @@ export function loadPose41(files: RigFiles, options: RigOptions = {}): OfficialP
                 duration,
                 events: timelines.some((timeline) => timelineKind(timeline) === 'event'),
             })),
-            ignored: 0,
+            physics: 0,
+            sliders: 0,
         },
-        createDriver: (driverOptions = {}) => createDriver(shared, driverOptions),
+        createDriver: () => createDriver(shared),
     };
 }

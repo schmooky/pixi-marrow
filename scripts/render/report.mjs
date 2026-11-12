@@ -11,6 +11,8 @@ const SUMMARY_NAMES = {
     match: 'ours against official',
     // the frames of `match` that ours draws through a clip mask, once more on their own
     clipped: 'of those, clipped',
+    // the frames of `match` of the rigs with physics constraints or sliders, once more on their own
+    solved: 'physics or slider rigs',
     formats: 'json and binary',
     pma: 'premultiplied atlas',
     cuts: 'cuts on and off',
@@ -272,10 +274,12 @@ export function createReporter({ root, dir, verbose }) {
                     overdraw.polygons += info.polygons.area;
                     overdraw.covered += info.covered;
                 }
-                // the clipped frames count in their comparison, and once more in a line of their own
+                // the clipped frames count in their comparison, and once more in a line of their own.
+                // So do the frames of a rig with physics or a slider against the official runtime
                 for (const [key, list] of [
                     [kind === 'proof' ? label : kind, frames],
                     ['clipped', clipped],
+                    ['solved', kind === 'match' && (rig.physics || rig.slider) ? frames : []],
                 ]) {
                     if (list.length === 0) continue;
                     const sum = total(key);
@@ -317,11 +321,15 @@ export function createReporter({ root, dir, verbose }) {
             return failed;
         },
 
-        /** Prints one line per comparison over every rig. The clipped frames follow their comparison. */
+        /**
+         * Prints one line per comparison over every rig. The clipped frames and the frames of the
+         * rigs with physics or sliders follow their comparison.
+         */
         summary() {
-            const keys = [...totals.keys()].filter((key) => key !== 'clipped');
+            const parts = ['clipped', 'solved'];
+            const keys = [...totals.keys()].filter((key) => !parts.includes(key));
 
-            if (totals.has('clipped')) keys.splice(keys.indexOf('match') + 1, 0, 'clipped');
+            keys.splice(keys.indexOf('match') + 1, 0, ...parts.filter((key) => totals.has(key)));
             for (const key of keys) {
                 const sum = totals.get(key);
                 const pick = sum.proof ? Math.min : Math.max;

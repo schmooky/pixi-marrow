@@ -26,3 +26,6 @@ packages/*/LICENSE
 .env
 .env.*
 !.env.example
+
+# Raw numbers of the A/B bench, written by scripts/bench/ab.mjs
+.bench/

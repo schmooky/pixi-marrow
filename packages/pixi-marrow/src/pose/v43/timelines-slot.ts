@@ -52,11 +52,10 @@ function mixChannels(
  * `dark` says whether the keys hold a dark color after them.
  */
 export function applyColor(pose: Pose43, timeline: Timeline43, from: number): void {
-    const state = pose.state;
     const slot = timeline.target;
 
-    if (state.active[timeline.bone] !== 1) return;
-    const { colors, darkColors } = state;
+    if (pose.state.active[timeline.bone] !== 1) return;
+    const { colors, darkColors } = pose;
     const setup = pose.rig.model.slots;
     const light = slot * 4;
     const dark = slot * 3;
@@ -77,10 +76,8 @@ export function applyColor(pose: Pose43, timeline: Timeline43, from: number): vo
 
 /** The official alpha timeline: the alpha of a slot color. */
 export function applyAlpha(pose: Pose43, timeline: Timeline43, from: number): void {
-    const state = pose.state;
-
-    if (state.active[timeline.bone] !== 1) return;
-    const colors = state.colors;
+    if (pose.state.active[timeline.bone] !== 1) return;
+    const colors = pose.colors;
     const setup = pose.rig.model.slots.colors;
     const i = timeline.target * 4 + 3;
     const frames = timeline.frames;

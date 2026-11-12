@@ -106,6 +106,16 @@ export class CoverTest {
         this.coveredBy = new Uint8Array(slots);
     }
 
+    /** The bytes of the typed arrays of the test. */
+    get bytes(): number {
+        const { skipped, marks, coveredBy, entries, places, placed, live, quads, boxes } = this;
+
+        return [skipped, marks, coveredBy, entries, places, placed, live, quads, boxes].reduce(
+            (sum, array) => sum + array.byteLength,
+            0,
+        );
+    }
+
     /**
      * Starts a frame. Returns whether {@link run} has work to do in it: a slot is skipped and
      * must be tested again, or it is the turn of a search. Most frames get false and are done.

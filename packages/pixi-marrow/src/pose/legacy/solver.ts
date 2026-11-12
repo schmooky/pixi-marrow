@@ -1,9 +1,11 @@
 import { LOCAL_STRIDE, type PoseState, WORLD_STRIDE } from '../state';
 import { cacheOf, type UpdateCache } from './cache';
-import { C_IK, C_PATH, C_PHYSICS, C_TRANSFORM, CONSTRAINT_STRIDE } from './constraints';
+import { C_IK, C_PATH, C_TRANSFORM } from './constraints';
 import { solveIk } from './ik';
 import { COS_QUARTER, DEG_RAD, NORMAL, QUARTER, SIN_QUARTER } from './math';
 import { solvePath } from './path';
+import { solvePhysics } from './physics';
+import { createPhysicsState, PHYSICS_UPDATE, setPhysicsToSetupPose } from './physics-state';
 import type { Rig } from './rig';
 import { solveTransform } from './transform';
 import { updateBone } from './world';
@@ -18,12 +20,23 @@ export interface Solver {
     /**
      * The official ax, ay, arotation, ascaleX, ascaleY, ashearX and ashearY of each bone, in the
      * layout of the local pose. An update starts them at the local pose. Constraints change them.
-     * A skeleton without a constraint that is solved has no array of its own here: this is its
-     * local pose, which nothing but timelines writes then.
+     * A skeleton without constraints has no array of its own here: this is its local pose, which
+     * nothing but timelines writes then. A physics constraint leaves the applied pose of its bone
+     * as it was when nothing in the update order reads it.
      */
     readonly applied: Float64Array;
-    /** The animated values of each constraint, `CONSTRAINT_STRIDE` numbers each. Timelines change them. */
+    /**
+     * The animated values of each IK, transform and path constraint, `CONSTRAINT_STRIDE` numbers
+     * each. Timelines change them.
+     */
     readonly values: Float64Array;
+    /**
+     * The animated values and the simulation state of each physics constraint, `PHYSICS_STRIDE`
+     * numbers each. It has no bytes for a skeleton without physics constraints.
+     */
+    readonly physics: Float64Array;
+    /** How physics constraints run in an update: the number of the official `Physics`. */
+    mode: number;
     /** The update cache of the active skin. */
     cache: UpdateCache;
 }
@@ -34,9 +47,13 @@ export function useSkin(solver: Solver): void {
     solver.pose.active.set(solver.cache.boneActive);
 }
 
-/** Sets every constraint to its setup values: the constraint part of the official `setBonesToSetupPose`. */
+/**
+ * Sets every constraint to its setup values: the constraint part of the official
+ * `setBonesToSetupPose`. The simulation of a physics constraint keeps its state.
+ */
 export function setConstraintsToSetupPose(solver: Solver): void {
     solver.values.set(solver.rig.plan.setup);
+    setPhysicsToSetupPose(solver.rig.plan, solver.physics);
 }
 
 /** The constraint state of a new skeleton instance: setup values and the update order without a skin. */
@@ -44,14 +61,12 @@ export function createSolver(rig: Rig, pose: PoseState): Solver {
     const solver: Solver = {
         rig,
         pose,
-        applied: rig.plan.constraints.some((constraint) => constraint.kind !== C_PHYSICS)
-            ? new Float64Array(rig.model.bones.count * LOCAL_STRIDE)
-            : pose.local,
-        values: new Float64Array(rig.plan.constraints.length * CONSTRAINT_STRIDE),
+        applied: rig.plan.constraints.length > 0 ? new Float64Array(rig.model.bones.count * LOCAL_STRIDE) : pose.local,
+        values: Float64Array.from(rig.plan.setup),
+        physics: createPhysicsState(rig.plan),
+        mode: PHYSICS_UPDATE,
         cache: cacheOf(rig, pose.skin),
     };
-
-    setConstraintsToSetupPose(solver);
 
     return solver;
 }
@@ -61,7 +76,7 @@ export function constraintIsActive(solver: Solver, constraint: number): boolean 
     return solver.cache.constraintActive[constraint] === 1;
 }
 
-/** Solves the constraint at an index of the constraint list, by its kind. A physics constraint is never asked for. */
+/** Solves the constraint at an index of the constraint list, by its kind. */
 function solveConstraint(solver: Solver, index: number): void {
     const constraint = solver.rig.plan.constraints[index];
 
@@ -69,13 +84,13 @@ function solveConstraint(solver: Solver, index: number): void {
     if (constraint.kind === C_IK) solveIk(solver, constraint);
     else if (constraint.kind === C_TRANSFORM) solveTransform(solver, constraint);
     else if (constraint.kind === C_PATH) solvePath(solver, constraint);
+    else solvePhysics(solver, constraint);
 }
 
 /**
- * The official `Skeleton.updateWorldTransform`: starts the applied pose of every bone at its
- * local pose, then updates bones and solves constraints in the order of the update cache. Physics
- * constraints have no entry: the official runtime leaves them in when they are switched off, and
- * then they change nothing. An inactive bone keeps the world transform it had.
+ * The official `Skeleton.updateWorldTransform` with the physics mode of the solver. It starts the
+ * applied pose of every bone at its local pose, then updates bones and solves constraints in the
+ * order of the update cache. An inactive bone keeps the world transform it had.
  *
  * Inherit mode `normal` of a bone with a parent, which nearly every bone has, is computed in the
  * loop itself: the parent transform times the applied pose. As functions of their own its steps

@@ -114,9 +114,10 @@ describe.each(VERSIONS)('MarrowSpine of a Spine %s skeleton', (version) => {
             expect(errors[0]?.message).toContain('The skeleton has no animation "undefined".');
         });
 
-        it('plays the animation and keeps its track when the engine refuses an option', () => {
+        it('throws for an option of the wrong type before anything plays', () => {
             const spine = create();
             const started = vi.fn();
+            const setAnimation = vi.spyOn(spine.engine, 'setAnimation');
             const speed: unknown = 'fast';
 
             spine.on('start', started);
@@ -124,8 +125,23 @@ describe.each(VERSIONS)('MarrowSpine of a Spine %s skeleton', (version) => {
             spine.update(FRAME);
 
             expect(error.code).toBe('invalid-data');
+            expect(error.message).toContain('The option "speed" was set to "fast".');
+            expect(error.fix).toBe('Pass a finite number.');
+            expect(setAnimation).not.toHaveBeenCalled();
+            expect(started).not.toHaveBeenCalled();
+        });
+
+        it('plays the animation and keeps its track when the engine refuses a field of the option entry', () => {
+            const spine = create();
+            const started = vi.fn();
+
+            spine.on('start', started);
+            const error = thrownBy(() => spine.play('walk', { speed: 2, entry: { trackEnd: 'never' } }));
+            spine.update(FRAME);
+
+            expect(error.code).toBe('invalid-data');
             expect(started).toHaveBeenCalledOnce();
-            expect(started.mock.calls[0]?.[0]).toMatchObject({ animation: 'walk', speed: 1 });
+            expect(started.mock.calls[0]?.[0]).toMatchObject({ animation: 'walk', speed: 2 });
         });
 
         it('checks the names of queue and setMix the same way', () => {

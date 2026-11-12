@@ -1,12 +1,12 @@
 import { solveOneBone } from './ik-one';
 import { solveTwoBones } from './ik-two';
-import { CONSTRAINT_STRIDE, IK_COMPRESS, IK_MIX, IK_STRETCH, type IkPlan } from './solver-types';
+import { IK_COMPRESS, IK_MIX, IK_STRETCH, type IkPlan } from './solver-types';
 import type { Pose43 } from './types';
 
 /** The official `IkConstraint.update`: points one bone, or a parent bone and its child, at the target bone. */
 export function solveIk(pose: Pose43, plan: IkPlan): void {
-    const { values } = pose.solve;
-    const v = plan.index * CONSTRAINT_STRIDE;
+    const values = pose.solve.applied;
+    const v = plan.at;
     const { bones } = plan;
 
     if (values[v + IK_MIX] === 0) return;

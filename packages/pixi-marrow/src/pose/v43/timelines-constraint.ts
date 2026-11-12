@@ -1,11 +1,12 @@
 import { ALPHA, curveValue, SHARED, sampleValues, TIME, towardSetup, VALUES } from './curves';
-import { CONSTRAINT_STRIDE, IK_BEND_DIRECTION, IK_COMPRESS, IK_STRETCH } from './solver-types';
+import { IK_BEND_DIRECTION, IK_COMPRESS, IK_STRETCH } from './solver-types';
 import { CURRENT, FIRST, type Pose43, SETUP, type Timeline43 } from './types';
 
 /*
- * The timelines that animate IK, transform and path constraints. They write the animated pose of
- * a constraint, the official `constraint.pose`, and leave a constraint alone that is not active.
- * Each reads its time and its alpha from `SHARED`, for the reasons given in curves.ts.
+ * The timelines that animate IK, transform and path constraints and sliders. They write the pose
+ * of a constraint and leave a constraint alone that is not active. `offset` of a timeline is
+ * where its first number is among the constraint poses. Each reads its time and its alpha from
+ * `SHARED`, for the reasons given in curves.ts.
  */
 
 /** Gives an IK constraint the bend direction, compress and stretch of its setup pose. */
@@ -20,12 +21,12 @@ function setupFlags(values: Float64Array, setup: Float64Array, i: number): void 
  * The bend direction, compress and stretch are taken from the key as they are.
  */
 export function applyIkConstraint(pose: Pose43, timeline: Timeline43, from: number, out: boolean): void {
-    const { values, active } = pose.solve;
+    const { values } = pose;
     const { setup } = pose.rig.solver;
     const { frames } = timeline;
 
-    if (active[timeline.target] !== 1) return;
-    const i = timeline.target * CONSTRAINT_STRIDE;
+    if (pose.solve.active[timeline.target] !== 1) return;
+    const i = timeline.offset;
 
     if (Number(SHARED[TIME]) < Number(frames[0])) {
         towardSetup(values, setup, i, 2, from);
@@ -50,15 +51,14 @@ export function applyIkConstraint(pose: Pose43, timeline: Timeline43, from: numb
 
 /**
  * The official `TransformConstraintTimeline` and `PathConstraintMixTimeline`: every mix of a
- * constraint. `offset` is where the first mix is among the numbers of the constraint. They mix
- * from the setup pose or from the current pose, and add when `add` is true.
+ * constraint. They mix from the setup pose or from the current pose, and add when `add` is true.
  */
 export function applyConstraintMixes(pose: Pose43, timeline: Timeline43, from: number, add: boolean): void {
-    const { values, active } = pose.solve;
+    const { values } = pose;
     const { setup } = pose.rig.solver;
 
-    if (active[timeline.target] !== 1) return;
-    const i = timeline.target * CONSTRAINT_STRIDE + timeline.offset;
+    if (pose.solve.active[timeline.target] !== 1) return;
+    const i = timeline.offset;
     const count = timeline.entries - 1;
 
     if (Number(SHARED[TIME]) < Number(timeline.frames[0])) {
@@ -79,14 +79,18 @@ export function applyConstraintMixes(pose: Pose43, timeline: Timeline43, from: n
 }
 
 /**
- * The official `PathConstraintPositionTimeline` and `PathConstraintSpacingTimeline`: one number of
- * a path constraint, as an absolute value. Only a timeline that is additive adds.
+ * The official `PathConstraintPositionTimeline`, `PathConstraintSpacingTimeline`, `SliderTimeline`
+ * and `SliderMixTimeline`: one number of a constraint, as an absolute value. This is the official
+ * `CurveTimeline1.getAbsoluteValue`.
+ *
+ * @param add The `add` the official timeline passes on. The position timeline and the slider
+ * timelines pass their own. The spacing timeline passes false.
  */
 export function applyConstraintValue(pose: Pose43, timeline: Timeline43, from: number, add: boolean): void {
-    const { values, active } = pose.solve;
+    const { values } = pose;
 
-    if (active[timeline.target] !== 1) return;
-    const i = timeline.target * CONSTRAINT_STRIDE + timeline.offset;
+    if (pose.solve.active[timeline.target] !== 1) return;
+    const i = timeline.offset;
     const current = Number(values[i]);
     const setup = Number(pose.rig.solver.setup[i]);
     const frames = timeline.frames;
@@ -103,5 +107,5 @@ export function applyConstraintValue(pose: Pose43, timeline: Timeline43, from: n
     const value = Number(SHARED[VALUES]);
     const base = from === SETUP ? setup : current;
 
-    values[i] = base + (add && timeline.additive ? value : value - base) * alpha;
+    values[i] = base + (add ? value : value - base) * alpha;
 }

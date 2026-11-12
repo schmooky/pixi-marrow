@@ -5,7 +5,21 @@ import type { AnimationData, SkeletonModel } from '../../model/model';
 import type { TimelineData, TimelineKind } from '../../model/timelines';
 import { type AttachmentLookup, createAttachmentLookup, meshSource } from '../shared/lookup';
 import { prepareSolver } from './solver';
-import { PATH_MIX, PATH_POSITION, PATH_SPACING } from './solver-types';
+import {
+    PATH_MIX,
+    PATH_POSITION,
+    PATH_SPACING,
+    PHYSICS_DAMPING,
+    PHYSICS_GRAVITY,
+    PHYSICS_INERTIA,
+    PHYSICS_MASS_INVERSE,
+    PHYSICS_MIX,
+    PHYSICS_STRENGTH,
+    PHYSICS_WIND,
+    type Plan43,
+    SLIDER_MIX,
+    SLIDER_TIME,
+} from './solver-types';
 import {
     type AttachmentInfo,
     type Clip43,
@@ -20,12 +34,15 @@ import {
     OP_INHERIT,
     OP_MIXES,
     OP_NO_DARK,
-    OP_NOTHING,
     OP_PAIR,
+    OP_PHYSICS,
+    OP_PHYSICS_MASS,
+    OP_PHYSICS_RESET,
     OP_RELATIVE,
     OP_SCALE,
     OP_SCALE_PAIR,
     OP_SEQUENCE,
+    OP_SLIDER,
     OP_VALUE,
     type Rig43,
     ROLE_ATTACHMENT,
@@ -115,20 +132,27 @@ const bone = (op: number, entries: number, properties: readonly number[], offset
 const color = (entries: number, properties: readonly number[], light: number, dark: boolean): KindSpec =>
     spec(OP_COLOR, entries, properties, { offset: light, dark, gate: 'slot' });
 
-/**
- * A timeline of a physics or slider constraint. Those are not solved, so the timeline changes
- * nothing. It still counts where the player looks at the timelines of an entry. The entries are
- * not used: the timeline is never read.
- */
-const unsolved = (property: number, additive = false): KindSpec => spec(OP_NOTHING, 1, [property], { additive });
+/** A timeline for one number of the pose of a physics constraint. `offset` is its position in the pose. */
+const physics = (property: number, offset: number, additive = false): KindSpec =>
+    spec(OP_PHYSICS, 2, [property], { offset, additive });
 
-/** The constraint type each constraint timeline kind animates, for the kinds this engine applies. */
+/** The constraint type each constraint timeline kind animates. */
 const CONSTRAINT_TYPES: Partial<Record<TimelineKind, ConstraintData['type']>> = {
     ikConstraint: 'ik',
     transformConstraint: 'transform',
     pathConstraintPosition: 'path',
     pathConstraintSpacing: 'path',
     pathConstraintMix: 'path',
+    physicsConstraintInertia: 'physics',
+    physicsConstraintStrength: 'physics',
+    physicsConstraintDamping: 'physics',
+    physicsConstraintMass: 'physics',
+    physicsConstraintWind: 'physics',
+    physicsConstraintGravity: 'physics',
+    physicsConstraintMix: 'physics',
+    physicsConstraintReset: 'physics',
+    slider: 'slider',
+    sliderMix: 'slider',
 };
 
 /** Every timeline kind of Spine 4.3. */
@@ -163,16 +187,16 @@ const SPECS: Record<TimelineKind, KindSpec> = {
     }),
     pathConstraintSpacing: spec(OP_VALUE, 2, [P_PATH_CONSTRAINT_SPACING], { offset: PATH_SPACING }),
     pathConstraintMix: spec(OP_MIXES, 4, [P_PATH_CONSTRAINT_MIX], { offset: PATH_MIX }),
-    physicsConstraintInertia: unsolved(P_PHYSICS_CONSTRAINT_INERTIA),
-    physicsConstraintStrength: unsolved(P_PHYSICS_CONSTRAINT_STRENGTH),
-    physicsConstraintDamping: unsolved(P_PHYSICS_CONSTRAINT_DAMPING),
-    physicsConstraintMass: unsolved(P_PHYSICS_CONSTRAINT_MASS),
-    physicsConstraintWind: unsolved(P_PHYSICS_CONSTRAINT_WIND, true),
-    physicsConstraintGravity: unsolved(P_PHYSICS_CONSTRAINT_GRAVITY, true),
-    physicsConstraintMix: unsolved(P_PHYSICS_CONSTRAINT_MIX),
-    physicsConstraintReset: spec(OP_NOTHING, 1, [], { instant: true }),
-    slider: unsolved(P_SLIDER_TIME),
-    sliderMix: unsolved(P_SLIDER_MIX, true),
+    physicsConstraintInertia: physics(P_PHYSICS_CONSTRAINT_INERTIA, PHYSICS_INERTIA),
+    physicsConstraintStrength: physics(P_PHYSICS_CONSTRAINT_STRENGTH, PHYSICS_STRENGTH),
+    physicsConstraintDamping: physics(P_PHYSICS_CONSTRAINT_DAMPING, PHYSICS_DAMPING),
+    physicsConstraintMass: { ...physics(P_PHYSICS_CONSTRAINT_MASS, PHYSICS_MASS_INVERSE), op: OP_PHYSICS_MASS },
+    physicsConstraintWind: physics(P_PHYSICS_CONSTRAINT_WIND, PHYSICS_WIND, true),
+    physicsConstraintGravity: physics(P_PHYSICS_CONSTRAINT_GRAVITY, PHYSICS_GRAVITY, true),
+    physicsConstraintMix: physics(P_PHYSICS_CONSTRAINT_MIX, PHYSICS_MIX),
+    physicsConstraintReset: spec(OP_PHYSICS_RESET, 1, [], { instant: true }),
+    slider: spec(OP_SLIDER, 2, [P_SLIDER_TIME], { offset: SLIDER_TIME }),
+    sliderMix: spec(OP_SLIDER, 2, [P_SLIDER_MIX], { offset: SLIDER_MIX, additive: true }),
 };
 
 const invalid = (message: string): MarrowError =>
@@ -204,6 +228,8 @@ interface Build {
     lookup: AttachmentLookup;
     info: Map<AttachmentData, AttachmentInfo>;
     ids: PropertyIds;
+    /** The plan of every constraint of the model. */
+    plans: readonly Plan43[];
 }
 
 const hasVertices = (attachment: AttachmentData): boolean =>
@@ -293,12 +319,26 @@ function folderFlags(model: SkeletonModel, slots: Int16Array): Uint8Array {
     return flags;
 }
 
-/** Throws when a timeline animates a constraint the skeleton does not have, or one of another type. */
+/**
+ * Throws when a timeline animates a constraint the skeleton does not have, or one of another type.
+ * A physics timeline with the target -1 is for every physics constraint.
+ */
 function checkConstraint(build: Build, data: TimelineData, user: string): void {
     const type = CONSTRAINT_TYPES[data.kind];
 
     if (type === undefined || build.model.constraints[data.target]?.type === type) return;
+    if (type === 'physics' && data.target === -1) return;
     throw invalid(`${user} has a ${data.kind} timeline for constraint ${data.target}, which is no ${type} constraint.`);
+}
+
+/**
+ * The `offset` of a timeline. For a timeline of one constraint it is where the first animated
+ * number is among the constraint poses. For the other kinds it is that of the kind.
+ */
+function offsetOf(build: Build, data: TimelineData, kind: KindSpec): number {
+    const plan = CONSTRAINT_TYPES[data.kind] === undefined ? undefined : build.plans[data.target];
+
+    return plan === undefined ? kind.offset : plan.at + kind.offset;
 }
 
 /** An empty `shown` for an attachment timeline: one row per skin and one for no skin, none looked up yet. */
@@ -343,7 +383,7 @@ function buildTimeline(build: Build, data: TimelineData, user: string): Timeline
         instant: kind.instant,
         op: noDark ? OP_NO_DARK : kind.op,
         bone: gateBone(build.model, kind, data.target),
-        offset: kind.offset,
+        offset: offsetOf(build, data, kind),
         dark: kind.dark,
         names: data.attachmentNames ?? [],
         shown: data.kind === 'attachment' ? skinRows(build.model) : NO_ROWS,
@@ -380,7 +420,8 @@ export function prepareRig(model: SkeletonModel): Rig43 {
     const lookup = createAttachmentLookup(model);
     const ids = new PropertyIds();
     const drawOrderId = ids.of(`${P_DRAW_ORDER}`);
-    const build: Build = { model, lookup, info: describeAttachments(model, lookup), ids };
+    const solver = prepareSolver(model, lookup);
+    const build: Build = { model, lookup, info: describeAttachments(model, lookup), ids, plans: solver.plans };
     const clips = model.animations.map((animation, index) => buildClip(build, animation, index));
     const rig: Rig43 = {
         model,
@@ -389,7 +430,7 @@ export function prepareRig(model: SkeletonModel): Rig43 {
         empty: { index: -1, name: '<empty>', duration: 0, timelines: [], ids: new Set() },
         info: build.info,
         drawOrderId,
-        solver: prepareSolver(model),
+        solver,
         scratch: {
             owners: new Int32Array(ids.count),
             stamps: new Float64Array(ids.count),

@@ -16,14 +16,29 @@ export interface AttachmentLookup {
     resolve(ref: AttachmentRef): AttachmentData | undefined;
 }
 
+/** The lookup of each model that has one. Every instance of a skeleton shares it. */
+const LOOKUPS = new WeakMap<SkeletonModel, AttachmentLookup>();
+
 /**
- * Builds the lookup tables for a model.
+ * The lookup tables of a model. They are built at the first call for a model and shared after
+ * that, so a model must not change once it has a lookup.
  *
  * @example
  * const lookup = createAttachmentLookup(model);
  * const head = lookup.find(engine.state.skin, model.slots.names.indexOf('head'), 'head');
  */
 export function createAttachmentLookup(model: SkeletonModel): AttachmentLookup {
+    let lookup = LOOKUPS.get(model);
+
+    if (lookup === undefined) {
+        lookup = buildLookup(model);
+        LOOKUPS.set(model, lookup);
+    }
+
+    return lookup;
+}
+
+function buildLookup(model: SkeletonModel): AttachmentLookup {
     // per skin, per slot: name to attachment
     const tables = model.skins.map((skin) => {
         const slots: (Map<string, AttachmentData> | undefined)[] = [];

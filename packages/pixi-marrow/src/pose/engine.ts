@@ -1,4 +1,3 @@
-import { MarrowError } from '../base/errors';
 import type { SkeletonModel } from '../model/model';
 import type { EventKey } from '../model/timelines';
 import type { PoseState } from './state';
@@ -75,6 +74,16 @@ export type TrackField =
 export type TrackFields = Partial<Record<TrackField, number | boolean | string>>;
 
 /**
+ * How physics constraints run in an update. The names are those of the official `Physics`.
+ *
+ * - `none` leaves physics out: the bones keep the pose the animations and other constraints gave.
+ * - `reset` puts the physics back to that pose, then runs it.
+ * - `update` runs the physics with the time that passed and moves the bones.
+ * - `pose` moves the bones to where the physics is, and does not advance it.
+ */
+export type PhysicsMode = 'none' | 'reset' | 'update' | 'pose';
+
+/**
  * Plays animations on one skeleton instance and keeps its pose in {@link PoseState}.
  *
  * The methods mirror the official `AnimationState` and `Skeleton`, so the same calls on this
@@ -113,27 +122,28 @@ export interface PoseEngine {
     setupPoseBones(): void;
     setupPoseSlots(): void;
     /**
-     * Advances every track by `dt` seconds, applies the animations to the pose, then computes the
-     * world transforms.
+     * How physics constraints run in {@link update}. Default `update`. The mode stays until it is
+     * set again, so set `reset` for one update only. Spine 4.1 has no physics: there it changes nothing.
+     */
+    physics: PhysicsMode;
+    /**
+     * Tells the physics constraints that the skeleton moved by `x`, `y` in the space of its
+     * parent, so that they lag behind: the official `Skeleton.physicsTranslate`.
+     */
+    physicsTranslate(x: number, y: number): void;
+    /**
+     * Tells the physics constraints that the skeleton turned by `degrees` around `x`, `y`: the
+     * official `Skeleton.physicsRotate`.
+     */
+    physicsRotate(x: number, y: number, degrees: number): void;
+    /**
+     * Advances every track and the skeleton time by `dt` seconds, applies the animations to the
+     * pose, then solves the constraints and computes the world transforms.
      */
     update(dt: number): void;
     /** What happened since the last call, in the order the official listener is called. */
     takeEvents(): PoseEvent[];
 }
-
-/** Options for {@link createPoseEngine}. */
-export interface PoseEngineOptions {
-    /**
-     * What to do with a skeleton that has constraints this version cannot solve yet: physics and
-     * slider constraints. `error` (the default) throws. `ignore` plays the skeleton without those:
-     * they are not applied and the timelines that animate them change nothing. IK, transform and
-     * path constraints are always solved.
-     */
-    constraints?: 'error' | 'ignore';
-}
-
-/** Constraint types the engines do not solve yet. */
-const UNSOLVED: readonly string[] = ['physics', 'slider'];
 
 /** Creates one more pose engine for the model it was loaded for. Synchronous. */
 export type PoseEngineFactory = () => PoseEngine;
@@ -142,26 +152,12 @@ export type PoseEngineFactory = () => PoseEngine;
  * Loads the pose engine code for a model's Spine version and returns a factory that creates
  * engines for that model without waiting. Use it when instances are created synchronously.
  *
- * Throws a {@link MarrowError} for a skeleton with physics or slider constraints, unless `constraints` is `ignore`.
- *
  * @example
  * const createEngine = await loadPoseEngine(model);
  * const first = createEngine();
  * const second = createEngine();
  */
-export async function loadPoseEngine(
-    model: SkeletonModel,
-    options: PoseEngineOptions = {},
-): Promise<PoseEngineFactory> {
-    const unsolved = [...new Set(model.constraints.map((constraint) => constraint.type))].filter((type) =>
-        UNSOLVED.includes(type),
-    );
-
-    if (unsolved.length > 0 && options.constraints !== 'ignore') {
-        throw new MarrowError('unsupported-feature', `The skeleton has ${unsolved.join(', ')} constraints.`, {
-            fix: 'Physics and slider constraints arrive with milestone M4. Until then pass { constraints: "ignore" } to play without them.',
-        });
-    }
+export async function loadPoseEngine(model: SkeletonModel): Promise<PoseEngineFactory> {
     if (model.version === '4.3') {
         const { createEngine43 } = await import('./v43/index');
 
@@ -176,7 +172,7 @@ export async function loadPoseEngine(
  * Creates a pose engine for a model. The engine for the model's Spine version is loaded on demand:
  * 4.1 and 4.2 share one, 4.3 has its own, because the official runtimes mix animations differently.
  *
- * Throws a {@link MarrowError} for a skeleton with physics or slider constraints, unless `constraints` is `ignore`.
+ * Every constraint of the three versions is solved: IK, transform, path, physics and sliders.
  *
  * @example
  * const engine = await createPoseEngine(await importSkeleton(bytes));
@@ -184,6 +180,6 @@ export async function loadPoseEngine(
  * engine.update(1 / 60);
  * console.log(engine.state.world.subarray(0, 6));
  */
-export async function createPoseEngine(model: SkeletonModel, options: PoseEngineOptions = {}): Promise<PoseEngine> {
-    return (await loadPoseEngine(model, options))();
+export async function createPoseEngine(model: SkeletonModel): Promise<PoseEngine> {
+    return (await loadPoseEngine(model))();
 }

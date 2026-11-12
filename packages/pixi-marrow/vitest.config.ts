@@ -5,6 +5,11 @@ export default defineConfig({
         environment: 'node',
         include: ['tests/**/*.test.ts'],
         setupFiles: ['./tests/setup.ts'],
+        // Some tests take seconds on a laptop: they warm the JavaScript engine up until it stops
+        // allocating, or read every page image. A CI runner is several times slower, and its speed
+        // changes from run to run. The default of 5 seconds is too short on a slow run.
+        testTimeout: 60_000,
+        hookTimeout: 60_000,
         coverage: {
             provider: 'v8',
             include: ['src/**/*.ts'],

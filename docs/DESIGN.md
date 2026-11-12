@@ -14,6 +14,8 @@ Change with M2a: there are two pose engines, one for 4.1 and 4.2 and one for 4.3
 
 Change with M3: IK, transform and path constraints are solved in both engines, and clipping works through a stencil mask (sections 5.3, 7.5 and 10). Tight meshes turned out not to be exact to the bit, so they are an option and not the default (section 7.4). The overdraw cuts that are exact are on by default.
 
+Change with M4: physics constraints and sliders are solved, so every constraint of the three versions is (sections 5.3 and 10). The option to ignore constraints is gone. The perf report loads on demand and is asynchronous (section 8.5). The A/B bench lives in this repository and runs on one desktop machine. Numbers per device class wait for spine-benchmark (section 16). That bench moved the batched render mode up: it is M5 now, before pose skipping (sections 7.2 and 16.1).
+
 This document is the plan. Every performance number in it is an estimate until the benchmark measures it. Section 0 lists what has been verified.
 
 ## 0. Verified facts this design rests on
@@ -199,7 +201,7 @@ Limits of the model today: indices are 16-bit. A file with more than 32,767 bone
 
 ### 5.3 Pose
 
-Built in M2a, with constraints since M3:
+Built in M2a, with constraints since M3 and M4:
 
 | Piece | Responsibility |
 |---|---|
@@ -210,9 +212,13 @@ Built in M2a, with constraints since M3:
 | `src/pose/v43` | The engine for 4.3. The official 4.3 runtime mixes animations with other arguments in every timeline, so it cannot share the 4.1 and 4.2 player. |
 | `createAttachmentLookup`, `meshSource` | Find attachments by skin, slot and name, and the mesh that owns the geometry of a linked mesh. |
 
-IK, transform and path constraints are solved since M3. Each engine ports the solvers and the update order of its own official runtime, so there is no shared kernel with version modes. The 4.3 engine includes the generalized transform constraints, because 4.3 has no other kind.
+IK, transform and path constraints are solved since M3, physics constraints and sliders since M4. Each engine ports the solvers and the update order of its own official runtime, so there is no shared kernel with version modes. The 4.3 engine includes the generalized transform constraints, because 4.3 has no other kind.
 
-Physics and slider constraints are not solved yet. Their timelines change nothing, but they still count in the mixing bookkeeping, as in the official player. Dropping them changes when mixed-out entries end. The constraints also keep their place in the update order: a bone that the order visits twice is posed twice, and in 4.2 that changes the last bits of a sheared bone.
+Physics has state: the simulation of each constraint and the time of the skeleton. `engine.physics` is the official `Physics` argument: `update`, `pose`, `reset` or `none`. `physicsTranslate` and `physicsRotate` are the official calls of those names. `PoseState.yDown` is the official static `Skeleton.yDown`, which the official Pixi runtime turns on. It decides which way gravity pulls when a physics constraint rotates or scales a bone. That is apart from the scale of -1 that flips the pose. The display object sets both.
+
+A slider of 4.3 applies an animation to the applied pose, not to the animated one. So a bone, a slot, a constraint or the draw order that a slider touches has two poses in the 4.3 engine. `PoseState` holds what is drawn: the applied values of slots and of the draw order, and the world transform of the applied bone pose. `local` stays the animated bone pose. A skeleton without sliders has one pose and pays nothing.
+
+The official runtime is the specification, with its quirks. Three that the engines keep: a slider writes the animated pose of the extra slots that a deform timeline reaches through a linked mesh. A physics reset key inside a slider never fires. In 4.1 and 4.2 a gap in the order numbers of constraints drops the constraints after it.
 
 Three rules of the update path, found by profiling in M3:
 
@@ -220,14 +226,20 @@ Three rules of the update path, found by profiling in M3:
 - No function on the update path takes or returns a fractional number. Time, alpha and sampled values go through one shared `Float64Array`, and kernels get indices. V8 puts a double on the heap when it crosses a call that is not inlined.
 - A bone that is not turned skips its trigonometry. The cosine of 0 is 1 and the sine of 0 is 0, so the result is the same to the bit.
 
-Measured in M3 on an Apple M4, in Node 24: the whole update of each rig's longest animation, against the official core doing the same work.
+Measured on an Apple M4, in Node 24: the whole update of each rig's longest animation, against the official core doing the same work. The rows without physics were measured in M3 and did not move in M4.
 
-| Engine | Rigs | Time, ours as a share of official | Bytes allocated per update, ours | Official |
-|---|---|---|---|---|
-| 4.3 | 19 | 27 to 97 percent | 3 to 15, from event objects | 17 to 5,043 |
-| 4.1 and 4.2 | 8 | 80 to 99 percent | 2 to 10, from event objects | 938 to 8,359 |
+| Engine | Rigs | Time, ours as a share of official |
+|---|---|---|
+| 4.3, rigs without physics or sliders | 19 | 27 to 97 percent |
+| 4.3, rigs with physics or a slider | 6 | 67 to 92 percent |
+| 4.1 and 4.2, rigs without physics | 8 | 80 to 99 percent |
+| 4.2, rigs with physics | 4 | 77 to 88 percent |
 
-An update that fires no event allocates nothing once V8 has optimized the path. The rigs nearest to the official time are bound by the same trigonometry calls. Skipping bones that did not change is M5.
+An update that fires no event allocates nothing once V8 has optimized the path. The official cores allocate 17 to 8,359 bytes per update on the same rigs. The rigs nearest to the official time are bound by the same trigonometry calls: a physics step is mostly `cos`, `sin`, `atan2` and `pow`, which both runtimes call with the same arguments.
+
+One step goes beyond the official code and stays exact. The official 4.2 runtime computes the applied transform of a bone after every physics constraint. The 4.2 engine does that only when a later bone update or constraint reads it. A test runs every physics fixture both ways and compares the world transforms to the bit.
+
+Skipping bones that did not change is M6.
 
 Planned for the later milestones:
 
@@ -268,7 +280,7 @@ Built so far, under other names: `SkeletonView` with its template, ranges and sh
 | `Optimizer` | Chooses a strategy for each feature from the model analysis, the device and the options. Records the reason. |
 | `Baker`, `BakedClip`, `BakedPlayer` | Sample an animation into a pose texture and play it without the pose core. |
 | `InstanceGroup` | Draws many instances of one asset in one call. |
-| `PerfProbe` | Timers and counters per bucket for spine-benchmark. |
+| `PerfProbe` | Timers and counters per bucket for spine-benchmark. Built in M4: `createProbe` of `pixi-marrow/perf`. |
 
 ## 6. Life of a frame
 
@@ -310,6 +322,8 @@ Baked animations replace steps 2 to 4 with one number: the clip time.
 | batched | Many small skeletons | Shared with other marrow skeletons | Positions and colors, like Pixi meshes |
 
 `renderMode: 'auto'` picks by vertex count and by how many instances share the render group. The threshold is a constant until the benchmark tunes it per device class.
+
+Only the mesh mode is built. The M4 bench shows what that costs. With 200 instances of one rig on stage the official runtime issues 1 draw call, because Pixi's batcher joins the instances. pixi-marrow issues 200, one per instance. On large rigs pixi-marrow still needs less time per frame. On small rigs the frame takes as long or longer, up to 1.28 times on WebGPU (section 16.1). The batched mode closes this gap. It was part of M6 and is M5 since this measurement.
 
 ### 7.3 Stable plan
 
@@ -429,16 +443,23 @@ Each item in this list has a parity test that runs with the item on and off.
 
 ### 8.5 The report
 
-`spine.perf.report()` returns every decision with its reason, and the counters behind it:
+`await spine.perf.report()` returns every decision the runtime made for one instance, with its reason and the counters behind it:
 
 ```ts
 [
-  { feature: 'skinning', value: 'gpu', reason: '1840 weighted vertices, max 3 bones per vertex' },
-  { feature: 'pose', value: '31 of 67 bones active', reason: 'animation "idle" moves the upper body only' },
-  { feature: 'bake', value: 'off', animation: 'idle', reason: 'physics constraint "hair"' },
+  { feature: 'drawCalls', value: '3', reason: '3 draw ranges: a range ends where the blend state, the group of 8 pages or the clip changes' },
   { feature: 'blend', value: '2 extra ranges', reason: 'slots "glow", "fx" use screen' },
+  { feature: 'tightMesh', value: 'off', reason: 'the option tightMesh is "auto": regions keep their quads' },
+  { feature: 'occlusion', value: '1 covered slot', reason: 'slot "small" lies behind the opaque part of a later slot and adds no index. The layout has 2 opaque rectangles' },
+  { feature: 'outlines', value: 'scanning', reason: 'the page images are being read in idle time' },
 ]
 ```
+
+Built in M4 with 15 rows: draw calls, blend ranges, pages, clipping, tight meshes, covered slots, outlines, dark tint, physics, constraints by kind, bones, slots, vertices, uploads and the layout. Every reason is read from the state of the instance when the call resolves. The rows about skinning mode, active bones and baking wait for the milestones that build those.
+
+The report and `spine.perf.memory()` are asynchronous. Their code is 4.4 kB gzipped and most games never call it, so it loads at the first call and not with the root import.
+
+`createProbe(spine)` from `pixi-marrow/perf` times every update of one instance in three buckets: the pose, the geometry and the events. It also counts what the renderer did. Without a probe an update pays one check of a field.
 
 This is the main tool for people and for agents: no guessing why something is slow.
 
@@ -461,9 +482,11 @@ Memory is a goal of the same weight as speed. These rules apply to every milesto
 
 Measured, not assumed:
 
-- `spine.perf.memory()` reports bytes shared per asset, bytes per instance and GPU bytes.
+- `await spine.perf.memory()` reports bytes shared per asset, bytes per instance and GPU bytes, built in M4. It counts typed arrays, GPU buffers and page textures, not JavaScript objects.
 - A memory baseline in `ci/` works like the size baseline. Growth of more than 10 percent in bytes per instance on the fixtures fails the build.
-- Since M3 the baseline counts `engine.bytes`: the pose state and what constraints add to an instance. A constrained bone costs 56 bytes more in 4.1 and 4.2 and 104 bytes more in 4.3. A skeleton without solved constraints pays nothing for them. Of the 104 bytes, 48 keep the world transform that a bone shows between a skin change and the next update equal to the official one. That is a candidate to cut.
+- Since M3 the baseline counts `engine.bytes`: the pose state and what constraints add to an instance. A constrained bone costs 56 bytes more in 4.1 and 4.2 and 104 bytes more in 4.3. A skeleton without solved constraints pays nothing for them. Of the 104 bytes, 48 keep the world transform that a bone shows between a skin change and the next update equal to the official one. Cutting it turned out not to be exact: an active bone under an inactive parent reads the stale world transform of that parent.
+- Since M4 the baseline also counts physics and slider state. A physics constraint adds 144 bytes to an instance in 4.2 and 180 in 4.3. A skeleton without physics or sliders pays nothing. The baseline is 1,530,600 bytes for one instance of each of the 114 fixtures, 6.6 percent above M3, all of it on the 20 files with physics or a slider.
+- The lookup of attachments by skin, slot and name is built once per model since M4. Before, every drawn instance built its own.
 - The spine-benchmark A/B reports heap and GPU memory next to frame time.
 
 ## 9. Public API sketch
@@ -486,7 +509,8 @@ const gun = hero.bone('gun');
 gun.rotation += 10;
 hero.follow('gun', muzzleFlash);
 
-console.table(hero.perf.report());
+hero.physicsTranslate(dx, dy);
+console.table(await hero.perf.report());
 ```
 
 Rules the API follows:
@@ -494,7 +518,9 @@ Rules the API follows:
 - Options objects, no positional booleans. `play('run', { loop: true })`, not `setAnimation(0, 'run', true)`.
 - Spine vocabulary is kept: track, skin, slot, bone, event, mix. Agents and animators already know it.
 - A wrong name throws `MarrowError` with the valid names and the closest match.
-- A rig that uses a feature not ported yet throws `MarrowError` with code `unsupported-feature` and the feature names.
+- Every feature of the three versions is ported since M4. A file that names something its version does not have, such as physics in 4.1, throws `MarrowError` with code `unsupported-feature`.
+- Play options are checked before anything plays: a wrong type or an unknown key throws and the track stays as it was.
+- The common track options have plain names: `loop`, `mix`, `speed`, `alpha`, `reverse`, `additive`, `start`, `end`. The rest of the official `TrackEntry` is reachable by its official names through `entry` and `track.configure`.
 - No required setup call. No import for side effects.
 - `hero.info` returns a JSON description: version, bones, slots, skins, animations with duration and flags, events, features used.
 
@@ -520,9 +546,9 @@ One model type for all versions. It is a faithful import, not a conversion: a 4.
 | Tracks, queue, mixing, events | yes | yes | yes | M2, built |
 | IK, transform and path constraints, clipping | yes | yes | yes | M3, built |
 | Generalized transform constraints | no | no | yes | M3, built |
-| Physics | no | yes | yes | M4 |
-| Sliders | no | no | yes | M4 |
-| Additive tracks and the remaining track options | yes | yes | yes | M4 |
+| Physics | no | yes | yes | M4, built |
+| Sliders | no | no | yes | M4, built |
+| Additive tracks and the remaining track options | yes | yes | yes | M4, built |
 
 The first draft planned one kernel per constraint with a version mode for older behaviour. The official solvers differ in too many small places for that: guards, comparisons of squares against lengths, rotation wrapping, the inherit modes in the applied transform, the sort of path bones. Exact parity is simpler to keep with one port per engine, where 4.1 and 4.2 differ by branches on the version.
 
@@ -592,7 +618,7 @@ Every code block in the docs is a file under `examples/`. The file is type-check
 | Two skills shipped in the npm package: use, and migrate from `spine-pixi-v8` | Works offline from `node_modules` |
 | Small surface, one way per task | Fewer wrong guesses |
 | `MarrowError` with code, fix and valid names | The agent can repair its own mistake in one step |
-| `hero.info` and `hero.perf.report()` as JSON | Inspect, do not guess |
+| `hero.info` and `await hero.perf.report()` as JSON | Inspect, do not guess |
 | `typegen` | Wrong names fail at compile time |
 | `pixi-marrow/core` in Node: load, pose and geometry without a GPU | An agent can test its code without a browser |
 | Mapping table from the official API | Uses what models already know |
@@ -617,12 +643,17 @@ The pose core is only as good as its proof. The parity suite is built before the
 | Plan stability | Node | Attachment and draw-order keys cause zero template rebuilds |
 | Allocation | Node | A played loop allocates nothing after warm-up |
 | Docs examples | Node and Chrome | Every example compiles and renders |
+| A/B bench | Headless Chrome | Not a test. `pnpm bench:ab` measures CPU time, frame time, draw calls and heap against the official Pixi runtime, and tight meshes on against off (section 16). |
 
 No tolerance: pose values are 64-bit, like the numbers of the official JavaScript core, and the engines port its arithmetic in the same order. Pose parity is exact equality. The one bounded difference is in mesh UVs of JSON files, where the model stores `regionUVs` in 32-bit and the official reader keeps 64-bit. The largest difference seen is 5.96e-8, far below one texel.
 
 The pose suite as built in M2a: 5,508 scripts and 165,298 compared updates over 117 rigs, in 18 seconds. Since M3 it runs 17 families of scripts on 129 rigs with constraints solved, in about 45 seconds. Four of the hand-written rigs exist for constraints: IK, transform, path, and the order in which constraints feed each other. A run of the official core against itself gives zero differences, and a change of one unit in the last place on either side is reported.
 
+Since M4 the reference is the played official skeleton with nothing switched off. The suite runs 18 families of scripts on 135 skeleton files: 2,430 cases in about 26 seconds. The new family is for physics: every mode, `physicsTranslate` and `physicsRotate`, wind and gravity directions, y down, moves and mirrored scales, steps of zero and of more than a second. Six more hand-written rigs exist for physics and sliders, because the fixtures hold one slider in total. They cover every physics property and flag, 21 sliders, and every kind of timeline inside a slider animation. A separate test proves that the reference does solve physics and sliders: the pose differs from a run in mode `none` and from the same rig without its sliders.
+
 The pixel check as built in M3: 456 frames against the official runtime per renderer, worst difference 4 of 255 levels, 0.008 percent of pixels off by more than 1. A frame that fails is drawn again, moved by a fraction of a pixel, and fails only when it fails at both places. The two runtimes place vertices in different code, so a vertex on a subpixel boundary can round two ways. Three frames pass at the second place only. A defect does not pass: the check proves that on shifted, tinted and hidden slots.
+
+Since M4 both sides run every constraint, physics and sliders included, from the same first update. The check draws 732 frames against the official runtime per renderer, on 45 rigs: worst difference 4 of 255 levels, 0.008 percent of pixels off by more than 1. The 284 frames of rigs with physics or a slider differ by 2 levels at most. Five frames pass at the second place only. The cuts on and off differ in no pixel on 530 frames.
 
 Fixtures: 57 official example rigs across 4.1, 4.2 and 4.3, each as JSON and binary, listed in `fixtures/manifest.json` at pinned commits with a hash per file. They are downloaded on demand and not committed, because the licence of the example assets has not been read. Your own rigs go into `fixtures/local/`, which is not committed either.
 
@@ -634,17 +665,52 @@ One finding from building the suite: the official binary readers ignore the offs
 |---|---|---|
 | M0 Scaffold and parity suite | Repo and gates from section 12. Facts file with generated blocks. Parity suite that loads fixtures into the three official cores. The docs site, the llms files and the skills wait for M2, when there is an API to document. | Built 2026-11-11. `pnpm check` passes locally. `pnpm parity:ref` prints reference poses for all 114 fixtures. CI has not run yet: there is no remote. |
 | M1 Model | `SkeletonModel`, JSON and binary importers for 4.1 to 4.3, atlas importer, `describeSkeleton`, `generateNames` and the command line tool | Built 2026-11-11. Model parity on all 114 fixtures and atlas parity on all 57 atlases, with exact equality. Hand-written skeletons cover the timeline kinds the fixtures lack. Every feature is imported, even those not yet solved. Not done: a memory baseline, which waits for instances in M2. |
-| M2a Pose, headless | Pose engines for 4.1 and 4.2 and for 4.3: bone transforms, every timeline that does not animate a constraint, tracks, queue, mixing, events, skins, deform, sequences. Geometry kernel: vertex positions and UVs. Memory baseline. | Built 2026-11-11. Pose parity is exact on all 114 fixtures and 3 hand-written rigs. Geometry parity is exact on all fixtures, with the one bounded case for JSON mesh UVs. A rig with constraints throws the typed error unless it is played with constraints ignored. Not done: keyframe cursors, which wait for M5 with the other skipping work. |
+| M2a Pose, headless | Pose engines for 4.1 and 4.2 and for 4.3: bone transforms, every timeline that does not animate a constraint, tracks, queue, mixing, events, skins, deform, sequences. Geometry kernel: vertex positions and UVs. Memory baseline. | Built 2026-11-11. Pose parity is exact on all 114 fixtures and 3 hand-written rigs. Geometry parity is exact on all fixtures, with the one bounded case for JSON mesh UVs. A rig with constraints throws the typed error unless it is played with constraints ignored. Not done: keyframe cursors, which wait for M6 with the other skipping work. |
 | M2b First frames | Render: `SkeletonView` draws through Pixi meshes with its own geometry and shader. CPU skinning into buffers, premultiplied pipeline, additive in the same draw, pages in one draw, stable vertex layout, hidden slots left out. The display object `MarrowSpine` with `MarrowAsset` and `Track`. Pixel check in headless Chrome (`pnpm check:render`). | Built 2026-11-11. On 12 rigs in 34 versions the picture matches the official Pixi runtime within 4 of 255 levels, on WebGL2 and WebGPU. At most 0.02 percent of pixels are off by more than 1. One draw call for every rig with only normal and additive slots. Known gap: clipping, which is M3. Not done: a custom render pipe, which the design named. Pixi meshes gave the same result with less reliance on Pixi internals. |
 | M3 Constraints and overdraw | Pose: IK, transform and path constraints in both engines, with the generalized transform constraints of 4.3. Render: clipping through a stencil mask, invisible regions left out, covered slots skipped, tight meshes as an option, outlines from a sidecar file or a scan in idle time. | Built 2026-11-11. Pose parity with constraints is exact on all 114 fixtures and 15 hand-written rigs, five per version. The pixel check passes on WebGL2 and WebGPU with constraints and clipping on both sides. The exact cuts change no pixel. Tight meshes draw 90.5 percent of the triangle area and stay opt-in, because they are not exact to the bit. Not done: the perf report, which moves to M4 with the perf probes. |
-| M4 Complete | Physics, sliders, additive tracks. Perf report and perf probes. spine-benchmark A/B against the official runtime, which also decides the default of `tightMesh`. | Parity on every fixture for 4.1 to 4.3. First published numbers per device class. |
-| M5 Pose skipping | Constant folding, needed set, timeline skipping, path cache, shared pose, sleep | Optimization parity passes. A/B shows the gain. |
-| M6 GPU | GPU skinning, slot palette, batched mode | Zero vertex upload for rigid rigs. A/B on low-end and mid devices. |
-| M7 Baked | Baker at build time and run time, baked playback, instancing, `balanced` preset | Eligible fixtures play baked with pixel parity at sample points |
-| M8 Release 1.0 | `fast` preset, idle cache, level of detail, docs within budget, migration guide | Docs budget and all gates pass |
+| M4 Complete | Physics, sliders, additive tracks. Perf report and perf probes. An A/B bench against the official Pixi runtime. | Built 2026-11-11. Physics constraints and sliders in both engines, the remaining track options, physics control, `perf.report()`, `perf.memory()`, the probe entry and `pnpm bench:ab`. Pose parity is exact on 135 skeleton files with every constraint on. The pixel check passes on WebGL2 and WebGPU with physics and sliders live. Not done: the A/B inside spine-benchmark and numbers per device class. The package is not published and its licence is not decided, so spine-benchmark cannot load it yet. `tightMesh` stays an option until devices are measured. |
+| M5 Batched mode | Small skeletons that share a render group share draw calls, with the premultiplied shader, additive slots in the batch and pages joined by texture. `renderMode: 'auto'` picks the mode per skeleton. The heap of an instance with a clip is explained and cut. | Measured by `pnpm bench:ab` at 200 instances, on WebGL2 and WebGPU. Rigs without a clip need no more draw calls than the official runtime. speedy-ess and sack-pro take less time per frame than the official runtime, and coin-pro takes no longer. The pixel check passes in both modes. |
+| M6 Pose skipping | Constant folding, needed set, timeline skipping, path cache, shared pose, sleep | Optimization parity passes. A/B shows the gain. |
+| M7 GPU | GPU skinning, slot palette | Zero vertex upload for rigid rigs. A/B on low-end and mid devices. |
+| M8 Baked | Baker at build time and run time, baked playback, instancing, `balanced` preset | Eligible fixtures play baked with pixel parity at sample points |
+| M9 Release 1.0 | `fast` preset, idle cache, level of detail, docs within budget, migration guide | Docs budget and all gates pass |
 | Later | Worker, WASM kernel, opaque pass | Only with benchmark evidence |
 
-Your three must-haves: fewer batch breaks and the premultiplied pipeline land in M2, overdraw in M3. M2 is the largest milestone because the first correct frame needs model, pose and render together.
+### 16.1 Measured in M4
+
+`pnpm bench:ab` on one machine: Apple M4 with 10 cores on battery, headless Chrome 157 with the real GPU, pixi.js 8.23.0, a canvas of 1280 by 720. 200 instances of one rig play one animation. The numbers are medians of 3 runs of 200 frames. This is one desktop. It says nothing about phones.
+
+Ours as a share of the official `spine-pixi-v8` of the rig's version. Lower is better.
+
+| Rig | CPU per frame, WebGL2 | Frame, WebGL2 | CPU per frame, WebGPU | Frame, WebGPU | Draw calls, ours and official | Heap per instance in KB, ours and official |
+|---|---|---|---|---|---|---|
+| 4.2 tank-pro | 36 percent | 47 percent | 41 percent | 59 percent | about 712 and 488 | 62 and 161 |
+| 4.3 raptor-pro | 59 percent | 65 percent | 51 percent | 60 percent | 200 and 1 | 19.5 and 70.5 |
+| 4.2 coin-pro | 54 percent | 83 percent | 62 percent | 111 percent | 800 and 400 | 15.5 and 5.2 |
+| 4.2 speedy-ess | 77 percent | inside the spread | 87 percent | 128 percent | 200 and 1 | 11.6 and 18.2 |
+| 4.3 sack-pro, with physics | 92 percent | 101 percent | 89 percent | 111 percent | 200 and 1 | 17.1 and 24.3 |
+
+CPU per frame is the update plus the CPU part of the render. The official runtime computes vertices while it renders and pixi-marrow in its update, so the update alone does not compare. Frame is the CPU time plus the wait for the GPU. In absolute terms the CPU time on WebGL2 is 6.3 against 17.4 ms for tank-pro and 2.7 against 4.5 ms for raptor-pro.
+
+What the numbers say:
+
+- pixi-marrow needs less CPU time on every rig measured.
+- It does not join instances into one draw call, and the official runtime does. On small rigs that eats the CPU gain: the frame takes as long or longer.
+- It holds less heap per instance on four rigs of five. coin-pro holds two to three times as much. The cause is not found yet. The rig has a clip, and a clip brings a mask mesh with buffers of its own.
+
+`pnpm bench:ab --mode=overdraw`: 24 instances scaled to cover a canvas of 1920 by 1080 several times, 5 runs. Render time with `tightMesh: 'on'` against `off`, on WebGL2:
+
+| Rig | Render time | Triangle area | Vertices |
+|---|---|---|---|
+| 4.2 dragon-ess | 11.0 percent less | 87.1 percent | 94 percent more |
+| 4.3 spineboy-pro | 12.0 percent less | 90.5 percent | 31 percent more |
+| 4.3 raptor-pro | 4.8 percent less | 91.6 percent | 13 percent more |
+| 4.3 chibi-stickers | 2.9 percent less | 97.4 percent | 22 percent more |
+| 4.2 tank-pro | 2.7 percent less | 90.9 percent | 64 percent more |
+
+Every run had the same sign. On WebGPU four rigs gain 3 to 22 percent with a wide spread between runs, and chibi-stickers shows no steady gain. The default cuts cost nothing: `auto` is within 0.3 percent of `off`. So tight meshes pay in a scene that is bound by fill, by 3 to 12 percent on this GPU. They are not exact to the bit and they add vertices. They stay an option until a phone GPU is measured.
+
+Your three must-haves: fewer batch breaks and the premultiplied pipeline land in M2, overdraw in M3. One part is open after M4: within one skeleton pixi-marrow breaks less, across many instances of small skeletons the official runtime draws less often. M2 is the largest milestone because the first correct frame needs model, pose and render together.
 
 ## 17. Risks
 
@@ -652,7 +718,7 @@ Your three must-haves: fewer batch breaks and the premultiplied pipeline land in
 |---|---|
 | Mixing and hold logic have many edge cases | Mix parity and random play parity from M2. The official implementation is the specification. |
 | Older solvers differ from 4.3 in ways a mode flag cannot cover | Per-constraint experiment first (section 10). Fallback: a separate kernel per version for that constraint. |
-| Physics drifts from the official result | Own tolerance, 64-bit state |
+| Physics drifts from the official result | It does not: the port keeps the order of the official arithmetic, and physics parity is exact equality like the rest (M4). |
 | A new Spine release changes the solver | The parity suite shows exactly which frames diverge. Port, then extend the model. |
 | Pixi internals used by a custom pipe and batcher change between minors | Test against the lowest supported and the latest Pixi in CI |
 | WebGPU and WebGL2 differ on stencil or data textures | Both renderers in pixel parity from M2 |

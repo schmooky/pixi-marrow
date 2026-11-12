@@ -1,7 +1,7 @@
 import { MarrowError } from '../../base/errors';
 import type { SkeletonModel } from '../../model/model';
-import type { PoseEngine, PoseEvent, TrackEntry, TrackFields } from '../engine';
-import { createPoseState, type PoseState, poseStateBytes } from '../state';
+import type { PhysicsMode, PoseEngine, PoseEvent, TrackEntry, TrackFields } from '../engine';
+import type { PoseState } from '../state';
 import { applyTracks } from './apply';
 import { updateCache } from './cache';
 import {
@@ -15,11 +15,12 @@ import {
 } from './commands';
 import { configureEntry } from './configure';
 import { Entry } from './entry';
+import { physicsRotate, physicsTranslate } from './physics';
 import { createPlayer, type Player43 } from './player';
+import { createPose, poseBytes } from './pose';
 import { prepareRig } from './rig';
 import { setSkin, setupPoseBones, setupPoseSlots } from './skeleton';
 import { updateWorld } from './solve';
-import { createSolve } from './solver';
 import type { Clip43, Pose43 } from './types';
 import { updateTracks } from './update';
 
@@ -29,6 +30,9 @@ const invalid = (message: string, fix: string): MarrowError => new MarrowError('
 const NO_EVENTS: PoseEvent[] = [];
 
 Object.freeze(NO_EVENTS);
+
+/** The official `Physics` values, by number. */
+const PHYSICS_MODES: readonly PhysicsMode[] = ['none', 'reset', 'update', 'pose'];
 
 /** A track index the official runtime accepts: a whole number from 0. */
 function checkTrack(track: number): number {
@@ -42,14 +46,13 @@ function checkTrack(track: number): number {
 /** The pose engine for Spine 4.3: the official `AnimationState` and `Skeleton` of one instance. */
 class Engine43 implements PoseEngine {
     readonly state: PoseState;
+    /** The animated pose: what the player and the setup pose calls write. */
     private readonly pose: Pose43;
     private readonly player: Player43;
 
     constructor(model: SkeletonModel) {
-        const rig = prepareRig(model);
-
-        this.state = createPoseState(model);
-        this.pose = { rig, state: this.state, solve: createSolve(rig) };
+        this.pose = createPose(prepareRig(model));
+        this.state = this.pose.state;
         this.player = createPlayer(this.pose);
         // what a new official Skeleton holds: the setup pose, found through the default skin
         setupPoseBones(this.pose);
@@ -58,11 +61,20 @@ class Engine43 implements PoseEngine {
     }
 
     get bytes(): number {
-        const { values, active, local, constrained, spare, worldStamps, localStamps, cache } = this.pose.solve;
-        const arrays = [values, active, local, constrained, spare, worldStamps, localStamps, cache];
-        const solve = arrays.reduce((sum, array) => sum + array.byteLength, 0);
+        return poseBytes(this.pose) + this.player.attachmentStates.byteLength;
+    }
 
-        return poseStateBytes(this.state) + solve + this.player.attachmentStates.byteLength;
+    get physics(): PhysicsMode {
+        return PHYSICS_MODES[this.pose.solve.physicsMode] ?? 'update';
+    }
+
+    set physics(mode: PhysicsMode) {
+        const number = PHYSICS_MODES.indexOf(mode);
+
+        if (number < 0) {
+            throw invalid(`"${mode}" is no physics mode.`, `Pass one of ${PHYSICS_MODES.join(', ')}.`);
+        }
+        this.pose.solve.physicsMode = number;
     }
 
     get timeScale(): number {
@@ -155,8 +167,17 @@ class Engine43 implements PoseEngine {
         setupPoseSlots(this.pose);
     }
 
+    physicsTranslate(x: number, y: number): void {
+        physicsTranslate(this.pose, x, y);
+    }
+
+    physicsRotate(x: number, y: number, degrees: number): void {
+        physicsRotate(this.pose, x, y, degrees);
+    }
+
     update(dt: number): void {
         updateTracks(this.player, dt);
+        // the official Skeleton.update
         this.state.time += dt;
         applyTracks(this.player);
         updateWorld(this.pose);
@@ -175,9 +196,12 @@ class Engine43 implements PoseEngine {
 
 /**
  * Creates the pose engine for Spine 4.3 skeletons: a port of the official 4.3 `AnimationState`
- * and `Skeleton`. It starts in the setup pose. IK, transform and path constraints are solved.
- * Physics and slider constraints are left out. The timelines that animate those change nothing,
- * but they count when entries mix, as in the official runtime.
+ * and `Skeleton`. It starts in the setup pose. Every constraint is solved: IK, transform, path
+ * and physics constraints and sliders.
+ *
+ * What a slider animates has an applied pose of its own, as in the official runtime. For slots
+ * and the draw order that is the pose in `PoseState`. It follows the animated pose in an update,
+ * not in a setup pose call, and before the first update it is that of a new official skeleton.
  *
  * @example
  * const engine = createEngine43(await importSkeleton(bytes));

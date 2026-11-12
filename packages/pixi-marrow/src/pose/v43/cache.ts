@@ -1,16 +1,14 @@
 import type { AttachmentData } from '../../model/attachments';
 import { WORLD_STRIDE } from '../state';
-import { constraintError } from './solver';
+import { constraintError } from './plan-checks';
 import type { IkPlan, PathPlan, PhysicsPlan, Plan43, SliderPlan, TransformPlan } from './solver-types';
+import { beginPosed, endPosed } from './split';
 import type { Pose43 } from './types';
 
 /*
  * The official `Skeleton.updateCache`: which bones and constraints are active, and the order in
- * which an update computes world transforms and solves constraints.
- *
- * Physics and slider constraints are not solved, but they are sorted like the official ones. So
- * the order is that of an official skeleton whose physics constraints are updated with
- * `Physics.none` and whose sliders have a mix of 0: they keep their place and change nothing.
+ * which an update computes world transforms and solves constraints. The pose it is given is the
+ * animated one: a path constraint is sorted by the attachment its slot has there.
  */
 
 /**
@@ -148,7 +146,7 @@ function sortPath(pose: Pose43, plan: PathPlan): void {
 
     if (state.skin !== -1) sortPathSlot(pose, plan, state.skin);
     if (defaultSkin !== -1 && defaultSkin !== state.skin) sortPathSlot(pose, plan, defaultSkin);
-    sortPathAttachment(pose, plan, state.attachments[plan.slot]);
+    sortPathAttachment(pose, plan, pose.attachments[plan.slot]);
     for (let i = 0; i < bones.length; i++) {
         const bone = bones[i] ?? -1;
 
@@ -160,22 +158,28 @@ function sortPath(pose: Pose43, plan: PathPlan): void {
     for (let i = 0; i < bones.length; i++) scratch.sorted[bones[i] ?? -1] = 1;
 }
 
-/** The official `PhysicsConstraint.sort`, without a place in the cache: the constraint is not solved. */
+/** The official `PhysicsConstraint.sort`. */
 function sortPhysics(pose: Pose43, plan: PhysicsPlan): void {
     sortBone(pose, plan.bone);
+    pose.rig.solver.scratch.items.push(~plan.index);
     sortReset(pose, plan.bone);
     constrain(pose, plan.bone);
 }
 
 /**
- * The official `Slider.sort`, without a place in the cache: the constraint is not solved. The
- * bones its animation animates get a constrained pose and go into the update cache once more.
+ * The official `Slider.sort`. The bones its animation animates get a constrained pose and go into
+ * the update cache once more. The slots its animation animates get a pose of their own, and so
+ * does the draw order when the animation has a timeline for it. So do the constraints it
+ * animates: their applied pose is the animated pose again at the start of every update, so there
+ * is nothing to note for them here.
  */
 function sortSlider(pose: Pose43, plan: SliderPlan): void {
     const { scratch } = pose.rig.solver;
-    const { bones } = plan;
+    const { split } = pose.solve;
+    const { bones, slots } = plan;
 
     if (plan.bone >= 0 && !plan.local) sortBone(pose, plan.bone);
+    scratch.items.push(~plan.index);
     for (let i = 0; i < bones.length; i++) {
         const bone = bones[i] ?? -1;
 
@@ -183,6 +187,9 @@ function sortSlider(pose: Pose43, plan: SliderPlan): void {
         sortReset(pose, bone);
         constrain(pose, bone);
     }
+    if (split === null) return;
+    for (let i = 0; i < slots.length; i++) split.slotPosed[slots[i] ?? -1] = 1;
+    if (plan.drawOrder) split.drawOrderPosed = true;
 }
 
 /** The official `isSourceActive` of a constraint: whether the bone it reads from is active. */
@@ -281,6 +288,8 @@ export function updateCache(pose: Pose43): void {
     const { count } = pose.rig.model.bones;
     const { items } = scratch;
 
+    const hadDrawOrder = beginPosed(pose);
+
     scratch.previous.set(solve.constrained);
     solve.constrained.fill(0);
     items.length = 0;
@@ -288,6 +297,7 @@ export function updateCache(pose: Pose43): void {
     sortConstraints(pose);
     for (let bone = 0; bone < count; bone++) sortBone(pose, bone);
     swapWorlds(pose);
+    endPosed(pose, hadDrawOrder);
     solve.solved = countSolved(items);
     if (solve.solved === 0) {
         // nothing is solved: the order of the bones is free, as long as parents come first

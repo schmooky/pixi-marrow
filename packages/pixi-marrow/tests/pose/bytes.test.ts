@@ -29,7 +29,7 @@ describe('engine.bytes', () => {
 
     it.each(ids)('%s: counts the pose state and what the constraints add', async (id) => {
         const model = await modelOf(id);
-        const engine = await createPoseEngine(model, { constraints: 'ignore' });
+        const engine = await createPoseEngine(model);
         const state = poseStateBytes(engine.state);
         // every engine keeps one number per slot for the attachment timelines
         const player = model.slots.count * 8;
@@ -56,8 +56,8 @@ describe('engine.bytes', () => {
 
         if (id === undefined) throw new Error('no fixture');
         const model = await modelOf(id);
-        const first = await createPoseEngine(model, { constraints: 'ignore' });
-        const second = await createPoseEngine(model, { constraints: 'ignore' });
+        const first = await createPoseEngine(model);
+        const second = await createPoseEngine(model);
 
         expect(second.bytes).toBe(first.bytes);
     });

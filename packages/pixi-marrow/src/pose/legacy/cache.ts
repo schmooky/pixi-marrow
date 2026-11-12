@@ -10,8 +10,14 @@ export interface UpdateCache {
     readonly entries: Int32Array;
     /** 1 for each bone that is posed with this skin. */
     readonly boneActive: Uint8Array;
-    /** 1 for each constraint that is solved and animated with this skin. */
+    /** 1 for each constraint that is solved and animated with this skin: the official `constraint.active`. */
     readonly constraintActive: Uint8Array;
+    /**
+     * 1 for each physics constraint whose bone has its applied pose read later in the update: by
+     * an update of the bone, or by an IK or transform constraint. Only then does the constraint
+     * compute that pose from the world transform it wrote. Nothing else can see the applied pose.
+     */
+    readonly appliedRead: Uint8Array;
 }
 
 /** What the sort functions work on: the official `sorted` and `active` flags and the cache so far. */
@@ -71,10 +77,10 @@ function sortIk(sort: Sort, constraint: LegacyConstraint): void {
 }
 
 /** What the official sort functions do after the bones a constraint reads: add it, then sort the bones below again. */
-function pushConstraint(sort: Sort, constraint: LegacyConstraint, solved: boolean): void {
+function pushConstraint(sort: Sort, constraint: LegacyConstraint): void {
     const bones = constraint.bones;
 
-    if (solved) sort.entries.push(-1 - constraint.index);
+    sort.entries.push(-1 - constraint.index);
     for (let i = 0; i < bones.length; i++) sortReset(sort, bones[i] ?? -1);
     for (let i = 0; i < bones.length; i++) sort.sorted[bones[i] ?? -1] = 1;
 }
@@ -90,7 +96,7 @@ function sortTransform(sort: Sort, constraint: LegacyConstraint): void {
         if (constraint.local) sortBone(sort, sort.parents[bone] ?? -1);
         sortBone(sort, bone);
     }
-    pushConstraint(sort, constraint, true);
+    pushConstraint(sort, constraint);
 }
 
 /** Sorts the bones the path attachments of one skin follow: the official `sortPathConstraintAttachment`. */
@@ -112,17 +118,13 @@ function sortPath(sort: Sort, constraint: LegacyConstraint): void {
     if (sort.defaultSkin >= 0 && sort.defaultSkin !== sort.skin) sortPathBones(sort, pathBones[sort.defaultSkin]);
     for (const each of pathBones) sortPathBones(sort, each);
     for (let i = 0; i < bones.length; i++) sortBone(sort, bones[i] ?? -1);
-    pushConstraint(sort, constraint, true);
+    pushConstraint(sort, constraint);
 }
 
-/**
- * The official `sortPhysicsConstraint`, without the constraint itself. The official runtime keeps
- * a physics constraint that is switched off in the cache. So its bone is sorted here and the
- * bones below are sorted again, which decides when and how often they update.
- */
+/** The official `sortPhysicsConstraint`. */
 function sortPhysics(sort: Sort, constraint: LegacyConstraint): void {
     sortBone(sort, constraint.targetBone);
-    pushConstraint(sort, constraint, false);
+    pushConstraint(sort, constraint);
 }
 
 /** Sorts one constraint if it is active: its target bone is, and a skin lists it if it needs one. */
@@ -133,6 +135,31 @@ function sortConstraint(sort: Sort, constraint: LegacyConstraint, listed: boolea
     else if (constraint.kind === C_TRANSFORM) sortTransform(sort, constraint);
     else if (constraint.kind === C_PATH) sortPath(sort, constraint);
     else if (constraint.kind === C_PHYSICS) sortPhysics(sort, constraint);
+}
+
+/**
+ * Finds the physics constraints that must compute the applied pose of their bone, for
+ * {@link UpdateCache.appliedRead}. It walks the update order from its end and notes the bones
+ * whose applied pose an entry reads. A bone entry reads its own. An IK or transform constraint
+ * reads those of its bones and of its target. A path or physics constraint reads world transforms only.
+ */
+function appliedReads(plan: ConstraintPlan, entries: readonly number[], boneCount: number): Uint8Array {
+    const reads = new Uint8Array(plan.constraints.length);
+    const readLater = new Uint8Array(boneCount);
+
+    for (let i = entries.length - 1; i >= 0; i--) {
+        const entry = entries[i] ?? 0;
+        const constraint = plan.constraints[-1 - entry];
+
+        if (entry >= 0) readLater[entry] = 1;
+        else if (constraint?.kind === C_PHYSICS) reads[constraint.index] = readLater[constraint.targetBone] ?? 0;
+        else if (constraint?.kind === C_IK || constraint?.kind === C_TRANSFORM) {
+            readLater[constraint.target] = 1;
+            for (const bone of constraint.bones) readLater[bone] = 1;
+        }
+    }
+
+    return reads;
 }
 
 /** The official `Skeleton.updateCache` for a skin. -1 is no skin. */
@@ -170,7 +197,12 @@ function buildCache(rig: Rig, skinIndex: number): UpdateCache {
     }
     for (let i = 0; i < count; i++) sortBone(sort, i);
 
-    return { entries: Int32Array.from(sort.entries), boneActive: sort.active, constraintActive };
+    return {
+        entries: Int32Array.from(sort.entries),
+        boneActive: sort.active,
+        constraintActive,
+        appliedRead: appliedReads(plan, sort.entries, count),
+    };
 }
 
 /**

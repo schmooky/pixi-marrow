@@ -1,7 +1,7 @@
 import { LOCAL_STRIDE, WORLD_STRIDE } from '../state';
 import { modifyLocal, modifyWorld, validateLocal } from './bone-pose';
 import { DEG_RAD, PI, PI2, RAD_DEG } from './math';
-import { CONSTRAINT_STRIDE, type TransformPlan } from './solver-types';
+import type { TransformPlan } from './solver-types';
 import type { Pose43 } from './types';
 
 // The property kinds: the official `TransformConstraintData` numbers.
@@ -15,23 +15,22 @@ const SHEAR_Y = 5;
 /** Where each property kind is among the local numbers of a bone. */
 const LOCAL_OFFSETS: readonly number[] = [2, 0, 1, 3, 4, 6];
 
-/*
+/**
  * The value that is on its way from the source bone to a bone of the constraint. It goes through
  * this array and typed arrays are read in place, for the reasons given in solve.ts. No call keeps
  * the array across a return.
  */
-const V = new Float64Array(2);
-/** The value of a source property, without the offset of the property. */
-const SOURCE = 0;
+export const V: Float64Array = new Float64Array(2);
+/** Where the value of a source property is in {@link V}. */
+export const SOURCE = 0;
 /** The value a target property is set to. */
 const TARGET = 1;
 
-/** The official `FromProperty.value` of a source bone in world coordinates. Writes it to `V`. */
-function readWorld(pose: Pose43, plan: TransformPlan, kind: number): void {
+/** The official `FromProperty.value` of a bone in world coordinates. Writes it to `V`. */
+function readWorld(pose: Pose43, bone: number, offsets: Float64Array, kind: number): void {
     const { state } = pose;
     const { world } = state;
-    const { offsets } = plan;
-    const o = plan.source * WORLD_STRIDE;
+    const o = bone * WORLD_STRIDE;
     const a = Number(world[o]);
     const b = Number(world[o + 1]);
     const c = Number(world[o + 2]);
@@ -78,25 +77,34 @@ function readWorld(pose: Pose43, plan: TransformPlan, kind: number): void {
 }
 
 /**
+ * The official `FromProperty.value`: one property of the applied pose of a bone, in local or in
+ * world coordinates. Writes it to {@link V} at {@link SOURCE}.
+ *
+ * @param offsets The six official offsets, by property kind.
+ * @param kind The property kind: see `TransformPlan`.
+ */
+export function readProperty(pose: Pose43, bone: number, offsets: Float64Array, kind: number, local: boolean): void {
+    if (local) {
+        const i = bone * LOCAL_STRIDE + (LOCAL_OFFSETS[kind] ?? 0);
+
+        V[SOURCE] = Number(pose.solve.local[i]) + Number(offsets[kind]);
+    } else readWorld(pose, bone, offsets, kind);
+}
+
+/**
  * The official `FromProperty.value` minus the offset of the property: one property of the source
  * bone. Writes it to `V`.
  */
 function readSource(pose: Pose43, plan: TransformPlan, from: number): void {
-    const kind = plan.fromKinds[from] ?? 0;
-
-    if (plan.localSource) {
-        const i = plan.source * LOCAL_STRIDE + (LOCAL_OFFSETS[kind] ?? 0);
-
-        V[SOURCE] = Number(pose.solve.local[i]) + Number(plan.offsets[kind]);
-    } else readWorld(pose, plan, kind);
+    readProperty(pose, plan.source, plan.offsets, plan.fromKinds[from] ?? 0, plan.localSource);
     V[SOURCE] = Number(V[SOURCE]) - Number(plan.fromOffsets[from]);
 }
 
 /** The official `ToProperty.apply` for local coordinates: mixes the target value into one local number of a bone. */
 function applyLocal(pose: Pose43, plan: TransformPlan, bone: number, kind: number): void {
-    const { local, values } = pose.solve;
+    const { local, applied } = pose.solve;
     const { additive } = plan;
-    const mix = Number(values[plan.index * CONSTRAINT_STRIDE + kind]);
+    const mix = Number(applied[plan.at + kind]);
     const i = bone * LOCAL_STRIDE + (LOCAL_OFFSETS[kind] ?? 0);
     const current = Number(local[i]);
     let value = Number(V[TARGET]);
@@ -129,7 +137,7 @@ function rotateWorld(pose: Pose43, plan: TransformPlan, o: number): void {
     if (!plan.additive) value -= Math.atan2(c, a);
     if (value > PI) value -= PI2;
     else if (value < -PI) value += PI2;
-    value *= Number(pose.solve.values[plan.index * CONSTRAINT_STRIDE + ROTATION]);
+    value *= Number(pose.solve.applied[plan.at + ROTATION]);
     const cos = Math.cos(value);
     const sin = Math.sin(value);
 
@@ -147,7 +155,7 @@ function scaleWorld(pose: Pose43, plan: TransformPlan, o: number, kind: number):
     const { state } = pose;
     const { world } = state;
     const value = Number(V[TARGET]);
-    const mix = Number(pose.solve.values[plan.index * CONSTRAINT_STRIDE + kind]);
+    const mix = Number(pose.solve.applied[plan.at + kind]);
     let s = 0;
 
     if (plan.additive) s = 1 + (value - 1) * mix;
@@ -180,7 +188,7 @@ function shearWorld(pose: Pose43, plan: TransformPlan, o: number): void {
         if (value > PI) value -= PI2;
         else if (value < -PI) value += PI2;
     }
-    value = by + value * Number(pose.solve.values[plan.index * CONSTRAINT_STRIDE + SHEAR_Y]);
+    value = by + value * Number(pose.solve.applied[plan.at + SHEAR_Y]);
     const s = Math.sqrt(b * b + d * d);
 
     world[o + 1] = Math.cos(value) * s * sx;
@@ -199,7 +207,7 @@ function moveWorld(pose: Pose43, plan: TransformPlan, bone: number, kind: number
     let value = Number(V[TARGET]);
 
     if (!plan.additive) value -= Number(world[i]) / scale;
-    world[i] = Number(world[i]) + value * Number(pose.solve.values[plan.index * CONSTRAINT_STRIDE + kind]) * scale;
+    world[i] = Number(world[i]) + value * Number(pose.solve.applied[plan.at + kind]) * scale;
 }
 
 /** The official `ToProperty.apply` for world coordinates: mixes the target value into the world transform of a bone. */
@@ -239,9 +247,9 @@ function clampTarget(plan: TransformPlan, to: number): void {
 
 /** Applies every target property of one source property to one bone. Reads the source value from `V`. */
 function applyTargets(pose: Pose43, plan: TransformPlan, from: number, bone: number): void {
-    const { values } = pose.solve;
+    const values = pose.solve.applied;
     const { toKinds, toOffsets, toScales } = plan;
-    const v = plan.index * CONSTRAINT_STRIDE;
+    const v = plan.at;
     const end = plan.toStarts[from + 1] ?? 0;
 
     for (let t = plan.toStarts[from] ?? 0; t < end; t++) {
@@ -269,7 +277,7 @@ function mixedOut(values: Float64Array, v: number): boolean {
 export function solveTransform(pose: Pose43, plan: TransformPlan): void {
     const { bones, fromKinds } = plan;
 
-    if (mixedOut(pose.solve.values, plan.index * CONSTRAINT_STRIDE)) return;
+    if (mixedOut(pose.solve.applied, plan.at)) return;
     if (plan.localSource) validateLocal(pose, plan.source);
     for (let i = 0; i < bones.length; i++) {
         const bone = bones[i] ?? -1;

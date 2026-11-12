@@ -77,27 +77,15 @@ describe('MarrowAsset.from', () => {
     it.each([
         ['4.2/sack-pro.skel', 'physics'],
         ['4.3/diamond-pro.skel', 'slider'],
-    ])('throws for the %s skeleton with %s constraints, unless they are ignored', async (id, kind) => {
+        ['4.2/spineboy-pro.skel', 'ik'],
+        ['4.3/tank-pro.skel', 'path'],
+    ])('takes the %s skeleton with %s constraints as it is, with no option', async (id, kind) => {
         const { model, atlas } = await importRig(id);
-        const data = { model, atlas, textures: atlas.pages.map(() => Texture.WHITE) };
-        const error = await rejection(MarrowAsset.from(data));
+        const asset = await MarrowAsset.from({ model, atlas, textures: atlas.pages.map(() => Texture.WHITE) });
 
-        expect(error.code).toBe('unsupported-feature');
-        expect(error.message).toContain(`The skeleton has ${kind} constraints.`);
-        expect(await rejection(MarrowAsset.from({ ...data, constraints: 'error' }))).toBeInstanceOf(MarrowError);
-        await expect(MarrowAsset.from({ ...data, constraints: 'ignore' })).resolves.toBeInstanceOf(MarrowAsset);
-    });
-
-    it('takes a skeleton with IK, transform and path constraints as it is: they are solved', async () => {
-        for (const id of ['4.2/spineboy-pro.skel', '4.3/tank-pro.skel']) {
-            const { model, atlas } = await importRig(id);
-            const kinds = new Set(model.constraints.map((constraint) => constraint.type));
-
-            expect(kinds.size).toBeGreaterThan(1);
-            await expect(MarrowAsset.from({ model, atlas, textures: [Texture.WHITE] })).resolves.toBeInstanceOf(
-                MarrowAsset,
-            );
-        }
+        expect(model.constraints.some((constraint) => constraint.type === kind)).toBe(true);
+        expect(asset.info.features).toContain(kind);
+        expect(asset.createEngine().state.model).toBe(model);
     });
 
     it('sets up each texture from its atlas page: alpha mode, filters, mipmaps and wrap', async () => {
@@ -234,7 +222,7 @@ describe('MarrowAsset.load', () => {
     });
 
     it('fetches a .skel URL as bytes and loads the page image from next to the atlas', async () => {
-        const asset = await load({ skeleton: 'art/boy.skel', atlas: 'art/boy.atlas', constraints: 'ignore' });
+        const asset = await load({ skeleton: 'art/boy.skel', atlas: 'art/boy.atlas' });
         const { model } = await importRig('4.2/spineboy-pro.skel');
 
         expect(reads.sort()).toEqual(['art/boy.atlas text', 'art/boy.skel bytes']);
@@ -246,7 +234,7 @@ describe('MarrowAsset.load', () => {
     });
 
     it('fetches a .json URL as text, and keeps the query of the atlas URL for the image', async () => {
-        const asset = await load({ skeleton: 'art/boy.json?v=2', atlas: 'art/boy.atlas?v=2', constraints: 'ignore' });
+        const asset = await load({ skeleton: 'art/boy.json?v=2', atlas: 'art/boy.atlas?v=2' });
 
         expect(reads.sort()).toEqual(['art/boy.atlas?v=2 text', 'art/boy.json?v=2 text']);
         expect(asset.info.animations.map((animation) => animation.name)).toContain('walk');
@@ -259,7 +247,7 @@ describe('MarrowAsset.load', () => {
         const { model } = await importRig('4.2/spineboy-pro.skel');
 
         for (const skeleton of [bytes, bytes.slice().buffer, json]) {
-            const asset = await load({ skeleton, atlas: 'art/boy.atlas', constraints: 'ignore' });
+            const asset = await load({ skeleton, atlas: 'art/boy.atlas' });
 
             expect(asset.info.counts).toEqual(describeSkeleton(model).counts);
         }
@@ -305,7 +293,7 @@ describe('MarrowAsset.load', () => {
     });
 
     it('shares one asset between loads of the same URLs and options', async () => {
-        const options = { skeleton: 'art/boy.skel', atlas: 'art/boy.atlas', constraints: 'ignore' } as const;
+        const options = { skeleton: 'art/boy.skel', atlas: 'art/boy.atlas' } as const;
         const [first, second] = await Promise.all([load(options), load({ ...options })]);
         const third = await load(options);
 
@@ -317,7 +305,7 @@ describe('MarrowAsset.load', () => {
 
     it('does not share between different URLs or options', async () => {
         const mine = blankTexture();
-        const base = { skeleton: 'art/boy.skel', atlas: 'art/boy.atlas', constraints: 'ignore' } as const;
+        const base = { skeleton: 'art/boy.skel', atlas: 'art/boy.atlas' } as const;
         const loaded = [
             await load(base),
             await load({ ...base, skeleton: 'art/boy.json' }),
@@ -354,8 +342,8 @@ describe('MarrowAsset.load', () => {
     });
 
     it('keeps an image loaded while another asset holds it', async () => {
-        const fromBytes = await load({ skeleton: 'art/boy.skel', atlas: 'art/boy.atlas', constraints: 'ignore' });
-        const fromJson = await load({ skeleton: 'art/boy.json', atlas: 'art/boy.atlas', constraints: 'ignore' });
+        const fromBytes = await load({ skeleton: 'art/boy.skel', atlas: 'art/boy.atlas' });
+        const fromJson = await load({ skeleton: 'art/boy.json', atlas: 'art/boy.atlas' });
 
         fromBytes.destroy();
         expect(unloadImage).not.toHaveBeenCalled();
@@ -365,7 +353,7 @@ describe('MarrowAsset.load', () => {
     });
 
     it('throws when a file is missing or the request fails, and can be tried again', async () => {
-        const options = { skeleton: 'art/boy.skel', atlas: 'art/missing.atlas', constraints: 'ignore' } as const;
+        const options = { skeleton: 'art/boy.skel', atlas: 'art/missing.atlas' } as const;
         const missing = await rejection(MarrowAsset.load(options));
 
         fetched.mockRejectedValueOnce(new TypeError('network down'));
@@ -404,23 +392,18 @@ describe('MarrowAsset.load', () => {
 
     it('throws when Pixi loads a page as something that is not a texture', async () => {
         loadImage.mockImplementation(async () => ({ data: 'not a texture' }));
-        const error = await rejection(
-            MarrowAsset.load({ skeleton: 'art/boy.skel', atlas: 'art/boy.atlas', constraints: 'ignore' }),
-        );
+        const error = await rejection(MarrowAsset.load({ skeleton: 'art/boy.skel', atlas: 'art/boy.atlas' }));
 
         expect(error.code).toBe('invalid-data');
         expect(error.message).toContain('Pixi loaded "spineboy.png" from art/spineboy.png, but not as a texture.');
         expect(unloadImage).toHaveBeenCalledExactlyOnceWith('art/spineboy.png');
     });
 
-    it('throws for a skeleton with physics constraints before it loads an image', async () => {
-        const error = await rejection(MarrowAsset.load({ skeleton: 'sack.skel', atlas: 'sack.atlas' }));
+    it('loads a skeleton with physics constraints like any other', async () => {
+        const asset = await load({ skeleton: 'sack.skel', atlas: 'sack.atlas' });
 
-        expect(error.code).toBe('unsupported-feature');
-        expect(error.message).toContain('The skeleton has physics constraints.');
-        expect(loadImage).not.toHaveBeenCalled();
-        // spineboy has IK and transform constraints, which are solved
-        await expect(load({ skeleton: 'art/boy.skel', atlas: 'art/boy.atlas' })).resolves.toBeInstanceOf(MarrowAsset);
+        expect(asset.info.features).toContain('physics');
+        expect(loadImage).toHaveBeenCalledTimes(asset.atlas.pages.length);
     });
 
     describe('MarrowSpine.load', () => {

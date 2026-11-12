@@ -3,6 +3,9 @@ import { updateLocalTransform } from './bone-pose';
 import { solveIk } from './ik';
 import { COS_QUARTER, DEG_RAD, NORMAL, QUARTER, SIN_QUARTER } from './math';
 import { solvePath } from './path';
+import { solvePhysics } from './physics';
+import { solveSlider } from './slider';
+import { keepLeaks, resetApplied } from './split';
 import { solveTransform } from './transform';
 import type { Pose43 } from './types';
 import { updateBoneWorld } from './world';
@@ -25,9 +28,23 @@ function solveConstraint(pose: Pose43, index: number): void {
     const plan = pose.rig.solver.plans[index];
 
     if (plan === undefined) return;
-    if (plan.type === 'ik') solveIk(pose, plan);
-    else if (plan.type === 'transform') solveTransform(pose, plan);
-    else if (plan.type === 'path') solvePath(pose, plan);
+    switch (plan.type) {
+        case 'ik':
+            solveIk(pose, plan);
+            break;
+        case 'transform':
+            solveTransform(pose, plan);
+            break;
+        case 'path':
+            solvePath(pose, plan);
+            break;
+        case 'physics':
+            solvePhysics(pose, plan);
+            break;
+        case 'slider':
+            solveSlider(pose, plan);
+            break;
+    }
 }
 
 /**
@@ -49,26 +66,28 @@ function nextStamp(pose: Pose43): number {
 }
 
 /**
- * The official `Skeleton.updateWorldTransform`: resets the applied pose of every bone to its
- * animated pose, then runs the update cache. That computes the world transform of every active
- * bone and solves the active IK, transform and path constraints, in the official order.
+ * The official `Skeleton.updateWorldTransform`: resets every applied pose to the animated pose,
+ * then runs the update cache. That computes the world transform of every active bone and solves
+ * the active constraints, in the official order. Physics constraints run in the mode of
+ * `Solve43.physicsMode`.
  *
  * `PoseState.world` holds the result. `PoseState.local` is not changed. A bone that is not active
- * keeps the world transform it had.
+ * keeps the world transform it had. `pose` is the animated pose of the engine.
  *
  * The official `Inherit.Normal` of a bone with a parent, which nearly every bone has, is computed
  * in the loop itself. As a function of its own it is too long for V8 to inline.
  */
 export function updateWorld(pose: Pose43): void {
     const { state, solve } = pose;
-    const { cache, cacheLength, worldStamps, localStamps } = solve;
-    const { world, inherit } = state;
+    const { cache, cacheLength, worldStamps, localStamps, inherit } = solve;
+    const { world } = state;
     const { parents } = pose.rig.model.bones;
     // with no constraint active every active bone is in the cache once, after its parents, and reads its animated pose
     const plain = solve.solved === 0;
     const local = plain ? state.local : solve.local;
     let stamp = 0;
 
+    if (solve.split !== null) resetApplied(pose);
     if (!plain) {
         // the official reset cache, for every bone. A bone without a constrained pose reads its animated pose.
         stamp = nextStamp(pose);
@@ -89,9 +108,10 @@ export function updateWorld(pose: Pose43): void {
             else worldStamps[item] = stamp;
         }
         const parent = Number(parents[item]);
+        const mode = Number(inherit[item]);
 
-        if (parent < 0 || inherit[item] !== NORMAL) {
-            updateBoneWorld(state, local, item, parent);
+        if (parent < 0 || mode !== NORMAL) {
+            updateBoneWorld(state, local, item, parent, mode);
             continue;
         }
         const p = parent * WORLD_STRIDE;
@@ -134,4 +154,5 @@ export function updateWorld(pose: Pose43): void {
         world[o + 2] = pc * la + pd * lc;
         world[o + 3] = pc * lb + pd * ld;
     }
+    if (solve.split !== null) keepLeaks(pose);
 }

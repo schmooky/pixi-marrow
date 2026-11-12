@@ -17,6 +17,14 @@ import {
     K_PATH_MIX,
     K_PATH_POSITION,
     K_PATH_SPACING,
+    K_PHYSICS_DAMPING,
+    K_PHYSICS_GRAVITY,
+    K_PHYSICS_INERTIA,
+    K_PHYSICS_MASS,
+    K_PHYSICS_MIX,
+    K_PHYSICS_RESET,
+    K_PHYSICS_STRENGTH,
+    K_PHYSICS_WIND,
     K_RGB,
     K_RGB2,
     K_RGBA,
@@ -29,7 +37,6 @@ import {
     K_SHEAR,
     K_SHEAR_X,
     K_SHEAR_Y,
-    K_SKIPPED,
     K_TRANSFORM,
     K_TRANSLATE,
     K_TRANSLATE_X,
@@ -69,8 +76,11 @@ export interface Rig {
     readonly caches: Map<number, UpdateCache>;
 }
 
-/** What a timeline animates: a bone, a slot, a constraint of one type, or nothing with an index. */
-type Target = 'bone' | 'slot' | 'none' | 'ik' | 'transform' | 'path';
+/**
+ * What a timeline animates: a bone, a slot, a constraint of one type, or nothing with an index.
+ * A physics timeline can also be for every physics constraint.
+ */
+type Target = 'bone' | 'slot' | 'none' | 'ik' | 'transform' | 'path' | 'physics';
 
 interface KindSpec {
     code: number;
@@ -114,10 +124,15 @@ const SPECS: Partial<Record<TimelineKind, KindSpec>> = {
     pathConstraintPosition: spec(K_PATH_POSITION, 2, 'path'),
     pathConstraintSpacing: spec(K_PATH_SPACING, 2, 'path'),
     pathConstraintMix: spec(K_PATH_MIX, 4, 'path'),
+    physicsConstraintInertia: spec(K_PHYSICS_INERTIA, 2, 'physics'),
+    physicsConstraintStrength: spec(K_PHYSICS_STRENGTH, 2, 'physics'),
+    physicsConstraintDamping: spec(K_PHYSICS_DAMPING, 2, 'physics'),
+    physicsConstraintMass: spec(K_PHYSICS_MASS, 2, 'physics'),
+    physicsConstraintWind: spec(K_PHYSICS_WIND, 2, 'physics'),
+    physicsConstraintGravity: spec(K_PHYSICS_GRAVITY, 2, 'physics'),
+    physicsConstraintMix: spec(K_PHYSICS_MIX, 2, 'physics'),
+    physicsConstraintReset: spec(K_PHYSICS_RESET, 1, 'physics'),
 };
-
-/** Timelines of these kinds animate physics constraints, which this engine does not solve. */
-const SKIPPED = /^physicsConstraint/;
 
 const rigs = new WeakMap<SkeletonModel, Rig>();
 
@@ -189,6 +204,7 @@ function idsOf(rig: Rig, data: TimelineData, properties: readonly string[]): num
 function checkTarget(rig: Rig, data: TimelineData, target: Target, what: string): void {
     if (target === 'none') return;
     if (target !== 'bone' && target !== 'slot') {
+        if (target === 'physics' && data.target === -1) return;
         // the official timeline reads its constraint from the list of that type and crashes without one
         if (rig.model.constraints[data.target]?.type === target) return;
         throw invalid(`${what} animates the ${target} constraint ${data.target}, which does not exist.`);
@@ -205,6 +221,14 @@ function checkTarget(rig: Rig, data: TimelineData, target: Target, what: string)
     }
 }
 
+/**
+ * The target a timeline is applied with. A physics timeline gets the place of its constraint
+ * among the physics constraints, as the official timeline has it, and keeps -1 for all of them.
+ */
+function targetOf(rig: Rig, data: TimelineData, target: Target): number {
+    return target === 'physics' ? rig.plan.physics.indexOf(data.target) : data.target;
+}
+
 function sequenceCount(attachment: AttachmentData): number {
     if (attachment.type !== 'region' && attachment.type !== 'mesh') return -1;
 
@@ -215,13 +239,9 @@ function compileTimeline(rig: Rig, data: TimelineData, what: string): LegacyTime
     const kind = SPECS[data.kind];
     const { frames, curves } = data;
 
-    if (kind === undefined) {
-        if (SKIPPED.test(data.kind)) {
-            return new LegacyTimeline(K_SKIPPED, data.target, 1, { frames, curves, ids: idsOf(rig, data, []) });
-        }
-        throw unsupportedKind(rig, data.kind, what);
-    }
-    if (kind.code === K_INHERIT && rig.v41) throw unsupportedKind(rig, data.kind, what);
+    if (kind === undefined) throw unsupportedKind(rig, data.kind, what);
+    // 4.1 has no inherit timeline and no physics
+    if (rig.v41 && (kind.code === K_INHERIT || kind.target === 'physics')) throw unsupportedKind(rig, data.kind, what);
     if (frames.length < kind.entries) throw invalid(`${what} has no keys.`);
     checkTarget(rig, data, kind.target, what);
     const ids = idsOf(rig, data, kind.properties);
@@ -243,7 +263,7 @@ function compileTimeline(rig: Rig, data: TimelineData, what: string): LegacyTime
         });
     }
 
-    return new LegacyTimeline(kind.code, data.target, kind.entries, {
+    return new LegacyTimeline(kind.code, targetOf(rig, data, kind.target), kind.entries, {
         frames,
         curves,
         ids,

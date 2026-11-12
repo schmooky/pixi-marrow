@@ -134,7 +134,8 @@ function applyRotateTimeline(
 
         return;
     }
-    const { local, active } = pose.state;
+    const { local } = pose;
+    const { active } = pose.state;
     const bone = timeline.target;
     const frames = timeline.frames;
 

@@ -192,7 +192,7 @@ describe('draw ranges', () => {
     it('binds the pages of each group of 8 to the shader of its range', async () => {
         const { model, atlas, lookup } = await loadRig('4.3/chibi-stickers.skel');
         const pages = atlas.pages.map(() => new Texture({ source: new TextureSource({ width: 2, height: 2 }) }));
-        const engine = await createPoseEngine(model, { constraints: 'ignore' });
+        const engine = await createPoseEngine(model);
         const view = new SkeletonView(model, atlas, pages);
         const rig: Rig = { model, atlas, lookup, engine, view };
         const seen = new Set<number>();

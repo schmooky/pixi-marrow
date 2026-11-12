@@ -4,7 +4,7 @@
  */
 
 export const STATUS =
-    'Pre-release, milestone M3. Skeletons of Spine 4.1, 4.2 and 4.3 load, play and draw in PixiJS v8, with IK, transform and path constraints and with clipping, and the picture matches the official runtime. Physics and slider constraints are not solved yet: a skeleton that has them plays only with them ignored.';
+    'Pre-release, milestone M4. Skeletons of Spine 4.1, 4.2 and 4.3 load, play and draw in PixiJS v8 with every constraint solved: IK, transform, path, physics and sliders. The poses equal the official cores to the bit, and the picture matches the official Pixi runtime.';
 
 /** One row per subpath export of packages/pixi-marrow/package.json. */
 export const ENTRY_POINTS = [
@@ -19,5 +19,9 @@ export const ENTRY_POINTS = [
     {
         specifier: 'pixi-marrow/optimize',
         holds: '`generateNames`, `buildAtlasOutlines`, `decodePng` and the `pixi-marrow` command line tool (`info`, `typegen`, `outlines`). Runs in Node.',
+    },
+    {
+        specifier: 'pixi-marrow/perf',
+        holds: '`createProbe`: times the pose, geometry and event work of every update of one `MarrowSpine` and counts what the renderer did. For benchmarks and profiling.',
     },
 ];

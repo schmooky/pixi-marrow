@@ -13,8 +13,9 @@ import {
     WORLD_STRIDE,
 } from '../../src/core';
 import { setClock } from '../../src/pose/v43/curves';
+import { createPose } from '../../src/pose/v43/pose';
 import { prepareRig } from '../../src/pose/v43/rig';
-import { createSolve } from '../../src/pose/v43/solver';
+import { setupPoseSlots } from '../../src/pose/v43/skeleton';
 import { applyTimeline } from '../../src/pose/v43/timelines';
 import { CURRENT, SETUP } from '../../src/pose/v43/types';
 import { loadPoseRig } from '../parity/pose-official';
@@ -206,7 +207,7 @@ describe('the 4.3 pose engine on a skeleton the official examples do not cover',
     let model: SkeletonModel;
     let labels: ReturnType<typeof attachmentLabels>;
     const run = async (script: PoseScript): Promise<void> => {
-        const engine = await createPoseEngine(model, { constraints: 'ignore' });
+        const engine = await createPoseEngine(model);
         const official = officialSubject(rig.createDriver(), labels.ofRef);
         const failure = runScript(script, engineSubject(engine, labels.ofObject), official);
 
@@ -241,7 +242,7 @@ function officialSkeleton(): Skeleton {
     return new Skeleton(new SkeletonJson(new AtlasAttachmentLoader(atlas)).readSkeletonData(LAB));
 }
 
-const play = (model: SkeletonModel): Promise<PoseEngine> => createPoseEngine(model, { constraints: 'ignore' });
+const play = (model: SkeletonModel): Promise<PoseEngine> => createPoseEngine(model);
 
 /** The first timeline of a kind in an animation of a model. The tests change it to damage the model. */
 function timelineOf(model: SkeletonModel, animation: number, kind: TimelineKind): TimelineData {
@@ -472,10 +473,8 @@ describe('data the official 4.3 core fails on', () => {
 
 describe('the attachment timeline of the 4.3 pose engine', () => {
     it('applies like the official AttachmentTimeline when it is applied on its own', async () => {
-        const model = await importSkeleton(LAB);
-        const { state } = await play(model);
-        const rig = prepareRig(model);
-        const pose = { rig, state, solve: createSolve(rig) };
+        const pose = createPose(prepareRig(await importSkeleton(LAB)));
+        const { state } = pose;
         const shown = (animation: number, time: number, from: number, out: boolean): string | undefined => {
             const timeline = pose.rig.clips[animation]?.timelines.find((candidate) => candidate.kind === 'attachment');
 
@@ -486,6 +485,8 @@ describe('the attachment timeline of the 4.3 pose engine', () => {
             return state.attachments[timeline.target]?.name;
         };
 
+        setupPoseSlots(pose);
+        state.active.fill(1);
         expect([shown(MOVE, 0.1, SETUP, false), shown(MOVE, 0.5, SETUP, false)]).toEqual(['alt', undefined]);
         // mixing out gives the setup attachment back, unless a lower track owns the slot
         expect([shown(MOVE, 0.5, CURRENT, true), shown(MOVE, 0.5, SETUP, true)]).toEqual([undefined, 'quad']);

@@ -231,7 +231,7 @@ export function updateLocalTransform(pose: Pose43, bone: number): void {
 
     local[l] = dx * ia - dy * ib;
     local[l + 1] = dy * id - dx * ic;
-    switch (state.inherit[bone]) {
+    switch (solve.inherit[bone]) {
         case NORMAL:
             MATRIX[0] = ia * a - ib * c;
             MATRIX[1] = ia * b - ib * d;

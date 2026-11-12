@@ -1,43 +1,12 @@
-import { Assets, BufferImageSource, Texture, TextureSource } from 'pixi.js';
+import { Assets, Texture, TextureSource } from 'pixi.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { scanOutlines } from '../../src/api/outline-scan';
 import { importAtlas } from '../../src/core';
 import { buildAtlasOutlines, type PagePixels } from '../../src/geometry/outlines';
 import { type AtlasOutlines, MarrowAsset, MarrowError, MarrowSpine } from '../../src/index';
-import type { AtlasModel } from '../../src/model/atlas';
 import type { PageReader } from '../../src/render/page-alpha';
-import { listAtlasFixtures, loadAtlasFixture } from '../geometry/outline-checks';
 import { fixtureFiles, importRig } from './helpers';
-
-/** The atlas of a fixture with its pages as textures made from the decoded pixels, which Node can read back. */
-async function pixelPages(id: string): Promise<{ atlas: AtlasModel; pages: PagePixels[]; textures: Texture[] }> {
-    const fixture = listAtlasFixtures().find((candidate) => candidate.id === id);
-
-    if (fixture === undefined) throw new Error(`no fixture ${id}. Run: pnpm fixtures`);
-    const { atlas, pages } = await loadAtlasFixture(fixture);
-    // a copy per texture: the decoded pages are shared by the tests of this file
-    const textures = pages.map(
-        ({ data, width, height }) =>
-            new Texture({
-                source: new BufferImageSource({ resource: new Uint8Array(data), width, height, format: 'rgba8unorm' }),
-            }),
-    );
-
-    return { atlas, pages, textures };
-}
-
-/** An asset of spineboy with pages that can be read. */
-async function boyAsset(options: { outlines?: 'auto' | 'off' | AtlasOutlines } = {}): Promise<{
-    asset: MarrowAsset;
-    built: AtlasOutlines;
-    textures: Texture[];
-}> {
-    const { model } = await importRig('4.2/spineboy-pro.skel');
-    const { atlas, pages, textures } = await pixelPages('4.2/spineboy.atlas');
-    const asset = await MarrowAsset.from({ model, atlas, textures, constraints: 'ignore', ...options });
-
-    return { asset, built: buildAtlasOutlines(atlas, pages), textures };
-}
+import { boyAsset, pixelPages } from './pages';
 
 async function rejection(promise: Promise<unknown>): Promise<MarrowError> {
     const error = await promise.then(
@@ -80,9 +49,7 @@ describe('the outlines of an asset', () => {
         const { asset } = await boyAsset({ outlines: built });
         const { model, atlas } = await importRig('4.2/raptor-pro.skel');
         const textures = atlas.pages.map(() => Texture.WHITE);
-        const error = await rejection(
-            MarrowAsset.from({ model, atlas, textures, constraints: 'ignore', outlines: built }),
-        );
+        const error = await rejection(MarrowAsset.from({ model, atlas, textures, outlines: built }));
 
         expect(asset.outlines).toEqual(built);
         // a checked copy, so a later change of the object cannot reach the renderer
@@ -94,10 +61,10 @@ describe('the outlines of an asset', () => {
 
     it('stay undefined for pages that cannot be read, and optimized does not reject', async () => {
         const { model, atlas } = await importRig('4.2/spineboy-pro.skel');
-        const white = await MarrowAsset.from({ model, atlas, textures: [Texture.WHITE], constraints: 'ignore' });
+        const white = await MarrowAsset.from({ model, atlas, textures: [Texture.WHITE] });
         // the size of the page, and no image behind it
         const blank = new Texture({ source: new TextureSource({ width: 1024, height: 256 }) });
-        const empty = await MarrowAsset.from({ model, atlas, textures: [blank], constraints: 'ignore' });
+        const empty = await MarrowAsset.from({ model, atlas, textures: [blank] });
 
         await expect(white.optimized).resolves.toBeUndefined();
         await expect(empty.optimized).resolves.toBeUndefined();
@@ -306,7 +273,7 @@ describe('MarrowAsset.load with outlines', () => {
     const loadImage = vi.spyOn(pixiAssets, 'load');
     const unloadImage = vi.spyOn(pixiAssets, 'unload');
     const assets: MarrowAsset[] = [];
-    const base = { skeleton: 'art/boy.skel', atlas: 'art/boy.atlas', constraints: 'ignore' } as const;
+    const base = { skeleton: 'art/boy.skel', atlas: 'art/boy.atlas' } as const;
     let outlines: AtlasOutlines;
 
     async function load(options: Parameters<typeof MarrowAsset.load>[0]): Promise<MarrowAsset> {
