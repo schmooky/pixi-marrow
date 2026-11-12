@@ -76,10 +76,12 @@ export class TrackBook {
      * which were made on the engine directly.
      */
     absorb(events: readonly PoseEvent[], out: EventList): void {
-        for (const event of events) {
-            const handle = this.handles.get(event.entry);
+        // by index: a loop over the values of an array makes an iterator, in every update
+        for (let i = 0; i < events.length; i++) {
+            const event = events[i];
+            const handle = event === undefined ? undefined : this.handles.get(event.entry);
 
-            if (handle === undefined) continue;
+            if (event === undefined || handle === undefined) continue;
             if (event.type === 'dispose') this.forget(event.entry, handle);
             else if (event.type === 'end' || (event.type === 'complete' && !handle.loop)) handle.settle();
             if (!handle.hidden) out.push(event.type, handle, event.key);

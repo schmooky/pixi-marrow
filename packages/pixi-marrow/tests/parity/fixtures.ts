@@ -7,6 +7,8 @@ import type { RigFiles } from './official';
 const root = fileURLToPath(new URL('../../../../', import.meta.url));
 const cacheDir = join(root, 'fixtures/.cache');
 const localDir = join(root, 'fixtures/local');
+/** The symbol rigs of the slot game Bzzz, which live in the repo with the leave of their owner. */
+const gameDir = join(root, 'fixtures/bzzz');
 
 /** One skeleton file the parity suite runs on, with the atlas that goes with it. */
 export interface Fixture {
@@ -72,19 +74,19 @@ function atlasNextTo(skeletonPath: string): string {
     return atlas;
 }
 
-/** Your own rigs: every `.json` and `.skel` under fixtures/local, at any depth. */
-function localFixtures(): Fixture[] {
-    if (!existsSync(localDir)) return [];
+/** The rigs of a folder: every `.json` and `.skel` under it, at any depth. Their ids start with `label`. */
+function folderFixtures(folder: string, label: string): Fixture[] {
+    if (!existsSync(folder)) return [];
 
-    return readdirSync(localDir, { recursive: true, encoding: 'utf8' })
+    return readdirSync(folder, { recursive: true, encoding: 'utf8' })
         .filter((file) => file.endsWith('.json') || file.endsWith('.skel'))
         .sort()
         .map((file) => {
-            const skeletonPath = join(localDir, file);
+            const skeletonPath = join(folder, file);
             const { version, format } = sniffSkeleton(readSkeleton(skeletonPath));
 
             return {
-                id: `local/${file}`,
+                id: `${label}/${file}`,
                 rig: basename(file, extname(file)),
                 version,
                 format,
@@ -94,9 +96,9 @@ function localFixtures(): Fixture[] {
         });
 }
 
-/** Every fixture: the official examples first, then the local rigs. */
+/** Every fixture: the official examples first, then the rigs of the game in the repo, then the local rigs. */
 export function listFixtures(): Fixture[] {
-    return [...officialFixtures(), ...localFixtures()];
+    return [...officialFixtures(), ...folderFixtures(gameDir, 'bzzz'), ...folderFixtures(localDir, 'local')];
 }
 
 /** Reads a fixture from disk. */

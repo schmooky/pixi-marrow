@@ -34,6 +34,21 @@ hero.physicsTranslate(dx, dy);
 
 `entry` and `track.configure` take any field of the official `TrackEntry` by its official name. `physics` is the official mode: `update`, `pose`, `reset` or `none`. Physics does not follow the Pixi position by itself: tell it with `physicsTranslate` and `physicsRotate`.
 
+## Bones and placeholders
+
+```ts
+const head = hero.bone('head');
+console.log(head.worldX, head.worldY);
+head.rotation += 15;
+
+hero.addChild(flash);
+hero.follow('gun', flash);
+
+hero.attach('placeholder', symbol);
+```
+
+`bone` gives a handle: the pose next to the parent bone to read and write, and the place in the skeleton to read. `follow` moves a container with a bone. `attach` draws a container at the place of a slot in the draw order, between the parts of the skeleton, and moves it with the bone of the slot. An attached container costs one draw call.
+
 ## Many skeletons
 
 Skeletons of up to 1024 vertices share draw calls: 200 instances of a small rig draw in one call. Nothing to set up. A Pixi object between two skeletons in draw order ends a batch, so keep skeletons next to each other in the display list where you can.
@@ -69,6 +84,14 @@ const hero = await MarrowSpine.load({ skeleton: 'hero.skel', atlas: 'hero.atlas'
 `tightMesh: 'on'` also draws every region as the polygon around its visible pixels. On the example rigs that shades 3 to 19 percent less triangle area. The picture is the same to the eye and not to the bit: some pixels move by 1 of 255 levels.
 
 `pixi-marrow outlines hero.atlas` writes the outlines to `hero.outlines.json` at build time. Pass that URL as `outlines` in the load options and nothing is read at load time.
+
+## Docs site
+
+```bash
+pnpm site:dev
+```
+
+A small site in `apps/site` with two live previews. It shows the bee of the slot game Bzzz, whose symbol rigs are in `fixtures/bzzz`.
 
 ## Goals
 

@@ -1,9 +1,9 @@
 {
   "everything": {
-    "gzip": 27540
+    "gzip": 29579
   },
   "core (everything)": {
-    "gzip": 5891
+    "gzip": 5892
   },
   "core (sniffSkeleton)": {
     "gzip": 806

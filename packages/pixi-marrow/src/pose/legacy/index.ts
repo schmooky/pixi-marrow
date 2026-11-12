@@ -37,7 +37,11 @@ class LegacyEngine implements PoseEngine {
     private readonly solver: Solver;
     private readonly player: LegacyPlayer;
     private mode: PhysicsMode = 'update';
-    /** The version of the pose after the last call of this engine. Another version means that someone else wrote the pose. */
+    /**
+     * The version of the pose as this engine last left it. Another version means that someone else
+     * wrote the pose. Only {@link begin} reads it and only {@link end} writes it, so that no call
+     * of the engine can take a version over that it did not raise itself.
+     */
     private seen: number;
 
     constructor(rig: Rig, pose: PoseState, solver: Solver) {
@@ -49,12 +53,29 @@ class LegacyEngine implements PoseEngine {
     }
 
     /**
-     * Ends a call that changed the pose: closes its stamps and makes the next update apply the
-     * timelines and compute the world transforms again.
+     * Starts a call that can raise the version: an update, or a command that changes the pose.
+     * It first looks whether someone else wrote the pose since the engine last left it. If so,
+     * the next update applies the timelines and computes every world transform, whatever this
+     * call and the calls after it do. That is noted here, before the call raises the version
+     * itself, because afterwards the two raises cannot be told apart.
      */
-    private changed(): void {
+    private begin(): void {
+        if (this.state.version !== this.seen) {
+            this.player.stirred = true;
+            this.solver.all = true;
+        }
+        openStamps(this.state);
+    }
+
+    /** Ends a call that {@link begin} started: closes its stamps and keeps the version the engine leaves. */
+    private end(): void {
         closeStamps(this.state);
         this.seen = this.state.version;
+    }
+
+    /** Ends a command that changed the pose: the next update applies the timelines again. */
+    private changed(): void {
+        this.end();
         this.player.stirred = true;
     }
 
@@ -152,26 +173,26 @@ class LegacyEngine implements PoseEngine {
     }
 
     setSkin(skin: number): void {
-        openStamps(this.state);
+        this.begin();
         setSkin(this.rig, this.state, this.solver, skin);
         this.changed();
     }
 
     setupPose(): void {
-        openStamps(this.state);
+        this.begin();
         setBonesToSetupPose(this.rig, this.state, this.solver);
         setSlotsToSetupPose(this.rig, this.state, this.solver);
         this.changed();
     }
 
     setupPoseBones(): void {
-        openStamps(this.state);
+        this.begin();
         setBonesToSetupPose(this.rig, this.state, this.solver);
         this.changed();
     }
 
     setupPoseSlots(): void {
-        openStamps(this.state);
+        this.begin();
         setSlotsToSetupPose(this.rig, this.state, this.solver);
         this.changed();
     }
@@ -179,20 +200,19 @@ class LegacyEngine implements PoseEngine {
     update(dt: number): void {
         const { state, player, solver } = this;
 
-        // someone else wrote the pose, or a test asks for the whole update: nothing is known to be as it was
-        if (state.version !== this.seen || !this.rig.skips) {
+        this.begin();
+        // a test asks for the whole update: nothing counts as known to be as it was
+        if (!this.rig.skips) {
             player.stirred = true;
             solver.all = true;
         }
-        openStamps(state);
         updateTracks(player, dt);
         state.time += dt;
         // an entry started or ended: a skeleton that was busy may not be any more, so look soon
         if (player.stirred && solver.busy > 2) solver.busy = 2;
         applyTracks(player);
         updateWorldTransform(solver);
-        closeStamps(state);
-        this.seen = state.version;
+        this.end();
     }
 
     takeEvents(): PoseEvent[] {

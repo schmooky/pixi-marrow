@@ -1,4 +1,12 @@
-import { type Batch, Buffer, extensions, type InstructionSet, type Renderer, VERSION } from 'pixi.js';
+import {
+    type Batch,
+    type BatchableElement,
+    Buffer,
+    extensions,
+    type InstructionSet,
+    type Renderer,
+    VERSION,
+} from 'pixi.js';
 import type { BatchBody } from './batch-body';
 import { BatchElement } from './batch-element';
 import { uploadsStretch } from './batch-upload';
@@ -12,6 +20,15 @@ import { bendsEdges } from './gate';
  * then. This library registers nothing when it is imported, so the pipe is put into a renderer
  * the first time that renderer is about to draw a skeleton, see {@link linkRenderer}.
  */
+
+/**
+ * What Pixi collects behind a container that is attached between two slots of a skeleton: the
+ * runs of the skeleton that draw after that container. See `attach-work.ts`.
+ */
+export interface BatchTail {
+    /** What the batcher gets: it names the skeleton and the container. */
+    readonly part: BatchableElement;
+}
 
 /** Whether the buffers of this Pixi upload at once when a batcher tells them what changed. */
 const AT_ONCE = uploadsStretch(Buffer.prototype.update, VERSION);
@@ -40,11 +57,19 @@ export class MarrowPipe {
         this.renderer = renderer;
     }
 
-    /** Puts the skeleton into the batch that is being built. */
-    addRenderable(body: BatchBody, instructionSet: InstructionSet): void {
+    /**
+     * Puts the skeleton into the batch that is being built. The tail behind an attached container
+     * adds the runs that follow that container.
+     */
+    addRenderable(body: BatchBody | BatchTail, instructionSet: InstructionSet): void {
         const { renderer } = this;
 
         if (renderer === null) return;
+        if ('part' in body) {
+            renderer.renderPipes.batch.addToBatch(body.part, instructionSet);
+
+            return;
+        }
         const round = renderer.roundPixels || body.roundPixels;
 
         // the picture is drawn to this target unless a filter or a cache comes between
@@ -62,12 +87,14 @@ export class MarrowPipe {
     }
 
     /** Writes what changed of a skeleton into its batch. */
-    updateRenderable(body: BatchBody): void {
-        body.element.sync();
+    updateRenderable(body: BatchBody | BatchTail): void {
+        // a tail has nothing of its own: the skeleton writes its runs
+        if (!('part' in body)) body.element.sync();
     }
 
     /** Whether the instructions must be built again for a skeleton: its batch has no room for it as it is. */
-    validateRenderable(body: BatchBody): boolean {
+    validateRenderable(body: BatchBody | BatchTail): boolean {
+        if ('part' in body) return false;
         const { element } = body;
 
         return element.resized && element.placed;

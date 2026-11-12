@@ -112,5 +112,21 @@
   "4.3/cloud-pot.json": 16107,
   "4.3/cloud-pot.skel": 16107,
   "4.3/diamond-pro.json": 6677,
-  "4.3/diamond-pro.skel": 6677
+  "4.3/diamond-pro.skel": 6677,
+  "bzzz/animation_a.skel": 646,
+  "bzzz/animation_bee.skel": 5104,
+  "bzzz/animation_bee_big.skel": 5182,
+  "bzzz/animation_blue_flower.skel": 2347,
+  "bzzz/animation_boost.skel": 3160,
+  "bzzz/animation_coin.skel": 1903,
+  "bzzz/animation_collect.skel": 3160,
+  "bzzz/animation_empty.skel": 268,
+  "bzzz/animation_j.skel": 646,
+  "bzzz/animation_k.skel": 646,
+  "bzzz/animation_multi.skel": 3160,
+  "bzzz/animation_mystery.skel": 4018,
+  "bzzz/animation_purple_flower.skel": 3181,
+  "bzzz/animation_q.skel": 646,
+  "bzzz/animation_rose_flower.skel": 3025,
+  "bzzz/animation_wild.skel": 4660
 }

@@ -20,6 +20,8 @@ Change with M5: the batched render mode is built, and `renderMode: 'auto'` picks
 
 Change with M6: work follows change. A pose state carries a version and stamps per bone and slot. The engines skip what would repeat, and a view does only what a stamp asks for (sections 2, 5.3 and 7.3). A skeleton at rest costs close to nothing and uploads nothing. The mesh mode, the clip code and the cuts of overdraw load on demand (section 11). Sharing one pose between instances is not built, and neither is a keyframe cursor: section 2 says why.
 
+Change after M6: the display object has bone handles, `follow` and `attach` (section 7.6), and there is a first docs site (section 13). The symbol rigs of a real slot game are fixtures now (section 15). A tree-shaken game could not use the mesh mode: that is fixed and has a check of its own (section 15).
+
 This document is the plan. Every performance number in it is an estimate until the benchmark measures it. Section 0 lists what has been verified.
 
 ## 0. Verified facts this design rests on
@@ -431,8 +433,14 @@ The rules that differ between versions, all ported: 4.3 can use a convex polygon
 
 ### 7.6 Objects attached to slots
 
-- `follow(target, container)`: the container tracks a bone or slot transform. It is not interleaved in the draw order. Free.
-- `attach(slot, container)`: the container is drawn at the slot's place in the draw order. Splits the skeleton into two draw ranges. The doc states this cost.
+Built after M6, for games that put their own Pixi objects into a rig.
+
+- `hero.bone(name)` is the handle of a bone. `x`, `y`, `rotation`, `scaleX` and `scaleY` are the pose next to the parent bone, as the Spine editor shows it, and can be written. `worldX`, `worldY`, `worldRotation` and `worldMatrix()` say where the bone is in the space of the display object after the last update. A write takes effect with the next update and stays until an animation that keys the bone writes it again, as in the official runtime.
+- `hero.follow(bone, container)`: the container gets the transform of the bone after every update, in the space of the display object, so it belongs inside it. It stays where it is in the display list. It costs no draw call.
+- `hero.attach(slot, container)`: the container becomes a part of the skeleton, drawn at the place of the slot in the draw order, after the attachment of that slot. It moves with the bone of the slot and its alpha is that of the slot. `followAttachment` hides it while the slot is empty, `followColor` tints it. It mirrors `addSlotObject` of the official runtime. A slot holds one container. A clip does not clip it.
+- Cost of `attach`: one more draw call per container that is drawn, in both render modes, because a foreign object ends a batch. A draw order key that moves slots across an attached slot rewrites indices and rebuilds nothing. The official runtime rebuilds 15 times in the scene that measures this.
+- A skeleton at rest with containers still rests: a container moves only when the stamp of its bone is newer.
+- The code that draws attached containers is a chunk of 1.4 kB that loads with the first `attach` of a page. The container is hidden for a frame or two until then.
 
 ## 8. Optimizations
 
@@ -621,7 +629,7 @@ One package. Few entry points. No runtime dependencies.
 
 Peer: `pixi.js`. Dev dependencies only: the three official cores and `spine-pixi-v8`, under npm aliases.
 
-Importers are separate modules loaded by version, so a game that ships 4.3 binary files does not carry the JSON or 4.1 readers. Since M6 the root import is 26.9 kB gzipped, from 31.1 kB in M5. Three parts load on demand. The mesh mode (5.2 kB) loads with an asset that `auto` draws with meshes or that asks for them. The clip code (7.3 kB) loads with an asset that has a clipping attachment. The cuts of overdraw (2.6 kB) load with the outlines. An instance that asks for the mesh mode before its chunk is there draws batched until it arrives. The two pose engines grew with the skipping, from 47.8 to 58.4 kB on demand for both together. A game loads one of them. Size budget for the root import with one importer: 60 KB gzipped. It is a target to confirm at M2, checked in CI after that.
+Importers are separate modules loaded by version, so a game that ships 4.3 binary files does not carry the JSON or 4.1 readers. Since the bone handles the root import is 28.9 kB gzipped: handles and `follow` must work at once and weigh 2 kB. In M6 it was 26.9 kB, from 31.1 kB in M5. The limit the bench checks went from 27 to 29 kB for that. Three parts load on demand. The mesh mode (5.2 kB) loads with an asset that `auto` draws with meshes or that asks for them. The clip code (7.3 kB) loads with an asset that has a clipping attachment. The cuts of overdraw (2.6 kB) load with the outlines. An instance that asks for the mesh mode before its chunk is there draws batched until it arrives. The two pose engines grew with the skipping, from 47.8 to 58.4 kB on demand for both together. A game loads one of them. Size budget for the root import with one importer: 60 KB gzipped. It is a target to confirm at M2, checked in CI after that.
 
 ## 12. Repo setup, compared with pixi-silk
 
@@ -658,6 +666,8 @@ Budget: at most 10 guide pages and 6,000 words in total. Each page has one runna
 8. Debug overlays
 9. Versions and limits
 10. Moving from `spine-pixi-v8`: one mapping table
+
+Built after M6: a first site in `apps/site`, far below this plan on purpose. Astro and MDX, four pages and about 1,200 words: home, start, bones and placeholders, good to know. Two live previews show the bee of the slot game Bzzz: one plays its animations, one has a shape attached to a slot and a mark that follows a bone. Every code block is a region of a file that is type-checked against the built package. There is no API reference, no search and no deploy yet. `pnpm site:dev` and `pnpm site:build` run it.
 
 The API reference is generated from TSDoc. Every public symbol has a one-line summary and an `@example`. No hand-written API prose.
 
@@ -722,6 +732,12 @@ Since M6 the check has six scenes for sleeping and waking. A skeleton rests and 
 
 Since M6 the check also runs on other versions of pixi.js: `pnpm check:render --pixi=8.16.0`. The package is built and checked on 8.23.0 and allows 8.16 and later. The whole check passes on 8.16.0, 8.21.0 and 8.23.0, in about three minutes per version. The versions in between were not run. It found two defects that the default run could not see. M5 lost partial uploads on 8.20 to 8.22, which shows only with several instances in a batch. The mesh mode drew stale triangles on 8.16 (section 7.3). On WebGPU the official runtime itself draws another alpha on Pixi before 8.23, because Pixi changed the blend factors of `add`. So ours on an old Pixi is judged against the official picture on 8.23.0.
 
+After M6 three things joined the checks.
+
+- The symbol rigs of the slot game Bzzz are fixtures in the repository, with the leave of its owner. They are 16 skeletons of Spine 4.2 in the binary format, on one atlas with an AVIF page. They are the first rigs of a real game the runtime ran on. All of them pass model, pose, geometry and atlas parity, in every script family.
+- A script family writes bones from outside the engine, as a bone handle does. It found that the 4.1 and 4.2 engine lost a write when `setSkin` was called with the skin that was set already. That is fixed.
+- The pixel check ends with a game check. It draws 9 cases from a bundle that is made as a game makes one: `Application` and `MarrowSpine` imported by name, the tree shaken. Pixi registers a pipe when its module loads, and a renderer takes its pipes when it is created. So the mesh mode, whose code loads on demand since M6, found no mesh pipe in a game that imports no `Mesh` of its own, and threw. The docs site found this, because it is the first real bundle. The mesh mode now gives a renderer the pipe it lacks. Without the fix 10 of 18 cases fail, on pixi.js 8.16.0 and 8.23.0. Two scenes compare `attach` and `follow` with `addSlotObject` of the official runtime.
+
 One failure stays unexplained. A frame of celestial-circus-pro on a multisampled target on WebGPU differed by 3 in one run of M5 and by 1 in one run of M6. It did not show again in more than 40 runs of that case.
 
 Fixtures: 57 official example rigs across 4.1, 4.2 and 4.3, each as JSON and binary, listed in `fixtures/manifest.json` at pinned commits with a hash per file. They are downloaded on demand and not committed, because the licence of the example assets has not been read. Your own rigs go into `fixtures/local/`, which is not committed either.
@@ -740,6 +756,7 @@ One finding from building the suite: the official binary readers ignore the offs
 | M4 Complete | Physics, sliders, additive tracks. Perf report and perf probes. An A/B bench against the official Pixi runtime. | Built 2026-11-11. Physics constraints and sliders in both engines, the remaining track options, physics control, `perf.report()`, `perf.memory()`, the probe entry and `pnpm bench:ab`. Pose parity is exact on 135 skeleton files with every constraint on. The pixel check passes on WebGL2 and WebGPU with physics and sliders live. Not done: the A/B inside spine-benchmark and numbers per device class. The package is not published and its licence is not decided, so spine-benchmark cannot load it yet. `tightMesh` stays an option until devices are measured. |
 | M5 Batched mode | Small skeletons that share a render group share draw calls, with the premultiplied shader, additive slots in the batch and pages joined by texture. `renderMode: 'auto'` picks the mode per skeleton. The heap of an instance with a clip is explained and cut. | Built 2026-11-12. Two batchers of our own, constant-size elements with rewrites in place, CPU clipping by a port of the official clipper, layouts shared per asset. 200 instances of a rig without a blend break draw in 1 call. The frame takes 30 to 89 percent of the official time on the five bench rigs. The pixel check passes in both modes. One rule of the list is missed: raptor-pro is 4 percent slower in batched mode than in mesh mode on WebGL2 (section 16.2). Not done: a CI run against pixi.js 8.16.0, and loading the mesh mode on demand. |
 | M6 Pose skipping | Constant folding, needed set, timeline skipping, path cache, shared pose, sleep. The mesh mode on demand. | Built 2026-11-12, with a narrower list than planned. Built: stamps in the pose state. Engines that skip an apply that would repeat and pose only bones whose inputs changed. Views that place, color and upload only what changed. Three chunks on demand. Not built, each with its measurement in section 2: a keyframe cursor, sharing a pose between instances, leaving out bones or timelines that nobody looks at. Pose parity is exact with the stamp check on. 200 instances at rest take 0.02 to 0.04 ms to update and upload nothing. No bench rig is slower than in M5. The pixel check passes on pixi.js 8.16.0, 8.21.0 and 8.23.0. Not reached: physics in mode `update` does not rest. |
+| Handles and site, after M6 | `bone`, `follow`, `attach`. A first docs site. Real rigs as fixtures. | Built 2026-11-12. The three calls work in both render modes and are compared with the official `addSlotObject` in the pixel check. The site shows the bee of the slot game Bzzz. Found and fixed on the way: the mesh mode in a tree-shaken game, and a bone write lost after `setSkin` in the 4.1 and 4.2 engine. |
 | M7 GPU | GPU skinning, slot palette | Zero vertex upload for rigid rigs. A/B on low-end and mid devices. |
 | M8 Baked | Baker at build time and run time, baked playback, instancing, `balanced` preset | Eligible fixtures play baked with pixel parity at sample points |
 | M9 Release 1.0 | `fast` preset, idle cache, level of detail, docs within budget, migration guide | Docs budget and all gates pass |

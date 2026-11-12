@@ -1,0 +1,48 @@
+---
+layout: ../layouts/Docs.astro
+title: Bones and placeholders
+description: Read a bone, let a Pixi object follow it, or put a Pixi object into the draw order of a rig.
+---
+
+import Preview from '../components/Preview.astro';
+import Snippet from '../components/Snippet.astro';
+import source from '../previews/placeholders.ts?raw';
+import more from '../snippets/bones.ts?raw';
+
+<Preview name="placeholders" height={430} caption="The bee of the slot game Bzzz. The ring is attached to the slot bee_sp, which lies between the wings and the body in the draw order: it is drawn over the wings and under the body, the head and the hands. The green mark follows the bone of the head." />
+
+Both shapes are `SilkGraphics` of [pixi-silk](https://github.com/schmooky/pixi-silk). Any Pixi `Container` works the same way.
+
+## Attach to a slot
+
+<Snippet source={source} regions="ring attach" />
+
+`attach` makes the container a part of the skeleton. It is drawn at the place of the slot in the draw order, after the attachment of that slot. It moves with the bone of the slot, and its alpha is that of the slot.
+
+A slot holds one container, and it shows on an empty slot too. That is what a placeholder slot of a rig is for. `detach` lets the container go.
+
+<Snippet source={more} regions="options" />
+
+`followAttachment` hides the container while the slot shows no attachment. `followColor` tints it with the color of the slot.
+
+Each attached slot costs one more draw call, plus the draw calls of the container. A clipping attachment does not clip the container.
+
+## Follow a bone
+
+<Snippet source={source} regions="follow" />
+
+`follow` gives a container the position, rotation, scale and skew of a bone after every update. The transform is in the space of the skeleton, so add the container to it first.
+
+The container stays where it is in the display list, and following costs no draw call. `unfollow` ends it.
+
+## Read and write a bone
+
+<Snippet source={source} regions="bone" />
+
+`bone` returns the handle of a bone, the same object at every call. `worldX`, `worldY` and `worldRotation` are read only. They say where the bone is in the skeleton after the last update, with y pointing down as in Pixi.
+
+<Snippet source={more} regions="write" />
+
+`x`, `y`, `rotation`, `scaleX` and `scaleY` are the pose next to the parent bone, as the Spine editor shows it. Rotation is in degrees.
+
+A write takes effect with the next update. It stays until an animation that keys the bone writes it again.

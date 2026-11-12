@@ -11,7 +11,9 @@
  * A scene can hold a tooling proof: one more side that is wrong on purpose and must be rejected.
  * `proof.swap` names two instances that change places in the draw order. `proof.hold` names a
  * step whose update the side leaves out, so that it shows the picture of the frame before: what
- * a view shows that skips work it had to do.
+ * a view shows that skips work it had to do. `proof.misplace` names an object an instance holds
+ * and another slot of the same bone: the side attaches the object there, so it is drawn at the
+ * wrong place in the draw order.
  */
 import { capture, captureSecond, judge } from './judge.js';
 import { countModes, readMode } from './mode.js';
@@ -56,11 +58,16 @@ const PROOF_LABELS = {
         'proof, ours with a frame held back',
         'proof, ours batched with a frame held back',
     ],
+    misplace: [
+        'proof, a container at another slot',
+        'proof, ours with a container at another slot',
+        'proof, ours batched with a container at another slot',
+    ],
 };
 
 /** The comparisons of a frame of a scene: `SCENE_PAIRS` with the labels of the proof of the scene. */
 function pairsOf(scene) {
-    const labels = PROOF_LABELS[scene.proof?.hold ? 'hold' : 'swap'];
+    const labels = PROOF_LABELS[['hold', 'misplace'].find((kind) => scene.proof?.[kind]) ?? 'swap'];
     const proofs = SCENE_PAIRS.filter((pair) => pair.kind === 'proof');
 
     return SCENE_PAIRS.map((pair) => (pair.kind === 'proof' ? { ...pair, label: labels[proofs.indexOf(pair)] } : pair));

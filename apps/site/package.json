@@ -1,0 +1,24 @@
+{
+  "name": "@pixi-marrow/site",
+  "private": true,
+  "version": "0.0.0",
+  "description": "The docs site of pixi-marrow: four short pages and two live previews.",
+  "type": "module",
+  "scripts": {
+    "rigs": "node scripts/copy-rigs.mjs",
+    "dev": "pnpm rigs && astro dev --port 5179",
+    "build": "pnpm rigs && pnpm typecheck && astro build",
+    "preview": "astro preview --port 5179",
+    "typecheck": "tsc"
+  },
+  "dependencies": {
+    "@astrojs/mdx": "^8.1.5",
+    "astro": "^7.4.11",
+    "pixi-marrow": "workspace:*",
+    "pixi-silk": "^1.0.1",
+    "pixi.js": "^8.22.0"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  }
+}

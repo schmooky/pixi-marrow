@@ -2,7 +2,10 @@ import {
     AnimationState,
     AnimationStateData,
     AtlasAttachmentLoader,
+    type BoneData,
     type Event,
+    IkConstraintData,
+    PathConstraintData,
     Physics,
     PhysicsConstraintData,
     Skeleton,
@@ -13,11 +16,12 @@ import {
     Texture,
     TextureAtlas,
     type TrackEntry,
+    TransformConstraintData,
 } from 'spine-core-4.3';
 import type { AttachmentRef, PhysicsMode, TrackField } from '../../src/core';
 import { attachmentRefs, eventKey, indexer, skinEntries, timelineKind } from './model-shared';
 import type { RigFiles } from './official';
-import { describeAnimation } from './pose-info';
+import { describeAnimation, describeBones } from './pose-info';
 import {
     animationIndexer,
     COMMON_FLAGS,
@@ -194,6 +198,12 @@ function createDriver(shared: Shared): OfficialDriver {
             yDown.place(scaleY);
         },
         yDown: (value) => yDown.set(value),
+        writeBone(index, field, value) {
+            const bone = skeleton.bones[index];
+
+            if (bone === undefined) throw new Error(`The rig has no bone ${index}`);
+            bone.pose[field] = value;
+        },
         read() {
             readPose(pose);
             readWorld(pose);
@@ -201,6 +211,31 @@ function createDriver(shared: Shared): OfficialDriver {
             return pose;
         },
     };
+}
+
+/** The bones a constraint writes. A slider writes the bones its animation keys. */
+const writtenBy =
+    (data: SkeletonData) =>
+    (constraint: unknown): BoneData[] => {
+        if (constraint instanceof PhysicsConstraintData) return [constraint.bone];
+        if (constraint instanceof SliderData) {
+            return constraint.animation.bones.flatMap((index) => data.bones[index] ?? []);
+        }
+        const known =
+            constraint instanceof IkConstraintData ||
+            constraint instanceof TransformConstraintData ||
+            constraint instanceof PathConstraintData;
+
+        return known ? constraint.bones : [];
+    };
+
+/** The bone a constraint reads to pose others, if it reads one. */
+function readBy(constraint: unknown): (BoneData | null)[] {
+    if (constraint instanceof IkConstraintData) return [constraint.target];
+    if (constraint instanceof TransformConstraintData) return [constraint.source];
+    if (constraint instanceof PathConstraintData) return [constraint.slot.boneData];
+
+    return constraint instanceof SliderData ? [constraint.bone] : [];
 }
 
 /** Loads a 4.3 skeleton for posing with the official 4.3 core. */
@@ -223,6 +258,7 @@ export function loadPose43(files: RigFiles): OfficialPoseRig {
             physics: data.constraints.filter((constraint: unknown) => constraint instanceof PhysicsConstraintData)
                 .length,
             sliders: data.constraints.filter((constraint: unknown) => constraint instanceof SliderData).length,
+            ...describeBones(data.bones, data.constraints.flatMap(writtenBy(data)), data.constraints.flatMap(readBy)),
         },
         createDriver: () => createDriver(shared),
     };

@@ -1,4 +1,5 @@
 import type { PhysicsMode, PoseEngine } from '../pose/engine';
+import type { Link } from '../render/attach-work';
 import type { SkeletonView } from '../render/skeleton-view';
 import type { ViewStats } from '../render/stats';
 import type { MarrowAsset } from './asset';
@@ -66,11 +67,16 @@ export interface PerfOwner {
 export class MarrowPerf {
     private readonly owner: PerfOwner;
     private readonly view: SkeletonView;
+    private readonly links: () => readonly Link[];
 
-    /** @param view The view that draws the display object. */
-    constructor(owner: PerfOwner, view: SkeletonView) {
+    /**
+     * @param view The view that draws the display object.
+     * @param links Hands out the containers that follow a bone or are attached to a slot at the moment.
+     */
+    constructor(owner: PerfOwner, view: SkeletonView, links: () => readonly Link[] = () => []) {
         this.owner = owner;
         this.view = view;
+        this.links = links;
     }
 
     /**
@@ -88,7 +94,7 @@ export class MarrowPerf {
     async report(): Promise<PerfEntry[]> {
         const { readReport } = await import('./perf-read');
 
-        return readReport(this.owner, this.view);
+        return readReport(this.owner, this.view, this.links());
     }
 
     /**

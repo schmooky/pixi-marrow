@@ -2,8 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
     createPoseEngine,
     importSkeleton,
+    isNewer,
+    LOCAL_STRIDE,
+    nextVersion,
     type PoseEngine,
     type SkeletonModel,
+    type TrackEntry,
     touchPose,
     WORLD_STRIDE,
 } from '../../src/core';
@@ -101,6 +105,7 @@ function armsRig(version: '4.1' | '4.2'): string {
                     rightSlot: { img: { width: 8, height: 8 } },
                 },
             },
+            { name: 'other', attachments: { leftSlot: { img: { width: 6, height: 6 } } } },
         ],
         animations: {
             all: {
@@ -145,6 +150,103 @@ function stamped(engine: PoseEngine): { bones: string[]; slots: string[] } {
         slots: model.slots.names.filter((_, i) => slotStamps[i] === version),
     };
 }
+
+/**
+ * What a caller can do between a write to the pose and the next update. The engine tells a write
+ * from outside by the version of the pose, which some of these calls raise themselves, or leave
+ * as it is while the engine notes it as seen. `resets` says that the call sets the bones back,
+ * which takes the write away in the official runtime too.
+ */
+const BETWEEN: { name: string; call: (engine: PoseEngine, entry: TrackEntry) => void; resets?: boolean }[] = [
+    { name: 'the skin that is set already', call: (engine) => engine.setSkin(engine.state.skin) },
+    { name: 'another skin', call: (engine) => engine.setSkin(engine.state.skin === 1 ? -1 : 1) },
+    { name: 'the setup pose of the slots', call: (engine) => engine.setupPoseSlots() },
+    { name: 'the setup pose of the bones', call: (engine) => engine.setupPoseBones(), resets: true },
+    { name: 'the setup pose', call: (engine) => engine.setupPose(), resets: true },
+    { name: 'an update of no time', call: (engine) => engine.update(0) },
+    { name: 'a track cleared that holds nothing', call: (engine) => engine.clearTrack(3) },
+    { name: 'every track cleared', call: (engine) => engine.clearTracks() },
+    { name: 'an animation queued', call: (engine) => engine.addAnimation(0, POSE, false, 5) },
+    { name: 'an entry configured', call: (engine, entry) => engine.configure(entry, { alpha: 1 }) },
+    {
+        name: 'the mixes set',
+        call: (engine) => {
+            engine.defaultMix = 0.1;
+            engine.setMix(ALL, WAVE, 0.1);
+        },
+    },
+    {
+        name: 'the time scale set',
+        call: (engine) => {
+            engine.timeScale = 1;
+        },
+    },
+    {
+        name: 'the physics calls',
+        call: (engine) => {
+            engine.physics = 'update';
+            engine.physicsTranslate(0, 0);
+            engine.physicsRotate(0, 0, 0);
+        },
+    },
+    {
+        name: 'the skeleton placed as it is',
+        call: (engine) => {
+            Object.assign(engine.state, { x: 0, y: 0, scaleX: 1, scaleY: 1, yDown: false });
+        },
+    },
+];
+
+describe.each(['4.1', '4.2'] as const)('a %s pose written from outside the legacy engine', (version) => {
+    /** The hand of the arm that no animation of the rig keys and no constraint writes. */
+    const HAND = 5;
+
+    /**
+     * Plays until the skeleton is at rest or in its loop, writes the rotation of the hand as code
+     * outside the engine does, makes the call and updates once. Returns the world transforms
+     * before the write and after the update, and whether the stamp of the hand moved in between.
+     */
+    const run = async (full: boolean, skin: number, loop: boolean, call: (typeof BETWEEN)[number]['call']) => {
+        const model = await importSkeleton(armsRig(version));
+        const engine = await createPoseEngine(model);
+        const { state } = engine;
+
+        // the engine that leaves nothing out is what the other one has to equal
+        rigOf(model).skips = !full;
+        engine.setSkin(skin);
+        const entry = engine.setAnimation(0, loop ? WAVE : ALL, loop);
+
+        for (let i = 0; i < 40; i++) engine.update(DT);
+        // what a renderer that drew now would keep
+        const drawn = state.version;
+        const before = Array.from(state.world);
+
+        state.local[HAND * LOCAL_STRIDE + 2] = 35;
+        state.version = nextVersion(state.version);
+        call(engine, entry);
+        engine.update(DT);
+
+        return { before, after: Array.from(state.world), stamped: isNewer(Number(state.boneStamps[HAND]), drawn) };
+    };
+
+    it.each(BETWEEN)('shows in the update after $name', async ({ call, resets }) => {
+        const hand = (world: number[]): number[] => world.slice(HAND * WORLD_STRIDE, (HAND + 1) * WORLD_STRIDE);
+
+        // without a skin and with one, so that the skin a call sets again is a real one too
+        for (const skin of [-1, 1]) {
+            for (const loop of [false, true]) {
+                const lean = await run(false, skin, loop, call);
+                const full = await run(true, skin, loop, call);
+
+                expect(lean.after, `skin ${skin}, ${loop ? 'in a loop' : 'at rest'}`).toEqual(full.after);
+                if (resets === true) continue;
+                // the hand has turned, and a renderer is told
+                expect(hand(lean.after)).not.toEqual(hand(lean.before));
+                expect(lean.stamped).toBe(true);
+            }
+        }
+    });
+});
 
 describe.each(['4.1', '4.2'] as const)('the stamps of the legacy engine on a %s skeleton', (version) => {
     const create = async (): Promise<{ model: SkeletonModel; engine: PoseEngine }> => {

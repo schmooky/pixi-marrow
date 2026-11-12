@@ -113,6 +113,16 @@
  *   proof, a frame held back   one side leaves the update of one frame out, as a view would that
  *                              skips work it had to do. Its stale picture must be rejected
  *
+ * Containers in a skeleton. The scenes `links-play` and `links-rest` attach a Pixi `Graphics` to
+ * a slot and let another follow a bone, ours with `attach` and `follow`, the official runtime
+ * with `addSlotObject`, while an animation with draw order keys plays and at rest.
+ *
+ *   proof, a container at another slot   the container sits at a wrong place in the draw order
+ *
+ * A game. After the rigs and scenes, `render/game-check.mjs` draws cases from a bundle that is
+ * made as a game makes one: it imports `Application` and `MarrowSpine` by name, with the tree
+ * shaken. Pixi registers pipes when their modules load, so a chunk that arrives after the
+ * renderer exists can miss one. Each case equals the same case from a bundle with all of Pixi.
  * The lazy mesh mode. The code of the mesh mode is a chunk that loads on demand. The scenes
  * whose name starts with `lazy` draw the default options alone, each on a page of its own:
  *
@@ -125,17 +135,13 @@
  *   mesh chunk                 the requests of the page. A page whose skeletons all draw in a
  *                              batch must not ask for the chunk. A bundle without such a chunk
  *                              is a finding and fails nothing
- *
  * Everywhere else an instance that asks for the mesh mode by name gets an asset that was loaded
  * for that mode, see scripts/render/sides.js.
- *
  * The last scenes look for a limit: 1200 instances in one stage, once of a rig with a clip and
  * once of a rig without. Each render mode of ours gets a page of its own there, so a mode that
  * throws inside Pixi cannot disturb the next one. What such a scene runs into prints as `FOUND`,
  * is listed in the summary as a finding and does not fail the check.
- *
  * TOLERANCE below holds the pass criteria and what they rest on.
- *
  * The second look: a frame that is outside the tolerance of ours against official is drawn again,
  * both sides moved by SECOND_PLACEMENT of scripts/render/judge.js, a fraction of a pixel that is
  * no multiple of the subpixel grid of a GPU. The two runtimes move vertices to the screen in
@@ -144,16 +150,13 @@
  * A real difference is not. A frame fails when it is outside the tolerance at both placements.
  * A frame that passes at the second one only is listed with the numbers of both, and the summary
  * counts those frames.
- *
  * Clipping: a frame that ours draws through a clip mask (`stats.maskDraws` above 0) is compared
  * like every other frame. The report also gives the largest differences of those frames on their
  * own. `--strict-clipping` does nothing: it was the switch that failed clipped frames while they
  * were a known gap, and it is still accepted so that older command lines keep working.
- *
  * Physics and sliders: the summary counts the frames of ours against official once more for the
  * rigs that have such constraints, in a line of their own. A solver that is wrong fails there and
  * leaves the other rigs alone.
- *
  * Images of failing cases (ours or first, official or second, and where they differ) and of one
  * passing frame per rig go to `.shots/render/<renderer>/`. `--shots` sets how many cases per rig
  * get images. `--self-test` runs the tooling proof alone and draws nothing of ours. A proof is a
@@ -161,7 +164,6 @@
  * placement, so that the second look cannot let a real difference pass. The proofs of a rig move,
  * tint and hide. The proofs of the scenes swap two instances in the draw order and hold a frame
  * back.
- *
  * --only keeps the rigs and scenes whose id holds the text: `--only=scene/` runs the scenes
  * alone, `--only=4.` the rigs alone. --render-mode=mesh or batched draws one mode of ours.
  * --trust-mode runs the batched comparisons on a runtime that reports no mode, and takes the mode
@@ -169,7 +171,6 @@
  * nothing about a batched mode. --dist names a folder with the `package.json` and the `dist` of a
  * build of pixi-marrow that was kept: the check then draws that build and leaves the working
  * tree alone.
- *
  * --pixi names the version of pixi.js the pages run on, for example `--pixi=8.16`. The package
  * allows a range of versions and is developed on one of them, and the runtime has branches by
  * the version of Pixi. The version must be installed as a dev dependency of the package under
@@ -182,12 +183,9 @@
  *   official, this pixi.js     the official runtime on the pixi.js of the page against the
  *                              reference. A difference is a finding about the official runtime
  *                              on that pixi.js and fails nothing
- *
  * The head of a renderer names the versions.
- *
  * Without --renderer both run. A renderer the browser does not have is skipped with a line that
  * says so, and fails the check only when it was asked for by name.
- *
  * Runs the installed Google Chrome. CHROME_PATH names another binary and CHROME_ARGS replaces the
  * launch flags. The package is built first when it has no build or the sources are newer.
  */
@@ -195,6 +193,7 @@ import { rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { findMeshChunk, meshChunkCase } from './render/chunks.mjs';
+import { checkGame } from './render/game-check.mjs';
 import { planRigs } from './render/plan.mjs';
 import { createReporter } from './render/report.mjs';
 import { describeHead, describeRig, describeScene, strayPixi } from './render/report-modes.mjs';
@@ -478,6 +477,15 @@ async function main() {
         server?.close();
         bundle.remove();
     }
+    if (!selfTest)
+        failed += await checkGame({
+            root,
+            pkg,
+            pixi,
+            renderers: wanted,
+            outDir: join(outDir, 'game'),
+            only: args.only ?? null,
+        });
     if (ran === 0) {
         console.log('check-render: no renderer came up, so nothing was checked');
         failed++;

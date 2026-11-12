@@ -1,7 +1,14 @@
-import { type AttachmentData, nextVersion, type PoseEngine, type SkeletonModel, WORLD_STRIDE } from '../../src/core';
+import {
+    type AttachmentData,
+    LOCAL_STRIDE,
+    nextVersion,
+    type PoseEngine,
+    type SkeletonModel,
+    WORLD_STRIDE,
+} from '../../src/core';
 import { createAttachmentLookup } from '../../src/pose/shared/lookup';
 import { createPoseState, type PoseState } from '../../src/pose/state';
-import type { OfficialDriver, OfficialPose } from './pose-shared';
+import { BONE_FIELDS, type OfficialDriver, type OfficialPose } from './pose-shared';
 
 /*
  * A pose engine made of an official driver. It makes every call on the driver and copies the pose
@@ -117,16 +124,25 @@ export function mirrorEngine(model: SkeletonModel, driver: OfficialDriver, tampe
         // the pose a new engine starts with is not a call
         if (call !== CREATED) tamper(state, before, call);
     };
-    /** What a script wrote to the state goes to the official skeleton before the next call. */
+    /** What a script wrote to the state goes to the official skeleton before the next call that reads it. */
     const forward = (): void => {
+        const local = driver.read().local;
+
         driver.place(state.x, state.y, state.scaleX, state.scaleY);
         driver.yDown(state.yDown);
         driver.forces(state.windX, state.windY, state.gravityX, state.gravityY);
-    };
-    const after = <T>(call: string, result: T): T => {
-        sync(call);
+        // a number of the local pose that is not the official one any more was written from outside
+        state.local.forEach((value, i) => {
+            const field = BONE_FIELDS[i % LOCAL_STRIDE];
 
-        return result;
+            if (field !== undefined && !Object.is(value, local[i]))
+                driver.writeBone(Math.floor(i / LOCAL_STRIDE), field, value);
+        });
+    };
+    const posing = (call: string, run: () => void): void => {
+        forward();
+        run();
+        sync(call);
     };
 
     sync(CREATED);
@@ -160,17 +176,13 @@ export function mirrorEngine(model: SkeletonModel, driver: OfficialDriver, tampe
         configure: (entry, fields) => driver.configure(entry, fields),
         clearTrack: (track) => driver.clearTrack(track),
         clearTracks: () => driver.clearTracks(),
-        setSkin: (skin) => after('setSkin', driver.setSkin(skin)),
-        setupPose: () => after('setupPose', driver.setupPose()),
-        setupPoseBones: () => after('setupPoseBones', driver.setupPoseBones()),
-        setupPoseSlots: () => after('setupPoseSlots', driver.setupPoseSlots()),
+        setSkin: (skin) => posing('setSkin', () => driver.setSkin(skin)),
+        setupPose: () => posing('setupPose', () => driver.setupPose()),
+        setupPoseBones: () => posing('setupPoseBones', () => driver.setupPoseBones()),
+        setupPoseSlots: () => posing('setupPoseSlots', () => driver.setupPoseSlots()),
         physicsTranslate: (x, y) => driver.physicsTranslate(x, y),
         physicsRotate: (x, y, degrees) => driver.physicsRotate(x, y, degrees),
-        update(dt) {
-            forward();
-            driver.update(dt);
-            sync('update');
-        },
+        update: (dt) => posing('update', () => driver.update(dt)),
         takeEvents: () => driver.takeEvents(),
     };
 }

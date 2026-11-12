@@ -1,4 +1,4 @@
-import { Container, type DestroyOptions, Ticker } from 'pixi.js';
+import { type DestroyOptions, Ticker } from 'pixi.js';
 import { MarrowError } from '../base/errors';
 import type { SkeletonInfo } from '../model/info';
 import type { AtlasOutlines } from '../model/outlines';
@@ -10,6 +10,7 @@ import { finiteArgument, namedIndex, physicsMode, renderMode } from './checks';
 import { EventPump } from './events';
 import type { MarrowNames, MarrowSpineOptions, PlayOptions, QueueOptions, StopOptions, UpdateProbe } from './options';
 import { type PlayPlan, planPlay } from './play-fields';
+import { SpineLinks } from './spine-links';
 import { MarrowPerf } from './spine-perf';
 import { EMPTY_ANIMATION, type Track, TrackHandle } from './track';
 import { TrackBook } from './track-book';
@@ -29,7 +30,7 @@ import { TrackBook } from './track-book';
  * hero.queue('run', { loop: true, mix: 0.2 });
  * hero.on('event', (event: MarrowEvent, track: Track) => console.warn(event.name, track.animation));
  */
-export class MarrowSpine<N extends MarrowNames = MarrowNames> extends Container {
+export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpineLinks<N> {
     /** What this object shares with the other instances of its skeleton. */
     readonly asset: MarrowAsset;
     /**
@@ -75,6 +76,7 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends Container 
             renderMode: renderMode(options.renderMode ?? 'auto'),
         });
         this.addChild(this.skeletonView.container);
+        this.linkTo({ state: this.engine.state, model: asset.model, view: this.skeletonView });
         // The setup pose, so that the object draws before its first update. Physics is left out:
         // it starts from the pose of the first real update, as in the official Pixi runtime
         this.engine.physics = 'none';
@@ -120,7 +122,7 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends Container 
      * console.log((await hero.perf.memory()).instance);
      */
     get perf(): MarrowPerf {
-        this.tools ??= new MarrowPerf(this, this.skeletonView);
+        this.tools ??= new MarrowPerf(this, this.skeletonView, () => this.links?.items ?? []);
 
         return this.tools;
     }
@@ -339,6 +341,7 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends Container 
         this.engine.update(seconds);
         if (this.afterReset !== null) this.endReset(this.afterReset);
         this.absorb();
+        this.links?.move(this.engine.state);
         this.draw();
         this.pump.flush(this, this.asset.model.events);
     }
@@ -402,6 +405,7 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends Container 
         this.engine.clearTracks();
         this.absorb();
         this.pump.pending.clear();
+        this.links?.clear();
         this.skeletonView.destroy();
         super.destroy(options);
     }
@@ -420,6 +424,7 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends Container 
         this.absorb();
         const absorbed = performance.now();
 
+        this.links?.move(this.engine.state);
         this.draw();
         const drawn = performance.now();
 

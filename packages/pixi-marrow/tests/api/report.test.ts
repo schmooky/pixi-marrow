@@ -13,6 +13,7 @@ import { FRAME, fixtureAsset } from './helpers';
 const FEATURES: readonly PerfFeature[] = [
     'renderMode',
     'motion',
+    'links',
     'drawCalls',
     'blend',
     'pages',
@@ -428,6 +429,8 @@ describe('the perf report of a display object', () => {
                 // no fixture is that large
                 stats: { ...spine.stats, vertices: 65536 },
                 view: inspectView(view),
+                links: [],
+                attachCode: 'idle',
                 physics: 'update',
                 resetPending: false,
             });

@@ -18,6 +18,8 @@ import { NO_CLIP, type VisibleList } from './visible';
  * - The slot that hides blends normally and its vertices carry the alpha byte 255. The color
  *   it writes then replaces what is below: `source + destination * (1 - 1)`.
  * - It is drawn itself in that frame, and no clip cuts it.
+ * - No container that is attached to a slot is drawn between the two slots. Such a container is
+ *   not known: it can read what is below it.
  * - The vertices of the hidden slot are the ones that are uploaded, as 32-bit floats. The
  *   rectangle in world space is convex, so the triangles between them lie inside it too.
  * - A slot that is skipped is tested again in every update in which a vertex moved, before
@@ -112,6 +114,9 @@ export class CoverSearch {
     private since = SEARCH_FIRST;
     /** Whether this frame searches for newly covered slots. */
     private due = false;
+    /** Where attached containers are drawn in the list of the last call: see `VisibleList.cuts`. */
+    private cuts: Int32Array = NO_INTS;
+    private cutCount = 0;
 
     /** @param skipped The marks of the view, one per slot of the model: the most entries that can be visible. */
     constructor(skipped: Uint8Array) {
@@ -171,6 +176,8 @@ export class CoverSearch {
         // a layout without an opaque rectangle has nothing to test with
         this.owes = template.opaqueCount > 0 && (this.owes || moved || relisted);
         if (!this.owes || !this.begin(relisted)) return false;
+        this.cuts = visible.cuts;
+        this.cutCount = visible.cutCount;
         if (drawsPlain(container)) return this.run(template, visible.list, visible.clips, visible.count, world, bones);
         this.rest(false);
 
@@ -388,7 +395,8 @@ export class CoverSearch {
             const k = start + n < kept ? start + n : start + n - kept;
             const b = k * 4;
 
-            if (i32(this.places, k) <= place || !this.ready(template, k, world, bones)) continue;
+            if (i32(this.places, k) <= place || this.parted(place, i32(this.places, k))) continue;
+            if (!this.ready(template, k, world, bones)) continue;
             if (x < f64(this.boxes, b) || y < f64(this.boxes, b + 1)) continue;
             if (x > f64(this.boxes, b + 2) || y > f64(this.boxes, b + 3)) continue;
             if (pointsInsideQuad(this.quads, k * 8, positions, at, count)) return k;
@@ -426,6 +434,21 @@ export class CoverSearch {
         this.live[k] = hides ? 1 : 0;
 
         return hides;
+    }
+
+    /**
+     * Whether a container that is attached to a slot is drawn between two places of the visible
+     * list. Nothing is known about such a container: it can read what is drawn below it, with a
+     * filter for example. So a slot below it is drawn, whatever lies above the container.
+     */
+    private parted(below: number, above: number): boolean {
+        for (let cut = 0; cut < this.cutCount; cut++) {
+            const at = i32(this.cuts, cut);
+
+            if (at > below && at <= above) return true;
+        }
+
+        return false;
     }
 
     /** A covered slot is not drawn, so its own rectangle hides nothing in this run. */

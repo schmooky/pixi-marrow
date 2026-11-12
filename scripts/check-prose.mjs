@@ -29,9 +29,12 @@ const SCOPE = [
     'packages/pixi-marrow/tests',
     'packages/pixi-marrow/bin',
     'packages/pixi-marrow/CHANGELOG.md',
+    'apps/site/src',
+    'apps/site/scripts',
+    'apps/site/astro.config.mjs',
 ];
 const SKIP = [/(^|\/)node_modules\//, /(^|\/)dist\//, /^scripts\/check-prose\.mjs$/];
-const EXTENSIONS = new Set(['.md', '.ts', '.mjs', '.js', '.yml']);
+const EXTENSIONS = new Set(['.md', '.mdx', '.ts', '.mjs', '.js', '.astro', '.css', '.yml']);
 
 /** character -> what to write instead */
 const TYPOGRAPHY = {
@@ -258,7 +261,7 @@ for (const file of files) {
               // an agent skill's description is a trigger list for the agent, not prose: punctuation rules only
               .filter((f) => !(file.endsWith('SKILL.md') && f.line === descriptionLine(text)))
               .map((f) => ({ ...f, text: readable(f.text), prose: true }))
-        : sourceText(text, false).flatMap((p) => {
+        : sourceText(text, ext === '.astro').flatMap((p) => {
               const line = lineAt(text, p.index);
 
               // the library's JSDoc is the API reference: check it like Markdown, examples excluded

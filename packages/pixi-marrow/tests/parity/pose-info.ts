@@ -1,6 +1,7 @@
 /*
  * What the scripts know about the animations of a rig: the length, whether events fire, how long
- * the longest timeline is and where some of its keys are, and how many bones are keyed.
+ * the longest timeline is and where some of its keys are, and which bones are keyed. And what they
+ * know about its bones: which hang on which, which need a skin, and which a constraint writes or reads.
  */
 
 /** What a script needs to know about an animation. */
@@ -13,8 +14,45 @@ export interface AnimationInfo {
     keys: number;
     /** Key times of that timeline, in order: the first, the last and up to four between them. */
     times: number[];
-    /** How many bones the animation keys. */
-    bones: number;
+    /** The bones the animation keys, in the order of the rig. */
+    keyed: number[];
+}
+
+/** What a script needs to know about the bones of a rig. Bones are indices into the bone list. */
+export interface BoneInfo {
+    /** Per bone, its parent. -1 for the root bone. */
+    parents: number[];
+    /** The bones that need a skin: not active until a skin lists them. */
+    skinBones: number[];
+    /** The bones a constraint writes, each once, in the order of the constraints. */
+    constrained: number[];
+    /** The bones a constraint reads to pose others: IK targets, the sources of transform constraints, the bones of sliders. */
+    sources: number[];
+}
+
+/** What `describeBones` reads of an official bone. Every version has these. */
+interface OfficialBone {
+    index: number;
+    parent: { index: number } | null;
+    skinRequired: boolean;
+}
+
+/** Describes the bones of an official skeleton for the scripts. `constrained` and `sources` may name a bone more than once. */
+export function describeBones(
+    bones: readonly OfficialBone[],
+    constrained: readonly { index: number }[],
+    sources: readonly ({ index: number } | null)[],
+): BoneInfo {
+    const once = (list: readonly ({ index: number } | null)[]): number[] => [
+        ...new Set(list.flatMap((bone) => (bone === null ? [] : [bone.index]))),
+    ];
+
+    return {
+        parents: bones.map((bone) => bone.parent?.index ?? -1),
+        skinBones: bones.filter((bone) => bone.skinRequired).map((bone) => bone.index),
+        constrained: once(constrained),
+        sources: once(sources),
+    };
 }
 
 /** What `describeAnimation` reads of an official timeline. Every version has these. */
@@ -38,12 +76,12 @@ export function describeAnimation(
     kind: (timeline: OfficialTimeline) => string,
 ): AnimationInfo {
     const { name, duration, timelines } = animation;
-    const bones = new Set<unknown>();
+    const keyed = new Set<number>();
     let longest: OfficialTimeline | undefined;
 
     for (const timeline of timelines) {
         if (longest === undefined || timeline.getFrameCount() > longest.getFrameCount()) longest = timeline;
-        if ('boneIndex' in timeline) bones.add(timeline.boneIndex);
+        if ('boneIndex' in timeline && typeof timeline.boneIndex === 'number') keyed.add(timeline.boneIndex);
     }
 
     return {
@@ -52,6 +90,6 @@ export function describeAnimation(
         events: timelines.some((timeline) => kind(timeline) === 'event'),
         keys: longest?.getFrameCount() ?? 0,
         times: longest ? someKeyTimes(longest) : [],
-        bones: bones.size,
+        keyed: [...keyed].sort((a, b) => a - b),
     };
 }

@@ -12,6 +12,35 @@ export interface AtlasOutlines {
   opaqueMargin: number;
   regions: (RegionOutline | null)[];
 }
+export interface AttachOptions {
+  followAttachment?: boolean;
+  followColor?: boolean;
+}
+export declare class Bone<N extends MarrowNames = MarrowNames> {
+  readonly name: N["bones"];
+  private readonly state;
+  private readonly local;
+  private readonly world;
+  private readonly index;
+  constructor(state: PoseState, index: number, name: N["bones"]);
+  get x(): number;
+  set x(value: number);
+  get y(): number;
+  set y(value: number);
+  get rotation(): number;
+  set rotation(value: number);
+  get scaleX(): number;
+  set scaleX(value: number);
+  get scaleY(): number;
+  set scaleY(value: number);
+  get worldX(): number;
+  get worldY(): number;
+  get worldRotation(): number;
+  get active(): boolean;
+  worldMatrix(out?: Matrix): Matrix;
+  private read;
+  private write;
+}
 export declare class MarrowAsset {
   readonly model: SkeletonModel;
   readonly atlas: AtlasModel;
@@ -85,11 +114,12 @@ export interface MarrowNames {
 export declare class MarrowPerf {
   private readonly owner;
   private readonly view;
-  constructor(owner: PerfOwner, view: SkeletonView);
+  private readonly links;
+  constructor(owner: PerfOwner, view: SkeletonView, links?: () => readonly Link[]);
   report(): Promise<PerfEntry[]>;
   memory(): Promise<PerfMemory>;
 }
-export declare class MarrowSpine<N extends MarrowNames = MarrowNames> extends Container {
+export declare class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpineLinks<N> {
   readonly asset: MarrowAsset;
   readonly engine: PoseEngine;
   private readonly skeletonView;
@@ -166,7 +196,7 @@ export interface PerfEntry {
   reason: string;
   animation?: string;
 }
-export type PerfFeature = "renderMode" | "motion" | "drawCalls" | "blend" | "pages" | "clipping" | "tightMesh" | "occlusion" | "outlines" | "darkTint" | "physics" | "constraints" | "bones" | "slots" | "vertices" | "uploads" | "layout";
+export type PerfFeature = "renderMode" | "motion" | "links" | "drawCalls" | "blend" | "pages" | "clipping" | "tightMesh" | "occlusion" | "outlines" | "darkTint" | "physics" | "constraints" | "bones" | "slots" | "vertices" | "uploads" | "layout";
 export interface PerfMemory {
   shared: number;
   instance: number;
@@ -214,6 +244,19 @@ export interface SkeletonInfo {
   animations: AnimationInfo[];
   counts: SkeletonCounts;
   features: SkeletonFeature[];
+}
+export declare abstract class SpineLinks<N extends MarrowNames = MarrowNames> extends Container {
+  protected links: Links | undefined;
+  private linkParts;
+  private readonly handles;
+  bone(name: N["bones"]): Bone<N>;
+  follow(bone: N["bones"], container: Container): void;
+  unfollow(container: Container): void;
+  attach(slot: N["slots"], container: Container, options?: AttachOptions): void;
+  detach(container: Container): void;
+  protected linkTo(parts: LinkParts): void;
+  private parts;
+  private linked;
 }
 export interface StopOptions {
   track?: number;

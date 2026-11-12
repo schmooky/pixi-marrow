@@ -12,6 +12,18 @@ export interface MarrowNames {
     events: string;
 }
 
+/** How a container that is attached to a slot follows that slot. See `MarrowSpine.attach`. */
+export interface AttachOptions {
+    /**
+     * True to show the container only while the slot shows an attachment, so that an animation
+     * that hides the attachment hides the container. Default false: the container shows on an
+     * empty slot too, as on a placeholder.
+     */
+    followAttachment?: boolean;
+    /** True to tint the container with the color of the slot. Default false. The alpha always follows. */
+    followColor?: boolean;
+}
+
 /** Options for creating a display object. */
 export interface MarrowSpineOptions {
     /**

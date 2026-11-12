@@ -1,0 +1,44 @@
+---
+import CopyCommand from '../components/CopyCommand.astro';
+import Preview from '../components/Preview.astro';
+import Snippet from '../components/Snippet.astro';
+import Base from '../layouts/Base.astro';
+import { PAGES, SITE } from '../lib/site';
+import source from '../previews/play.ts?raw';
+
+const arrow = 'M5 12h14M13 6l6 6-6 6';
+---
+
+<Base>
+    <section class="hero">
+        <div class="hero-grid"></div>
+        <div class="container-page hero-text">
+            <div class="eyebrow">Pre-release, for PixiJS v8</div>
+            <h1 class="display-1">A Spine runtime <span class="marrow-text">with its own pose core.</span></h1>
+            <p class="lead">pixi-marrow plays Spine 4.1, 4.2 and 4.3 skeletons in PixiJS v8, with its own pose core and its own render path.</p>
+            <div class="hero-actions">
+                <a href="/start/" class="btn btn-primary">
+                    Start
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d={arrow} /></svg>
+                </a>
+                <CopyCommand command={SITE.install} />
+            </div>
+            <p class="hero-note">The package is a pre-release and is not on npm yet.</p>
+        </div>
+        <div class="container-page home-demo">
+            <Preview name="play" height={400} caption="The bee of the slot game Bzzz, a rig of Spine 4.2. The Animation row lists what the rig that shows can play. The big bee flies across the reels, so it is shown from further away." />
+            <div class="code-card">
+                <div class="code-card-title">The lines that draw it</div>
+                <Snippet source={source} regions="import draw" />
+            </div>
+        </div>
+    </section>
+    <section class="container-page home-pages">
+        {PAGES.map((page) => (
+            <a href={page.href} class="card-link">
+                <strong>{page.title}</strong>
+                <span>{page.description}</span>
+            </a>
+        ))}
+    </section>
+</Base>

@@ -14,7 +14,9 @@ import type { PoseRigInfo } from './pose-shared';
 
 /** The animation that keys the fewest bones, but at least one. The first animation when none keys a bone. */
 function fewest(rig: PoseRigInfo): number {
-    const keyed = rig.animations.map(({ bones }, index) => ({ bones, index })).filter(({ bones }) => bones > 0);
+    const keyed = rig.animations
+        .map(({ keyed: bones }, index) => ({ bones: bones.length, index }))
+        .filter(({ bones }) => bones > 0);
     const [first] = keyed.sort((a, b) => a.bones - b.bones);
 
     return first?.index ?? 0;

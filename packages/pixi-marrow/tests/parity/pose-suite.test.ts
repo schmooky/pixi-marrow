@@ -345,6 +345,46 @@ describe('the comparison', () => {
 });
 
 /*
+ * The scripts for writes to a bone must show a side that does not take the write. Here one side
+ * drops every write: each script of the family reports it.
+ */
+describe('the scripts for writes to a bone', () => {
+    const ids = ['4.1/made-for-pose.json', '4.2/made-physics-order.json', '4.3/made-slider.json', '4.3/made-ik.json'];
+
+    it.each(ids)('report a side of %s that drops the writes', (id) => {
+        const rig = rigOf(id);
+        const scripts = SCRIPT_FAMILIES.find(({ name }) => name === 'bone writes')?.scripts(rig.info, id) ?? [];
+
+        expect(scripts.length).toBeGreaterThanOrEqual(10);
+        for (const each of scripts) {
+            const deaf: Subject = { ...officialSubject(rig.createDriver()), writeBone() {} };
+
+            expect(
+                runScript(each, officialSubject(rig.createDriver()), officialSubject(rig.createDriver())),
+                each.name,
+            ).toBeNull();
+            expect(runScript(each, deaf, officialSubject(rig.createDriver())), each.name).not.toBeNull();
+        }
+    });
+
+    it('report a write that is dropped at the update after it, with the bone that differs', () => {
+        const rig = rigOf('4.2/made-for-pose.json');
+        const written = script('one write', (s) => {
+            s.update(DT, 2);
+            // the first bone below the root
+            s.bone(1, 'x', 55.5);
+            s.update(DT, 2);
+        });
+        const deaf: Subject = { ...officialSubject(rig.createDriver()), writeBone() {} };
+        const failure = runScript(written, deaf, officialSubject(rig.createDriver()));
+
+        expect(failure).toContain('step 3 of 3, update 1 of 2');
+        expect(failure).toContain('\n    local[7]: ');
+        expect(parts(failure)).toEqual(['local', 'world']);
+    });
+});
+
+/*
  * The scripts for rest must show an update that was left out by mistake. The side that sleeps
  * here leaves updates out while nothing in the pose changes, so its tracks lose the time. Every
  * script that brings a track to rest reports it, whether the time is dropped or made up later.

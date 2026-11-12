@@ -15,7 +15,7 @@ import {
     VERSION,
 } from 'pixi.js';
 import { MarrowError } from '../base/errors';
-import { BATCHER, BatchElement, type BatchHome, DARK_BATCHER } from './batch-element';
+import { BATCHER, BatchElement, type BatchHome, type BatchPart, DARK_BATCHER } from './batch-element';
 import { GROUP_PAGES, POSITION_WORDS, STATIC_WORDS } from './batch-layout';
 import { createBatchShader } from './batch-shader';
 import { PendingUpload, uploadsStretch } from './batch-upload';
@@ -109,9 +109,13 @@ export class MarrowBatcher extends Batcher implements BatchHome {
     readonly staticWords: number;
     /** Words per vertex in the buffer Pixi uploads: the position alone. */
     protected vertexSize: number = POSITION_WORDS;
-    /** The elements that were added since the last break. Valid up to {@link waiting}. */
-    private readonly pending: (BatchElement | undefined)[] = [];
+    /** The elements and the parts of elements that were added since the last break. Valid up to {@link waiting}. */
+    private readonly pending: (BatchElement | BatchPart | undefined)[] = [];
     private waiting = 0;
+    /** While a break runs: the batch the next indices go on in, the index after its last one, and whether a batch was opened. */
+    private current: Batch | undefined;
+    private cursor = 0;
+    private started = false;
     /** The batches of all builds. A build uses them from the first one on. */
     private readonly pool: Batch[] = [];
     private used = 0;
@@ -158,8 +162,16 @@ export class MarrowBatcher extends Batcher implements BatchHome {
         this.waiting = 0;
     }
 
-    /** Gives an element its place in the buffers. Throws a `MarrowError` for an element of another library. */
-    override add(element: BatchableElement): void {
+    /**
+     * Gives an element its place in the buffers. A part of an element that was added before has
+     * its place already. Throws a `MarrowError` for an element of another library.
+     */
+    override add(element: BatchableElement | BatchPart): void {
+        if ('owner' in element) {
+            this.pending[this.waiting++] = element;
+
+            return;
+        }
         if (!(element instanceof BatchElement)) {
             throw new MarrowError('invalid-data', `The batcher "${this.name}" got an element that is no skeleton.`, {
                 fix: 'Give the batch elements of other display objects another batcherName.',
@@ -180,43 +192,79 @@ export class MarrowBatcher extends Batcher implements BatchHome {
      */
     override break(instructionSet: InstructionSet): void {
         const { pending, waiting } = this;
-        const first = pending[0];
-        let batch: Batch | undefined;
 
-        if (waiting === 0 || first === undefined) return;
-        let cursor = first._indexStart;
-
+        if (waiting === 0) return;
         this.ensureAttributeBuffer(this.attributeSize);
         this.reserveStatics();
         this.reserveIndices();
+        this.current = undefined;
+        this.started = false;
         for (let i = 0; i < waiting; i++) {
-            const element = pending[i];
+            const item = pending[i];
 
             pending[i] = undefined;
-            if (element === undefined) continue;
-            if (batch === undefined || !this.fits(batch, element)) {
-                if (batch !== undefined) batch.size = cursor - batch.start;
-                batch = this.open(instructionSet, element.blendOf(0), cursor, batch === undefined);
+            if (item instanceof BatchElement) this.emitOwn(instructionSet, item);
+            else if (item?.owner.placed === true) {
+                const { partRuns, runs } = item.owner;
+                const from = partRuns[item.index] ?? runs;
+
+                // the batch before ended with the container that Pixi collected in between
+                this.close();
+                this.cursor = item.owner._indexStart + item.owner.runOffset(from);
+                this.emitRuns(instructionSet, item.owner, from, partRuns[item.index + 1] ?? runs);
             }
-            this.enter(batch, element, 0);
-            // the later runs are batches that start with their pages, so every page has its number now
-            if (element.runs > 1) element.alignPages();
-            element._batch = batch;
-            element.pack(this);
-            for (let run = 0; run < element.runs; run++) {
-                if (run > 0) {
-                    batch.size = cursor - batch.start;
-                    batch = this.open(instructionSet, element.blendOf(run), cursor, false);
-                    this.enter(batch, element, run);
-                }
-                element.batches[run] = batch;
-                cursor += Number(element.runSizes[run]);
-            }
-            element.batches.length = element.runs;
         }
-        if (batch !== undefined) batch.size = cursor - batch.start;
+        this.close();
         this.waiting = 0;
         this.elementStart = this.elementSize;
+    }
+
+    /** Ends the batch that is open where its indices end. */
+    private close(): void {
+        if (this.current !== undefined) this.current.size = this.cursor - this.current.start;
+        this.current = undefined;
+    }
+
+    /**
+     * Writes a skeleton into the buffers and puts the runs it draws itself into batches: all of
+     * them, or the ones before its first attached container. The first run goes on in the open
+     * batch where it fits and the indices follow each other.
+     */
+    private emitOwn(instructionSet: InstructionSet, element: BatchElement): void {
+        const to = element.partRuns[0] ?? element.runs;
+        const start = element._indexStart;
+        const { current } = this;
+
+        if (current === undefined || to === 0 || start !== this.cursor || !this.fits(current, element)) this.close();
+        this.cursor = start;
+        if (to > 0) {
+            const batch = this.current ?? this.open(instructionSet, element.blendOf(0));
+
+            this.current = batch;
+            this.enter(batch, element, 0);
+            element._batch = batch;
+        }
+        // the later runs are batches that start with their pages, so every page has its number now
+        if (element.runs > 1) element.alignPages();
+        element.pack(this);
+        element.batches.length = 0;
+        this.emitRuns(instructionSet, element, 0, to);
+    }
+
+    /** Puts some runs of a skeleton into batches, from where the cursor is. Every run but one that goes on is a batch of its own. */
+    private emitRuns(instructionSet: InstructionSet, element: BatchElement, from: number, to: number): void {
+        for (let run = from; run < to; run++) {
+            let batch = this.current;
+
+            if (batch === undefined) {
+                batch = this.open(instructionSet, element.blendOf(run));
+                this.current = batch;
+                this.enter(batch, element, run);
+            }
+            element.batches[run] = batch;
+            this.cursor += Number(element.runSizes[run]);
+            if (run + 1 < to) this.close();
+        }
     }
 
     /** Notes a stretch of the positions that changed. {@link flush} uploads it. */
@@ -315,7 +363,7 @@ export class MarrowBatcher extends Batcher implements BatchHome {
     }
 
     /** The next batch of the build, set up for a blend mode and without textures. */
-    private open(instructionSet: InstructionSet, blendMode: Batch['blendMode'], start: number, first: boolean): Batch {
+    private open(instructionSet: InstructionSet, blendMode: Batch['blendMode']): Batch {
         let batch = this.pool[this.used];
 
         if (batch === undefined) {
@@ -331,9 +379,11 @@ export class MarrowBatcher extends Batcher implements BatchHome {
         batch.elements.length = 0;
         // the bind group of the batch before is that of other textures
         Object.assign(batch, { bindGroup: null, gpuBindGroup: null });
-        batch.action = first ? 'startBatch' : 'renderBatch';
+        // the first batch of a break binds the geometry and the shader
+        batch.action = this.started ? 'renderBatch' : 'startBatch';
+        this.started = true;
         batch.blendMode = blendMode;
-        batch.start = start;
+        batch.start = this.cursor;
         batch.size = 0;
         instructionSet.add(batch);
 

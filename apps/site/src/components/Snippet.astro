@@ -1,0 +1,14 @@
+---
+import { Code } from 'astro:components';
+import { snippet } from '../lib/snippet';
+
+interface Props {
+    /** The text of a file of src/snippets or src/previews, imported with `?raw`. */
+    source: string;
+    /** The names of the regions to show, in order, with a space between two. */
+    regions: string;
+}
+const { source, regions } = Astro.props;
+---
+
+<Code code={snippet(source, ...regions.split(' '))} lang="ts" theme="github-dark-dimmed" />
