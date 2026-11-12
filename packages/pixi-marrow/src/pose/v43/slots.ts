@@ -42,6 +42,41 @@ export function setupAttachment(pose: Pose43, slot: number): AttachmentData | nu
 }
 
 /**
+ * Notes that the color, the attachment, the sequence index or the deform of a slot changed in a
+ * pose. When the pose is the one that is drawn, the slot gets the pending version as its stamp.
+ * The animated pose of an engine whose sliders animate slots is not drawn. There the slot is
+ * marked, and it is stamped when it is carried over to the pose state.
+ */
+export function stampSlot(pose: Pose43, slot: number): void {
+    const { state, solve } = pose;
+    const { split } = solve;
+
+    if (pose.colors !== state.colors) {
+        if (split !== null) split.touched[slot] = 1;
+
+        return;
+    }
+    // a slot with a pose of its own no longer holds its animated pose: the next update resets it
+    if (split !== null && split.slotPosed[slot] === 1) split.touched[slot] = 1;
+    state.version = solve.pending;
+    state.slotStamps[slot] = solve.pending;
+}
+
+/** Notes that the draw order changed in a pose, like {@link stampSlot} for a slot. */
+export function stampDrawOrder(pose: Pose43): void {
+    const { state, solve } = pose;
+
+    solve.orderSerial++;
+    if (pose.drawOrder !== state.drawOrder) {
+        if (solve.split !== null) solve.split.orderTouched = true;
+
+        return;
+    }
+    state.version = solve.pending;
+    state.drawOrderStamp = solve.pending;
+}
+
+/**
  * The official `SlotPose.setAttachment`. A new attachment resets the sequence index. The deform
  * is kept only when both attachments have vertices and share their timeline attachment.
  */
@@ -54,6 +89,7 @@ export function setSlotAttachment(pose: Pose43, slot: number, attachment: Attach
     }
     pose.attachments[slot] = attachment;
     pose.sequenceIndices[slot] = -1;
+    stampSlot(pose, slot);
 }
 
 function sharesDeform(rig: Rig43, a: AttachmentData, b: AttachmentData): boolean {

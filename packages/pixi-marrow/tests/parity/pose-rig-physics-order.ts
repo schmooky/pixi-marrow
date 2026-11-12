@@ -15,6 +15,7 @@ import {
     physics,
     type RigParts,
 } from './pose-rig-kit';
+import { wakePhysicsOrder } from './pose-rig-wake';
 
 /*
  * A rig made for physics among other constraints, for 4.2 and 4.3. Physics bones hang in a chain,
@@ -221,7 +222,7 @@ function parts(version: SpineVersion): RigParts {
         slots: [slot('rail', 'base'), slot('line', 'tail')],
         constraints: constraintLists(version, constraints(version), true),
         skins: skins(all),
-        animations: { swing: swing(), whip: whip(), still: still() },
+        animations: { swing: swing(), whip: whip(), wake: wakePhysicsOrder(), still: still() },
     };
 }
 

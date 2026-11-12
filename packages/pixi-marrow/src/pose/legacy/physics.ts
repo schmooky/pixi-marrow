@@ -53,8 +53,12 @@ import type { Solver } from './solver';
  * the next live in `q`: a number that is passed to a call or returned from one can cost an allocation.
  */
 
-/** Scratch of one physics constraint. */
-const q = new Float64Array(8);
+/**
+ * Scratch of one physics constraint. After a constraint ran, physics-rest.ts reads from it what
+ * the next update of that constraint would start from.
+ */
+export const PHYSICS_SCRATCH: Float64Array = new Float64Array(9);
+const q = PHYSICS_SCRATCH;
 /** The most the bone may have moved along x since the last update, for the simulation: the official `qx`. */
 const QX = 0;
 /** The official `qy`. */
@@ -63,14 +67,16 @@ const QY = 1;
 const DAMP = 2;
 /** The official `a`: the seconds that are left after the steps of this update. */
 const LEFT = 3;
-/** The official `ca`: the angle of the x axis of the bone. */
-const ANGLE = 4;
+/** Scratch offset: the official `ca`, the angle of the x axis of the bone before the constraint turns it. */
+export const ANGLE = 4;
 /** The official `c`: the cosine of the angle the simulation has turned the bone to. */
 const COS = 5;
 /** The official `s`: the sine of that angle. */
 const SIN = 6;
-/** The official `mr`: how far the bone follows the rotation of the simulation. */
-const TURN = 7;
+/** Scratch offset: the official `mr`, how far the bone follows the rotation of the simulation. */
+export const TURN = 7;
+/** Scratch offset: the length of the bone in the world before the constraint stretches it. */
+export const REACH = 8;
 
 /**
  * The part of the official update that moves the bone: the offsets follow the bone with inertia,
@@ -183,6 +189,7 @@ function follow(solver: Solver, s: number, k: number, w: number, turn: boolean, 
         const r = Number(data[k + PHYSICS_LENGTH]) * Math.sqrt(ba * ba + bc * bc);
 
         if (r > 0) state[s + SCALE_OFFSET] = Number(state[s + SCALE_OFFSET]) + ((dx * c + dy * sin) * i) / r;
+        q[REACH] = r;
     }
     q[ANGLE] = ca;
     q[COS] = c;

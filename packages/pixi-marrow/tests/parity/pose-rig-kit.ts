@@ -193,6 +193,56 @@ export function keysOf(names: readonly string[], flat: readonly number[], durati
     });
 }
 
+/**
+ * Key times for a timeline with many keys: `count` times from 0 to `duration`, at uneven steps.
+ * Some keys lie closer together than an update is long and others far apart, so a lookup that
+ * guesses from the key before, or from where the time is in the animation, is wrong often.
+ * `phase` shifts the pattern, so that two timelines do not share their key times.
+ */
+export function unevenTimes(count: number, duration: number, phase = 0): number[] {
+    const steps = Array.from(
+        { length: count - 1 },
+        (_, i) => [1, 7, 0.3, 2, 13, 0.5, 4, 1, 0.2, 9][(i + phase) % 10] ?? 1,
+    );
+    const total = steps.reduce((sum, step) => sum + step, 0);
+    let at = 0;
+
+    return [
+        0,
+        ...steps.map((step) => {
+            at += step;
+
+            return Math.round((at / total) * duration * 10000) / 10000;
+        }),
+    ];
+}
+
+/** A value that swings between `-amplitude` and `amplitude` from key to key, with three decimals. */
+export const swing = (i: number, amplitude: number, rate = 1.7): number =>
+    Math.round(Math.sin(i * rate) * amplitude * 1000) / 1000;
+
+/**
+ * Keys at the given times. `values` gives the values of key `i` by name. Every third key is
+ * stepped, and every fifth has a curve for each value that leaves the range of its two keys.
+ */
+export function keysAt(times: readonly number[], values: (i: number) => Record<string, number>): Json[] {
+    return times.map((time, i) => {
+        const key: Json = { ...(i > 0 ? { time } : {}), ...values(i) };
+        const next = times[i + 1];
+
+        if (next === undefined || (i % 3 !== 2 && i % 5 !== 0)) return key;
+        if (i % 3 === 2) return { ...key, curve: 'stepped' };
+        const to = values(i + 1);
+        const curve = Object.entries(values(i)).flatMap(([name, from]) => {
+            const spread = ((to[name] ?? from) - from) * 0.3 + 0.05;
+
+            return [time + (next - time) * 0.3, from - spread, time + (next - time) * 0.7, (to[name] ?? from) + spread];
+        });
+
+        return { ...key, curve };
+    });
+}
+
 /** Keys of one value, as `keysOf` makes them. */
 export const keys = (values: readonly number[], duration: number, name = 'value'): Json[] =>
     keysOf([name], values, duration);

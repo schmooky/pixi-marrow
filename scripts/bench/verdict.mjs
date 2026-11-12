@@ -24,7 +24,7 @@
 import { ms, overlap, print, spread } from './table.mjs';
 
 /** The instance count the list names. */
-const VERDICT_INSTANCES = 200;
+export const VERDICT_INSTANCES = 200;
 /** The renderers the list names. */
 const VERDICT_RENDERERS = ['webgl', 'webgpu'];
 
@@ -168,8 +168,10 @@ export function judgeVerdict(result) {
         text: rule.text,
         rows: VERDICT_RENDERERS.flatMap((renderer) => {
             const entry = result.renderers.find((it) => it.renderer === renderer);
+            // the list is about instances that play: a run may hold other scenes too
+            const playing = entry ? entry.rigs.filter((rig) => (rig.scene ?? 'play') === 'play') : null;
 
-            return rowsOf(rule, renderer, entry ? entry.rigs : null, settings);
+            return rowsOf(rule, renderer, playing, settings);
         }),
     }));
 

@@ -1,0 +1,1291 @@
+{
+  "what": "Numbers of one run of pnpm bench:ab, for the verdict of later runs. Times are ms: median, smallest and largest run.",
+  "date": "2026-11-12T10:09:20.270Z",
+  "command": "node scripts/bench/ab.mjs --dist=/private/tmp/claude-501/-Users-user-Library-Application-Support-Claude-scratch-workspaces-69ac347c-62e1-4421-908c-16738c6cb031-14f6ce8d-55a7-455a-8fd8-1977d9368b4b-scratch-2026-11-11-88afdb/eccc2275-eeb4-49d4-8ca7-fc43ddbd31a5/scratchpad/m6-K/pkg-m5 --scene=all --instances=200 --runs=5 --memory=off --write-baseline --out=/private/tmp/claude-501/-Users-user-Library-Application-Support-Claude-scratch-workspaces-69ac347c-62e1-4421-908c-16738c6cb031-14f6ce8d-55a7-455a-8fd8-1977d9368b4b-scratch-2026-11-11-88afdb/eccc2275-eeb4-49d4-8ca7-fc43ddbd31a5/scratchpad/m6-K/bench-baseline",
+  "build": "M5 behaviour: commit 669da75 with the stamp fields of src/pose/state.ts and nothing else of M6, built on 2026-11-12 and kept as a folder for --dist",
+  "machine": {
+    "cpu": "Apple M4",
+    "cores": 10,
+    "memoryGB": 16,
+    "os": "darwin 25.5.0 arm64",
+    "power": "AC Power",
+    "node": "v24.14.0",
+    "chrome": "157.0.8103.78"
+  },
+  "versions": {
+    "pixi-marrow": "0.0.0, git 669da75, with local changes",
+    "spine-pixi-v8 for 4.2": "4.2.120",
+    "spine-pixi-v8 for 4.3": "4.3.13"
+  },
+  "runs": 5,
+  "scenes": {
+    "play": {
+      "webgl": {
+        "4.2/tank-pro": {
+          "instances": 200,
+          "plays": "shoot",
+          "ours": {
+            "runs": 5,
+            "draws": [401, 401],
+            "update": [4.9925, 4.8675, 5.1875],
+            "cpu": [6.175, 5.905, 6.34],
+            "frame": [9.5325, 9.2375, 11.4575],
+            "uploads": 3.08,
+            "uploadBytes": 7475696
+          },
+          "official": {
+            "runs": 5,
+            "draws": [485, 491],
+            "update": [3.9625, 3.94, 4.28],
+            "cpu": [18.64, 18.145, 19.8725],
+            "frame": [22.4725, 21.785, 25.27],
+            "uploads": 4,
+            "uploadBytes": 9546424
+          }
+        },
+        "4.2/coin-pro": {
+          "instances": 200,
+          "plays": "animation",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.485, 0.475, 0.52],
+            "cpu": [0.545, 0.525, 0.585],
+            "frame": [1.79, 1.565, 1.9925],
+            "uploads": 3,
+            "uploadBytes": 496400
+          },
+          "official": {
+            "runs": 5,
+            "draws": [400, 400],
+            "update": [0.195, 0.16, 0.245],
+            "cpu": [2.5575, 2.405, 2.66],
+            "frame": [4.625, 4.38, 4.89],
+            "uploads": 4,
+            "uploadBytes": 339354
+          }
+        },
+        "4.2/speedy-ess": {
+          "instances": 200,
+          "plays": "run",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.425, 0.395, 0.495],
+            "cpu": [0.4925, 0.455, 0.565],
+            "frame": [1.2775, 1.12, 1.305],
+            "uploads": 3,
+            "uploadBytes": 274000
+          },
+          "official": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.3, 0.28, 0.32],
+            "cpu": [0.725, 0.715, 0.805],
+            "frame": [1.565, 1.52, 1.69],
+            "uploads": 4,
+            "uploadBytes": 335600
+          }
+        },
+        "4.3/raptor-pro": {
+          "instances": 200,
+          "plays": "roar",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [2.91, 2.79, 3.14],
+            "cpu": [3.195, 3.07, 3.4725],
+            "frame": [5.535, 5.45, 6.125],
+            "uploads": 7.25,
+            "uploadBytes": 1138025
+          },
+          "official": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [2.3, 2.2225, 2.44],
+            "cpu": [5.9025, 5.5775, 6.2],
+            "frame": [8.28, 8.2325, 8.585],
+            "uploads": 4,
+            "uploadBytes": 7820800
+          }
+        },
+        "4.3/sack-pro": {
+          "instances": 200,
+          "plays": "fall-in",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [1.525, 1.5075, 1.5925],
+            "cpu": [1.64, 1.615, 1.7575],
+            "frame": [2.91, 2.8125, 3.0175],
+            "uploads": 1,
+            "uploadBytes": 308800
+          },
+          "official": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [1.47, 1.215, 1.6475],
+            "cpu": [2.3175, 1.955, 2.6025],
+            "frame": [3.7225, 3.335, 4.1325],
+            "uploads": 1,
+            "uploadBytes": 926400
+          }
+        }
+      },
+      "webgpu": {
+        "4.2/tank-pro": {
+          "instances": 200,
+          "plays": "shoot",
+          "ours": {
+            "runs": 5,
+            "draws": [401, 401],
+            "update": [4.9175, 4.895, 5.2025],
+            "cpu": [6.545, 6.51, 6.935],
+            "frame": [10.7825, 10.135, 16.6675],
+            "uploads": 4.08,
+            "uploadBytes": 7475824
+          },
+          "official": {
+            "runs": 5,
+            "draws": [485, 491],
+            "update": [3.935, 3.85, 4.0175],
+            "cpu": [20.405, 20.0625, 21.2075],
+            "frame": [26.7425, 26.3, 31.6725],
+            "uploads": 5,
+            "uploadBytes": 9546552
+          }
+        },
+        "4.2/coin-pro": {
+          "instances": 200,
+          "plays": "animation",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [1.09, 0.6675, 1.1075],
+            "cpu": [1.4875, 0.915, 1.495],
+            "frame": [3.355, 2.31, 3.415],
+            "uploads": 4,
+            "uploadBytes": 496528
+          },
+          "official": {
+            "runs": 5,
+            "draws": [400, 400],
+            "update": [0.175, 0.1675, 0.185],
+            "cpu": [2.6875, 2.64, 2.7625],
+            "frame": [4.6925, 4.6225, 4.7875],
+            "uploads": 5,
+            "uploadBytes": 339483
+          }
+        },
+        "4.2/speedy-ess": {
+          "instances": 200,
+          "plays": "run",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.8675, 0.375, 0.895],
+            "cpu": [1.1625, 0.515, 1.2],
+            "frame": [2.5675, 0.975, 2.595],
+            "uploads": 4,
+            "uploadBytes": 274128
+          },
+          "official": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.435, 0.38, 0.55],
+            "cpu": [1.2775, 1.0775, 1.615],
+            "frame": [2.545, 2.37, 3.09],
+            "uploads": 5,
+            "uploadBytes": 335728
+          }
+        },
+        "4.3/raptor-pro": {
+          "instances": 200,
+          "plays": "roar",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [2.685, 2.66, 2.7275],
+            "cpu": [3.215, 3.185, 3.2575],
+            "frame": [4.6025, 4.525, 4.94],
+            "uploads": 8.25,
+            "uploadBytes": 1138153
+          },
+          "official": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [2.0425, 2.0025, 2.105],
+            "cpu": [7.27, 7.2175, 7.3425],
+            "frame": [10.41, 10.2475, 10.705],
+            "uploads": 5,
+            "uploadBytes": 7820928
+          }
+        },
+        "4.3/sack-pro": {
+          "instances": 200,
+          "plays": "fall-in",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [2.0325, 1.5125, 2.105],
+            "cpu": [2.28, 1.7375, 2.355],
+            "frame": [3.855, 3.0225, 3.9675],
+            "uploads": 2,
+            "uploadBytes": 308928
+          },
+          "official": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [1.265, 1.2425, 1.315],
+            "cpu": [2.4075, 2.2675, 2.4575],
+            "frame": [4.0825, 3.935, 4.1975],
+            "uploads": 2,
+            "uploadBytes": 926528
+          }
+        }
+      }
+    },
+    "rest": {
+      "webgl": {
+        "4.2/tank-pro": {
+          "instances": 200,
+          "plays": "shoot",
+          "ours": {
+            "runs": 5,
+            "draws": [401, 401],
+            "update": [4.725, 4.555, 4.775],
+            "cpu": [5.2325, 5.04, 5.3575],
+            "frame": [8.125, 7.8525, 8.3825],
+            "uploads": 1,
+            "uploadBytes": 1355200
+          },
+          "official": {
+            "runs": 5,
+            "draws": [401, 401],
+            "update": [4.505, 4.325, 4.6025],
+            "cpu": [18.0225, 16.9375, 18.4525],
+            "frame": [20.575, 19.1825, 21.1575],
+            "uploads": 1,
+            "uploadBytes": 3466400
+          }
+        },
+        "4.2/coin-pro": {
+          "instances": 200,
+          "plays": "animation",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.25, 0.235, 0.28],
+            "cpu": [0.28, 0.265, 0.315],
+            "frame": [1.955, 1.93, 2.0375],
+            "uploads": 2,
+            "uploadBytes": 170000
+          },
+          "official": {
+            "runs": 5,
+            "draws": [400, 400],
+            "update": [0.1275, 0.125, 0.145],
+            "cpu": [2.095, 2.095, 2.2925],
+            "frame": [4.48, 3.72, 5.1675],
+            "uploads": 4,
+            "uploadBytes": 269200
+          }
+        },
+        "4.2/speedy-ess": {
+          "instances": 200,
+          "plays": "run",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.325, 0.32, 0.3375],
+            "cpu": [0.37, 0.3625, 0.385],
+            "frame": [1.0975, 1.075, 1.12],
+            "uploads": 1,
+            "uploadBytes": 70400
+          },
+          "official": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.255, 0.25, 0.26],
+            "cpu": [0.6, 0.585, 0.62],
+            "frame": [1.3525, 1.33, 1.37],
+            "uploads": 1,
+            "uploadBytes": 211200
+          }
+        },
+        "4.3/raptor-pro": {
+          "instances": 200,
+          "plays": "roar",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [2.135, 2.125, 2.4025],
+            "cpu": [2.35, 2.34, 2.68],
+            "frame": [3.5525, 3.5325, 4.46],
+            "uploads": 1,
+            "uploadBytes": 1067200
+          },
+          "official": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [1.525, 1.435, 1.8025],
+            "cpu": [3.575, 3.45, 4.245],
+            "frame": [5.095, 4.8575, 7.61],
+            "uploads": 1,
+            "uploadBytes": 3081600
+          }
+        },
+        "4.3/sack-pro": {
+          "instances": 200,
+          "plays": "fall-in",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [1.22, 1.22, 1.31],
+            "cpu": [1.295, 1.29, 1.3925],
+            "frame": [2.2375, 2.2275, 2.4675],
+            "uploads": 1,
+            "uploadBytes": 308800
+          },
+          "official": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.855, 0.845, 0.885],
+            "cpu": [1.485, 1.455, 1.515],
+            "frame": [2.47, 2.435, 2.49],
+            "uploads": 1,
+            "uploadBytes": 926400
+          }
+        }
+      },
+      "webgpu": {
+        "4.2/tank-pro": {
+          "instances": 200,
+          "plays": "shoot",
+          "ours": {
+            "runs": 5,
+            "draws": [401, 401],
+            "update": [4.135, 4.115, 4.15],
+            "cpu": [4.835, 4.83, 4.85],
+            "frame": [7.505, 6.345, 8.5925],
+            "uploads": 2,
+            "uploadBytes": 1355328
+          },
+          "official": {
+            "runs": 5,
+            "draws": [401, 401],
+            "update": [3.78, 3.695, 3.84],
+            "cpu": [15.1675, 14.805, 15.5675],
+            "frame": [18.305, 17.905, 18.6725],
+            "uploads": 2,
+            "uploadBytes": 3466528
+          }
+        },
+        "4.2/coin-pro": {
+          "instances": 200,
+          "plays": "animation",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.675, 0.36, 0.71],
+            "cpu": [0.8825, 0.47, 0.925],
+            "frame": [2.8125, 2.1375, 3.025],
+            "uploads": 3,
+            "uploadBytes": 170128
+          },
+          "official": {
+            "runs": 5,
+            "draws": [400, 400],
+            "update": [0.16, 0.16, 0.2175],
+            "cpu": [2.635, 2.35, 2.785],
+            "frame": [5.1475, 4.48, 5.2775],
+            "uploads": 5,
+            "uploadBytes": 269328
+          }
+        },
+        "4.2/speedy-ess": {
+          "instances": 200,
+          "plays": "run",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.665, 0.525, 0.675],
+            "cpu": [0.795, 0.64, 0.815],
+            "frame": [1.8075, 1.505, 1.92],
+            "uploads": 2,
+            "uploadBytes": 70528
+          },
+          "official": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.425, 0.345, 0.47],
+            "cpu": [1.1325, 0.9075, 1.2825],
+            "frame": [2.2775, 1.775, 2.505],
+            "uploads": 2,
+            "uploadBytes": 211328
+          }
+        },
+        "4.3/raptor-pro": {
+          "instances": 200,
+          "plays": "roar",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [2.3275, 2.32, 2.3525],
+            "cpu": [2.815, 2.81, 2.8425],
+            "frame": [4.2575, 4.1025, 4.7975],
+            "uploads": 2,
+            "uploadBytes": 1067328
+          },
+          "official": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [1.6525, 1.6125, 1.755],
+            "cpu": [4.615, 4.5475, 4.82],
+            "frame": [7.4225, 7.1725, 7.4825],
+            "uploads": 2,
+            "uploadBytes": 3081728
+          }
+        },
+        "4.3/sack-pro": {
+          "instances": 200,
+          "plays": "fall-in",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [2.05, 1.9, 2.075],
+            "cpu": [2.29, 2.1425, 2.33],
+            "frame": [3.855, 3.8025, 3.9575],
+            "uploads": 2,
+            "uploadBytes": 308928
+          },
+          "official": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [1.2275, 1.1975, 1.265],
+            "cpu": [2.3675, 2.355, 2.4425],
+            "frame": [4.105, 4.07, 4.18],
+            "uploads": 2,
+            "uploadBytes": 926528
+          }
+        }
+      }
+    },
+    "setup": {
+      "webgl": {
+        "4.2/tank-pro": {
+          "instances": 200,
+          "plays": "shoot",
+          "ours": {
+            "runs": 5,
+            "draws": [401, 401],
+            "update": [2.7625, 2.68, 2.81],
+            "cpu": [3.105, 3.01, 3.155],
+            "frame": [5.225, 4.4825, 5.425],
+            "uploads": 1,
+            "uploadBytes": 1355200
+          },
+          "official": {
+            "runs": 5,
+            "draws": [401, 401],
+            "update": [1.86, 1.835, 1.985],
+            "cpu": [10.785, 10.67, 12.14],
+            "frame": [16.19, 15.2725, 16.65],
+            "uploads": 1,
+            "uploadBytes": 3488800
+          }
+        },
+        "4.2/coin-pro": {
+          "instances": 200,
+          "plays": "animation",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.175, 0.175, 0.19],
+            "cpu": [0.2, 0.2, 0.2275],
+            "frame": [0.865, 0.86, 1.1275],
+            "uploads": 2,
+            "uploadBytes": 170000
+          },
+          "official": {
+            "runs": 5,
+            "draws": [400, 400],
+            "update": [0.055, 0.05, 0.095],
+            "cpu": [1.745, 1.74, 2.05],
+            "frame": [3.115, 3.1, 4.595],
+            "uploads": 4,
+            "uploadBytes": 269200
+          }
+        },
+        "4.2/speedy-ess": {
+          "instances": 200,
+          "plays": "run",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.17, 0.165, 0.4575],
+            "cpu": [0.21, 0.2, 0.55],
+            "frame": [0.92, 0.905, 2.4725],
+            "uploads": 1,
+            "uploadBytes": 70400
+          },
+          "official": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.12, 0.12, 0.215],
+            "cpu": [0.43, 0.415, 0.79],
+            "frame": [1.15, 1.13, 1.725],
+            "uploads": 1,
+            "uploadBytes": 211200
+          }
+        },
+        "4.3/raptor-pro": {
+          "instances": 200,
+          "plays": "roar",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [1.85, 1.76, 1.94],
+            "cpu": [2.075, 1.975, 2.205],
+            "frame": [3.71, 3.165, 3.905],
+            "uploads": 1,
+            "uploadBytes": 1067200
+          },
+          "official": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.745, 0.72, 0.985],
+            "cpu": [2.735, 2.6525, 3.7275],
+            "frame": [4.1225, 3.9425, 5.995],
+            "uploads": 1,
+            "uploadBytes": 3081600
+          }
+        },
+        "4.3/sack-pro": {
+          "instances": 200,
+          "plays": "fall-in",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.96, 0.96, 0.965],
+            "cpu": [1.03, 1.03, 1.04],
+            "frame": [1.525, 1.5225, 1.535],
+            "uploads": 1,
+            "uploadBytes": 308800
+          },
+          "official": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.485, 0.475, 0.49],
+            "cpu": [1.09, 1.075, 1.1],
+            "frame": [1.605, 1.59, 1.63],
+            "uploads": 1,
+            "uploadBytes": 926400
+          }
+        }
+      },
+      "webgpu": {
+        "4.2/tank-pro": {
+          "instances": 200,
+          "plays": "shoot",
+          "ours": {
+            "runs": 5,
+            "draws": [401, 401],
+            "update": [3.04, 2.99, 3.14],
+            "cpu": [3.76, 3.6975, 3.95],
+            "frame": [6.7025, 6.58, 7.615],
+            "uploads": 2,
+            "uploadBytes": 1355328
+          },
+          "official": {
+            "runs": 5,
+            "draws": [401, 401],
+            "update": [1.92, 1.915, 1.9975],
+            "cpu": [11.5375, 11.43, 12.5275],
+            "frame": [16.66, 16.62, 16.675],
+            "uploads": 2,
+            "uploadBytes": 3488928
+          }
+        },
+        "4.2/coin-pro": {
+          "instances": 200,
+          "plays": "animation",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.3, 0.205, 0.59],
+            "cpu": [0.4225, 0.295, 0.82],
+            "frame": [2.07, 1.64, 2.8825],
+            "uploads": 3,
+            "uploadBytes": 170128
+          },
+          "official": {
+            "runs": 5,
+            "draws": [400, 400],
+            "update": [0.075, 0.075, 0.08],
+            "cpu": [2.45, 2.035, 2.565],
+            "frame": [4.88, 4.075, 5.13],
+            "uploads": 5,
+            "uploadBytes": 269328
+          }
+        },
+        "4.2/speedy-ess": {
+          "instances": 200,
+          "plays": "run",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.185, 0.185, 0.185],
+            "cpu": [0.25, 0.25, 0.255],
+            "frame": [0.94, 0.935, 0.945],
+            "uploads": 2,
+            "uploadBytes": 70528
+          },
+          "official": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.12, 0.12, 0.125],
+            "cpu": [0.505, 0.48, 0.51],
+            "frame": [1.21, 1.18, 1.22],
+            "uploads": 2,
+            "uploadBytes": 211328
+          }
+        },
+        "4.3/raptor-pro": {
+          "instances": 200,
+          "plays": "roar",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [1.925, 1.915, 2.53],
+            "cpu": [2.415, 2.405, 3.195],
+            "frame": [3.635, 3.6, 5.8325],
+            "uploads": 2,
+            "uploadBytes": 1067328
+          },
+          "official": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.815, 0.78, 0.89],
+            "cpu": [3.77, 3.7325, 4.135],
+            "frame": [6.2025, 5.605, 6.6425],
+            "uploads": 2,
+            "uploadBytes": 3081728
+          }
+        },
+        "4.3/sack-pro": {
+          "instances": 200,
+          "plays": "fall-in",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [1.07, 1.06, 1.085],
+            "cpu": [1.26, 1.25, 1.29],
+            "frame": [2.435, 2.395, 2.4725],
+            "uploads": 2,
+            "uploadBytes": 308928
+          },
+          "official": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.56, 0.54, 0.725],
+            "cpu": [1.5125, 1.465, 1.865],
+            "frame": [2.855, 2.77, 3.5275],
+            "uploads": 2,
+            "uploadBytes": 926528
+          }
+        }
+      }
+    },
+    "moved": {
+      "webgl": {
+        "4.2/tank-pro": {
+          "instances": 200,
+          "plays": "shoot",
+          "ours": {
+            "runs": 5,
+            "draws": [401, 401],
+            "update": [3.8, 3.79, 3.895],
+            "cpu": [4.1625, 4.145, 4.28],
+            "frame": [6.025, 5.6125, 6.5625],
+            "uploads": 1,
+            "uploadBytes": 1355200
+          },
+          "official": {
+            "runs": 5,
+            "draws": [401, 401],
+            "update": [3.615, 3.5975, 3.765],
+            "cpu": [14.705, 14.3825, 15.0775],
+            "frame": [16.975, 16.6775, 17.35],
+            "uploads": 1,
+            "uploadBytes": 3466400
+          }
+        },
+        "4.2/coin-pro": {
+          "instances": 200,
+          "plays": "animation",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.235, 0.23, 1.12],
+            "cpu": [0.2825, 0.28, 1.5275],
+            "frame": [1.93, 0.945, 5.07],
+            "uploads": 2,
+            "uploadBytes": 170000
+          },
+          "official": {
+            "runs": 5,
+            "draws": [400, 400],
+            "update": [0.145, 0.125, 0.165],
+            "cpu": [2.13, 1.98, 2.575],
+            "frame": [4.67, 4.3025, 5.495],
+            "uploads": 4,
+            "uploadBytes": 269200
+          }
+        },
+        "4.2/speedy-ess": {
+          "instances": 200,
+          "plays": "run",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.285, 0.28, 0.315],
+            "cpu": [0.335, 0.335, 0.36],
+            "frame": [1.035, 1.0325, 1.06],
+            "uploads": 1,
+            "uploadBytes": 70400
+          },
+          "official": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.225, 0.22, 0.23],
+            "cpu": [0.54, 0.515, 0.565],
+            "frame": [1.255, 1.225, 1.27],
+            "uploads": 1,
+            "uploadBytes": 211200
+          }
+        },
+        "4.3/raptor-pro": {
+          "instances": 200,
+          "plays": "roar",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [2.22, 2.2025, 2.35],
+            "cpu": [2.4675, 2.455, 2.6175],
+            "frame": [4.0625, 4.0275, 4.1925],
+            "uploads": 1,
+            "uploadBytes": 1067200
+          },
+          "official": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [1.7225, 1.64, 1.825],
+            "cpu": [3.9575, 3.85, 4.11],
+            "frame": [8.0575, 7.73, 8.17],
+            "uploads": 1,
+            "uploadBytes": 3081600
+          }
+        },
+        "4.3/sack-pro": {
+          "instances": 200,
+          "plays": "fall-in",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [1.3525, 1.255, 1.38],
+            "cpu": [1.45, 1.35, 1.505],
+            "frame": [2.585, 2.525, 2.7175],
+            "uploads": 1,
+            "uploadBytes": 308800
+          },
+          "official": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.975, 0.93, 1.02],
+            "cpu": [1.66, 1.595, 1.705],
+            "frame": [2.955, 2.8475, 3.085],
+            "uploads": 1,
+            "uploadBytes": 926400
+          }
+        }
+      },
+      "webgpu": {
+        "4.2/tank-pro": {
+          "instances": 200,
+          "plays": "shoot",
+          "ours": {
+            "runs": 5,
+            "draws": [401, 401],
+            "update": [4.115, 4.095, 4.1925],
+            "cpu": [4.84, 4.81, 4.9425],
+            "frame": [7.8625, 6.595, 8.2375],
+            "uploads": 2,
+            "uploadBytes": 1355328
+          },
+          "official": {
+            "runs": 5,
+            "draws": [401, 401],
+            "update": [3.73, 3.695, 3.915],
+            "cpu": [14.9125, 14.76, 15.8175],
+            "frame": [17.975, 17.7375, 19.1425],
+            "uploads": 2,
+            "uploadBytes": 3466528
+          }
+        },
+        "4.2/coin-pro": {
+          "instances": 200,
+          "plays": "animation",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.695, 0.285, 0.6975],
+            "cpu": [0.95, 0.4, 0.9575],
+            "frame": [2.9225, 1.78, 3.17],
+            "uploads": 3,
+            "uploadBytes": 170128
+          },
+          "official": {
+            "runs": 5,
+            "draws": [400, 400],
+            "update": [0.175, 0.16, 0.185],
+            "cpu": [2.9175, 2.6625, 3.015],
+            "frame": [5.5475, 5.135, 5.6825],
+            "uploads": 5,
+            "uploadBytes": 269328
+          }
+        },
+        "4.2/speedy-ess": {
+          "instances": 200,
+          "plays": "run",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.5925, 0.4025, 0.73],
+            "cpu": [0.735, 0.5175, 0.9425],
+            "frame": [1.8675, 1.3875, 2.065],
+            "uploads": 2,
+            "uploadBytes": 70528
+          },
+          "official": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.405, 0.325, 0.475],
+            "cpu": [1.0825, 0.8575, 1.2725],
+            "frame": [2.1325, 1.7525, 2.695],
+            "uploads": 2,
+            "uploadBytes": 211328
+          }
+        },
+        "4.3/raptor-pro": {
+          "instances": 200,
+          "plays": "roar",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [2.31, 2.305, 2.63],
+            "cpu": [2.825, 2.82, 3.2425],
+            "frame": [4.1325, 4.115, 5.5225],
+            "uploads": 2,
+            "uploadBytes": 1067328
+          },
+          "official": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [1.5925, 1.585, 1.665],
+            "cpu": [4.5575, 4.53, 4.74],
+            "frame": [6.6475, 6.4125, 7.2575],
+            "uploads": 2,
+            "uploadBytes": 3081728
+          }
+        },
+        "4.3/sack-pro": {
+          "instances": 200,
+          "plays": "fall-in",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [1.7625, 1.39, 2.055],
+            "cpu": [2.025, 1.585, 2.335],
+            "frame": [3.6325, 2.9375, 3.945],
+            "uploads": 2,
+            "uploadBytes": 308928
+          },
+          "official": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [1.2, 0.9675, 1.2025],
+            "cpu": [2.3525, 1.9, 2.3725],
+            "frame": [4.11, 3.3775, 4.2025],
+            "uploads": 2,
+            "uploadBytes": 926528
+          }
+        }
+      }
+    },
+    "little": {
+      "webgl": {
+        "4.2/tank-pro": {
+          "instances": 200,
+          "plays": "little",
+          "ours": {
+            "runs": 5,
+            "draws": [401, 401],
+            "update": [2.6475, 2.635, 2.8425],
+            "cpu": [2.975, 2.96, 3.2025],
+            "frame": [4.475, 4.455, 5.8475],
+            "uploads": 1,
+            "uploadBytes": 1355200
+          },
+          "official": {
+            "runs": 5,
+            "draws": [401, 401],
+            "update": [2.215, 2.21, 2.44],
+            "cpu": [11.1975, 10.9625, 12.1525],
+            "frame": [16.325, 15.3, 16.6325],
+            "uploads": 1,
+            "uploadBytes": 3488800
+          }
+        },
+        "4.2/coin-pro": {
+          "instances": 200,
+          "plays": "little",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.185, 0.185, 1.055],
+            "cpu": [0.21, 0.205, 1.3225],
+            "frame": [0.855, 0.83, 4.61],
+            "uploads": 2,
+            "uploadBytes": 45200
+          },
+          "official": {
+            "runs": 5,
+            "draws": [400, 400],
+            "update": [0.07, 0.065, 0.07],
+            "cpu": [1.835, 1.82, 1.86],
+            "frame": [3.21, 3.19, 3.25],
+            "uploads": 4,
+            "uploadBytes": 144400
+          }
+        },
+        "4.2/speedy-ess": {
+          "instances": 200,
+          "plays": "little",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.18, 0.1775, 0.38],
+            "cpu": [0.215, 0.21, 0.45],
+            "frame": [0.6325, 0.615, 1.445],
+            "uploads": 1,
+            "uploadBytes": 70400
+          },
+          "official": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.125, 0.12, 0.185],
+            "cpu": [0.4325, 0.41, 0.63],
+            "frame": [0.8425, 0.825, 1.495],
+            "uploads": 1,
+            "uploadBytes": 211200
+          }
+        },
+        "4.3/raptor-pro": {
+          "instances": 200,
+          "plays": "gun-grab",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [1.835, 1.83, 1.835],
+            "cpu": [2.1, 2.095, 2.105],
+            "frame": [3.6425, 3.6225, 3.6475],
+            "uploads": 21,
+            "uploadBytes": 1293840
+          },
+          "official": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.84, 0.825, 0.87],
+            "cpu": [3.835, 3.72, 3.975],
+            "frame": [5.7, 5.6325, 5.8625],
+            "uploads": 4,
+            "uploadBytes": 7805200
+          }
+        },
+        "4.3/sack-pro": {
+          "instances": 200,
+          "plays": "little",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.985, 0.9825, 1.07],
+            "cpu": [1.055, 1.055, 1.16],
+            "frame": [1.55, 1.55, 2.41],
+            "uploads": 1,
+            "uploadBytes": 308800
+          },
+          "official": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.4975, 0.49, 0.5225],
+            "cpu": [1.165, 1.14, 1.1975],
+            "frame": [1.72, 1.7, 2.19],
+            "uploads": 1,
+            "uploadBytes": 926400
+          }
+        },
+        "4.2/owl-pro": {
+          "instances": 200,
+          "plays": "blink",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.68, 0.64, 1.17],
+            "cpu": [0.8, 0.74, 1.3675],
+            "frame": [1.9, 1.375, 3.1875],
+            "uploads": 4.88,
+            "uploadBytes": 413476
+          },
+          "official": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.18, 0.18, 0.185],
+            "cpu": [1.63, 1.615, 1.64],
+            "frame": [2.82, 2.79, 2.825],
+            "uploads": 4,
+            "uploadBytes": 2542173
+          }
+        },
+        "4.3/spineboy-pro": {
+          "instances": 200,
+          "plays": "shoot",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [1.035, 1.015, 1.045],
+            "cpu": [1.3, 1.28, 1.305],
+            "frame": [2.605, 2.575, 2.62],
+            "uploads": 3,
+            "uploadBytes": 3871200
+          },
+          "official": {
+            "runs": 5,
+            "draws": [400, 400],
+            "update": [0.7, 0.68, 0.8225],
+            "cpu": [2.2975, 2.24, 2.46],
+            "frame": [4.105, 3.965, 4.345],
+            "uploads": 4,
+            "uploadBytes": 4180051
+          }
+        }
+      },
+      "webgpu": {
+        "4.2/tank-pro": {
+          "instances": 200,
+          "plays": "little",
+          "ours": {
+            "runs": 5,
+            "draws": [401, 401],
+            "update": [2.91, 2.865, 3.11],
+            "cpu": [3.6225, 3.575, 3.95],
+            "frame": [6.4025, 5.1725, 8.2675],
+            "uploads": 2,
+            "uploadBytes": 1355328
+          },
+          "official": {
+            "runs": 5,
+            "draws": [401, 401],
+            "update": [2.32, 2.315, 2.39],
+            "cpu": [12.265, 11.9275, 12.675],
+            "frame": [16.665, 16.65, 16.68],
+            "uploads": 2,
+            "uploadBytes": 3488928
+          }
+        },
+        "4.2/coin-pro": {
+          "instances": 200,
+          "plays": "little",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.56, 0.5475, 0.615],
+            "cpu": [0.68, 0.6675, 0.755],
+            "frame": [2.5625, 2.46, 2.78],
+            "uploads": 3,
+            "uploadBytes": 45328
+          },
+          "official": {
+            "runs": 5,
+            "draws": [400, 400],
+            "update": [0.1, 0.095, 0.105],
+            "cpu": [2.635, 2.33, 2.67],
+            "frame": [5.1375, 4.61, 5.2425],
+            "uploads": 5,
+            "uploadBytes": 144528
+          }
+        },
+        "4.2/speedy-ess": {
+          "instances": 200,
+          "plays": "little",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.32, 0.21, 0.3775],
+            "cpu": [0.42, 0.285, 0.51],
+            "frame": [1.29, 0.99, 1.5375],
+            "uploads": 2,
+            "uploadBytes": 70528
+          },
+          "official": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.15, 0.135, 0.275],
+            "cpu": [0.5725, 0.515, 1.0625],
+            "frame": [1.31, 1.2125, 2.22],
+            "uploads": 2,
+            "uploadBytes": 211328
+          }
+        },
+        "4.3/raptor-pro": {
+          "instances": 200,
+          "plays": "gun-grab",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [2.465, 2.01, 2.545],
+            "cpu": [3.215, 2.615, 3.315],
+            "frame": [5.7525, 3.955, 7.63],
+            "uploads": 22,
+            "uploadBytes": 1293968
+          },
+          "official": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [1, 0.97, 1.025],
+            "cpu": [6.025, 5.99, 6.07],
+            "frame": [14.8075, 13.97, 15.345],
+            "uploads": 5,
+            "uploadBytes": 7805328
+          }
+        },
+        "4.3/sack-pro": {
+          "instances": 200,
+          "plays": "little",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [1.17, 1.095, 1.8275],
+            "cpu": [1.43, 1.28, 2.105],
+            "frame": [2.7, 2.49, 3.9375],
+            "uploads": 2,
+            "uploadBytes": 308928
+          },
+          "official": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.72, 0.59, 0.79],
+            "cpu": [1.885, 1.62, 2.21],
+            "frame": [3.3075, 3, 3.975],
+            "uploads": 2,
+            "uploadBytes": 926528
+          }
+        },
+        "4.2/owl-pro": {
+          "instances": 200,
+          "plays": "blink",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.74, 0.725, 0.81],
+            "cpu": [0.985, 0.965, 1.0925],
+            "frame": [2.28, 2.22, 2.4275],
+            "uploads": 5.88,
+            "uploadBytes": 413604
+          },
+          "official": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.235, 0.22, 0.295],
+            "cpu": [2.5, 2.43, 2.885],
+            "frame": [4.56, 4.4475, 5.0625],
+            "uploads": 5,
+            "uploadBytes": 2542301
+          }
+        },
+        "4.3/spineboy-pro": {
+          "instances": 200,
+          "plays": "shoot",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [1.4475, 1.29, 1.5075],
+            "cpu": [2.91, 2.5875, 2.9825],
+            "frame": [4.4, 4.075, 4.55],
+            "uploads": 4,
+            "uploadBytes": 3871328
+          },
+          "official": {
+            "runs": 5,
+            "draws": [400, 400],
+            "update": [1.085, 0.8175, 1.0975],
+            "cpu": [4.465, 3.59, 4.54],
+            "frame": [7.845, 7.765, 8.1075],
+            "uploads": 5,
+            "uploadBytes": 4180179
+          }
+        }
+      }
+    },
+    "mixed": {
+      "webgl": {
+        "mixed: coin-pro, speedy-ess, powerup-pro, goblins-pro, alien-pro": {
+          "instances": 30,
+          "plays": "animation",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.115, 0.085, 0.435],
+            "cpu": [0.145, 0.11, 0.5825],
+            "frame": [0.88, 0.675, 1.915],
+            "uploads": 7.6444,
+            "uploadBytes": 85662
+          },
+          "official": {
+            "runs": 5,
+            "draws": [31, 33],
+            "update": [0.11, 0.07, 0.3175],
+            "cpu": [0.5, 0.295, 1.175],
+            "frame": [1.55, 0.93, 3.115],
+            "uploads": 8,
+            "uploadBytes": 212861
+          }
+        }
+      },
+      "webgpu": {
+        "mixed: coin-pro, speedy-ess, powerup-pro, goblins-pro, alien-pro": {
+          "instances": 30,
+          "plays": "animation",
+          "ours": {
+            "runs": 5,
+            "draws": [1, 1],
+            "update": [0.135, 0.1, 0.26],
+            "cpu": [0.21, 0.15, 0.3725],
+            "frame": [0.96, 0.805, 1.3875],
+            "uploads": 8.6444,
+            "uploadBytes": 85790
+          },
+          "official": {
+            "runs": 5,
+            "draws": [31, 33],
+            "update": [0.075, 0.065, 0.105],
+            "cpu": [0.365, 0.35, 0.56],
+            "frame": [1.0525, 1.04, 1.6825],
+            "uploads": 9,
+            "uploadBytes": 212990
+          }
+        }
+      }
+    }
+  }
+}

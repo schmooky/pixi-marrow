@@ -68,6 +68,8 @@ function updateTrack(player: LegacyPlayer, index: number, current: LegacyEntry):
         if (current.delay > 0) return;
         currentDelta = -current.delay;
         current.delay = 0;
+        // from this update on the entry is applied
+        player.stirred = true;
     }
     if (current.next !== null) {
         if (advanceToNext(player, index, current)) {

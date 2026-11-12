@@ -4,6 +4,7 @@
  * server.
  */
 import {
+    cpSync,
     existsSync,
     mkdirSync,
     readdirSync,
@@ -71,6 +72,72 @@ function officialCore(pkgDir) {
     };
 }
 
+/**
+ * Gives every import of `pixi.js` in the bundle the same build of Pixi: the page, pixi-marrow and
+ * the official runtime then share one copy, whichever folder each of them would find on its own.
+ *
+ * @param pixiDir The folder of that pixi.js.
+ */
+function onePixi(pixiDir) {
+    const manifest = JSON.parse(readFileSync(join(pixiDir, 'package.json'), 'utf8'));
+
+    return {
+        name: 'one-pixi',
+        resolveId(source) {
+            if (source === 'pixi.js') return join(pixiDir, manifest.module);
+            // nothing here imports a file of Pixi by its path. If something starts to, it must not get another copy
+            if (source.startsWith('pixi.js/'))
+                throw new Error(`${source} is imported by its path, past the pixi.js of the page`);
+
+            return null;
+        },
+    };
+}
+
+/** What marks the modules of the reference copy of an official runtime, at the end of their ids. */
+const REFERENCE = '?reference';
+
+/**
+ * A second copy of the official runtimes that runs on a pixi.js of its own: the reference.
+ *
+ * A page that runs on another version of pixi.js still needs an official picture nobody
+ * doubts, and the official runtime can draw differently on an old pixi.js too. So the page gets
+ * the official runtime twice. Once on the pixi.js of the page, and once more on the pixi.js the
+ * package is developed with, where its pictures are the ones every check so far was judged by.
+ *
+ * The bundle imports `reference-pixi` for that pixi.js and `reference-spine-pixi-4.2` or
+ * `reference-spine-pixi-4.3` for the runtime. The modules of the copy are the same files with a
+ * mark at the end of their ids, which makes them modules of their own. Their import of `pixi.js`
+ * goes to the reference, their other imports go where they went before.
+ *
+ * @param pixiDir The folder of the pixi.js of the reference.
+ */
+function referenceOfficial(pixiDir) {
+    const pixiEntry = join(pixiDir, JSON.parse(readFileSync(join(pixiDir, 'package.json'), 'utf8')).module);
+
+    return {
+        name: 'reference-official',
+        async resolveId(source, importer) {
+            if (source === 'reference-pixi') return pixiEntry;
+            const runtime = /^reference-(spine-pixi-4\.[23])$/.exec(source)?.[1];
+
+            if (runtime) return `${(await this.resolve(runtime, importer, { skipSelf: true })).id}${REFERENCE}`;
+            if (!importer?.endsWith(REFERENCE)) return null;
+            const file = importer.slice(0, -REFERENCE.length);
+
+            if (source === 'pixi.js') return pixiEntry;
+            // a file of the runtime stays in the copy
+            if (source.startsWith('.')) return `${join(dirname(file), source)}${REFERENCE}`;
+
+            // the Spine core and what else the runtime needs know no Pixi: both copies share them
+            return (await this.resolve(source, file, { skipSelf: true }))?.id ?? null;
+        },
+        load(id) {
+            return id.endsWith(REFERENCE) ? readFileSync(id.slice(0, -REFERENCE.length), 'utf8') : null;
+        },
+    };
+}
+
 /** True while a process with this id runs. */
 function alive(pid) {
     try {
@@ -89,11 +156,19 @@ function alive(pid) {
  *
  * @param page The browser entry, relative to the repo root. It exports `start`, which gets `PIXI`
  * and the loaders of the runtimes.
+ * @param options.pkg The folder of the built pixi-marrow the page loads, see `builtPackage` of
+ * scripts/render/setup.mjs. Default: the package of the working tree.
+ * @param options.pixi The folder of the pixi.js the page and both runtimes run on, see
+ * `pixiPackage` of scripts/render/setup.mjs. Default: the pixi.js the package is developed with.
+ * @param options.reference True to bundle the official runtimes once more, on the pixi.js the
+ * package is developed with: `start` then also gets `loadReference`, see `referenceOfficial`.
  * @returns `dir` is the folder that holds `entry.js` and its chunks. `made` is an empty folder for
  * fixtures a tool writes itself, see `serve`. `remove` deletes the scratch project with both.
  */
-export async function bundlePage(root, page = 'scripts/render/page.js') {
+export async function bundlePage(root, page = 'scripts/render/page.js', { pkg, pixi, reference = false } = {}) {
     const pkgDir = join(root, 'packages/pixi-marrow');
+    const developedOn = realpathSync(join(pkgDir, 'node_modules/pixi.js'));
+    const pixiDir = pixi ?? developedOn;
     const cache = join(root, 'node_modules/.cache');
     // one scratch project per process, so the check and the bench can run at the same time
     const work = join(cache, `marrow-page-${process.pid}`);
@@ -112,7 +187,14 @@ export async function bundlePage(root, page = 'scripts/render/page.js') {
     rmSync(work, { recursive: true, force: true });
     mkdirSync(modules, { recursive: true });
     // a junction needs no privilege on Windows. Elsewhere the type is ignored
-    symlinkSync(pkgDir, join(modules, 'pixi-marrow'), 'junction');
+    if (!pkg || pkg === pkgDir) symlinkSync(pkgDir, join(modules, 'pixi-marrow'), 'junction');
+    else {
+        // A build that was kept is copied in, so that its import of pixi.js resolves to the one
+        // of this scratch project. A link would resolve it from the folder the build was kept in
+        mkdirSync(join(modules, 'pixi-marrow'));
+        cpSync(join(pkg, 'package.json'), join(modules, 'pixi-marrow/package.json'));
+        cpSync(join(pkg, 'dist'), join(modules, 'pixi-marrow/dist'), { recursive: true });
+    }
     for (const name of ['pixi.js', 'spine-pixi-4.2', 'spine-pixi-4.3']) {
         symlinkSync(realpathSync(join(pkgDir, 'node_modules', name)), join(modules, name), 'junction');
     }
@@ -126,6 +208,15 @@ export async function bundlePage(root, page = 'scripts/render/page.js') {
             "    loadOurs: () => import('pixi-marrow'),",
             "    loadCore: () => import('pixi-marrow/core'),",
             "    loadOfficial: (version) => (version === '4.2' ? import('spine-pixi-4.2') : import('spine-pixi-4.3')),",
+            // the official runtime once more, with the pixi.js it runs on: `PIXI` and `lib`
+            ...(reference
+                ? [
+                      '    loadReference: async (version) => ({',
+                      "        PIXI: await import('reference-pixi'),",
+                      "        lib: await (version === '4.2' ? import('reference-spine-pixi-4.2') : import('reference-spine-pixi-4.3')),",
+                      '    }),',
+                  ]
+                : []),
             '});',
             '',
         ].join('\n'),
@@ -133,7 +224,7 @@ export async function bundlePage(root, page = 'scripts/render/page.js') {
     const bundle = await rolldown({
         input: entry,
         platform: 'browser',
-        plugins: [officialCore(pkgDir)],
+        plugins: [...(reference ? [referenceOfficial(developedOn)] : []), officialCore(pkgDir), onePixi(pixiDir)],
         logLevel: 'warn',
     });
 

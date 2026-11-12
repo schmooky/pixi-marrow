@@ -3,6 +3,7 @@ import type { PoseState } from '../state';
 import { LAST_TIME, SHARED, search, TIME } from './curves';
 import { factsOf, type Rig } from './rig';
 import { findAttachment, setSlotAttachment } from './skeleton';
+import { stampDrawOrder, stampSlot } from './stamps';
 import { FIRST, type LegacyTimeline, MIX_OUT, SETUP } from './timelines';
 
 const SEQUENCE_ENTRIES = 3;
@@ -39,11 +40,12 @@ export function applyAttachment(
     }
 }
 
-/** The official `DrawOrderTimeline.apply`. */
+/** The official `DrawOrderTimeline.apply`. The draw order is stamped when a position gets another slot. */
 export function applyDrawOrder(pose: PoseState, timeline: LegacyTimeline, blend: number, direction: number): void {
     const time = Number(SHARED[TIME]);
     const drawOrder = pose.drawOrder;
     let order: Int16Array | null = null;
+    let changed = false;
 
     if (direction === MIX_OUT) {
         if (blend !== SETUP) return;
@@ -52,11 +54,13 @@ export function applyDrawOrder(pose: PoseState, timeline: LegacyTimeline, blend:
     } else {
         order = timeline.drawOrders[search(timeline.frames, 1)] ?? null;
     }
-    if (order === null) {
-        for (let i = 0; i < drawOrder.length; i++) drawOrder[i] = i;
-    } else {
-        drawOrder.set(order);
+    for (let i = 0, n = order === null ? drawOrder.length : order.length; i < n; i++) {
+        const slot = order === null ? i : Number(order[i]);
+
+        if (drawOrder[i] !== slot) changed = true;
+        drawOrder[i] = slot;
     }
+    if (changed) stampDrawOrder(pose);
 }
 
 /**
@@ -94,6 +98,13 @@ function sequenceIndex(mode: number, start: number, count: number): number {
     }
 }
 
+/** Sets the sequence index of a slot and stamps the slot when the index is a new one. */
+function setSequenceIndex(pose: PoseState, slot: number, index: number): void {
+    // the array holds 32-bit integers: compare what it will hold
+    if (pose.sequenceIndices[slot] !== (index | 0)) stampSlot(pose, slot);
+    pose.sequenceIndices[slot] = index;
+}
+
 /**
  * The official `SequenceTimeline.apply`. The 4.2 runtime resets the index while mixing out with
  * blend `setup` and changes nothing while mixing out otherwise. The 4.1 runtime ignores the direction.
@@ -113,12 +124,12 @@ export function applySequence(
     // the slot must show the attachment, or one that takes its timelines from it
     if (shown !== attachment && (shown === null || factsOf(rig, shown).timeline !== attachment)) return;
     if (direction === MIX_OUT && !rig.v41) {
-        if (blend === SETUP) pose.sequenceIndices[slot] = -1;
+        if (blend === SETUP) setSequenceIndex(pose, slot, -1);
 
         return;
     }
     if (time < Number(frames[0])) {
-        if (blend === SETUP || blend === FIRST) pose.sequenceIndices[slot] = -1;
+        if (blend === SETUP || blend === FIRST) setSequenceIndex(pose, slot, -1);
 
         return;
     }
@@ -135,7 +146,7 @@ export function applySequence(
         index += ((time - before) / delay + 0.00001) | 0;
         index = sequenceIndex(mode, index, timeline.sequenceCount);
     }
-    pose.sequenceIndices[slot] = index;
+    setSequenceIndex(pose, slot, index);
 }
 
 /**

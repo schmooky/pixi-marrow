@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { createPoseEngine, importSkeleton, MarrowError, poseStateBytes, type SkeletonModel } from '../../src/core';
 import { createPose, poseBytes } from '../../src/pose/v43/pose';
 import { prepareRig } from '../../src/pose/v43/rig';
-import { PHYSICS_STATE } from '../../src/pose/v43/solver-types';
+import { PHYSICS_STATE, PLACED_SIZE } from '../../src/pose/v43/solver-types';
 import {
     createPair,
     differences,
@@ -305,9 +305,12 @@ describe('the physics state of the 4.3 pose engine', () => {
             plain.state.colors,
             plain.solve.values,
         ]);
-        expect(poseBytes(plain)).toBe(poseStateBytes(plain.state));
+        // a byte for each bone that may have to be posed again, and the place and the forces of the last update
+        const noted = bare.bones.count + PLACED_SIZE * 8;
+
+        expect(poseBytes(plain)).toBe(poseStateBytes(plain.state) + noted);
         // four bytes for each bone of the update order: all but the one that needs a skin
-        expect(engine.bytes).toBe(poseStateBytes(engine.state) + (bare.bones.count - 1) * 4);
+        expect(engine.bytes).toBe(poseStateBytes(engine.state) + noted + (bare.bones.count - 1) * 4);
         expect(poseBytes(pose)).toBeGreaterThanOrEqual(poseBytes(plain) + pose.solve.physics.byteLength);
         // the physics calls do nothing there
         engine.physics = 'reset';

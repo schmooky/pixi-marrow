@@ -1,13 +1,12 @@
 import { Container } from 'pixi.js';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { linkRenderer, MarrowPipe } from '../../src/render/batch-pipe';
-import { batchClipper } from '../../src/render/clip-code';
 import { inspectView } from '../../src/render/inspect';
+import { loadMeshCode } from '../../src/render/mesh-code';
 import { AUTO_BATCH_VERTICES, hasClip, modeFor, modeReason } from '../../src/render/mode';
 import { expectBatch, loadFamily, populate } from './batch-check';
 import { bodyOf, createStage, elementOf } from './batch-stage';
-import { clipAttachment } from './clip-check';
-import { expectKernel, meshes, play, type Rig, slotIndex, step, vertexData } from './rig';
+import { drawPose, expectKernel, meshes, play, type Rig, step, vertexData } from './rig';
 
 /** The first rig of a list. */
 function firstOf(rigs: readonly Rig[]): Rig {
@@ -19,20 +18,21 @@ function firstOf(rigs: readonly Rig[]): Rig {
 }
 
 describe('the mode a view draws in', () => {
-    it('follows the option, the size of the skeleton and its clips', () => {
+    // the code of the mesh mode is there, as after an asset that asked for it. `mesh-code.test.ts` is about the time before
+    beforeAll(async () => {
+        await loadMeshCode();
+    });
+
+    it('follows the option, the size of the skeleton and what a renderer can batch', () => {
         const cases: [Parameters<typeof modeReason>, string, string][] = [
-            [['mesh', 10, 0, false], 'option', 'mesh'],
-            [['batched', 10, 0, false], 'option', 'batched'],
-            [['batched', 100_000, 0, false], 'option', 'batched'],
-            // slots that a clip cuts count only while the code that clips in a batch is not loaded
-            [['batched', 10, 3, false], 'clip', 'mesh'],
-            [['batched', 10, 0, true], 'limit', 'mesh'],
-            [['auto', AUTO_BATCH_VERTICES, 0, false], 'small', 'batched'],
-            [['auto', AUTO_BATCH_VERTICES + 1, 0, false], 'large', 'mesh'],
-            [['auto', AUTO_BATCH_VERTICES + 1, 2, false], 'large', 'mesh'],
-            [['auto', 10, 2, false], 'clip', 'mesh'],
-            [['auto', 10, 0, true], 'limit', 'mesh'],
-            [['mesh', 10, 2, true], 'option', 'mesh'],
+            [['mesh', 10, false], 'option', 'mesh'],
+            [['batched', 10, false], 'option', 'batched'],
+            [['batched', 100_000, false], 'option', 'batched'],
+            [['batched', 10, true], 'limit', 'mesh'],
+            [['auto', AUTO_BATCH_VERTICES, false], 'small', 'batched'],
+            [['auto', AUTO_BATCH_VERTICES + 1, false], 'large', 'mesh'],
+            [['auto', 10, true], 'limit', 'mesh'],
+            [['mesh', 10, true], 'option', 'mesh'],
         ];
 
         for (const [args, reason, mode] of cases) {
@@ -89,57 +89,6 @@ describe('the mode a view draws in', () => {
         expect(inspectView(rig.view).mode).toMatchObject({ option: 'auto', mode: 'batched', reason: 'small' });
         expect(rig.view.parts.paints.mesh).toBeUndefined();
         expect(stage.counts.builds).toBe(1);
-    });
-
-    // this file never loads the code that clips in a batch: `batched-clip.test.ts` does
-    it('is the mesh mode while a clip cuts a visible slot and the code that clips in a batch is not loaded', async () => {
-        expect(batchClipper()).toBeUndefined();
-        const stage = createStage();
-        const family = await loadFamily('4.2/spineboy-pro.skel');
-        const rigs = await populate(stage, family, 3);
-        const rig = firstOf(rigs.slice(1));
-        const { state } = rig.engine;
-        const gun = slotIndex(rig, 'gun');
-        const image = state.attachments[gun] ?? null;
-
-        stage.render();
-        expect(stage.counts.draws).toHaveLength(1);
-        state.attachments[gun] = clipAttachment(
-            'clip',
-            slotIndex(rig, 'head'),
-            [-200, -200, 200, -200, 200, 200, -200, 200],
-        );
-        rig.view.update(state);
-        expect(rig.view.stats).toMatchObject({ renderMode: 'mesh', clips: 1, maskDraws: 2 });
-        expect(inspectView(rig.view).mode).toMatchObject({
-            option: 'batched',
-            mode: 'mesh',
-            reason: 'clip',
-            batches: 0,
-        });
-        expect(bodyOf(rig.view)?.visible).toBe(false);
-        stage.render();
-        expect(stage.counts.builds).toBe(2);
-        // the skeletons around it still batch, each side on its own
-        expect(stage.counts.draws.filter((draw) => draw.kind === 'batch')).toHaveLength(2);
-        expect(stage.counts.draws.filter((draw) => draw.kind === 'mesh').length).toBe(rig.view.stats.drawCalls);
-        expectKernel(rig);
-        // more updates while it clips change nothing for Pixi
-        for (let frame = 0; frame < 5; frame++) {
-            for (const item of rigs) step(item, 0.02);
-            state.attachments[gun] = clipAttachment('clip', slotIndex(rig, 'head'), [-200, -200, 200, -200, 200, 200]);
-            rig.view.update(state);
-            stage.render();
-        }
-        expect(stage.counts.builds).toBe(2);
-        state.attachments[gun] = image;
-        rig.view.update(state);
-        expect(rig.view.stats).toMatchObject({ renderMode: 'batched', clips: 0, maskDraws: 0, drawCalls: 1 });
-        expect(meshes(rig.view)).toEqual([]);
-        stage.render();
-        expect(stage.counts.builds).toBe(3);
-        expect(stage.counts.draws).toHaveLength(1);
-        for (const item of rigs) expectBatch(item);
     });
 
     it('changes with the option at run time, and keeps what the other mode drew with', async () => {
@@ -290,7 +239,7 @@ describe('a batched skeleton that Pixi does not draw', () => {
         // the skeleton in the middle batches too, and every slot of it fades out
         between.view.renderMode = 'batched';
         between.engine.state.colors.fill(0);
-        between.view.update(between.engine.state);
+        drawPose(between.view, between.engine.state);
         expect(between.view.stats).toMatchObject({ renderMode: 'batched', drawCalls: 0, indices: 0 });
         expect(bodyOf(between.view)?.visible).toBe(false);
         stage.render();
@@ -300,12 +249,12 @@ describe('a batched skeleton that Pixi does not draw', () => {
 
         // nothing changes while it stays invisible
         for (let frame = 0; frame < 5; frame++) {
-            between.view.update(between.engine.state);
+            drawPose(between.view, between.engine.state);
             stage.render();
         }
         expect(stage.counts.builds).toBe(builds);
         between.engine.state.colors.fill(1);
-        between.view.update(between.engine.state);
+        drawPose(between.view, between.engine.state);
         stage.render();
         expect(stage.counts.builds).toBe(builds + 1);
         expect(stage.counts.draws).toHaveLength(1);
@@ -390,7 +339,7 @@ describe('the pipe of the batched mode', () => {
         const rig = await family.create();
         const pipe = linkRenderer(stage.renderer);
 
-        rig.view.update(rig.engine.state);
+        drawPose(rig.view, rig.engine.state);
         const body = bodyOf(rig.view);
 
         if (body === undefined) throw new Error('no body');

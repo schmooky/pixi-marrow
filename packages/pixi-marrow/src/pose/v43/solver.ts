@@ -7,6 +7,7 @@ import type {
 } from '../../model/constraints';
 import type { SkeletonModel } from '../../model/model';
 import type { AttachmentLookup } from '../shared/lookup';
+import { WORLD_STRIDE } from '../state';
 import { checkIndices, constraintError, PROPERTY_KINDS } from './plan-checks';
 import { planSlider, planSliders } from './slider-plan';
 import {
@@ -280,6 +281,7 @@ function createScratch(model: SkeletonModel, plans: readonly Plan43[]): SolveScr
     return {
         sorted: new Uint8Array(model.bones.count),
         previous: new Uint8Array(model.bones.count),
+        wasActive: new Uint8Array(model.bones.count),
         items: [],
         spaces: new Float64Array(spaces),
         positions: new Float64Array(spaces * 3 + 2),
@@ -287,6 +289,10 @@ function createScratch(model: SkeletonModel, plans: readonly Plan43[]): SolveScr
         world: new Float64Array(vertices + 2),
         curves: new Float64Array(Math.ceil(vertices / 6)),
         segments: new Float64Array(10),
+        seen: new Float64Array(plans.filter((item) => item.type === 'physics').length * WORLD_STRIDE),
+        kept: new Float64Array(PHYSICS_STATE + WORLD_STRIDE),
+        shown: null,
+        unread: new Uint8Array(model.bones.count),
     };
 }
 
@@ -311,6 +317,7 @@ export function prepareSolver(model: SkeletonModel, lookup: AttachmentLookup): S
         setup,
         ...listChildren(model),
         sliders: planSliders(model, lookup, plans),
+        free: new Uint8Array(model.bones.count),
         scratch: createScratch(model, plans),
     };
 }

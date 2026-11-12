@@ -67,6 +67,66 @@ export interface PoseState {
     readonly deformLengths: Int32Array;
     /** The slot index at each draw order position. */
     readonly drawOrder: Int16Array;
+    /**
+     * Counts the changes of the pose, with {@link nextVersion}. An engine raises it in every
+     * update and command that changed something a renderer reads. That is a world transform, the
+     * activity of a bone, a slot color, an attachment, a sequence index, a deform or the draw
+     * order. A reader that sees the value it saw last has nothing to do.
+     *
+     * It also tells an engine that someone else wrote the state. Code that writes an array of
+     * this state itself, `local` and `inherit` included, raises the version and sets the stamps of
+     * what it wrote, or calls {@link touchPose}. An engine at rest skips its work until then. The
+     * plain fields need no call: an engine compares `x`, `y`, `scaleX`, `scaleY`, `yDown` and the
+     * directions of wind and gravity in every update.
+     */
+    version: number;
+    /**
+     * Per bone: the {@link version} at which its world transform or its activity last changed. A
+     * stamp may move although the values stayed. A value never changes without its stamp. Compare
+     * with {@link isNewer}.
+     */
+    readonly boneStamps: Uint32Array;
+    /**
+     * Per slot: the {@link version} at which its color, dark color, attachment, sequence index or
+     * deform last changed. The same rule as for {@link boneStamps}.
+     */
+    readonly slotStamps: Uint32Array;
+    /** The {@link version} at which the draw order last changed. */
+    drawOrderStamp: number;
+}
+
+/**
+ * The version after a version. It wraps after 4,294,967,295 changes, which {@link isNewer} allows for.
+ *
+ * @example
+ * state.version = nextVersion(state.version);
+ * state.boneStamps[bone] = state.version;
+ */
+export const nextVersion = (version: number): number => (version + 1) >>> 0;
+
+/**
+ * True when a stamp is newer than the version a reader saw last. It holds while the reader is
+ * less than two billion changes behind.
+ *
+ * @example
+ * if (isNewer(Number(state.boneStamps[bone]), seen)) placeVerticesOf(bone);
+ */
+export const isNewer = (stamp: number, seen: number): boolean => ((stamp - seen) | 0) > 0;
+
+/**
+ * Marks the whole pose as changed: every bone, every slot and the draw order. For code that
+ * writes the arrays of a state itself and does not track what it wrote. The engine then does
+ * its next update in full, and a renderer places everything again.
+ *
+ * @example
+ * state.local[bone * LOCAL_STRIDE + 2] += 10;
+ * touchPose(state);
+ */
+export function touchPose(state: PoseState): void {
+    state.version = nextVersion(state.version);
+    state.boneStamps.fill(state.version);
+    state.slotStamps.fill(state.version);
+    state.drawOrderStamp = state.version;
 }
 
 /**
@@ -101,6 +161,10 @@ export function createPoseState(model: SkeletonModel): PoseState {
         deform: Array.from({ length: slots }, () => new Float64Array(0)),
         deformLengths: new Int32Array(slots),
         drawOrder: new Int16Array(slots),
+        version: 1,
+        boneStamps: new Uint32Array(bones).fill(1),
+        slotStamps: new Uint32Array(slots).fill(1),
+        drawOrderStamp: 1,
     };
 }
 
@@ -122,6 +186,8 @@ export function poseStateBytes(state: PoseState): number {
         state.sequenceIndices,
         state.deformLengths,
         state.drawOrder,
+        state.boneStamps,
+        state.slotStamps,
         ...state.deform,
     ];
 

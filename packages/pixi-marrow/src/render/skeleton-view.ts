@@ -8,17 +8,19 @@ import { type AttachmentLookup, createAttachmentLookup } from '../pose/shared/lo
 import type { PoseState } from '../pose/state';
 import { layoutSlots, type SlotLayout } from './batch-layout';
 import { measureEntries } from './bounds';
-import { batchClipper } from './clip-code';
+import { clipCode, clipCodeMissing } from './clip-code';
 import { restoreColors } from './colors';
 import { CoverTest } from './cover';
 import { type CutChoice, CutState } from './cut-state';
-import { checkPose, placeEntry, showSequence, tintEntry } from './entry-pose';
+import { checkPose } from './entry-pose';
 import { type DrawGate, drawsPlain, type EdgeBend } from './gate';
 import type { ViewParts } from './inspect';
 import { releaseTemplate } from './layouts';
-import { type ModeReason, modeFor, modeReason, type RenderMode } from './mode';
+import { meshCode, wantMeshCode } from './mesh-code';
+import type { RenderMode } from './mode';
 import { pageSources } from './pages';
 import { ViewPaints } from './paints';
+import { clipsMoved, createPosePass, notePass, type PosePass, poseEntries } from './pose-pass';
 import { u8 } from './read';
 import { createViewStats, type ViewStats } from './stats';
 import { buildTemplate, type Template, templateBytes } from './template';
@@ -33,7 +35,7 @@ export type { ViewStats } from './stats';
 export interface SkeletonViewOptions extends CutChoice {
     /**
      * `mesh` draws with meshes of the view, `batched` in the batches of its render group. `auto`
-     * (the default) batches a small skeleton.
+     * (the default) batches a small skeleton. A view draws in a batch until the mesh code is loaded.
      */
     renderMode?: RenderMode | undefined;
 }
@@ -50,13 +52,13 @@ const PAGE_POLL = 64;
  * that skeletons next to each other share draw calls. See {@link SkeletonViewOptions.renderMode}.
  *
  * The vertex layout is stable. Every attachment a slot can show has its own vertex range, so
- * showing, hiding and reordering slots rewrites indices only. Positions are handed on with every
- * update, colors when they change, texture coordinates when a sequence shows another region.
+ * showing, hiding and reordering slots rewrites indices only. Positions are handed on for the
+ * slots that moved, colors when they change, texture coordinates when a sequence shows another region.
  *
  * A clipping attachment cuts the slots after it, by the rules of the official runtime of the
  * model's version. In the mesh mode those slots are draw ranges behind a stencil mask that holds
- * the clip polygon: two more draw calls and one small upload per update. In the batched mode
- * their triangles are cut on the CPU and stay in the batch, see `batch-clip.ts`.
+ * the clip polygon: two more draw calls, and one small upload when the polygon moved. In the
+ * batched mode their triangles are cut on the CPU and stay in the batch, see `batch-clip.ts`.
  *
  * With outlines the view cuts overdraw in two ways that leave the picture as it is. A slot that
  * lies inside the opaque rectangle of a later slot is left out of the index buffer. A region
@@ -85,8 +87,6 @@ export class SkeletonView implements DrawGate {
     readonly container: Container;
     /** What the view did and what it holds. */
     readonly stats: ViewStats;
-    /** The mode the view was asked for. Setting it takes effect with the next update. */
-    renderMode: RenderMode;
     private readonly model: SkeletonModel;
     private readonly atlas: AtlasModel;
     private readonly lookup: AttachmentLookup;
@@ -100,16 +100,18 @@ export class SkeletonView implements DrawGate {
     private readonly seen: VisibleList;
     /** What draws in each mode, and the mode that draws now. */
     private readonly paints: ViewPaints;
-    /** Why the view draws in its mode. */
-    private reason: ModeReason;
+    /** The `renderMode` option. */
+    private choice: RenderMode;
     /** Where the slots keep their vertices in a batch. */
     private slots: SlotLayout;
     /** The pose of the last update. */
     private last: PoseState | undefined;
     private template: Template;
     private boundsDirty = true;
-    /** True when the alpha of a slot that can hide others changed since the covered slots were tested. */
-    private recolored = true;
+    /** What the last pass over the visible entries did, and the version of the pose it drew. */
+    private readonly pass: PosePass = createPosePass();
+    /** True when the mode must be picked again: the option, the layout or what a renderer can batch changed. */
+    private restyle = true;
     /** True when the layout holds polygons or regions without a vertex: cuts that every draw makes. */
     private baked = false;
     /** Counts the updates between two looks at the page textures. */
@@ -140,51 +142,82 @@ export class SkeletonView implements DrawGate {
         this.dark = model.slots.hasDark.includes(1);
         this.cutState = new CutState(atlas, pages, options);
         this.cover = new CoverTest(model.slots.count);
-        this.renderMode = options.renderMode ?? 'auto';
+        this.choice = options.renderMode ?? 'auto';
         // a batch needs no color per vertex. Which mode draws is known for sure with the first update
-        this.template = this.build(-1, null, this.renderMode === 'mesh');
+        this.template = this.build(-1, null, false);
         this.slots = layoutSlots(this.template, model.slots.count);
         this.seen = new VisibleList(model);
         this.container = new Container({ label: 'marrow-skeleton' });
-        this.reason = modeReason(this.renderMode, this.slots.plain, 0, false);
-        const mode = modeFor(this.renderMode, this.reason);
-
-        this.stats = createViewStats(this.template.vertexCount, templateBytes(this.template), mode);
+        this.stats = createViewStats(this.template.vertexCount, templateBytes(this.template));
         // the first update knows what the skeleton shows, and creates what draws in its mode
-        this.paints = new ViewPaints(
-            {
-                container: this.container,
-                gate: this,
-                pages,
-                texture: textures[0] ?? Texture.EMPTY,
-                dark: this.dark,
-                model,
-                seen: this.seen,
-                cover: this.cover,
-                stats: this.stats,
-                measure: () => this.measure(),
-            },
-            mode,
-        );
+        this.paints = new ViewPaints({
+            container: this.container,
+            gate: this,
+            pages,
+            texture: textures[0] ?? Texture.EMPTY,
+            dark: this.dark,
+            model,
+            seen: this.seen,
+            cover: this.cover,
+            stats: this.stats,
+            measure: () => this.measure(),
+        });
+        this.stats.renderMode = this.paints.pick(this.choice, this.slots.plain, false) ?? 'batched';
+        // a view that is made for the mesh mode asks for its code, also after a load that failed
+        if (this.paints.waits) wantMeshCode();
         this.baked = this.template.tightOffsets.length > 0 || this.template.hollow.includes(1);
+    }
+
+    /**
+     * The `renderMode` option. Setting it takes effect with the next update. The mesh mode
+     * draws once its code is loaded, which setting `mesh` asks for.
+     */
+    get renderMode(): RenderMode {
+        return this.choice;
+    }
+
+    set renderMode(mode: RenderMode) {
+        this.choice = mode;
+        this.restyle = true;
+        if (mode === 'mesh') wantMeshCode();
     }
 
     /**
      * Brings the buffers in line with a pose. Call after the pose engine has updated. Allocates
      * nothing once every draw range the skeleton needs has been used.
      *
+     * The view does the work the stamps of the pose ask for, see `pose-pass.ts`. A pose with the
+     * version the view drew last asks for none, and the update returns at once. It does not when
+     * the outlines or the mode of the view changed, or a search for covered slots is owed.
+     *
      * Throws a `MarrowError` for a pose of another model, after {@link destroy}, and for a
      * clipping attachment with fewer than three vertices, which it names.
      */
     update(state: PoseState): void {
         checkPose(this.destroyed, state.model === this.model);
-        this.last = state;
-        if (state.skin !== this.template.skin || this.outdated() || !this.seen.resolve(this.template, state)) {
-            this.layout(state.skin, state.attachments);
-            this.seen.reset();
-            this.seen.resolve(this.template, state);
+        const { pass, paints, seen } = this;
+        const stale = this.outdated() || state.skin !== this.template.skin;
+        const same = state === this.last && state.version === pass.seen && !pass.all;
+        const arrived = paints.waits && meshCode() !== undefined;
+
+        if (same && !stale && !this.restyle && !this.cover.owes && !arrived) {
+            this.stats.skips++;
+            pass.skipped = true;
+
+            return;
         }
-        this.finish(state, this.seen.collect(this.template, state));
+        if (state !== this.last) pass.all = true;
+        this.last = state;
+        // what is visible can change with the draw order, an attachment or an alpha, not with a bone that moves
+        let listed = pass.all || (!same && seen.relists(this.template, state, pass.seen));
+
+        if (stale || (listed && !seen.resolve(this.template, state))) {
+            this.layout(state.skin, state.attachments);
+            seen.reset();
+            seen.resolve(this.template, state);
+            listed = true;
+        }
+        this.finish(state, listed ? seen.collect(this.template, state) : seen.count, listed);
     }
 
     /**
@@ -237,17 +270,20 @@ export class SkeletonView implements DrawGate {
         if (outdated && this.seen.inStep(this.template, state)) this.redraw(state);
     }
 
-    /** Draws with meshes from now on: a renderer cannot sample the pages of a run in one batch. */
+    /** Draws with meshes from now on, and nothing until their code is loaded: a renderer cannot batch the skeleton. */
     refuseBatch(): void {
         this.refused = true;
+        this.restyle = true;
+        this.seen.dirty = true;
+        wantMeshCode();
         if (this.last !== undefined && !this.destroyed) this.update(this.last);
     }
 
     /** The state of the view as it is, for `inspectView`, which the perf report loads on demand. */
     get parts(): ViewParts {
-        const { template, seen, cover, cutState, paints, reason, renderMode } = this;
+        const { template, seen, cover, cutState, paints, choice, refused, pass, last } = this;
 
-        return { template, seen, cover, cutState, paints, reason, renderMode };
+        return { template, seen, cover, cutState, paints, renderMode: choice, refused, pass, pose: last };
     }
 
     /** Frees the buffers, the meshes and the shaders. The textures belong to the caller. */
@@ -283,13 +319,10 @@ export class SkeletonView implements DrawGate {
 
     /** Picks the mode for what the view shows now, and changes to it. */
     private choose(): void {
-        // without the code that clips in a batch, a clip draws with meshes and a stencil mask
-        const clipped = batchClipper() === undefined ? this.seen.clipped : 0;
-        const reason = modeReason(this.renderMode, this.slots.plain, clipped, this.refused);
-        const mode = modeFor(this.renderMode, reason);
+        const mode = this.paints.pick(this.choice, this.slots.plain, this.refused);
 
-        this.reason = reason;
-        if (mode !== this.paints.mode || !this.paints.ready) this.enter(mode);
+        this.restyle = false;
+        if (mode !== undefined) this.enter(mode);
     }
 
     /** Starts to draw in a mode. Pixi builds the instructions of the render group again for it. */
@@ -297,6 +330,8 @@ export class SkeletonView implements DrawGate {
         if (mode === 'mesh') restoreColors(this.template);
         this.paints.enter(mode, this.template, this.slots);
         this.stats.renderMode = mode;
+        // what draws in the mode holds nothing of the pose yet
+        this.pass.all = true;
         this.seen.dirty = true;
         this.watch();
     }
@@ -318,6 +353,9 @@ export class SkeletonView implements DrawGate {
         this.baked = template.tightOffsets.length > 0 || template.hollow.includes(1);
         this.paints.relayout(template, this.slots);
         this.cover.clear();
+        // new vertex ranges hold no pose, and can have another count for `auto`
+        this.pass.all = true;
+        this.restyle = true;
         this.seen.dirty = true;
         this.boundsDirty = true;
         this.stats.templateBuilds++;
@@ -334,94 +372,64 @@ export class SkeletonView implements DrawGate {
 
         this.layout(before.skin, state.attachments);
         this.seen.carry(before, this.template, state);
-        this.finish(state, this.seen.count);
-    }
-
-    /** What follows the list of visible entries: the mode, vertex data, covered slots, indices, clip masks. */
-    private finish(state: PoseState, count: number): void {
-        this.stats.clips = this.seen.applied;
-        this.choose();
-        if (count > 0) this.pose(state, count);
-        if (this.hide(state, count)) this.seen.dirty = true;
-        if (this.seen.dirty) this.reindex(count);
-        const { mesh, element, body } = this.paints;
-
-        if (element !== undefined) {
-            element.clip(state);
-            body?.touch();
-        } else if (mesh !== undefined && mesh.ranges.masks > 0) {
-            mesh.clip(this.model, state, this.seen, this.stats);
-            // a mask grows when its slot shows a polygon with more vertices
-            this.stats.bufferBytes = templateBytes(this.template) + mesh.ranges.bytes;
-        }
-    }
-
-    /** Positions, sequence frames and colors of the visible entries, then the uploads or the marks for the batch. */
-    private pose(state: PoseState, count: number): void {
-        const { template, stats } = this;
-        const { bones, hasDark } = this.model.slots;
-        const visible = this.seen.list;
-        const { element } = this.paints;
-        let colorsChanged = false;
-        let uvsChanged = false;
-
-        for (let i = 0; i < count; i++) {
-            const entry = i32(visible, i);
-            const slot = i32(template.slots, entry);
-
-            // a hollow entry has no vertex to place or to color
-            if (i32(template.counts, entry) === 0) continue;
-            const moved = i32(template.frameCounts, entry) > 1 ? showSequence(template, state, entry, slot) : 0;
-
-            if (moved > 0) {
-                uvsChanged = true;
-                element?.mark(entry);
-                // a frame on a page of another group of 8 moves the entry to another draw range
-                if (moved > 1) this.seen.dirty = true;
-            }
-            placeEntry(template, state, bones, entry, slot);
-            const alpha = u8(template.light, entry * 4 + 3);
-
-            if (!tintEntry(template, state, hasDark, entry, slot)) continue;
-            colorsChanged = true;
-            element?.mark(entry);
-            // the alpha of a slot with an opaque rectangle decides whether it can hide others
-            if (u8(template.light, entry * 4 + 3) !== alpha && i32(template.opaqueAt, entry) >= 0)
-                this.recolored = true;
-        }
-        if (element === undefined) this.paints.mesh?.upload(colorsChanged, uvsChanged);
-        else element.dirty = true;
-        this.boundsDirty = true;
-        stats.positionUploads++;
-        if (uvsChanged) stats.uvUploads++;
-        if (colorsChanged) stats.colorUploads++;
+        this.finish(state, this.seen.count, true);
     }
 
     /**
-     * Marks the visible slots that a later opaque slot covers. Most frames have nothing to do
-     * here: no slot is skipped and it is not the turn of a search, see `CoverTest`. Nothing is
-     * covered while Pixi multiplies an alpha below 1 into the skeleton or blends it in another
-     * mode than normal. Returns whether a mark changed.
+     * What follows the list of visible entries: the mode, the vertex data of what changed, covered
+     * slots, indices and clips.
+     *
+     * @param listed Whether the list was made again for this pose.
      */
-    private hide(state: PoseState, count: number): boolean {
-        const { cover, template, seen } = this;
+    private finish(state: PoseState, count: number, listed: boolean): void {
+        const { pass, seen, stats, template, cover } = this;
+        const { bones, hasDark } = this.model.slots;
+
+        // the code that clips loads with an asset whose skeleton has a clipping attachment
+        if (seen.clipped > 0 && clipCode() === undefined) throw clipCodeMissing();
+        stats.clips = seen.applied;
+        this.choose();
+        const { mesh, element } = this.paints;
+
+        poseEntries(pass, template, state, bones, hasDark, seen, element);
+        if (element === undefined) mesh?.upload(pass, template.hasDark ? 8 : 4);
+        notePass(stats, pass);
+        const moved = pass.placed > 0 || listed;
+
+        if (moved) this.boundsDirty = true;
+        // a sequence on a page of another group of 8 moves its entry to another draw range
+        if (pass.regrouped) seen.dirty = true;
         // the slots that can hide others are chosen again when the list or their alpha changed
-        const moved = seen.dirty || this.recolored;
+        const relisted = seen.dirty || pass.recolored || pass.all;
 
-        this.recolored = false;
-        // a layout without an opaque rectangle has nothing to test with
-        if (template.opaqueCount === 0 || !cover.begin(moved)) return false;
-        let changed = false;
+        if (cover.follow(template, seen, state.world, bones, this.container, moved, relisted)) seen.dirty = true;
+        stats.coveredSlots = cover.covered;
+        const indexed = seen.dirty;
 
-        if (drawsPlain(this.container)) {
-            changed = cover.run(template, seen.list, seen.clips, count, state.world, this.model.slots.bones);
-        } else {
-            changed = cover.clear();
-            cover.rest(false);
+        if (indexed) this.reindex(count);
+        this.clip(state, indexed);
+        pass.before = pass.seen;
+        pass.seen = state.version;
+        pass.all = false;
+        pass.skipped = false;
+    }
+
+    /** Shapes the mask of a clip again when its polygon moved or the list changed, see `pose-pass.ts`. */
+    private clip(state: PoseState, indexed: boolean): void {
+        const { pass, seen, stats } = this;
+        const { mesh, element, body } = this.paints;
+        const shaped =
+            seen.clipped > 0 && (indexed || pass.all || clipsMoved(state, seen, this.model.slots.bones, pass.seen));
+
+        if (element !== undefined) {
+            // a batch holds cut triangles: they are cut again then, and when a slot inside a clip was placed
+            if (shaped || pass.cut) clipCode()?.pose(element, state);
+            if (element.dirty) body?.touch();
+        } else if (shaped && mesh !== undefined && mesh.ranges.masks > 0) {
+            mesh.clip(this.model, state, seen, stats);
+            // a mask grows when its slot shows a polygon with more vertices
+            stats.bufferBytes = templateBytes(this.template) + mesh.ranges.bytes;
         }
-        this.stats.coveredSlots = cover.covered;
-
-        return changed;
     }
 
     /**
@@ -444,10 +452,12 @@ export class SkeletonView implements DrawGate {
         }
         if (element !== undefined) {
             const runs = element.plan();
+            // A skeleton that shows nothing leaves the batch, so that it breaks no batch of others.
+            // One that no renderer can batch draws nothing while it waits for the code of the mesh mode
+            const shows = count > 0 && !(this.refused && this.paints.waits);
 
-            // a skeleton that shows nothing leaves the batch, so that it breaks no batch of others
-            if (this.paints.body !== undefined) this.paints.body.visible = count > 0;
-            stats.drawCalls = count > 0 ? runs : 0;
+            if (this.paints.body !== undefined) this.paints.body.visible = shows;
+            stats.drawCalls = shows ? runs : 0;
             stats.maskDraws = 0;
             stats.indices = indices;
             stats.bufferBytes = templateBytes(template) + element.bytes;

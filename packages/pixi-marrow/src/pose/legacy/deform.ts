@@ -1,6 +1,7 @@
 import type { PoseState } from '../state';
 import { ALPHA, curvePercent, SHARED, search, TIME } from './curves';
 import { factsOf, type Rig } from './rig';
+import { stampSlot } from './stamps';
 import { ADD, FIRST, type LegacyTimeline, SETUP } from './timelines';
 
 /**
@@ -142,8 +143,15 @@ function deformBeforeFirstKey(
     setup: Float32Array | null,
 ): void {
     const alpha = Number(SHARED[ALPHA]);
-    if (blend === SETUP || (blend === FIRST && alpha === 1)) pose.deformLengths[slot] = 0;
-    else if (blend === FIRST) mixDeformToSetup(resizeDeform(pose, slot, count), count, setup);
+
+    if (blend === SETUP || (blend === FIRST && alpha === 1)) {
+        // a slot without a deform stays as it is
+        if (pose.deformLengths[slot] !== 0) stampSlot(pose, slot);
+        pose.deformLengths[slot] = 0;
+    } else if (blend === FIRST) {
+        mixDeformToSetup(resizeDeform(pose, slot, count), count, setup);
+        stampSlot(pose, slot);
+    }
 }
 
 /** The deform at or after the first key of a timeline. `values` is scratch space. */
@@ -202,5 +210,7 @@ export function applyDeform(
         deformBeforeFirstKey(pose, slot, first.length, blend, setup);
     } else {
         deformFromKeys(resizeDeform(pose, slot, first.length), timeline, first, blend, setup, values);
+        // the vertices are not compared: a deform between two keys is a new one in nearly every update
+        stampSlot(pose, slot);
     }
 }

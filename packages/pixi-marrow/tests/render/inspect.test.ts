@@ -1,10 +1,11 @@
 import { Container, type Renderer, type Texture, TextureSource } from 'pixi.js';
 import { describe, expect, it } from 'vitest';
 import type { AtlasPage } from '../../src/model/atlas';
-import { type PageBlock, pageAllowsCuts, pageBlock, sharedTriangleBytes } from '../../src/render/cuts';
+import { sharedTriangleBytes } from '../../src/render/cut-work';
 import { bendsEdges } from '../../src/render/gate';
 import { describeCuts, inspectView, layoutArrayBytes, templateArrayBytes } from '../../src/render/inspect';
 import { ownsStatics, releaseTemplate } from '../../src/render/layouts';
+import { type PageBlock, pageAllowsCuts, pageBlock } from '../../src/render/page-block';
 import { buildTemplate, showFrame } from '../../src/render/template';
 import { type CoverSlot, coverFiles, coverRig, framesUntilCovered, opaqueSquares, slotOf } from './cover-rig';
 import { cutView, PENTAGON, pageTextures, plainOutlines, setPolygon } from './cuts';
@@ -120,6 +121,7 @@ describe('what a view says about its cuts', () => {
             tightMesh: 'auto',
             occlusion: 'auto',
             outlines: true,
+            code: 'loaded',
             hostile: false,
             bend: null,
             pages: [null],
@@ -140,19 +142,24 @@ describe('what a view says about its cuts', () => {
         expect(cutState.held?.regions).toHaveLength(rig.atlas.regionNames.length);
         expect(cutState.allowed).toEqual(Uint8Array.of(1));
         // the same objects in every call, and the template of the last layout
-        expect(rig.view.parts).toEqual({
-            cutState,
-            template,
-            seen,
-            cover,
-            paints,
-            reason: 'option',
-            renderMode: 'mesh',
-        });
+        const again = rig.view.parts;
+
+        for (const key of ['cutState', 'template', 'seen', 'cover', 'paints'] as const) {
+            expect(again[key], key).toBe(rig.view.parts[key]);
+        }
+        expect([again.cutState, again.template, again.seen, again.cover]).toEqual([cutState, template, seen, cover]);
+        expect(again).toMatchObject({ renderMode: 'mesh', refused: false });
         expect(rig.view.parts.paints).toBe(paints);
         expect(seen.count).toBe(2);
         expect(paints.mesh?.ranges.active).toBe(1);
-        expect(paints).toMatchObject({ mode: 'mesh', ready: true, body: undefined, element: undefined });
+        expect(paints).toMatchObject({
+            mode: 'mesh',
+            reason: 'option',
+            waits: false,
+            ready: true,
+            body: undefined,
+            element: undefined,
+        });
     });
 
     it('states that a view has no outlines', async () => {

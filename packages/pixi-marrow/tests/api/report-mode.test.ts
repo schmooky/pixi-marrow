@@ -1,5 +1,7 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { type MarrowAsset, MarrowError, MarrowSpine, type PerfEntry, type PerfFeature } from '../../src/index';
+import { touchPose } from '../../src/pose/state';
+import { loadMeshCode } from '../../src/render/mesh-code';
 import { AUTO_BATCH_VERTICES } from '../../src/render/mode';
 import { createStage } from '../render/batch-stage';
 import type { CoverSlot } from '../render/cover-rig';
@@ -28,6 +30,11 @@ describe('the render mode of a display object', () => {
 
         return found;
     }
+
+    // the code of the mesh mode is there, as after an asset that asked for it. `mesh-code.test.ts` is about the time before
+    beforeAll(async () => {
+        await loadMeshCode();
+    });
 
     afterEach(() => {
         for (const spine of made.splice(0)) spine.destroy();
@@ -243,6 +250,7 @@ describe('the render mode of a display object', () => {
         expect((await row(spine, 'slots')).value).toBe('0 of 1 visible');
         // the slot fades in: the skeleton joins the batch with the next build
         spine.engine.state.colors[3] = 1;
+        touchPose(spine.engine.state);
         spine.update(FRAME);
         stage.render();
         expect(stage.counts.draws).toHaveLength(1);

@@ -1,7 +1,9 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { buildReport } from '../../src/api/report';
 import { type MarrowAsset, MarrowSpine, type PerfEntry, type PerfFeature } from '../../src/index';
+import { touchPose } from '../../src/pose/state';
 import { inspectView } from '../../src/render/inspect';
+import { loadMeshCode } from '../../src/render/mesh-code';
 import type { SkeletonView } from '../../src/render/skeleton-view';
 import type { CoverSlot } from '../render/cover-rig';
 import { coverAsset, filesAsset } from './cover-asset';
@@ -10,6 +12,7 @@ import { FRAME, fixtureAsset } from './helpers';
 /** The features of a report, in the order of its rows. */
 const FEATURES: readonly PerfFeature[] = [
     'renderMode',
+    'motion',
     'drawCalls',
     'blend',
     'pages',
@@ -55,6 +58,11 @@ const NINE_PAGES = {
         '\n',
     ),
 };
+
+// the code of the mesh mode is there, as after an asset that asked for it
+beforeAll(async () => {
+    await loadMeshCode();
+});
 
 describe('the perf report of a display object', () => {
     const made: MarrowSpine[] = [];
@@ -382,7 +390,7 @@ describe('the perf report of a display object', () => {
 
             expect(await row(spine, 'bones')).toMatchObject({
                 value: '31 of 31 posed',
-                reason: 'every bone is posed in every update',
+                reason: 'every bone is posed in an update that moves the skeleton',
             });
             expect(await row(spine, 'slots')).toMatchObject({
                 value: '3 of 3 visible',
@@ -433,7 +441,11 @@ describe('the perf report of a display object', () => {
         it('state the uploads per update that drew, with the totals behind them', async () => {
             const spine = create(await coverAsset(apart([{ name: 'a', shows: 'small' }])));
 
-            for (let i = 0; i < 3; i++) spine.update(FRAME);
+            // a pose that is marked as changed: the view places it again, as it does while it plays
+            for (let i = 0; i < 3; i++) {
+                touchPose(spine.engine.state);
+                spine.update(FRAME);
+            }
 
             // the update of the constructor and three more. The color is written once
             expect(await row(spine, 'uploads')).toMatchObject({

@@ -1,9 +1,9 @@
 {
   "everything": {
-    "gzip": 31864
+    "gzip": 27540
   },
   "core (everything)": {
-    "gzip": 5762
+    "gzip": 5891
   },
   "core (sniffSkeleton)": {
     "gzip": 806
@@ -15,12 +15,12 @@
     "gzip": 1251
   },
   "core (createPoseEngine)": {
-    "gzip": 185
+    "gzip": 186
   },
   "optimize (generateNames)": {
     "gzip": 537
   },
   "perf (createProbe)": {
-    "gzip": 982
+    "gzip": 1051
   }
 }

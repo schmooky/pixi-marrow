@@ -7,7 +7,7 @@
  * usage: pnpm check:render [--renderer=webgl|webgpu|both] [--only=4.3/spineboy] [--animations=3|all]
  *                          [--render-mode=both|mesh|batched] [--strict-rebuilds] [--trust-mode]
  *                          [--strict-clipping] [--self-test] [--verbose] [--shots=4]
- *                          [--out=.shots/render] [--size=512]
+ *                          [--out=.shots/render] [--size=512] [--dist=<folder>] [--pixi=8.16]
  *
  * The rigs are the entries of fixtures/manifest.json that have page images. For each one a few
  * animations play on both sides with the same time steps. Both sides run as they ship and solve
@@ -102,6 +102,33 @@
  *   instruction builds         how often Pixi built instructions after the first frame, per side
  *   proof, two instances ...   two instances swapped in the draw order. It must be rejected
  *
+ * Sleeping and waking. A runtime may leave work out for a skeleton that does not change. It must
+ * never show an old picture for it. The scenes whose name starts with `sleep` let skeletons rest
+ * and wake: one rests for many frames and plays again, some rest while their parent moves or
+ * while a neighbour in the same batch plays, some change while they are hidden and are shown
+ * later, some rest while their skin, tint, alpha or render mode changes, and some are destroyed
+ * while they rest. Every frame of these scenes is compared with the official runtime, which does
+ * all of its work in every frame, in both render modes.
+ *
+ *   proof, a frame held back   one side leaves the update of one frame out, as a view would that
+ *                              skips work it had to do. Its stale picture must be rejected
+ *
+ * The lazy mesh mode. The code of the mesh mode is a chunk that loads on demand. The scenes
+ * whose name starts with `lazy` draw the default options alone, each on a page of its own:
+ *
+ *   lazy mesh mode             the modes the instances drew in, frame by frame. A rig that `auto`
+ *                              draws with meshes must draw its first frame in the mesh mode. An
+ *                              instance that asks for the mesh mode at run time, or is created
+ *                              for it without the load that waits for its code, draws in a batch
+ *                              until the code is there. It must draw in every frame, which the
+ *                              comparison of every frame shows, and arrive in the mesh mode
+ *   mesh chunk                 the requests of the page. A page whose skeletons all draw in a
+ *                              batch must not ask for the chunk. A bundle without such a chunk
+ *                              is a finding and fails nothing
+ *
+ * Everywhere else an instance that asks for the mesh mode by name gets an asset that was loaded
+ * for that mode, see scripts/render/sides.js.
+ *
  * The last scenes look for a limit: 1200 instances in one stage, once of a rig with a clip and
  * once of a rig without. Each render mode of ours gets a page of its own there, so a mode that
  * throws inside Pixi cannot disturb the next one. What such a scene runs into prints as `FOUND`,
@@ -132,13 +159,31 @@
  * get images. `--self-test` runs the tooling proof alone and draws nothing of ours. A proof is a
  * picture that is wrong on purpose: it must be rejected, and rejected again at the second
  * placement, so that the second look cannot let a real difference pass. The proofs of a rig move,
- * tint and hide. The proof of the scenes swaps two instances in the draw order.
+ * tint and hide. The proofs of the scenes swap two instances in the draw order and hold a frame
+ * back.
  *
  * --only keeps the rigs and scenes whose id holds the text: `--only=scene/` runs the scenes
  * alone, `--only=4.` the rigs alone. --render-mode=mesh or batched draws one mode of ours.
  * --trust-mode runs the batched comparisons on a runtime that reports no mode, and takes the mode
  * that was asked for as the mode that drew. It is for work on this tool: such a run proves
- * nothing about a batched mode.
+ * nothing about a batched mode. --dist names a folder with the `package.json` and the `dist` of a
+ * build of pixi-marrow that was kept: the check then draws that build and leaves the working
+ * tree alone.
+ *
+ * --pixi names the version of pixi.js the pages run on, for example `--pixi=8.16`. The package
+ * allows a range of versions and is developed on one of them, and the runtime has branches by
+ * the version of Pixi. The version must be installed as a dev dependency of the package under
+ * an alias, see `pixiPackage` of scripts/render/setup.mjs. pixi-marrow then runs on that
+ * pixi.js. The official runtime allows the same range and can draw differently on an old
+ * pixi.js too, so it runs twice. Its pictures on the pixi.js the package is developed with are
+ * the reference: every comparison with the official runtime is one with them. Its pictures on
+ * the pixi.js of the page are held against the reference too:
+ *
+ *   official, this pixi.js     the official runtime on the pixi.js of the page against the
+ *                              reference. A difference is a finding about the official runtime
+ *                              on that pixi.js and fails nothing
+ *
+ * The head of a renderer names the versions.
  *
  * Without --renderer both run. A renderer the browser does not have is skipped with a line that
  * says so, and fails the check only when it was asked for by name.
@@ -149,11 +194,13 @@
 import { rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { findMeshChunk, meshChunkCase } from './render/chunks.mjs';
 import { planRigs } from './render/plan.mjs';
 import { createReporter } from './render/report.mjs';
+import { describeHead, describeRig, describeScene, strayPixi } from './render/report-modes.mjs';
 import { planScenes } from './render/scene-plan.mjs';
 import { bundlePage, serve } from './render/serve.mjs';
-import { ensureBuilt, inTime, launchChrome, parseArgs } from './render/setup.mjs';
+import { builtPackage, inTime, launchChrome, parseArgs, pixiPackage } from './render/setup.mjs';
 
 /**
  * The pass criteria, each as tight as the pictures of this repo support. The numbers they rest on
@@ -216,6 +263,11 @@ const TOLERANCE = {
     // the only reference there is. The limit is the one of `match`: both modes pass that against
     // the official runtime wherever it can draw.
     own: { max: 4, over1: 0.0005, over8: 0 },
+    // On a page that runs on another pixi.js: the official runtime on that pixi.js against the
+    // official runtime on the pixi.js the package is developed with, the reference. The same
+    // code draws both, so the limits are those of `match`. A frame outside of them says that
+    // the official runtime draws another picture on that pixi.js. It is a finding, not a failure.
+    pixi: { max: 4, over1: 0.0005, over8: 0 },
 };
 /** Failing cases per rig that get their images saved. */
 const SHOTS_PER_RIG = 4;
@@ -247,9 +299,12 @@ const pageOptions = {
 async function runPage(browser, origin, renderer, { official, call, plan, options: more }) {
     const page = await browser.newPage();
     const errors = [];
+    // every address the page asks for: a scene about the lazy mesh mode looks for a chunk among them
+    const requested = [];
     // the runtimes load before the renderer is created, so the page is told which ones in its address
     const query = `renderer=${renderer}&official=${official ?? 'none'}&ours=${selfTest ? 'no' : 'yes'}`;
 
+    page.on('request', (request) => requested.push(request.url()));
     page.on('pageerror', (error) => errors.push(error.message));
     page.on('response', (response) => {
         if (response.status() >= 400) errors.push(`${response.status()} for ${response.url()}`);
@@ -267,7 +322,7 @@ async function runPage(browser, origin, renderer, { official, call, plan, option
         await page.waitForFunction(() => window.renderCheck, null, { timeout: 30_000 });
         const state = await page.evaluate(() => ({ ...window.renderCheck, run: undefined, scene: undefined }));
 
-        if (state.error || state.renderer !== renderer) return { state, errors };
+        if (state.error || state.renderer !== renderer) return { state, errors, requested };
         // the renderer is up from here on
         const options = { ...pageOptions, ...more, extras: plan.extras };
         const report = await inTime(
@@ -275,47 +330,33 @@ async function runPage(browser, origin, renderer, { official, call, plan, option
             RIG_TIMEOUT,
         );
 
-        return { state, report, errors };
+        return { state, report, errors, requested };
     } catch (error) {
-        return { state: { renderer }, crash: error.message.split('\n')[0], errors };
+        return { state: { renderer }, crash: error.message.split('\n')[0], errors, requested };
     } finally {
         await page.close().catch(() => {});
     }
 }
 
-/** The line that says what a rig is and what it plays. */
-function describeRig(rig) {
-    const plays = rig.sequences.map((s) => `${s.animation}${s.skin ? ` (${s.skin})` : ''}`).join(', ');
-    const solves = [rig.physics && 'physics', rig.slider && 'slider'].filter(Boolean).join(' and ');
-
-    return `${rig.id}  ${rig.size} px, scale ${rig.placement.scale}, ${solves ? `solves ${solves}, ` : ''}plays ${plays}`;
-}
-
-/** The line that says what a scene holds and what its pictures are judged against. */
-function describeScene(scene) {
-    const rigs = Object.values(scene.rigs).map(
-        (rig) => `${rig.id} plays ${rig.animation}${rig.skin ? ` (${rig.skin})` : ''}`,
-    );
-    const against = scene.official
-        ? `against spine-pixi-v8 for Spine ${scene.official}`
-        : `no official picture, ${scene.why}: the batched mode is judged against the mesh mode`;
-
-    return `${scene.id}  ${scene.size} px, ${scene.title}. ${rigs.join(', ')}, ${against}`;
-}
-
-/** The rigs and the scenes of this run. A rig runs `run` of the page, a scene runs `scene`. */
-async function planJobs(made) {
+/**
+ * The rigs and the scenes of this run. A rig runs `run` of the page, a scene runs `scene`.
+ *
+ * @param made A folder for the fixtures a scene writes. `pkg` is the folder of the built
+ * pixi-marrow whose core reads the skeletons.
+ */
+async function planJobs(made, pkg) {
     // a scene picks its rigs by id, so the plan holds every rig and --only filters afterwards
     const planned = await planRigs({
         root,
         size: Number(args.size ?? 512),
         animations: args.animations === 'all' ? Number.POSITIVE_INFINITY : Number(args.animations ?? 3),
         only: null,
+        pkg,
     });
     const chosen = (id) => !args.only || id.includes(args.only);
     // the tooling proof needs the official runtime, which Spine 4.1 does not have
     const rigs = planned.filter((rig) => chosen(rig.id) && (!selfTest || rig.official));
-    // the tooling proof of the scenes is the one with two instances swapped
+    // the tooling proofs of the scenes: two instances swapped, and a frame held back
     const scenes = planScenes({ root, rigs: planned, made }).filter(
         (scene) => chosen(scene.id) && (!selfTest || scene.proof),
     );
@@ -333,7 +374,8 @@ async function planJobs(made) {
 /**
  * The pages of one scene. A scene that looks for a limit gets a page per render mode of ours, so
  * that a mode that throws inside Pixi cannot disturb the next one: the two modes by name and the
- * default options.
+ * default options. A scene about the lazy mesh mode draws the default options alone: an instance
+ * that asks for the mesh mode by name would load the code the scene watches for.
  */
 function sceneJobs(scene) {
     const job = (plan, options) => ({
@@ -344,6 +386,7 @@ function sceneJobs(scene) {
         options,
     });
 
+    if (scene.lazy) return [job(scene, { renderMode: 'auto' })];
     if (!scene.limit || selfTest) return [job(scene)];
     const modes = pageOptions.renderMode === 'both' ? ['mesh', 'batched', 'auto'] : [pageOptions.renderMode];
 
@@ -352,9 +395,15 @@ function sceneJobs(scene) {
     );
 }
 
+/** Runs the check and returns the exit code. */
 async function main() {
-    ensureBuilt(root, 'check-render');
-    const bundle = await bundlePage(root);
+    const pkg = builtPackage(root, args.dist, 'check-render');
+    const pixi = pixiPackage(root, args.pixi, 'check-render');
+    // on another pixi.js than the package is developed with, the official runtime also runs as the reference
+    const versions = { page: pixi.version, reference: pixi.alias === 'pixi.js' ? null : pixiPackage(root).version };
+    const bundle = await bundlePage(root, undefined, { pkg, pixi: pixi.dir, reference: versions.reference !== null });
+    // where the code of the mesh mode is in the bundle, for the scenes about the lazy mesh mode
+    const mesh = findMeshChunk(bundle.dir);
     let failed = 0;
     let ran = 0;
     let missing = false;
@@ -362,7 +411,7 @@ async function main() {
     let browser;
 
     try {
-        const jobs = await planJobs(bundle.made);
+        const jobs = await planJobs(bundle.made, pkg);
 
         server = await serve(root, bundle.dir, { made: bundle.made });
         browser = await launchChrome();
@@ -381,7 +430,8 @@ async function main() {
             rmSync(dir, { recursive: true, force: true });
             for (const job of jobs) {
                 const before = Date.now();
-                const { state, report, crash, errors } = await runPage(browser, server.origin, renderer, job);
+                const ran = await runPage(browser, server.origin, renderer, job);
+                const { state, report, crash, errors } = ran;
 
                 seconds[job.call] += (Date.now() - before) / 1000;
                 if (state.step !== 'load' && (state.error || state.renderer !== renderer)) {
@@ -392,7 +442,9 @@ async function main() {
                     if (wanted.length === 1) failed++;
                     break;
                 }
-                if (!announced) console.log(`check-render: ${renderer}${state.gpu ? ` (${state.gpu})` : ''}`);
+                if (!announced) console.log(`check-render: ${describeHead(renderer, state, versions)}`);
+                // every runtime must run on the pixi.js the head names for it
+                errors.push(...strayPixi(state.pixi, versions));
                 announced = true;
                 console.log(`  ${job.title}`);
                 // what a scene that looks for a limit runs into is a finding. It fails nothing
@@ -404,6 +456,7 @@ async function main() {
                     else failed++;
                 }
                 if (report) {
+                    if (job.plan.lazy) report.cases.push(meshChunkCase(job.plan, ran.requested, mesh));
                     failed += reporter.rig(job.plan, report);
                     missing ||= report.missing;
                 }

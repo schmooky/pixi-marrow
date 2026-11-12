@@ -5,6 +5,7 @@ import type { TimelineData, TimelineKind } from '../../model/timelines';
 import { type AttachmentLookup, createAttachmentLookup, meshSource } from '../shared/lookup';
 import type { UpdateCache } from './cache';
 import { type ConstraintPlan, createConstraintPlan } from './constraints';
+import { timelineIsStill } from './still';
 import {
     type Clip,
     K_ALPHA,
@@ -74,6 +75,12 @@ export interface Rig {
     readonly plan: ConstraintPlan;
     /** The update cache of each skin that was active so far, by skin index. -1 is no skin. */
     readonly caches: Map<number, UpdateCache>;
+    /**
+     * True, as it is by default, lets an update leave out the work whose result is known. False
+     * makes every update of every instance apply every timeline and compute every world
+     * transform, as the official runtime does. The poses are the same either way: tests compare them.
+     */
+    skips: boolean;
 }
 
 /**
@@ -150,12 +157,21 @@ export function rigOf(model: SkeletonModel): Rig {
             model,
             v41: model.version === '4.1',
             lookup: createAttachmentLookup(model),
-            empty: { index: -1, name: '<empty>', duration: 0, timelines: [], ids: new Set() },
+            empty: {
+                index: -1,
+                name: '<empty>',
+                duration: 0,
+                timelines: [],
+                ids: new Set(),
+                still: true,
+                stillFrom: Number.NEGATIVE_INFINITY,
+            },
             clips: [],
             propertyIds: new Map(),
             facts: new Map(),
             plan: createConstraintPlan(model),
             caches: new Map(),
+            skips: true,
         };
         rigs.set(model, rig);
     }
@@ -293,7 +309,18 @@ function compileClip(rig: Rig, index: number, animation: AnimationData): Clip {
         return timeline;
     });
 
-    return { index, name: animation.name, duration: animation.duration, timelines, ids };
+    return {
+        index,
+        name: animation.name,
+        duration: animation.duration,
+        timelines,
+        ids,
+        still: timelines.every(timelineIsStill),
+        stillFrom: timelines.reduce(
+            (from, timeline) => Math.max(from, Number(timeline.frames[0])),
+            Number.NEGATIVE_INFINITY,
+        ),
+    };
 }
 
 /**

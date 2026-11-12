@@ -10,7 +10,7 @@ import {
     TRANSFORM_MIX,
 } from './constraints';
 import { ALPHA, leadingCurveValues, SHARED, search, TIME } from './curves';
-import { constraintIsActive, type Solver } from './solver';
+import { constraintIsActive, noteConstraint, type Solver } from './solver';
 import {
     FIRST,
     K_IK,
@@ -34,6 +34,7 @@ const IK_ENTRIES = 6;
  * Before the first key the values go to the setup values, at once for blend `setup` and by
  * `alpha` for blend `first`. From the first key on they go to the key values by `alpha`, from the
  * setup values for blend `setup` and from the current values otherwise. `scratch` is scratch space.
+ * Returns true when a value got other bits than it had.
  */
 function mixValues(
     timeline: LegacyTimeline,
@@ -43,34 +44,43 @@ function mixValues(
     count: number,
     blend: number,
     scratch: Float64Array,
-): void {
+): boolean {
     const time = Number(SHARED[TIME]);
     const alpha = Number(SHARED[ALPHA]);
     const { frames, curves, entries } = timeline;
+    let changed = false;
 
     if (time < Number(frames[0])) {
-        if (blend !== SETUP && blend !== FIRST) return;
+        if (blend !== SETUP && blend !== FIRST) return false;
         for (let i = at, n = at + count; i < n; i++) {
             const current = Number(values[i]);
             const start = Number(setup[i]);
+            const next = blend === SETUP ? start : current + (start - current) * alpha;
 
-            values[i] = blend === SETUP ? start : current + (start - current) * alpha;
+            if (next !== current || (next === 0 && 1 / next !== 1 / current)) changed = true;
+            values[i] = next;
         }
 
-        return;
+        return changed;
     }
     leadingCurveValues(frames, curves, entries, count, scratch);
     for (let i = 0; i < count; i++) {
         const value = Number(scratch[i]);
-        const start = blend === SETUP ? Number(setup[at + i]) : Number(values[at + i]);
+        const current = Number(values[at + i]);
+        const start = blend === SETUP ? Number(setup[at + i]) : current;
+        const next = start + (value - start) * alpha;
 
-        values[at + i] = start + (value - start) * alpha;
+        if (next !== current || (next === 0 && 1 / next !== 1 / current)) changed = true;
+        values[at + i] = next;
     }
+
+    return changed;
 }
 
 /**
  * The part of the official `IkConstraintTimeline.apply` that does not interpolate: the bend
- * direction and the compress and stretch flags come from the setup pose or from the key.
+ * direction and the compress and stretch flags come from the setup pose or from the key. Returns
+ * true when one of them changed.
  */
 function applyIkFlags(
     timeline: LegacyTimeline,
@@ -79,12 +89,15 @@ function applyIkFlags(
     at: number,
     blend: number,
     direction: number,
-): void {
+): boolean {
     const time = Number(SHARED[TIME]);
     const frames = timeline.frames;
     const before = time < Number(frames[0]);
     const fromSetup = before ? blend === SETUP || blend === FIRST : blend === SETUP && direction === MIX_OUT;
     const fromKey = !before && (blend === SETUP ? direction !== MIX_OUT : direction === MIX_IN);
+    const bend = Number(values[at + IK_BEND]);
+    const compress = Number(values[at + IK_COMPRESS]);
+    const stretch = Number(values[at + IK_STRETCH]);
 
     if (fromSetup) {
         values[at + IK_BEND] = Number(setup[at + IK_BEND]);
@@ -97,13 +110,21 @@ function applyIkFlags(
         values[at + IK_COMPRESS] = Number(frames[i + 4]) !== 0 ? 1 : 0;
         values[at + IK_STRETCH] = Number(frames[i + 5]) !== 0 ? 1 : 0;
     }
+
+    // these three are whole numbers, or not numbers at all, which counts as a change
+    return (
+        bend !== Number(values[at + IK_BEND]) ||
+        compress !== Number(values[at + IK_COMPRESS]) ||
+        stretch !== Number(values[at + IK_STRETCH])
+    );
 }
 
 /**
  * Applies a timeline that animates a constraint: the official `apply` of `IkConstraintTimeline`,
  * `TransformConstraintTimeline`, `PathConstraintPositionTimeline`, `PathConstraintSpacingTimeline`
  * and `PathConstraintMixTimeline`, which are the same in 4.1 and 4.2. A constraint that is not
- * active keeps its values. `scratch` is scratch space for the values of one key.
+ * active keeps its values. `scratch` is scratch space for the values of one key. A constraint
+ * whose values changed is noted for the world transforms of this update.
  */
 export function applyConstraintTimeline(
     solver: Solver,
@@ -117,17 +138,21 @@ export function applyConstraintTimeline(
     const setup = solver.rig.plan.setup;
     const at = target * CONSTRAINT_STRIDE;
 
+    let changed = false;
+
     if (!constraintIsActive(solver, target)) return;
     if (kind === K_IK) {
-        mixValues(timeline, values, setup, at + IK_MIX, 2, blend, scratch);
-        applyIkFlags(timeline, values, setup, at, blend, direction);
+        const mixed = mixValues(timeline, values, setup, at + IK_MIX, 2, blend, scratch);
+
+        changed = applyIkFlags(timeline, values, setup, at, blend, direction) || mixed;
     } else if (kind === K_TRANSFORM) {
-        mixValues(timeline, values, setup, at + TRANSFORM_MIX, 6, blend, scratch);
+        changed = mixValues(timeline, values, setup, at + TRANSFORM_MIX, 6, blend, scratch);
     } else if (kind === K_PATH_POSITION) {
-        mixValues(timeline, values, setup, at + PATH_POSITION, 1, blend, scratch);
+        changed = mixValues(timeline, values, setup, at + PATH_POSITION, 1, blend, scratch);
     } else if (kind === K_PATH_SPACING) {
-        mixValues(timeline, values, setup, at + PATH_SPACING, 1, blend, scratch);
+        changed = mixValues(timeline, values, setup, at + PATH_SPACING, 1, blend, scratch);
     } else if (kind === K_PATH_MIX) {
-        mixValues(timeline, values, setup, at + PATH_MIX, 3, blend, scratch);
+        changed = mixValues(timeline, values, setup, at + PATH_MIX, 3, blend, scratch);
     }
+    if (changed) noteConstraint(solver, target);
 }

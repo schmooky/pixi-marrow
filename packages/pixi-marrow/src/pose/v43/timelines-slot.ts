@@ -1,7 +1,7 @@
 import { MarrowError } from '../../base/errors';
 import type { AttachmentData } from '../../model/attachments';
 import { ALPHA, curveValue, SHARED, sampleValues, search, TIME, towardSetup, VALUES } from './curves';
-import { findAttachment, setSlotAttachment, setupAttachment } from './slots';
+import { findAttachment, setSlotAttachment, setupAttachment, stampSlot } from './slots';
 import { CURRENT, FIRST, type Pose43, SETUP, type Timeline43 } from './types';
 
 /*
@@ -9,21 +9,26 @@ import { CURRENT, FIRST, type Pose43, SETUP, type Timeline43 } from './types';
  * alpha from `SHARED`, for the reasons given in curves.ts.
  */
 
-/** The official `Color.clamp` for `count` channels. */
-function clampChannels(values: Float64Array, index: number, count: number): void {
+/** The official `Color.clamp` for `count` channels. Returns true when it changed one. */
+function clampChannels(values: Float64Array, index: number, count: number): boolean {
+    let changed = false;
+
     for (let i = index; i < index + count; i++) {
         const value = Number(values[i]);
 
-        if (value < 0) values[i] = 0;
-        else if (value > 1) values[i] = 1;
+        if (!(value < 0 || value > 1)) continue;
+        values[i] = value < 0 ? 0 : 1;
+        changed = true;
     }
+
+    return changed;
 }
 
 /**
  * Mixes `count` sampled channels into a color, like the official color timelines. The channels
  * are read from `SHARED` at `sampleIndex`. At full alpha they replace the color. Otherwise they
  * are mixed from the setup color or from the current color. The result is clamped to the range
- * from 0 to 1.
+ * from 0 to 1. Returns true when a channel is not what it was.
  */
 function mixChannels(
     values: Float64Array,
@@ -32,19 +37,26 @@ function mixChannels(
     count: number,
     sampleIndex: number,
     from: number,
-): void {
+): boolean {
     const alpha = Number(SHARED[ALPHA]);
+    let changed = false;
 
     for (let k = 0; k < count; k++) {
+        const old = Number(values[index + k]);
         let value = Number(SHARED[sampleIndex + k]);
 
         if (alpha !== 1) {
-            const base = from === SETUP ? Number(setup[index + k]) : Number(values[index + k]);
+            const base = from === SETUP ? Number(setup[index + k]) : old;
 
             value = base + (value - base) * alpha;
         }
-        values[index + k] = value < 0 ? 0 : value > 1 ? 1 : value;
+        value = value < 0 ? 0 : value > 1 ? 1 : value;
+        if (Object.is(value, old)) continue;
+        values[index + k] = value;
+        changed = true;
     }
+
+    return changed;
 }
 
 /**
@@ -62,16 +74,20 @@ export function applyColor(pose: Pose43, timeline: Timeline43, from: number): vo
     const count = timeline.offset;
 
     if (Number(SHARED[TIME]) < Number(timeline.frames[0])) {
-        towardSetup(colors, setup.colors, light, count, from);
+        let changed = towardSetup(colors, setup.colors, light, count, from);
+
         // a full color is mixed with the official Color.add, which clamps
-        if (count === 4 && from === FIRST) clampChannels(colors, light, 4);
-        if (timeline.dark) towardSetup(darkColors, setup.darkColors, dark, 3, from);
+        if (count === 4 && from === FIRST && clampChannels(colors, light, 4)) changed = true;
+        if (timeline.dark && towardSetup(darkColors, setup.darkColors, dark, 3, from)) changed = true;
+        if (changed) stampSlot(pose, slot);
 
         return;
     }
     sampleValues(timeline, timeline.entries - 1);
-    mixChannels(colors, setup.colors, light, count, VALUES, from);
-    if (timeline.dark) mixChannels(darkColors, setup.darkColors, dark, 3, VALUES + count, from);
+    let changed = mixChannels(colors, setup.colors, light, count, VALUES, from);
+
+    if (timeline.dark && mixChannels(darkColors, setup.darkColors, dark, 3, VALUES + count, from)) changed = true;
+    if (changed) stampSlot(pose, slot);
 }
 
 /** The official alpha timeline: the alpha of a slot color. */
@@ -83,12 +99,12 @@ export function applyAlpha(pose: Pose43, timeline: Timeline43, from: number): vo
     const frames = timeline.frames;
 
     if (Number(SHARED[TIME]) < Number(frames[0])) {
-        towardSetup(colors, setup, i, 1, from);
+        if (towardSetup(colors, setup, i, 1, from)) stampSlot(pose, timeline.target);
 
         return;
     }
     curveValue(frames, timeline.curves);
-    mixChannels(colors, setup, i, 1, VALUES, from);
+    if (mixChannels(colors, setup, i, 1, VALUES, from)) stampSlot(pose, timeline.target);
 }
 
 /**

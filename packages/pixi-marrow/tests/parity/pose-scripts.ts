@@ -1,7 +1,10 @@
 import { DT, ODD, type PoseScript, pick, script } from './pose-script';
 import { dialectScripts, fieldScripts } from './pose-scripts-fields';
+import { keyScripts } from './pose-scripts-keys';
 import { physicsScripts } from './pose-scripts-physics';
 import { randomScript } from './pose-scripts-random';
+import { restScripts } from './pose-scripts-rest';
+import { stillScripts } from './pose-scripts-still';
 import type { PoseRigInfo } from './pose-shared';
 
 /*
@@ -426,5 +429,8 @@ export const SCRIPT_FAMILIES: readonly ScriptFamily[] = [
     { name: 'dialect', scripts: dialectScripts },
     { name: 'entry fields', scripts: fieldScripts },
     { name: 'physics', scripts: physicsScripts },
+    { name: 'rest', scripts: restScripts },
+    { name: 'keys', scripts: keyScripts },
+    { name: 'still bones', scripts: stillScripts },
     { name: 'random', scripts: (rig, seed) => [1, 2, 3, 4, 5, 6].map((n) => randomScript(rig, `${seed} ${n}`)) },
 ];

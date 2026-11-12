@@ -1,7 +1,7 @@
 import { MarrowError } from '../../base/errors';
 import type { SkeletonModel } from '../../model/model';
 import type { PhysicsMode, PoseEngine, PoseEvent, TrackEntry, TrackFields } from '../engine';
-import type { PoseState } from '../state';
+import { nextVersion, type PoseState } from '../state';
 import { applyTracks } from './apply';
 import { updateCache } from './cache';
 import {
@@ -18,9 +18,9 @@ import { Entry } from './entry';
 import { physicsRotate, physicsTranslate } from './physics';
 import { createPlayer, type Player43 } from './player';
 import { createPose, poseBytes } from './pose';
+import { distrust, solvePose } from './rest';
 import { prepareRig } from './rig';
 import { setSkin, setupPoseBones, setupPoseSlots } from './skeleton';
-import { updateWorld } from './solve';
 import type { Clip43, Pose43 } from './types';
 import { updateTracks } from './update';
 
@@ -58,6 +58,24 @@ class Engine43 implements PoseEngine {
         setupPoseBones(this.pose);
         setupPoseSlots(this.pose);
         updateCache(this.pose);
+        this.pose.solve.seen = this.state.version;
+    }
+
+    /**
+     * Starts a call that can change the pose: a change gets the version after the current one.
+     * A version this engine did not leave means that other code wrote the pose state. Then
+     * nothing is known about it, and the next update applies and computes everything.
+     */
+    private open(): void {
+        const { solve } = this.pose;
+
+        if (this.state.version !== solve.seen) distrust(this.pose);
+        solve.pending = nextVersion(this.state.version);
+    }
+
+    /** Ends a call that can change the pose. */
+    private close(): void {
+        this.pose.solve.seen = this.state.version;
     }
 
     get bytes(): number {
@@ -74,6 +92,7 @@ class Engine43 implements PoseEngine {
         if (number < 0) {
             throw invalid(`"${mode}" is no physics mode.`, `Pass one of ${PHYSICS_MODES.join(', ')}.`);
         }
+        if (number !== this.pose.solve.physicsMode) this.pose.solve.dirty = true;
         this.pose.solve.physicsMode = number;
     }
 
@@ -151,12 +170,16 @@ class Engine43 implements PoseEngine {
         if (!Number.isInteger(skin) || skin < -1 || skin >= count) {
             throw invalid(`The skeleton has no skin ${skin}.`, `Pass an index below ${count}, or -1 for no skin.`);
         }
+        this.open();
         setSkin(this.pose, skin);
+        this.close();
     }
 
     setupPose(): void {
+        this.open();
         setupPoseBones(this.pose);
         setupPoseSlots(this.pose);
+        this.close();
     }
 
     setupPoseBones(): void {
@@ -164,23 +187,29 @@ class Engine43 implements PoseEngine {
     }
 
     setupPoseSlots(): void {
+        this.open();
         setupPoseSlots(this.pose);
+        this.close();
     }
 
     physicsTranslate(x: number, y: number): void {
         physicsTranslate(this.pose, x, y);
+        this.pose.solve.dirty = true;
     }
 
     physicsRotate(x: number, y: number, degrees: number): void {
         physicsRotate(this.pose, x, y, degrees);
+        this.pose.solve.dirty = true;
     }
 
     update(dt: number): void {
+        this.open();
         updateTracks(this.player, dt);
         // the official Skeleton.update
         this.state.time += dt;
         applyTracks(this.player);
-        updateWorld(this.pose);
+        solvePose(this.pose);
+        this.close();
     }
 
     takeEvents(): PoseEvent[] {

@@ -1,7 +1,17 @@
 import type { AttachmentData } from '../../model/attachments';
 import { WORLD_STRIDE } from '../state';
 import { constraintError } from './plan-checks';
-import type { IkPlan, PathPlan, PhysicsPlan, Plan43, SliderPlan, TransformPlan } from './solver-types';
+import {
+    type IkPlan,
+    type PathPlan,
+    type PhysicsPlan,
+    type Plan43,
+    ROLE_FREE,
+    ROLE_HELD,
+    ROLE_MULTI,
+    type SliderPlan,
+    type TransformPlan,
+} from './solver-types';
 import { beginPosed, endPosed } from './split';
 import type { Pose43 } from './types';
 
@@ -16,16 +26,29 @@ import type { Pose43 } from './types';
  * active skin lists it or one of its descendants. The official `bone.sorted` starts as the opposite.
  */
 function updateActive(pose: Pose43): void {
-    const { active } = pose.state;
-    const { sorted } = pose.rig.solver.scratch;
+    const { state } = pose;
+    const { active } = state;
+    const { sorted, wasActive } = pose.rig.solver.scratch;
     const { parents, skinRequired, count } = pose.rig.model.bones;
-    const skin = pose.rig.model.skins[pose.state.skin];
+    const skin = pose.rig.model.skins[state.skin];
 
+    wasActive.set(active);
     for (let bone = 0; bone < count; bone++) active[bone] = skinRequired[bone] === 1 ? 0 : 1;
     for (const listed of skin?.bones ?? []) {
         for (let bone: number = listed; bone >= 0; bone = parents[bone] ?? -1) active[bone] = 1;
     }
-    for (let bone = 0; bone < count; bone++) sorted[bone] = active[bone] === 1 ? 0 : 1;
+    for (let bone = 0; bone < count; bone++) {
+        sorted[bone] = active[bone] === 1 ? 0 : 1;
+        if (active[bone] !== wasActive[bone]) stampBone(pose, bone);
+    }
+}
+
+/** Notes that the world transform or the activity of a bone changed outside an update. */
+function stampBone(pose: Pose43, bone: number): void {
+    const { state } = pose;
+
+    state.version = pose.solve.pending;
+    state.boneStamps[bone] = pose.solve.pending;
 }
 
 /** The official `Skeleton.sortBone`: puts a bone into the update cache, after its parents. */
@@ -266,6 +289,77 @@ function swapWorlds(pose: Pose43): void {
             world[i] = Number(spare[i]);
             spare[i] = value;
         }
+        stampBone(pose, bone);
+    }
+}
+
+/** The bones a constraint moves in the world: those of a physics, a path or a world transform constraint. */
+function worldBones(plan: Plan43): ArrayLike<number> {
+    if (plan.type === 'physics') return [plan.bone];
+    if (plan.type === 'path' || (plan.type === 'transform' && !plan.localTarget)) return plan.bones;
+
+    return [];
+}
+
+/** The bones a constraint poses: it changes their applied pose or their world transform. */
+function posedBones(plan: Plan43): ArrayLike<number> {
+    return plan.type === 'physics' ? [plan.bone] : plan.bones;
+}
+
+/**
+ * Gives every bone its role in an update. A bone of an active constraint is posed in every
+ * solved update. A bone that is in the update cache twice, or that an active constraint moves in
+ * the world, can be written more than once. Its stamp is set at the end of an update, against
+ * the world transform it has now. A bone that is not active can be among those: a constraint
+ * moves it on from where the last update left it. Every other bone is free.
+ */
+function markRoles(pose: Pose43): void {
+    const { solve, state } = pose;
+    const { plans, free, scratch } = pose.rig.solver;
+    const { items, sorted: seen } = scratch;
+    const { count } = pose.rig.model.bones;
+
+    solve.multiCount = 0;
+    solve.stale = false;
+    if (solve.solved === 0) {
+        solve.roles = free;
+
+        return;
+    }
+    if (solve.roles === free) solve.roles = new Uint8Array(count);
+    const { roles } = solve;
+
+    roles.fill(ROLE_FREE);
+    seen.fill(0);
+    for (const plan of plans) {
+        if (solve.active[plan.index] !== 1) continue;
+        const posed = posedBones(plan);
+        const moved = worldBones(plan);
+
+        for (let i = 0; i < posed.length; i++) roles[posed[i] ?? -1] = ROLE_HELD;
+        for (let i = 0; i < moved.length; i++) seen[moved[i] ?? -1] = 2;
+    }
+    for (const item of items) {
+        if (item >= 0) seen[item] = (seen[item] ?? 0) + 1;
+    }
+    let multi = 0;
+
+    for (let bone = 0; bone < count; bone++) {
+        if ((seen[bone] ?? 0) <= 1) continue;
+        roles[bone] = ROLE_MULTI;
+        multi++;
+    }
+    if (solve.multiList.length < multi) solve.multiList = new Int32Array(multi);
+    for (let bone = 0; bone < count; bone++) {
+        if (roles[bone] === ROLE_MULTI) solve.multiList[solve.multiCount++] = bone;
+    }
+    if (solve.shown.length < solve.multiCount * WORLD_STRIDE) {
+        solve.shown = new Float64Array(solve.multiCount * WORLD_STRIDE);
+    }
+    for (let k = 0; k < solve.multiCount; k++) {
+        const o = (solve.multiList[k] ?? 0) * WORLD_STRIDE;
+
+        solve.shown.set(state.world.subarray(o, o + WORLD_STRIDE), k * WORLD_STRIDE);
     }
 }
 
@@ -304,7 +398,11 @@ export function updateCache(pose: Pose43): void {
         items.length = 0;
         for (let bone = 0; bone < count; bone++) if (state.active[bone] === 1) items.push(bone);
     }
+    markRoles(pose);
     if (solve.cache.length < items.length) solve.cache = new Int32Array(items.length);
     solve.cache.set(items);
     solve.cacheLength = items.length;
+    // the order changed: the next update solves the pose again, every bone of it
+    solve.dirty = true;
+    solve.force = true;
 }

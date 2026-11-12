@@ -4,6 +4,7 @@ import type { TimelineKind } from '../../src/model/timelines';
 import { u8, u16 } from '../../src/render/read';
 import { listFixtures } from '../parity/fixtures';
 import {
+    drawPose,
     expectKernel,
     FRAME,
     loadRig,
@@ -134,7 +135,7 @@ describe('SkeletonView', () => {
         const { stats } = rig.view;
         const head = slotIndex(rig, 'head');
         const update = (): number => {
-            rig.view.update(state);
+            drawPose(rig.view, state);
             readDrawn(rig);
 
             return stats.indexRebuilds;
@@ -203,14 +204,14 @@ describe('SkeletonView', () => {
         const indices = stats.indices;
 
         state.attachments[clip.slot] = clip.attachment;
-        rig.view.update(state);
+        drawPose(rig.view, state);
         // the same triangles as before. Every visible slot is inside the clip: one range and its mask, drawn twice
         expect(stats).toMatchObject({ clips: 1, maskDraws: 2, maskUploads: 1, maskRebuilds: 1, drawCalls: 3 });
         expect(stats.indices).toBe(indices);
         expect(meshes(rig.view).length).toBe(1);
         readDrawn(rig);
         state.active[rig.model.slots.bones[clip.slot] ?? 0] = 0;
-        rig.view.update(state);
+        drawPose(rig.view, state);
         expect(stats).toMatchObject({ clips: 0, maskDraws: 0, maskUploads: 1, drawCalls: 1 });
         readDrawn(rig);
     });
@@ -226,6 +227,6 @@ describe('SkeletonView', () => {
         const rig = await loadRig('4.2/spineboy-pro.skel');
         const other = await loadRig('4.2/raptor-pro.skel');
 
-        expect(() => rig.view.update(other.engine.state)).toThrow(MarrowError);
+        expect(() => drawPose(rig.view, other.engine.state)).toThrow(MarrowError);
     });
 });

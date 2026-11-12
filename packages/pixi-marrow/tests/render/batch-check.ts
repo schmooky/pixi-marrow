@@ -6,7 +6,11 @@ import type { AtlasModel } from '../../src/model/atlas';
 import type { SkeletonModel } from '../../src/model/model';
 import { createPoseEngine } from '../../src/pose/engine';
 import { createAttachmentLookup } from '../../src/pose/shared/lookup';
+import { loadClipCode } from '../../src/render/clip-code';
 import { colorByte } from '../../src/render/colors';
+import { loadCutCode } from '../../src/render/cut-code';
+import { loadMeshCode } from '../../src/render/mesh-code';
+import { hasClip } from '../../src/render/mode';
 import { SkeletonView, type SkeletonViewOptions } from '../../src/render/skeleton-view';
 import { batcherOf, bodyOf, elementOf, readRuns, readVertex, type Stage } from './batch-stage';
 import { fixtureFiles, kernelPositions, kernelUVs, type Rig, trianglesOf, visibleSlots } from './rig';
@@ -38,6 +42,8 @@ export async function loadFamily(
     const atlas = importAtlas(files.atlas);
 
     change?.(model, atlas);
+    // an asset loads the code that clips with a skeleton that has a clipping attachment
+    if (hasClip(model)) await loadClipCode();
     const textures = atlas.pages.map(() => new Texture({ source: new TextureSource({ width: 1, height: 1 }) }));
     const lookup = createAttachmentLookup(model);
 
@@ -47,11 +53,29 @@ export async function loadFamily(
         textures,
         async create(options: SkeletonViewOptions = {}): Promise<Rig> {
             const engine = await createPoseEngine(model);
+
+            // as an asset does for instances that are asked to start in the mesh mode
+            if (options.renderMode === 'mesh') await loadMeshCode();
+            // and for outlines, the code that cuts with them
+            if (options.outlines !== undefined) await loadCutCode();
             const view = new SkeletonView(model, atlas, textures, { renderMode: 'batched', ...options });
 
             return { model, atlas, lookup, engine, view };
         },
     };
+}
+
+/**
+ * One more instance of a family, with a view that is created as it is. Nothing loads the code
+ * of the mesh mode for it, as when a display object asks for that mode from an asset that did
+ * not load it.
+ */
+export async function createBare(family: Family, options: SkeletonViewOptions): Promise<Rig> {
+    const { model, atlas, textures } = family;
+    const engine = await createPoseEngine(model);
+    const view = new SkeletonView(model, atlas, textures, options);
+
+    return { model, atlas, lookup: createAttachmentLookup(model), engine, view };
 }
 
 /** Some instances of a family on a stage, each in the setup pose. */

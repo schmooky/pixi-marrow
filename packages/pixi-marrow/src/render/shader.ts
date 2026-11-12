@@ -24,9 +24,6 @@ import { GlProgram, GpuProgram, Shader, type TextureSource, type TextureStyle } 
  * turned off.
  */
 
-/** How many atlas pages one draw can sample. More pages split the draw. */
-export const MAX_PAGES = 8;
-
 const range = (count: number): number[] => Array.from({ length: count }, (_, i) => i);
 
 const GL_ROUND = `
@@ -261,7 +258,7 @@ export function releaseShader(shader: Shader): void {
 
 /**
  * The shader that draws one range of a skeleton: a WebGL2 program and a WebGPU program with the
- * same output. `sources` are the pages the range samples, 1 to {@link MAX_PAGES}. Vertex
+ * same output. `sources` are the pages the range samples, 1 to `MAX_PAGES`. Vertex
  * attribute `aFlags.x` selects one of them. `dark` adds the dark color attribute and the two color
  * tint of the official runtime.
  *

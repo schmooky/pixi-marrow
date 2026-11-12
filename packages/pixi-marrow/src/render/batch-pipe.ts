@@ -1,6 +1,7 @@
-import { type Batch, extensions, type InstructionSet, type Renderer } from 'pixi.js';
+import { type Batch, Buffer, extensions, type InstructionSet, type Renderer, VERSION } from 'pixi.js';
 import type { BatchBody } from './batch-body';
 import { BatchElement } from './batch-element';
+import { uploadsStretch } from './batch-upload';
 import { MarrowBatcher, MarrowDarkBatcher, PIPE_ID } from './batcher';
 import { bendsEdges } from './gate';
 
@@ -11,6 +12,9 @@ import { bendsEdges } from './gate';
  * then. This library registers nothing when it is imported, so the pipe is put into a renderer
  * the first time that renderer is about to draw a skeleton, see {@link linkRenderer}.
  */
+
+/** Whether the buffers of this Pixi upload at once when a batcher tells them what changed. */
+const AT_ONCE = uploadsStretch(Buffer.prototype.update, VERSION);
 
 /** True once the batchers are among the extensions of Pixi. */
 let registered = false;
@@ -92,6 +96,8 @@ export class MarrowPipe {
                 if (element.dirty) element.sync();
             }
             batcher.flush();
+            // a later batch of a batcher finds its geometry bound, and an older Pixi uploaded when it bound it
+            if (!AT_ONCE && batch.action === 'renderBatch') batcher.push(renderer);
         }
         renderer.renderPipes.batch.execute(batch);
     }

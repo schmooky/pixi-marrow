@@ -3,6 +3,7 @@ import { type Fixture, listFixtures, readFixture } from './fixtures';
 import type { RigFiles } from './official';
 import { ikRigs } from './pose-rig-ik';
 import { SEQUENCE_ATLAS } from './pose-rig-kit';
+import { longPose } from './pose-rig-long';
 import { orderRigs } from './pose-rig-order';
 import { pathRigs } from './pose-rig-path';
 import { physicsRigs } from './pose-rig-physics';
@@ -10,6 +11,7 @@ import { physicsOrderRigs } from './pose-rig-physics-order';
 import { sliderRigs } from './pose-rig-slider';
 import { sliderSlotRigs } from './pose-rig-slider-slots';
 import { transformRigs } from './pose-rig-transform';
+import { wakeSlots } from './pose-rig-wake';
 
 /*
  * The skeletons the pose suite runs on: the fixtures and the rigs made here. The rigs made for
@@ -386,6 +388,8 @@ function skeletonJson(version: SpineVersion): string {
         animations: {
             kinds: kinds(version),
             other: other(version),
+            long: longPose(version),
+            wakeSlots: wakeSlots(),
             // one key at time 0: an animation without a length
             still: {
                 bones: { f: { scaley: [{ value: 1.5 }], shearx: [{ value: -12 }] } },

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_OCCLUDERS, MIN_OCCLUDER_AREA, SEARCH_FIRST, SEARCH_LAST } from '../../src/render/cover';
+import { MAX_OCCLUDERS, MIN_OCCLUDER_AREA, SEARCH_FIRST, SEARCH_LAST } from '../../src/render/cover-search';
 import { type CoverSlot, coverRig, framesUntilCovered, moveSlot, slotOf } from './cover-rig';
 import { drawnIndices, readCutSlots } from './cuts';
-import { meshes, type Rig, step } from './rig';
+import { drawPose, meshes, type Rig, redraw, step } from './rig';
 
 /** A small slot behind a big one: the small one is covered. */
 const BEHIND: readonly CoverSlot[] = [
@@ -21,7 +21,7 @@ function skipped(rig: Rig, covered: readonly string[]): string[] {
 async function coveredIn(slots: readonly CoverSlot[]): Promise<number> {
     const rig = await coverRig(slots);
 
-    step(rig, 0);
+    redraw(rig);
 
     return rig.view.stats.coveredSlots;
 }
@@ -30,7 +30,7 @@ describe('covered slots', () => {
     it('leaves a slot out that lies inside the opaque rectangle of a later slot', async () => {
         const rig = await coverRig(BEHIND);
 
-        step(rig, 0);
+        redraw(rig);
         expect(rig.view.stats).toMatchObject({
             coveredSlots: 1,
             indices: 6,
@@ -50,7 +50,7 @@ describe('covered slots', () => {
         });
 
         for (const rig of [off, bare]) {
-            step(rig, 0);
+            redraw(rig);
             expect(rig.view.stats).toMatchObject({ coveredSlots: 0, indices: 12, drawCalls: 1 });
             expect(skipped(rig, [])).toEqual([]);
         }
@@ -61,7 +61,7 @@ describe('covered slots', () => {
         const { stats } = rig.view;
         const at = (x: number, y: number): number => {
             moveSlot(rig, 'small', x, y);
-            step(rig, 0);
+            redraw(rig);
 
             return stats.coveredSlots;
         };
@@ -82,7 +82,7 @@ describe('covered slots', () => {
         // the vertices of a skipped slot are still placed in every frame: the test reads them
         const uploads = stats.positionUploads;
 
-        step(rig, 0);
+        redraw(rig);
         expect(stats.positionUploads).toBe(uploads + 1);
     });
 
@@ -90,11 +90,11 @@ describe('covered slots', () => {
         const rig = await coverRig([BEHIND[1], BEHIND[0]].flatMap((slot) => (slot ? [slot] : [])));
         const { state } = rig.engine;
 
-        step(rig, 0);
+        redraw(rig);
         expect(rig.view.stats.coveredSlots).toBe(0);
         state.drawOrder.reverse();
         // another draw order starts the search over: it is found within the first wait
-        expect(framesUntilCovered(rig, 1, () => rig.view.update(state))).toBeLessThanOrEqual(SEARCH_FIRST);
+        expect(framesUntilCovered(rig, 1, () => drawPose(rig.view, state))).toBeLessThanOrEqual(SEARCH_FIRST);
         // one rewrite for the order, one for the slot that is skipped
         expect(rig.view.stats.indexRebuilds).toBe(3);
     });
@@ -105,18 +105,18 @@ describe('covered slots', () => {
         const big = slotOf(rig, 'big');
         const withAlpha = (alpha: number): number => {
             state.colors[big * 4 + 3] = alpha;
-            rig.view.update(state);
+            drawPose(rig.view, state);
 
             return rig.view.stats.coveredSlots;
         };
 
-        step(rig, 0);
+        redraw(rig);
         // 0.999 is the byte 254
         expect(withAlpha(0.999)).toBe(0);
         expect(withAlpha(0.5)).toBe(0);
         // the alpha of a slot that can hide starts the search over
         state.colors[big * 4 + 3] = 1;
-        expect(framesUntilCovered(rig, 1, () => rig.view.update(state))).toBeLessThanOrEqual(SEARCH_FIRST);
+        expect(framesUntilCovered(rig, 1, () => drawPose(rig.view, state))).toBeLessThanOrEqual(SEARCH_FIRST);
         // the color of the attachment counts as well
         expect(
             await coveredIn([
@@ -147,7 +147,7 @@ describe('covered slots', () => {
                 { name: 'big', shows: 'big', blend },
             ]);
 
-            step(rig, 0);
+            redraw(rig);
             expect(rig.view.stats.coveredSlots).toBe(0);
         },
     );
@@ -161,7 +161,7 @@ describe('covered slots', () => {
         const rig = await coverRig(slots);
 
         step(off, 0);
-        step(rig, 0);
+        redraw(rig);
         expect(off.view.stats).toMatchObject({ coveredSlots: 0, drawCalls: 2, indices: 12 });
         // the multiply range stays and draws one triangle without area
         expect(rig.view.stats).toMatchObject({ coveredSlots: 1, drawCalls: 2, indices: 9 });
@@ -263,14 +263,14 @@ describe('covered slots', () => {
         ]);
         const { state } = rig.engine;
 
-        step(rig, 0);
+        redraw(rig);
         expect(rig.view.stats).toMatchObject({ coveredSlots: 1, indices: 6 });
         // 8 bytes of color per vertex with dark colors
         expect(rig.view.stats.bufferBytes).toBe(
             8 * 28 + (meshes(rig.view)[0]?.geometry.indexBuffer.data.byteLength ?? 0),
         );
         state.colors[slotOf(rig, 'big') * 4 + 3] = 0.5;
-        rig.view.update(state);
+        drawPose(rig.view, state);
         expect(rig.view.stats.coveredSlots).toBe(0);
     });
 
@@ -315,17 +315,17 @@ describe('covered slots', () => {
         ]);
         const { stats } = rig.view;
 
-        step(rig, 0);
+        redraw(rig);
         expect(stats).toMatchObject({ coveredSlots: count, indices: 6, indexRebuilds: 1 });
         // every one of them is tested again in the frame the big slot moves away
         moveSlot(rig, 'big', 500, 0);
-        step(rig, 0);
+        redraw(rig);
         expect(stats).toMatchObject({ coveredSlots: 0, indices: (count + 1) * 6, indexRebuilds: 2 });
         moveSlot(rig, 'big', 0, 0);
         expect(framesUntilCovered(rig, count)).toBeLessThanOrEqual(SEARCH_LAST);
         // one that leaves alone is drawn in that frame, while the others stay skipped
         moveSlot(rig, `s${count - 1}`, 300, 0);
-        step(rig, 0);
+        redraw(rig);
         expect(stats).toMatchObject({ coveredSlots: count - 1, indices: 12 });
     });
 
@@ -345,7 +345,7 @@ describe('covered slots', () => {
         const idle = 130;
         const next = turns.find((turn) => turn > idle) ?? 0;
 
-        for (let frame = 0; frame < idle; frame++) step(rig, 0);
+        for (let frame = 0; frame < idle; frame++) redraw(rig);
         expect(rig.view.stats).toMatchObject({ coveredSlots: 0, indexRebuilds: 1 });
         // a bone that moves is no reason to search: the slot is found at the next turn
         moveSlot(rig, 'small', 0, 0);
@@ -353,7 +353,7 @@ describe('covered slots', () => {
         expect(framesUntilCovered(rig, 1)).toBe(next - idle);
         // back out, and wait until the searches are far apart again
         moveSlot(rig, 'small', 300, 0);
-        for (let frame = 0; frame < 300; frame++) step(rig, 0);
+        for (let frame = 0; frame < 300; frame++) redraw(rig);
         expect(rig.view.stats.coveredSlots).toBe(0);
         // a slot that goes away changes the visible slots: the search starts over at once
         moveSlot(rig, 'small', 0, 0);
@@ -372,10 +372,10 @@ describe('covered slots', () => {
         const { stats } = rig.view;
         const alpha = (name: string, value: number): void => {
             state.colors[slotOf(rig, name) * 4 + 3] = value;
-            rig.view.update(state);
+            drawPose(rig.view, state);
         };
 
-        step(rig, 0);
+        redraw(rig);
         expect(stats).toMatchObject({ coveredSlots: 2, indices: 12 });
         // the slot behind the one that goes is drawn at once, the other one stays skipped
         alpha('big', 0);
@@ -384,6 +384,6 @@ describe('covered slots', () => {
         expect(stats).toMatchObject({ coveredSlots: 0, indices: 18 });
         alpha('big', 1);
         alpha('other', 1);
-        expect(framesUntilCovered(rig, 2, () => rig.view.update(state))).toBeLessThanOrEqual(SEARCH_FIRST);
+        expect(framesUntilCovered(rig, 2, () => drawPose(rig.view, state))).toBeLessThanOrEqual(SEARCH_FIRST);
     });
 });

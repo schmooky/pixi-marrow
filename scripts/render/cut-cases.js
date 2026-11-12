@@ -174,7 +174,12 @@ export async function multisampledCase(env, plan, mode = 'mesh') {
     const batched = mode === 'batched';
 
     try {
-        const asset = await lib.MarrowAsset.load({ skeleton: url(plan.files.skel), atlas: url(plan.files.atlas) });
+        // the load asks for the mode of the instances, so that the code of the mesh mode is there for them
+        const asset = await lib.MarrowAsset.load({
+            skeleton: url(plan.files.skel),
+            atlas: url(plan.files.atlas),
+            ...modeOptions(mode),
+        });
 
         await asset.optimized;
         const studio = createStudio(PIXI, env.renderer, plan.size, env.draws, true);

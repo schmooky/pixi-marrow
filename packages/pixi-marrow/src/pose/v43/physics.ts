@@ -45,8 +45,12 @@ const ROTATE_VELOCITY = 15;
 const SCALE_OFFSET = 16;
 const SCALE_LAG = 17;
 const SCALE_VELOCITY = 18;
-const REMAINING = 19;
-const LAST_TIME = 20;
+/** Where the official `remaining` of a physics constraint is among its numbers: the time no step has used yet. */
+export const PHYSICS_REMAINING = 19;
+/** Where the official `lastTime` of a physics constraint is among its numbers. */
+export const PHYSICS_LAST_TIME = 20;
+const REMAINING = PHYSICS_REMAINING;
+const LAST_TIME = PHYSICS_LAST_TIME;
 
 /** The official `MathUtils.invPI2`. */
 const INV_PI2: number = 1 / PI2;
@@ -435,17 +439,15 @@ function poseOnly(pose: Pose43, plan: PhysicsPlan): void {
 }
 
 /**
- * The official `PhysicsConstraint.update`: moves, turns and scales the bone of the constraint in
- * the world, by the mode in `Solve43.physicsMode`.
+ * The official `PhysicsConstraint.update` from where it has marked its bone: moves, turns and
+ * scales the bone in the world and advances the state of the constraint, by the mode in
+ * `Solve43.physicsMode`. The constraint has a mix and the mode is not `none`.
  */
-export function solvePhysics(pose: Pose43, plan: PhysicsPlan): void {
+export function stepPhysics(pose: Pose43, plan: PhysicsPlan): void {
     const { solve } = pose;
-    const mix = Number(solve.applied[plan.at + PHYSICS_MIX]);
     const mode = solve.physicsMode;
 
-    if (mix === 0 || mode === PHYSICS_NONE) return;
-    modifyWorld(pose, plan.bone);
-    W[MIX] = mix;
+    W[MIX] = Number(solve.applied[plan.at + PHYSICS_MIX]);
     W[Z] = 0;
     if (mode === PHYSICS_POSE) poseOnly(pose, plan);
     else {
@@ -462,4 +464,25 @@ export function solvePhysics(pose: Pose43, plan: PhysicsPlan): void {
         solve.physics[plan.state + TX] = l * Number(world[b]);
         solve.physics[plan.state + TY] = l * Number(world[b + 2]);
     }
+}
+
+/**
+ * The official `PhysicsConstraint.update`: moves, turns and scales the bone of the constraint in
+ * the world, by the mode in `Solve43.physicsMode`. While an update is probed for physics that
+ * rest, it notes the world transform the bone had before.
+ */
+export function solvePhysics(pose: Pose43, plan: PhysicsPlan): void {
+    const { solve } = pose;
+
+    if (Number(solve.applied[plan.at + PHYSICS_MIX]) === 0 || solve.physicsMode === PHYSICS_NONE) return;
+    modifyWorld(pose, plan.bone);
+    if (solve.probing) {
+        const { world } = pose.state;
+        const { seen } = pose.rig.solver.scratch;
+        const b = plan.bone * WORLD_STRIDE;
+        const k = (plan.state / PHYSICS_STATE) * WORLD_STRIDE;
+
+        for (let i = 0; i < WORLD_STRIDE; i++) seen[k + i] = Number(world[b + i]);
+    }
+    stepPhysics(pose, plan);
 }

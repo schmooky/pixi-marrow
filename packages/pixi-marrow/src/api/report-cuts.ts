@@ -1,4 +1,5 @@
-import type { PageBlock } from '../render/cuts';
+import type { CutCodeState } from '../render/cut-code';
+import type { PageBlock } from '../render/page-block';
 import type { OutlinesState } from './asset';
 import { type PerfEntry, plural, type ReportSource, slotNames } from './report-base';
 
@@ -32,6 +33,15 @@ const NO_OUTLINES: Readonly<Record<OutlinesState, string>> = {
     off: OUTLINES.off,
 };
 
+/** Why the view cuts nothing although it has outlines: the code that cuts is a chunk that loads with them. */
+const NO_CODE: Readonly<Record<Exclude<CutCodeState, 'loaded'>, string>> = {
+    idle: 'the code that cuts loads with the outlines, and nothing asked for it yet',
+    loading: 'the code that cuts is loading. The view lays its vertex ranges out again once it is there',
+    failed:
+        'the chunk of pixi-marrow with the code that cuts did not load, so every region keeps its quad and every slot is drawn. ' +
+        'Check the network, and that the bundler wrote the chunks of pixi-marrow next to its entry and the server sends them',
+};
+
 const MARGIN = 'is below the 0.5 pixels that bilinear filtering needs';
 
 /** The pages whose regions keep their quads, each with what its texture does. Empty when no page does. */
@@ -48,6 +58,7 @@ function cutsOff({ view, outlinesState }: ReportSource): string | null {
     const { cuts } = view;
 
     if (!cuts.outlines) return NO_OUTLINES[outlinesState];
+    if (cuts.code !== 'loaded') return NO_CODE[cuts.code];
     if (!cuts.hostile) return null;
     const stays = 'Both cuts stay off for this instance';
 

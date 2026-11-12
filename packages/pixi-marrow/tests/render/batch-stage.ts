@@ -295,14 +295,22 @@ export interface UploadCounts {
     positions: number;
     statics: number;
     indices: number;
-    /** The bytes of the uploads of the static data and of the indices. */
+    /** The bytes of the uploads of the positions, of the static data and of the indices. */
+    positionBytes: number;
     staticBytes: number;
     indexBytes: number;
 }
 
 /** Counts the uploads of the buffers of a batcher from now on. */
 export function watchUploads(batcher: MarrowBatcher): UploadCounts {
-    const counts: UploadCounts = { positions: 0, statics: 0, indices: 0, staticBytes: 0, indexBytes: 0 };
+    const counts: UploadCounts = {
+        positions: 0,
+        statics: 0,
+        indices: 0,
+        positionBytes: 0,
+        staticBytes: 0,
+        indexBytes: 0,
+    };
     const [positions] = batcher.geometry.buffers;
     const watch = (buffer: Buffer | undefined, count: (bytes: number) => void): void => {
         if (buffer === undefined) return;
@@ -314,7 +322,10 @@ export function watchUploads(batcher: MarrowBatcher): UploadCounts {
         };
     };
 
-    watch(positions, () => counts.positions++);
+    watch(positions, (bytes) => {
+        counts.positions++;
+        counts.positionBytes += bytes;
+    });
     watch(batcher.staticBuffer, (bytes) => {
         counts.statics++;
         counts.staticBytes += bytes;

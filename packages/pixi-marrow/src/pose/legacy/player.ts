@@ -24,6 +24,17 @@ export class LegacyPlayer {
     readonly mixes: Map<string, number> = new Map();
     /** True when the hold modes of the entries must be computed before the next apply. */
     animationsChanged = false;
+    /**
+     * True when the next apply cannot be the one before again: a call changed an entry or the
+     * pose, or an update started, ended or advanced an entry. See rest.ts.
+     */
+    stirred = true;
+    /** True when the last apply left every number of the pose as it was. Then the same apply need not run again. */
+    settled = false;
+    /** How many applies to wait before the next one is checked for leaving the pose as it is. */
+    patience = 0;
+    /** How long that wait was the last time. It doubles while the pose keeps changing. */
+    waited = 0;
     /** The official `unkeyedState`. It grows by 2 with every apply. */
     unkeyedState = 0;
     /** The official `Slot.attachmentState` of each slot. */
@@ -51,6 +62,8 @@ export class LegacyPlayer {
  */
 function emit(player: LegacyPlayer, type: PoseEventType, entry: LegacyEntry): void {
     player.events.push({ type, track: entry.trackIndex, animation: entry.animation, entry });
+    // an entry started, ended or was interrupted. `complete` comes from the apply itself and stirs nothing
+    if (type !== 'complete') player.stirred = true;
 }
 
 /** The official `queue.start`. */

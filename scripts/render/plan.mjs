@@ -134,9 +134,11 @@ function sliderFeatures(model, infos) {
  * @param options.size Width and height of the picture in pixels. A rig that would be small gets twice that.
  * @param options.animations How many animations per rig, or Infinity for all of them.
  * @param options.only A part of `<version>/<rig>` to keep, or null for every rig.
+ * @param options.pkg The folder of the built pixi-marrow whose core reads the skeletons. Default:
+ * the package of the working tree.
  */
-export async function planRigs({ root, size, animations, only }) {
-    const core = await import(pathToFileURL(join(root, 'packages/pixi-marrow/dist/core.js')).href);
+export async function planRigs({ root, size, animations, only, pkg = join(root, 'packages/pixi-marrow') }) {
+    const core = await import(pathToFileURL(join(pkg, 'dist/core.js')).href);
     const manifest = JSON.parse(readFileSync(join(root, 'fixtures/manifest.json'), 'utf8'));
     const rigs = [];
 

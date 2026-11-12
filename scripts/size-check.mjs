@@ -24,15 +24,18 @@ const TOLERANCE = 0.1;
 
 /** name: [what the app imports, markers that must NOT end up in that bundle, subpath (default the root)] */
 const IMPORTS = {
-    // the root import does not carry the probes of pixi-marrow/perf, and the perf report and the clip
-    // kernel load on demand. The markers are a message of the probes, a reason of the report and a
-    // message of the kernel
+    // the root import does not carry the probes of pixi-marrow/perf, and the perf report, the clip
+    // kernel, the mesh mode and the cuts of overdraw load on demand. The markers are a message of
+    // the probes, a reason of the report, a message of the kernel, the label of the meshes of the
+    // mesh mode and a field of the search for covered slots
     everything: [
         '*',
         [
             'has a probe that measures its updates',
             'a draw range samples up to 8',
             'A clip polygon without a vertex cannot clip',
+            'marrow-range',
+            'coveredBy',
         ],
     ],
     // the headless core has no Pixi in it. pixi.js is external, so an import of it stays visible
@@ -53,6 +56,17 @@ const IMPORTS = {
 rmSync(work, { recursive: true, force: true });
 mkdirSync(join(work, 'node_modules'), { recursive: true });
 symlinkSync(pkgDir, join(work, 'node_modules/pixi-marrow'), 'dir');
+
+/**
+ * Chunks of the root import that load on demand and are listed by name, each found by a text
+ * only its code holds: the mesh mode by the label of its meshes, the code for clips by a message
+ * of the clip kernel, the cuts of overdraw by a field of the search for covered slots.
+ */
+const NAMED_CHUNKS = {
+    'the mesh mode': 'marrow-range',
+    'the code for clips': 'A clip polygon without a vertex cannot clip',
+    'the cuts of overdraw': 'coveredBy',
+};
 
 const kb = (n) => `${(n / 1024).toFixed(2)} kB`;
 const results = {};
@@ -86,6 +100,12 @@ for (const [name, [specifiers, forbidden, subpath = '']] of Object.entries(IMPOR
         const lazyCode = lazy.map((c) => c.code).join('\n');
 
         console.log(`${name}: + ${kb(gzipSync(lazyCode, { level: 9 }).length)} gzip on demand (${lazy.length} chunk)`);
+    }
+    for (const [what, marker] of name === 'everything' ? Object.entries(NAMED_CHUNKS) : []) {
+        const chunk = lazy.find((c) => c.code.includes(marker));
+
+        if (chunk) console.log(`${name}: ${what} is ${kb(gzipSync(chunk.code, { level: 9 }).length)} gzip on demand`);
+        else failures.push(`${name}: no chunk on demand holds "${marker}", so ${what} is not a chunk of its own`);
     }
 
     await bundle.close();

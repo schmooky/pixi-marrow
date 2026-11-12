@@ -1,9 +1,10 @@
 import { Texture, TextureSource } from 'pixi.js';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { textureBytes, typedArrayBytes } from '../../src/api/memory';
 import { type MarrowAsset, MarrowSpine } from '../../src/index';
 import { createAttachmentLookup } from '../../src/pose/shared/lookup';
 import { layoutArrayBytes } from '../../src/render/inspect';
+import { loadMeshCode } from '../../src/render/mesh-code';
 import { buildTemplate } from '../../src/render/template';
 import { createStage } from '../render/batch-stage';
 import type { CoverSlot } from '../render/cover-rig';
@@ -121,6 +122,11 @@ describe('perf.memory', () => {
 
         return spine;
     }
+
+    // the sums are about the mesh mode, whose code an asset loads when it is asked to
+    beforeAll(async () => {
+        await loadMeshCode();
+    });
 
     afterEach(() => {
         for (const spine of made.splice(0)) spine.destroy();

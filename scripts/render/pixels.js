@@ -39,6 +39,43 @@ export function countDraws() {
 }
 
 /**
+ * Counts the buffer uploads of the page, on WebGL2 and on WebGPU, for every runtime alike. Read
+ * `calls` and `bytes`, reset both to 0.
+ *
+ * An upload is a call of `bufferData` or `bufferSubData` with data, or of `GPUQueue.writeBuffer`.
+ * A `bufferData` that only sets a size allocates and uploads nothing: it counts as a call of 0
+ * bytes. Vertex, index and uniform buffers all go through these calls. A buffer that WebGPU
+ * fills while it creates it is not seen here. That happens once per buffer, not per frame.
+ */
+export function countUploads() {
+    const uploads = { calls: 0, bytes: 0 };
+    // the bytes of `length` elements of some data from `offset` on, as both interfaces count them
+    const bytesOf = (data, offset = 0, length = 0) => {
+        if (data === null || typeof data !== 'object') return 0;
+        const each = ArrayBuffer.isView(data) && !(data instanceof DataView) ? data.BYTES_PER_ELEMENT : 1;
+
+        return length ? length * each : data.byteLength - offset * each;
+    };
+    const wrap = (type, name, bytes) => {
+        if (!type) return;
+        const original = type.prototype[name];
+
+        type.prototype[name] = function (...args) {
+            uploads.calls++;
+            uploads.bytes += bytes(args);
+
+            return original.apply(this, args);
+        };
+    };
+
+    wrap(globalThis.WebGL2RenderingContext, 'bufferData', (args) => bytesOf(args[1], args[3], args[4]));
+    wrap(globalThis.WebGL2RenderingContext, 'bufferSubData', (args) => bytesOf(args[2], args[3], args[4]));
+    wrap(globalThis.GPUQueue, 'writeBuffer', (args) => bytesOf(args[2], args[3], args[4]));
+
+    return uploads;
+}
+
+/**
  * Counts how often Pixi builds the instructions of a render group. Read `count`, reset it to 0.
  *
  * A render group keeps a list of instructions, one per batch, mesh, mask or filter step, and runs

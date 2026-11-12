@@ -14,6 +14,7 @@ import {
     type RigParts,
     slider,
 } from './pose-rig-kit';
+import { wakeSlider } from './pose-rig-wake';
 
 /*
  * A rig made for sliders, which only 4.3 has. The one official slider reads the local rotation of
@@ -373,6 +374,7 @@ function parts(): RigParts {
             nod: nod(),
             bend: bend(),
             drive: drive(),
+            wake: wakeSlider(),
             still: still(),
         },
     };

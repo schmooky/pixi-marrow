@@ -48,7 +48,8 @@ function packageOf(path) {
     if (path.includes('/pixi.js/')) return 'pixi.js';
     if (path.includes('spine-pixi-v8')) return 'spine-pixi-v8';
     if (path.includes('spine-core')) return 'spine-core';
-    if (path.startsWith('packages/pixi-marrow')) return 'pixi-marrow';
+    // the package of the repo, or the copy of a build that was kept
+    if (path.includes('pixi-marrow/dist/')) return 'pixi-marrow';
     if (path.startsWith('scripts/')) return 'the bench page';
 
     return 'other';
@@ -135,7 +136,8 @@ async function measureMemory(context, rig, job) {
 
         if (state.error || state.renderer !== renderer)
             return { error: state.error ?? `the browser gave ${state.renderer}` };
-        await page.evaluate((plan) => window.bench.load(plan), rig);
+        // the asset is loaded for the mesh mode when the instances ask for it by name
+        await page.evaluate(([plan, mesh]) => window.bench.load(plan, mesh), [rig, job.options?.renderMode === 'mesh']);
         if (!job.split) return page.evaluate((it) => window.bench.hold(it), { ...job, warmup: WARMUP });
         const client = await page.context().newCDPSession(page);
 

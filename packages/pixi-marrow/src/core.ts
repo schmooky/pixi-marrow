@@ -75,4 +75,4 @@ export { createPoseEngine, loadPoseEngine } from './pose/engine';
 export type { AttachmentLookup } from './pose/shared/lookup';
 export { createAttachmentLookup, meshSource } from './pose/shared/lookup';
 export type { PoseState } from './pose/state';
-export { LOCAL_STRIDE, poseStateBytes, WORLD_STRIDE } from './pose/state';
+export { isNewer, LOCAL_STRIDE, nextVersion, poseStateBytes, touchPose, WORLD_STRIDE } from './pose/state';

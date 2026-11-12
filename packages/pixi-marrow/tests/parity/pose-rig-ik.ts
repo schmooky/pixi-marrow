@@ -11,6 +11,7 @@ import {
     madeRig,
     type RigParts,
 } from './pose-rig-kit';
+import { wakeIk } from './pose-rig-wake';
 
 /*
  * A rig made for IK. The official examples have one-bone and two-bone IK, both bend directions
@@ -226,6 +227,7 @@ function parts(version: SpineVersion): RigParts {
         animations: {
             reach: reach(version),
             swing: swing(),
+            wake: wakeIk(),
             // one key at time 0: an animation without a length
             still: {
                 bones: { tA: { translate: [{ x: -30, y: 15 }] }, tB: { translate: [{ x: 45, y: -35 }] } },

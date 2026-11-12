@@ -15,6 +15,8 @@ import { BACKGROUNDS, compare, difference, displacedShare, picture } from './pix
  * with polygons and a picture of quads. They report the largest difference and do not limit it.
  * `modes` is ours in the batched mode against ours in the mesh mode, judged like `match` with
  * limits of its own. It is measured and not judged while `TOLERANCE.modes` of the check is null.
+ * `pixi` is the official runtime on the pixi.js of the page against the reference, see
+ * `TOLERANCE.pixi` of the check. What it finds is about the official runtime and fails nothing.
  * A `proof` is wrong on purpose: it passes when every criterion in `rejectedBy` rejects it.
  *
  * `group` names the line of the summary a comparison counts in, where that is not its kind. The
@@ -24,6 +26,8 @@ import { BACKGROUNDS, compare, difference, displacedShare, picture } from './pix
  */
 export const PAIRS = [
     { label: 'official twice', a: 'twin', b: 'official', kind: 'exact' },
+    // on a page that runs on another pixi.js: the official runtime there against the reference
+    { label: 'official, this pixi.js', a: 'official-here', b: 'official', kind: 'pixi' },
     { label: 'ours', a: 'ours', b: 'official', kind: 'match' },
     { label: 'ours, json', a: 'ours-json', b: 'official-json', kind: 'match' },
     { label: 'official, json and binary', a: 'official-json', b: 'official', kind: 'formats' },
@@ -112,7 +116,7 @@ const AGAINST_OFFICIAL = ['match', 'polygonsOfficial'];
  * it has a limit. The two modes move vertices to the screen in different places, one on the CPU
  * and one in the vertex shader, like the two runtimes.
  */
-const SECOND_LOOK = ['match', 'own', 'modes'];
+const SECOND_LOOK = ['match', 'own', 'modes', 'pixi'];
 
 const percent = (share) => `${(100 * share).toFixed(3)}%`;
 
@@ -252,11 +256,16 @@ function shots(ctx, result, flagged, a, b) {
     };
 }
 
-/** One frame of an instance: its picture on both backgrounds, and what its stats say. */
+/**
+ * One frame of an instance: its picture on both backgrounds, and what its stats say. An instance
+ * with a `studio` of its own is drawn there: a side can have a renderer of its own.
+ */
 export async function capture(studio, instance) {
+    const own = instance.studio ?? studio;
+
     return {
-        clear: await studio.shoot(instance.root, BACKGROUNDS.clear),
-        solid: await studio.shoot(instance.root, BACKGROUNDS.solid),
+        clear: await own.shoot(instance.root, BACKGROUNDS.clear),
+        solid: await own.shoot(instance.root, BACKGROUNDS.solid),
         stats: instance.stats(),
     };
 }

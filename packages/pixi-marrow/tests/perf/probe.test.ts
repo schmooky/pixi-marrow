@@ -1,6 +1,7 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { type MarrowAsset, MarrowError, MarrowSpine } from '../../src/index';
 import { createProbe, type PerfProbe } from '../../src/perf';
+import { touchPose } from '../../src/pose/state';
 import { coverAsset } from '../api/cover-asset';
 import { FRAME, fixtureAsset, poseOf } from '../api/helpers';
 import type { CoverSlot } from '../render/cover-rig';
@@ -71,7 +72,16 @@ describe('a perf probe', () => {
             pose: { total: 0, mean: 0, worst: 0 },
             geometry: { total: 0, mean: 0, worst: 0 },
             events: { total: 0, mean: 0, worst: 0 },
-            counters: { drawCalls: 0, vertices: 0, uploads: 0, rangesRebuilt: 0, clips: 0, coveredSlots: 0 },
+            counters: {
+                drawCalls: 0,
+                vertices: 0,
+                uploads: 0,
+                rangesRebuilt: 0,
+                clips: 0,
+                coveredSlots: 0,
+                skippedUpdates: 0,
+                placedSlots: 0,
+            },
         });
     });
 
@@ -145,18 +155,42 @@ describe('a perf probe', () => {
     it('adds up what the view did in every update', () => {
         const spine = create();
         const probe = createProbe(spine);
+        const before = { ...spine.stats };
 
-        for (let i = 0; i < 3; i++) spine.update(FRAME);
-
-        // one range of two quads: positions upload in every update, nothing else changes
+        // a pose that is marked as changed: the view places the two quads again, as it does while it plays
+        for (let i = 0; i < 3; i++) {
+            touchPose(spine.engine.state);
+            spine.update(FRAME);
+        }
+        expect(spine.stats.positionUploads - before.positionUploads).toBe(3);
+        // one range of two quads: the positions upload in every update, nothing else changes
         expect(probe.read().counters).toEqual({
             drawCalls: 3,
-            vertices: 3 * 8,
+            vertices: 24,
             uploads: 3,
             rangesRebuilt: 0,
             clips: 0,
             coveredSlots: 0,
+            skippedUpdates: 0,
+            placedSlots: 6,
         });
+    });
+
+    it('counts the updates in which the view found nothing to do', () => {
+        const spine = create();
+        const probe = createProbe(spine);
+        const before = { ...spine.stats };
+
+        // Nothing plays. An engine that knows so leaves the pose alone, and the view skips. One
+        // that marks every pose as changed makes the view place the two quads again
+        for (let i = 0; i < 3; i++) spine.update(FRAME);
+        const worked = spine.stats.positionUploads - before.positionUploads;
+        const skipped = spine.stats.skips - before.skips;
+        const { counters } = probe.read();
+
+        expect(worked + skipped).toBeLessThanOrEqual(3);
+        expect(counters).toMatchObject({ uploads: worked, skippedUpdates: skipped, placedSlots: worked * 2 });
+        expect(counters.vertices).toBe(worked * 8);
     });
 
     it('counts like the counters of the view while a fixture with a clip plays', async () => {
@@ -166,14 +200,18 @@ describe('a perf probe', () => {
         spine.update(FRAME);
         const probe = createProbe(spine);
         const before = { uploads: uploads(spine), rebuilds: spine.stats.indexRebuilds };
-        const sums = { drawCalls: 0, vertices: 0, clips: 0, coveredSlots: 0 };
+        const sums = { drawCalls: 0, vertices: 0, clips: 0, coveredSlots: 0, skippedUpdates: 0, placedSlots: 0 };
 
         for (let i = 0; i < 60; i++) {
+            const { skips, positionUploads } = spine.stats;
+
             spine.update(FRAME);
             sums.drawCalls += spine.stats.drawCalls;
-            sums.vertices += spine.stats.vertices;
+            if (spine.stats.positionUploads !== positionUploads) sums.vertices += spine.stats.vertices;
             sums.clips += spine.stats.clips;
             sums.coveredSlots += spine.stats.coveredSlots;
+            if (spine.stats.skips !== skips) sums.skippedUpdates++;
+            else sums.placedSlots += spine.stats.placedSlots;
         }
         const { counters, updates } = probe.read();
 
@@ -207,6 +245,7 @@ describe('a perf probe', () => {
 
         expect(probe.read()).toMatchObject({ updates: 0, update: { total: 0, mean: 0, worst: 0 } });
         expect(probe.read().counters.uploads).toBe(0);
+        touchPose(spine.engine.state);
         spine.update(FRAME);
 
         expect(probe.read()).toMatchObject({

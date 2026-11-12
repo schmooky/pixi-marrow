@@ -7,11 +7,17 @@
  *
  * A side has `root`, `home`, `place` and `stats`, like an instance of scripts/render/sides.js, so
  * the comparison and its second look treat a whole stage as they treat one instance.
+ *
+ * A scene can hold a tooling proof: one more side that is wrong on purpose and must be rejected.
+ * `proof.swap` names two instances that change places in the draw order. `proof.hold` names a
+ * step whose update the side leaves out, so that it shows the picture of the frame before: what
+ * a view shows that skips work it had to do.
  */
 import { capture, captureSecond, judge } from './judge.js';
 import { countModes, readMode } from './mode.js';
-import { BACKGROUNDS, createStudio } from './pixels.js';
+import { BACKGROUNDS } from './pixels.js';
 import { chooseModes, probeModes } from './probe.js';
+import { applyEvent, buildSide, destroySide, modeOf } from './scene-build.js';
 
 const message = (error) => (error instanceof Error ? `${error.name}: ${error.message}` : String(error));
 
@@ -25,180 +31,39 @@ const message = (error) => (error instanceof Error ? `${error.name}: ${error.mes
  */
 const SCENE_PAIRS = [
     { label: 'scene twice', a: 'twin', b: 'official', kind: 'exact', group: 'sceneTwice' },
+    // on a page that runs on another pixi.js: the official runtime there against the reference
+    { label: 'official, this pixi.js', a: 'official-here', b: 'official', kind: 'pixi', group: 'scenePixi' },
     { label: 'mesh', a: 'mesh', b: 'official', kind: 'match', group: 'sceneMesh' },
     { label: 'batched', a: 'batched', b: 'official', kind: 'match', group: 'sceneBatched' },
     { label: 'batched and mesh', a: 'batched', b: 'mesh', kind: 'modes', group: 'sceneModes', reference: 'official' },
     { label: 'batched against mesh', a: 'batched', b: 'mesh', kind: 'own', group: 'sceneOwn', reference: 'mesh' },
     { label: 'auto', a: 'auto', b: 'official', kind: 'match', group: 'sceneAuto', reference: 'official' },
     { label: 'auto against mesh', a: 'auto', b: 'mesh', kind: 'own', group: 'sceneAuto', reference: 'mesh' },
-    { label: 'proof, two instances swapped', a: 'swapped', b: 'official', kind: 'proof', rejectedBy: ['match'] },
-    {
-        label: 'proof, ours with two instances swapped',
-        a: 'mesh-swapped',
-        b: 'official',
-        kind: 'proof',
-        rejectedBy: ['match'],
-    },
-    {
-        label: 'proof, ours batched with two instances swapped',
-        a: 'batched-swapped',
-        b: 'official',
-        kind: 'proof',
-        rejectedBy: ['match'],
-    },
+    { label: 'proof, official', a: 'wrong', b: 'official', kind: 'proof', rejectedBy: ['match'] },
+    { label: 'proof, ours', a: 'mesh-wrong', b: 'official', kind: 'proof', rejectedBy: ['match'] },
+    { label: 'proof, ours batched', a: 'batched-wrong', b: 'official', kind: 'proof', rejectedBy: ['match'] },
 ];
 
-/** A container for a group node: its transform, alpha, tint, filter and whether it is a render group. */
-function makeGroup(PIXI, scene, node) {
-    const group = new PIXI.Container(node.renderGroup ? { isRenderGroup: true } : {});
+/** The labels of the three proof comparisons of a scene, by what its proof does. */
+const PROOF_LABELS = {
+    swap: [
+        'proof, two instances swapped',
+        'proof, ours with two instances swapped',
+        'proof, ours batched with two instances swapped',
+    ],
+    hold: [
+        'proof, a frame held back',
+        'proof, ours with a frame held back',
+        'proof, ours batched with a frame held back',
+    ],
+};
 
-    group.position.set(node.x ?? 0, node.y ?? 0);
-    group.scale.set(node.scale ?? 1);
-    group.rotation = node.rotation ?? 0;
-    if (node.alpha !== undefined) group.alpha = node.alpha;
-    if (node.tint !== undefined) group.tint = node.tint;
-    if (node.filter) {
-        group.filters = [new PIXI.AlphaFilter({ alpha: node.filter.alpha })];
-        // the area is given, so the bounds of a runtime do not decide how large the filter texture is
-        group.filterArea = new PIXI.Rectangle(0, 0, scene.size, scene.size);
-    }
+/** The comparisons of a frame of a scene: `SCENE_PAIRS` with the labels of the proof of the scene. */
+function pairsOf(scene) {
+    const labels = PROOF_LABELS[scene.proof?.hold ? 'hold' : 'swap'];
+    const proofs = SCENE_PAIRS.filter((pair) => pair.kind === 'proof');
 
-    return group;
-}
-
-/** A Pixi object that is no instance: a rectangle drawn by a graphics object, or a tinted sprite. */
-function makeShape(PIXI, node) {
-    if (node.type === 'graphics') {
-        return new PIXI.Graphics()
-            .rect(node.x, node.y, node.width, node.height)
-            .fill({ color: node.color, alpha: node.alpha });
-    }
-    const sprite = new PIXI.Sprite(PIXI.Texture.WHITE);
-
-    sprite.position.set(node.x, node.y);
-    sprite.width = node.width;
-    sprite.height = node.height;
-    sprite.rotation = node.rotation ?? 0;
-    sprite.tint = node.color;
-    sprite.alpha = node.alpha;
-
-    return sprite;
-}
-
-/** The render mode an instance of a side asks for. Only the batched side lets a node pick its own. */
-const modeOf = (side, node) => (side.mode === 'batched' ? (node.mode ?? 'batched') : side.mode);
-
-/** Creates the instance of a node, plays its animation and moves it to its place in time. */
-async function makeInstance(scene, side, node) {
-    const rig = scene.rigs[node.rig];
-    const url = (file) => `/fixtures/${side.runtime.name}/${rig.version}/${file}`;
-    const instance = await side.runtime.create({
-        skeleton: url(rig.skel),
-        atlas: url(rig.atlas),
-        mode: modeOf(side, node),
-    });
-
-    side.instances.push(instance);
-    side.named.set(node.name, instance);
-    instance.node = node;
-    if (rig.skin) instance.setSkin(rig.skin);
-    instance.place(node);
-    instance.play(rig.animation);
-    // every instance at another time of its animation
-    instance.update(node.time ?? 0);
-    if (node.visible === false) instance.view.visible = false;
-    if (node.renderable === false) instance.view.renderable = false;
-
-    return instance.view;
-}
-
-/**
- * Builds a node and what is below it, and adds it to a parent.
- *
- * @param index Where in the child list of the parent it goes. Without it the node goes to the end.
- */
-async function addNode(env, scene, side, node, parent, index) {
-    const { PIXI } = env;
-    let object;
-
-    if (node.type === 'spine') object = await makeInstance(scene, side, node);
-    else if (node.type === 'group') {
-        object = makeGroup(PIXI, scene, node);
-        for (const child of node.children) await addNode(env, scene, side, child, object);
-        if (node.mask) {
-            const mask = new PIXI.Graphics().circle(...node.mask.circle).fill(0xffffff);
-
-            object.addChild(mask);
-            object.mask = mask;
-        }
-    } else object = makeShape(PIXI, node);
-    if (index === undefined) parent.addChild(object);
-    else parent.addChildAt(object, index);
-}
-
-/**
- * One side of a scene: a stage of its own with every node of the scene.
- *
- * @param spec.key The name of the side. `spec.runtime` is the official side or ours, and
- * `spec.mode` the render mode its instances ask for. `spec.swapped` builds the tooling proof: two
- * instances change places in the child list.
- */
-async function buildSide(env, scene, spec) {
-    const stage = new env.PIXI.Container();
-    const side = {
-        ...spec,
-        root: stage,
-        stage,
-        instances: [],
-        named: new Map(),
-        home: { x: 0, y: 0 },
-        place(placement) {
-            side.home = placement;
-            stage.position.set(placement.x, placement.y);
-        },
-        stats: () => null,
-        // draw calls of the captured frames, and how often Pixi built instructions
-        draws: [],
-        builds: { first: null, later: 0, renders: 0 },
-    };
-
-    try {
-        for (const node of scene.nodes) await addNode(env, scene, side, node, stage);
-        if (spec.swapped) {
-            const [a, b] = scene.proof.swap.map((name) => side.named.get(name).view);
-
-            stage.swapChildren(a, b);
-        }
-    } catch (error) {
-        destroySide(side);
-        throw error;
-    }
-
-    return side;
-}
-
-function destroySide(side) {
-    for (const instance of side.instances) instance.destroy();
-    side.instances.length = 0;
-    side.stage.destroy({ children: true });
-}
-
-/** Applies one change between two frames to a side: see the events of scripts/render/scene-plan.mjs. */
-async function applyEvent(env, scene, side, event) {
-    const target = event.name ? side.named.get(event.name) : null;
-
-    if (event.op === 'add') await addNode(env, scene, side, event.node, side.stage, event.index);
-    else if (event.op === 'remove') side.stage.removeChild(target.view);
-    else if (event.op === 'insert') side.stage.addChildAt(target.view, event.index);
-    else if (event.op === 'move') side.stage.setChildIndex(target.view, event.index);
-    else if (event.op === 'set') {
-        if (event.visible !== undefined) target.view.visible = event.visible;
-        if (event.renderable !== undefined) target.view.renderable = event.renderable;
-    } else if (event.op === 'destroy') {
-        target.destroy();
-        side.instances.splice(side.instances.indexOf(target), 1);
-        side.named.delete(event.name);
-    } else throw new Error(`unknown event ${event.op}`);
+    return SCENE_PAIRS.map((pair) => (pair.kind === 'proof' ? { ...pair, label: labels[proofs.indexOf(pair)] } : pair));
 }
 
 /** Adds the instruction builds of one render of a side to its counters. */
@@ -211,23 +76,26 @@ function countBuild(side, builds) {
 /**
  * The sides a scene is built for.
  *
- * Without ours the tooling proof runs alone: the official stage twice, and once with two
- * instances swapped. The side `auto` has the default options. It is drawn at the first frame
- * only: that says which mode `auto` picks with this many instances, and that the pick draws.
+ * Without ours the tooling proof runs alone: the official stage twice, and once made wrong. The
+ * side `auto` has the default options. It is drawn at the first frame only: that says which mode
+ * `auto` picks with this many instances, and that the pick draws. On a page that draws the
+ * default options alone it stays for the whole scene.
  */
-function sidesOf(scene, official, ours, run) {
+function sidesOf(scene, official, ours, run, officialHere = null) {
     const specs = [];
     const add = (key, runtime, mode, more = {}) => specs.push({ key, runtime, mode, ...more });
 
     if (official) add('official', official);
+    // where `official` is the reference: the official runtime on the pixi.js of the page
+    if (official && officialHere) add('official-here', officialHere);
     if (official && !ours) add('twin', official);
-    if (official && scene.proof) add('swapped', official, undefined, { swapped: true });
+    if (official && scene.proof) add('wrong', official, undefined, { wrong: true });
     if (!ours) return specs;
     if (run.mesh || (run.batched && scene.reference === 'mesh')) add('mesh', ours, 'mesh');
     if (run.batched) add('batched', ours, 'batched');
-    if (run.auto) add('auto', ours, 'auto', { once: true });
-    if (official && scene.proof && run.mesh) add('mesh-swapped', ours, 'mesh', { swapped: true });
-    if (official && scene.proof && run.batched) add('batched-swapped', ours, 'batched', { swapped: true });
+    if (run.auto) add('auto', ours, 'auto', { once: run.mesh || run.batched, picks: Boolean(scene.lazy) });
+    if (official && scene.proof && run.mesh) add('mesh-wrong', ours, 'mesh', { wrong: true });
+    if (official && scene.proof && run.batched) add('batched-wrong', ours, 'batched', { wrong: true });
 
     return specs;
 }
@@ -300,7 +168,7 @@ function countCases(scene, sides, options, counted) {
     const reasons = [];
 
     for (const side of sides) {
-        if (side.swapped || side.key === 'twin') continue;
+        if (side.wrong || side.key === 'twin') continue;
         draws[side.key] = range(side.draws);
         if (!side.once) builds[side.key] = { ...side.builds };
     }
@@ -321,8 +189,13 @@ function countCases(scene, sides, options, counted) {
     ];
 }
 
-/** Which modes of ours a scene draws: asks the runtime with the first rig of the scene. */
+/**
+ * Which modes of ours a scene draws: asks the runtime with the first rig of the scene. A scene
+ * about the lazy mesh mode asks nothing: an instance that asks for the mesh mode would load the
+ * code the scene watches for.
+ */
 async function askModes(env, scene, studio, options, report) {
+    if (scene.lazy) return { run: { mesh: false, batched: false, auto: true }, known: true };
     const [rig] = Object.values(scene.rigs);
     const url = (file) => `/fixtures/ours/${rig.version}/${file}`;
     const readings = await probeModes(env.ours, studio, {
@@ -361,7 +234,7 @@ async function compareFrame(ctx, scene, sides, at) {
             });
         }
     }
-    for (const pair of SCENE_PAIRS) {
+    for (const pair of pairsOf(scene)) {
         const a = frames.get(pair.a);
         const b = frames.get(pair.b);
         const again = async () => ({
@@ -376,14 +249,106 @@ async function compareFrame(ctx, scene, sides, at) {
         });
 
         if (pair.reference && pair.reference !== scene.reference) continue;
+        // a proof that holds a frame back is wrong at that frame alone
+        if (pair.kind === 'proof' && scene.proof?.hold && scene.proof.hold.step !== at.step) continue;
         if (a && b) ctx.report.cases.push(await judge(ctx, at, pair, a, b, again));
     }
+}
+
+/**
+ * The seconds the instances of a side advance at a step. Every side advances by the step of the
+ * scene, and by nothing at the first frame. The wrong side of a proof that holds a frame back
+ * leaves the update of that step out and makes up for it at the next one.
+ */
+function secondsOf(scene, side, step) {
+    const held = side.wrong ? scene.proof.hold?.step : undefined;
+
+    if (step === 0 || step === held) return 0;
+
+    return step - 1 === held ? scene.dt * 2 : scene.dt;
+}
+
+/** How long a scene about the lazy mesh mode waits at its end for an instance that asked for it. */
+const LAZY_WAIT = 2000;
+
+/** The instances of a side that ask for the mesh mode: by a node, or by an event while the scene plays. */
+function askingForMesh(scene, side) {
+    const names = scene.events
+        .filter((event) => event.op === 'mode' && event.mode === 'mesh')
+        .map((event) => event.name);
+
+    return side.instances.filter((instance) => instance.node.mode === 'mesh' || names.includes(instance.node.name));
+}
+
+/**
+ * Notes the modes the instances with the default options drew in at one frame, and what the
+ * report says about an instance that asks for the mesh mode and does not draw in it yet. Then
+ * the page gets a turn of its event loop: a chunk that loads on demand arrives in such a turn.
+ */
+async function noteLazyFrame(scene, sides, lazy) {
+    const side = sides.find((entry) => entry.key === 'auto');
+
+    if (side) lazy.frames.push(countModes(side.instances.map((instance) => instance.spine)));
+    // a scene whose rig `auto` draws with meshes follows its first instance, the others the ones that ask
+    const followed = scene.lazy === 'first' ? side?.instances.slice(0, 1) : side && askingForMesh(scene, side);
+
+    for (const instance of followed ?? []) {
+        const { mode, reason } = await instance.mode();
+        const said = `${mode ?? 'no mode'}: ${reason}`;
+
+        // the report is noted when it says something new
+        if (lazy.said.at(-1)?.text !== said) lazy.said.push({ frame: lazy.frames.length - 1, text: said });
+    }
+    await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+/**
+ * The case of a scene about the lazy mesh mode, from the modes of its frames.
+ *
+ * `lazy: 'first'` is a rig that `auto` draws with meshes: its first frame must be drawn in the
+ * mesh mode, so the code must be there when the asset has loaded. `lazy: 'switch'` asks an
+ * instance for the mesh mode while the scene plays, and `lazy: 'create'` creates one that asks
+ * for it without the load that waits for its code. Both draw in a batch until the code is
+ * there. They must draw in every frame, which the comparisons with the official runtime show,
+ * and they must arrive in the mesh mode: the scene waits a moment at its end for that.
+ * `lazy: 'never'` needs no mesh mode. There the Node side looks at the requests of the page.
+ */
+async function lazyCase(scene, sides, lazy) {
+    const side = sides.find((entry) => entry.key === 'auto');
+    const reasons = [];
+    const info = { lazy: scene.lazy, frames: lazy.frames, said: lazy.said, waited: 0 };
+    const [first] = lazy.frames;
+
+    if (!side || !first) {
+        return { label: 'lazy mesh mode', kind: 'lazy', reasons: ['the default options did not draw'], info };
+    }
+    if (first.unknown > 0) info.silent = true;
+    else if (scene.lazy === 'first' && first.batched > 0) {
+        reasons.push(`${first.batched} of ${first.batched + first.mesh} instances drew their first frame in a batch`);
+    } else if (scene.lazy === 'switch' || scene.lazy === 'create') {
+        const asked = askingForMesh(scene, side);
+        const started = performance.now();
+        const waiting = () => asked.some((instance) => instance.stats()?.renderMode !== 'mesh');
+
+        // an instance takes its new mode with an update, once the code of that mode is there
+        while (waiting() && performance.now() - started < LAZY_WAIT) {
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            for (const instance of side.instances) instance.update(0);
+        }
+        info.waited = performance.now() - started;
+        if (waiting()) {
+            reasons.push(`an instance that asked for the mesh mode did not draw in it ${LAZY_WAIT} ms after the scene`);
+        }
+    }
+
+    return { label: 'lazy mesh mode', kind: 'lazy', reasons, info };
 }
 
 /** Runs one scene. The result is plain data for the Node side, like the result of a rig. */
 export async function runScene(env, scene, options) {
     const report = { cases: [], notes: [], missing: env.missing };
-    const studio = createStudio(env.PIXI, env.renderer, scene.size, env.draws, false, env.builds);
+    // the render texture of ours, or of the official runtime where the tooling proof runs alone
+    const studio = (env.ours ?? env.official).studio(scene.size);
     const ctx = {
         plan: { size: scene.size, additive: scene.additive, rig: scene.id },
         options,
@@ -401,11 +366,14 @@ export async function runScene(env, scene, options) {
     const at = (step) => ({ step, time: Math.round(step * scene.dt * 1000) / 1000 });
     // every side that was built, and the ones that are still on stage
     const built = [];
+    // A scene about the lazy mesh mode: per frame how many instances drew in which mode, and what
+    // the report said about the ones that ask for the mesh mode
+    const lazy = { frames: [], said: [] };
     let sides = [];
 
     ctx.sampleLabel = env.ours ? (asked.run.mesh ? 'mesh' : 'batched') : 'scene twice';
     try {
-        for (const spec of sidesOf(scene, official, env.ours, asked.run)) {
+        for (const spec of sidesOf(scene, official, env.ours, asked.run, env.officialHere)) {
             try {
                 built.push(await buildSide(env, scene, spec));
             } catch (error) {
@@ -419,9 +387,11 @@ export async function runScene(env, scene, options) {
                     for (const event of scene.events) {
                         if (event.step === step) await applyEvent(env, scene, side, event);
                     }
-                    if (step > 0) for (const instance of side.instances) instance.update(scene.dt);
+                    const seconds = secondsOf(scene, side, step);
+
+                    if (seconds > 0) for (const instance of side.instances) instance.update(seconds);
                     // every frame is drawn, so the builds of the frames between two captures count too
-                    countBuild(side, studio.draw(side.stage, BACKGROUNDS.solid).builds);
+                    countBuild(side, side.studio.draw(side.stage, BACKGROUNDS.solid).builds);
                 } catch (error) {
                     // a side that throws leaves the stage. The others play on
                     report.cases.push({
@@ -436,6 +406,7 @@ export async function runScene(env, scene, options) {
             const modes = step === 0 ? await modeCase(sides, asked.known) : null;
 
             if (modes) report.cases.push(modes);
+            if (scene.lazy) await noteLazyFrame(scene, sides, lazy);
             if (scene.captures.includes(step)) {
                 await compareFrame(ctx, scene, sides, at(step));
             }
@@ -446,6 +417,7 @@ export async function runScene(env, scene, options) {
         if (env.ours) {
             const rows = await rowsCase(scene, sides);
 
+            if (scene.lazy) report.cases.push(await lazyCase(scene, sides, lazy));
             if (rows) report.cases.push(rows);
             report.cases.push(...countCases(scene, built, options, studio.countsBuilds));
         }

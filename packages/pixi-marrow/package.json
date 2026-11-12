@@ -54,6 +54,8 @@
     "@arethetypeswrong/core": "^0.18.5",
     "@types/node": "^24.0.0",
     "@vitest/coverage-v8": "^5.1.0",
+    "pixi-8.16": "npm:pixi.js@8.16.0",
+    "pixi-8.21": "npm:pixi.js@8.21.0",
     "pixi.js": "^8.22.0",
     "publint": "^0.3.24",
     "spine-core-4.1": "npm:@esotericsoftware/spine-core@4.1.55",

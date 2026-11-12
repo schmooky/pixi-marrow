@@ -159,6 +159,7 @@ describe.each(['4.2', '4.3'])('the Pixi objects of a %s coin', (version) => {
             rig.model,
             rig.atlas,
             rig.atlas.pages.map(() => Texture.WHITE),
+            { renderMode: 'mesh' },
         );
         const second: Rig = { ...rig, engine, view };
 

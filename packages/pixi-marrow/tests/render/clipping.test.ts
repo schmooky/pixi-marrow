@@ -4,7 +4,19 @@ import type { SkeletonModel } from '../../src/model/model';
 import { listFixtures } from '../parity/fixtures';
 import { clipAttachment, clipGroups, expectClips } from './clip-check';
 import type { OfficialClips } from './clip-official';
-import { FRAME, loadRig, meshes, play, type Rig, readFlags, slotIndex, step, vertexData, visibleSlots } from './rig';
+import {
+    drawPose,
+    FRAME,
+    loadRig,
+    meshes,
+    play,
+    type Rig,
+    readFlags,
+    slotIndex,
+    step,
+    vertexData,
+    visibleSlots,
+} from './rig';
 
 /*
  * Which slots a clipping attachment cuts, against the official `SkeletonClipping` of each version
@@ -43,7 +55,7 @@ const AFTER_HEAD = ['eye', 'front-thigh', 'front-foot', 'front-shin', 'mouth', '
 
 /** Updates the view, checks it against the official clipper and returns the slots each clip cuts, by name. */
 function cutNames(rig: Rig): Record<string, string[]> & { clips: OfficialClips } {
-    rig.view.update(rig.engine.state);
+    drawPose(rig.view, rig.engine.state);
     const clips = expectClips(rig);
     const { names } = rig.model.slots;
     const cut: Record<string, string[]> = {};

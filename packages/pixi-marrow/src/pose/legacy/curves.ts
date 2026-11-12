@@ -1,11 +1,15 @@
 /** The curve type of a key that interpolates in a straight line. */
-const LINEAR = 0;
+export const CURVE_LINEAR = 0;
 /** The curve type of a key that holds its value. */
-const STEPPED = 1;
+export const CURVE_STEPPED = 1;
 /** Curve types from this number on are Bezier: the type minus this number is the index of the samples. */
-const BEZIER = 2;
+export const CURVE_BEZIER = 2;
 /** Floats one Bezier curve takes in a `curves` array. */
-const BEZIER_SIZE = 18;
+export const CURVE_BEZIER_SIZE = 18;
+const LINEAR = CURVE_LINEAR;
+const STEPPED = CURVE_STEPPED;
+const BEZIER = CURVE_BEZIER;
+const BEZIER_SIZE = CURVE_BEZIER_SIZE;
 
 /*
  * Reading numbers in this engine: `Number(array[index])`.
@@ -41,6 +45,10 @@ export const ALPHA_MIX = 5;
 export const DELTA = 6;
 /** How far the mix of the entry that is applied is, from 0 to 1. */
 export const MIX = 7;
+/** The version the running update or command raises the pose to when it changes something: see stamps.ts. */
+export const STAMP = 8;
+/** 1 once the running update or command has set a stamp. */
+export const STAMPED = 9;
 
 /**
  * The index of the last key at or before the time in `SHARED`, as the official `Timeline.search`
@@ -130,6 +138,84 @@ export function curveValues(frames: Float32Array, curves: Float32Array, entries:
         for (let v = 1; v < entries; v++) out[v - 1] = Number(frames[i + v]);
     } else {
         for (let v = 1; v < entries; v++) bezierValue(frames, curves, i, v, entries, out);
+    }
+}
+
+/**
+ * {@link curveValues} for a timeline with one value per key, written to `out[0]`. Most timelines
+ * of an animation are of this kind. The general function is fast only when V8 inlines it where
+ * the number of values is known, which it stops doing when the caller grows. This one does not
+ * depend on that: the number of values is written into it, and so is the Bezier case.
+ */
+export function curveValue(frames: Float32Array, curves: Float32Array, out: Float64Array): void {
+    const time = Number(SHARED[TIME]);
+    const n = frames.length;
+    let i = n - 2;
+
+    for (let ii = 2; ii < n; ii += 2) {
+        if (Number(frames[ii]) > time) {
+            i = ii - 2;
+            break;
+        }
+    }
+    const curveType = Number(curves[i >> 1]);
+    let value = Number(frames[i + 1]);
+
+    if (curveType === LINEAR) {
+        const before = Number(frames[i]);
+
+        value += (Number(frames[i + 3]) - value) * ((time - before) / (Number(frames[i + 2]) - before));
+    } else if (curveType !== STEPPED) {
+        // the straight piece of the curve that holds `time` runs from x, y to endX, endY
+        const c = curveType - BEZIER;
+        const end = c + BEZIER_SIZE;
+        let x = Number(frames[i]);
+        let endX = Number(curves[c]);
+        let endY = Number(curves[c + 1]);
+
+        if (!(endX > time)) {
+            let at = c + 2;
+
+            while (at < end && !(Number(curves[at]) >= time)) at += 2;
+            x = Number(curves[(at < end ? at : end) - 2]);
+            value = Number(curves[(at < end ? at : end) - 1]);
+            // after the last sample the piece ends at the next key
+            endX = at < end ? Number(curves[at]) : Number(frames[i + 2]);
+            endY = at < end ? Number(curves[at + 1]) : Number(frames[i + 3]);
+        }
+        value += ((time - x) / (endX - x)) * (endY - value);
+    }
+    out[0] = value;
+}
+
+/**
+ * {@link bezierValue} for both values of a key with two values, written to `out[0]` and `out[1]`
+ * in one call. `i` is the index of the key in `frames`.
+ */
+export function bezierPair(frames: Float32Array, curves: Float32Array, i: number, out: Float64Array): void {
+    const time = Number(SHARED[TIME]);
+    const curveType = Number(curves[i / 3]);
+
+    for (let v = 1; v < 3; v++) {
+        // the straight piece of the curve that holds `time` runs from x, y to endX, endY
+        const c = curveType + BEZIER_SIZE * (v - 1) - BEZIER;
+        const end = c + BEZIER_SIZE;
+        let x = Number(frames[i]);
+        let y = Number(frames[i + v]);
+        let endX = Number(curves[c]);
+        let endY = Number(curves[c + 1]);
+
+        if (!(endX > time)) {
+            let at = c + 2;
+
+            while (at < end && !(Number(curves[at]) >= time)) at += 2;
+            x = Number(curves[(at < end ? at : end) - 2]);
+            y = Number(curves[(at < end ? at : end) - 1]);
+            // after the last sample the piece ends at the next key
+            endX = at < end ? Number(curves[at]) : Number(frames[i + 3]);
+            endY = at < end ? Number(curves[at + 1]) : Number(frames[i + 3 + v]);
+        }
+        out[v - 1] = y + ((time - x) / (endX - x)) * (endY - y);
     }
 }
 

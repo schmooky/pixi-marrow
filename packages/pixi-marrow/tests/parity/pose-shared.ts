@@ -11,6 +11,7 @@ import {
     type TrackFields,
     WORLD_STRIDE,
 } from '../../src/core';
+import type { AnimationInfo } from './pose-info';
 
 /*
  * What the three official pose drivers share. A driver takes the calls of a pose engine and makes
@@ -58,8 +59,7 @@ export interface PoseRigInfo {
     bones: number;
     slots: number;
     skins: number;
-    /** `events` says whether the animation has an event timeline. */
-    animations: { name: string; duration: number; events: boolean }[];
+    animations: AnimationInfo[];
     /** How many physics constraints the rig has. */
     physics: number;
     /** How many sliders the rig has. */

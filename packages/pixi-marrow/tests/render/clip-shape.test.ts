@@ -2,7 +2,8 @@ import { SkeletonClipping as Clipping42, Triangulator as Triangulator42 } from '
 import { describe, expect, it } from 'vitest';
 import { MarrowError } from '../../src/base/errors';
 import { SPINE_VERSIONS } from '../../src/base/version';
-import { ClipShape, checkClip } from '../../src/render/clip-shape';
+import { checkClip } from '../../src/render/clip-check';
+import { ClipShape } from '../../src/render/clip-shape';
 import { clipAttachment } from './clip-check';
 import { officialClipper } from './clip-official';
 import { around, expectShape, L_SHAPE, NO_DEFORM, random, shapeOf, trianglesOf, WORLD } from './clip-shape-rig';

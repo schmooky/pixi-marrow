@@ -1,7 +1,7 @@
 import { PHYSICS_DATA_STRIDE, PHYSICS_SETUP } from './constraints';
 import { ALPHA, curveValues, LAST_TIME, SHARED, TIME } from './curves';
 import { MASS_INVERSE, PHYSICS_STRIDE, resetPhysics } from './physics-state';
-import { constraintIsActive, type Solver } from './solver';
+import { constraintIsActive, noteConstraint, type Solver } from './solver';
 import { FIRST, K_PHYSICS_INERTIA, K_PHYSICS_RESET, type LegacyTimeline, SETUP } from './timelines';
 
 /*
@@ -44,7 +44,12 @@ function mixValue(
     } else {
         result = current + (Number(scratch[0]) - current) * alpha;
     }
-    state[at] = mass ? 1 / result : result;
+    const next = mass ? 1 / result : result;
+
+    if (next !== stored || (next === 0 && 1 / next !== 1 / stored)) {
+        noteConstraint(solver, Number(solver.rig.plan.physics[p]));
+        state[at] = next;
+    }
 }
 
 /**
@@ -122,13 +127,10 @@ function applyReset(solver: Solver, timeline: LegacyTimeline): void {
         due = resetIsDue(frames, true);
     }
     if (!due) return;
-    if (target !== -1) {
-        resetPhysics(pose, state, target * PHYSICS_STRIDE);
-
-        return;
-    }
-    for (let p = 0, n = physics.length; p < n; p++) {
-        if (constraintIsActive(solver, Number(physics[p]))) resetPhysics(pose, state, p * PHYSICS_STRIDE);
+    for (let p = target === -1 ? 0 : target, n = target === -1 ? physics.length : target + 1; p < n; p++) {
+        if (!constraintIsActive(solver, Number(physics[p]))) continue;
+        resetPhysics(pose, state, p * PHYSICS_STRIDE);
+        noteConstraint(solver, Number(physics[p]));
     }
 }
 

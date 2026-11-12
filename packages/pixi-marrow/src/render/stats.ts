@@ -3,7 +3,11 @@ export type DrawMode = 'mesh' | 'batched';
 
 /** Counters a view keeps, for the perf report and for tests. Where not said otherwise they only grow. */
 export interface ViewStats {
-    /** The mode the view draws in at the moment. With `renderMode: 'auto'` the view picks it. */
+    /**
+     * The mode the view draws in at the moment. With `renderMode: 'auto'` the view picks it. The
+     * code of the mesh mode loads on demand: a view that should draw with meshes is `batched`
+     * until that code is there, and `perf.report()` says so.
+     */
     renderMode: DrawMode;
     /**
      * Draw calls the view takes per frame at the moment. In the mesh mode they are its own: one
@@ -51,7 +55,7 @@ export interface ViewStats {
      * triangles and draws no mask.
      */
     maskDraws: number;
-    /** How often the polygon of a clip mask was uploaded: once per mask in every update. */
+    /** How often the polygon of a clip mask was uploaded: once per mask in an update that moved the polygon or changed the list. */
     maskUploads: number;
     /** How often the triangles of a clip mask were rewritten and uploaded. */
     maskRebuilds: number;
@@ -63,6 +67,18 @@ export interface ViewStats {
     tightRanges: number;
     /** Slots that are left out of the index buffers at the moment because a later opaque slot covers them. */
     coveredSlots: number;
+    /**
+     * How often an update returned at once, because the pose was the one the view drew last and
+     * nothing of the view had changed. Such an update places no vertex and uploads nothing.
+     */
+    skips: number;
+    /**
+     * Visible slots whose vertices the last update placed that did not skip: the ones whose
+     * bones, attachment or deform changed. All of them after a new layout or a change of mode.
+     */
+    placedSlots: number;
+    /** Visible slots whose colors that update wrote: the ones whose color changed. */
+    coloredSlots: number;
 }
 
 /**
@@ -90,5 +106,8 @@ export function createViewStats(vertices: number, bufferBytes: number, renderMod
         maskRebuilds: 0,
         tightRanges: 0,
         coveredSlots: 0,
+        skips: 0,
+        placedSlots: 0,
+        coloredSlots: 0,
     };
 }

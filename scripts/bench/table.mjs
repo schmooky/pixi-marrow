@@ -40,6 +40,9 @@ export function summarize(raw, instances) {
         draws: [Math.min(...raw.calls), Math.max(...raw.calls)],
         // the draw calls of a frame on average, for a rig whose count moves from frame to frame
         drawsMean: mean(raw.calls),
+        // buffer uploads and their bytes per frame, on average. A file of an older run has none
+        uploads: raw.uploads ? mean(raw.uploads) : null,
+        uploadBytes: raw.uploadBytes ? mean(raw.uploadBytes) : null,
         heapPerInstance: perInstance(raw.heapBytes),
         agentPerInstance: perInstance(raw.agentBytes),
         covered: raw.covered,
@@ -103,6 +106,8 @@ export function combine(summaries) {
         frameP95: pick((s) => s.frame.p95),
         draws: [Math.min(...summaries.map((s) => s.draws[0])), Math.max(...summaries.map((s) => s.draws[1]))],
         drawsMean: pick((s) => s.drawsMean),
+        uploads: pick((s) => s.uploads),
+        uploadBytes: pick((s) => s.uploadBytes),
         heapPerInstance: pick((s) => s.heapPerInstance),
         agentPerInstance: pick((s) => s.agentPerInstance),
         ours: summaries[0].ours,
@@ -133,6 +138,8 @@ function ratioRow(name, a, b, memoryRatio) {
         '',
         '',
         ratio(a.frame, b.frame),
+        '',
+        '',
         '',
         '',
         '',
@@ -167,6 +174,8 @@ export function printAb(groups) {
             '',
             '',
             'draws',
+            'uploads',
+            '',
             'heap KB',
             '',
             'page KB',
@@ -187,6 +196,8 @@ export function printAb(groups) {
             'p95',
             '+-',
             '',
+            'per frame',
+            'KB',
             'per inst',
             '+-',
             'per inst',
@@ -220,6 +231,8 @@ export function printAb(groups) {
                 ms(side.frameP95.median),
                 spread(side.frame),
                 drawRange(side.draws),
+                side.uploads ? side.uploads.median.toFixed(1) : '',
+                side.uploadBytes ? kilobytes(side.uploadBytes) : '',
                 memory(side.heapPerInstance),
                 memorySpread(side.heapPerInstance),
                 memory(side.agentPerInstance),
@@ -322,6 +335,12 @@ export function describePage(state) {
     lines.push(
         `an empty stage renders and waits for the GPU in ${state.emptyFrame.median.toFixed(3)} ms: every render time holds about that much`,
     );
+    if (typeof state.emptyFrame.uploads === 'number') {
+        lines.push(
+            `an empty stage uploads ${state.emptyFrame.uploads.toFixed(1)} buffers and ${(state.emptyFrame.uploadBytes / 1024).toFixed(1)} KB per frame: ` +
+                'every count of uploads holds that much',
+        );
+    }
     if (!memory.gc) lines.push('the page cannot call gc(), so the memory numbers include garbage');
     if (memory.heap) {
         lines.push(

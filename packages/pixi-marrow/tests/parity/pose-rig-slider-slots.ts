@@ -9,6 +9,7 @@ import {
     SEQUENCE_ATLAS,
     slider,
 } from './pose-rig-kit';
+import { wakeSliderSlots } from './pose-rig-wake';
 
 /*
  * A rig made for what a 4.3 slider does to slots and to the draw order. The animations of its
@@ -329,6 +330,7 @@ function parts(): RigParts {
             paint: paint(),
             shuffle: shuffle(),
             fade: fade(),
+            wake: wakeSliderSlots(),
             // one key at time 0: an animation without a length
             still: { bones: { knob: { translate: [{ x: 45 }] } }, slots: { s4: { alpha: [{ value: 0.4 }] } } },
         },

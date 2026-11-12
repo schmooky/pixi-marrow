@@ -10,7 +10,9 @@ import {
     ExtensionType,
     Geometry,
     type InstructionSet,
+    type Renderer,
     type Shader,
+    VERSION,
 } from 'pixi.js';
 import { MarrowError } from '../base/errors';
 import { BATCHER, BatchElement, type BatchHome, DARK_BATCHER } from './batch-element';
@@ -31,9 +33,10 @@ import { PendingUpload, uploadsStretch } from './batch-upload';
  * - A batch is an instruction of the pipe of the batched mode, so that the pipe sees it before
  *   it draws. The pipe then hands it to the batch pipe of Pixi, which draws it like every batch.
  * - An element writes its own data. The batcher gives it its place and never packs for it.
- * - A vertex lives in two buffers. Pixi uploads the buffer of a batcher in every frame in which
- *   an element changed, so that one holds positions and nothing else. Texture coordinates,
- *   colors and flags are in a buffer of the batcher, which uploads when one of them changed.
+ * - A vertex lives in two buffers: one for positions, which a pose changes, and one for texture
+ *   coordinates, colors and flags, which change now and then. Pixi would upload the first one
+ *   whole in every frame in which an element changed. Here every skeleton notes the stretches
+ *   it wrote, and the batcher uploads those before it draws. A skeleton at rest uploads nothing.
  */
 
 /** The name of the render pipe that runs the batches. See `batch-pipe.ts`. */
@@ -112,7 +115,8 @@ export class MarrowBatcher extends Batcher implements BatchHome {
     /** The batches of all builds. A build uses them from the first one on. */
     private readonly pool: Batch[] = [];
     private used = 0;
-    /** What the static vertex data and the index data must upload before the next draw. */
+    /** What the positions, the static vertex data and the index data must upload before the next draw. */
+    private readonly positionsPending: PendingUpload;
     private readonly staticsPending: PendingUpload;
     private readonly indicesPending: PendingUpload;
 
@@ -125,8 +129,11 @@ export class MarrowBatcher extends Batcher implements BatchHome {
         this.staticBuffer = vertexBuffer(this.statics, 'marrow-batch-statics');
         this.geometry = createGeometry(this.staticBuffer, dark);
         this.shader = createBatchShader(this.maxTextures, dark);
-        this.staticsPending = new PendingUpload(uploadsStretch(this.staticBuffer.update));
-        this.indicesPending = new PendingUpload(uploadsStretch(this.staticBuffer.update));
+        const ranged = uploadsStretch(this.staticBuffer.update, VERSION);
+
+        this.positionsPending = new PendingUpload(ranged);
+        this.staticsPending = new PendingUpload(ranged);
+        this.indicesPending = new PendingUpload(ranged);
     }
 
     /** Whether elements wait for the next break: the batch that is being built is one of this batcher. */
@@ -144,7 +151,8 @@ export class MarrowBatcher extends Batcher implements BatchHome {
         super.begin();
         this.serial++;
         this.used = 0;
-        // Pixi uploads the indices at the end of a build
+        // Pixi uploads the positions and the indices at the end of a build
+        this.positionsPending.clear();
         this.indicesPending.clear();
         this.pending.fill(undefined, 0, this.waiting);
         this.waiting = 0;
@@ -211,6 +219,11 @@ export class MarrowBatcher extends Batcher implements BatchHome {
         this.elementStart = this.elementSize;
     }
 
+    /** Notes a stretch of the positions that changed. {@link flush} uploads it. */
+    touchPositions(from: number, words: number): void {
+        this.positionsPending.add(from, words);
+    }
+
     /** Notes a stretch of the static vertex data that changed. {@link flush} uploads it. */
     touchStatics(from: number, words: number): void {
         this.staticsPending.add(from, words);
@@ -225,16 +238,35 @@ export class MarrowBatcher extends Batcher implements BatchHome {
     }
 
     /**
-     * Uploads what changed since Pixi uploaded the buffers. The pipe calls it before a batch
-     * draws: Pixi uploads the positions earlier in a frame, and nothing else.
+     * Uploads what changed since Pixi uploaded the buffers, which it does at the end of a build.
+     * The pipe calls it before a batch draws. Every buffer uploads the stretches its skeletons
+     * noted, or its used part when that is less work: a batch of 200 skeletons of which one
+     * moved uploads the vertices of that one.
      */
     flush(): void {
-        if (this.dirty) {
-            this.dirty = false;
-            this.geometry.buffers[0]?.update(this.attributeSize * 4);
-        }
+        const [positions] = this.geometry.buffers;
+
+        if (positions !== undefined) this.positionsPending.flush(positions, 4, this.attributeSize);
         this.staticsPending.flush(this.staticBuffer, 4, (this.attributeSize / POSITION_WORDS) * this.staticWords);
         this.indicesPending.flush(this.geometry.indexBuffer, this.indexBuffer.BYTES_PER_ELEMENT, this.indexSize);
+    }
+
+    /**
+     * Makes a renderer upload now what {@link flush} told the buffers. pixi.js before 8.23 uploads
+     * a WebGL buffer when its geometry is bound. That is before the first batch of a batcher
+     * draws. What a later batch of the same batcher notes would wait for the next frame.
+     *
+     * The geometry of the batcher must be the one that is bound: the index buffer is uploaded
+     * through the binding of its vertex array.
+     */
+    push(renderer: Renderer): void {
+        const [positions] = this.geometry.buffers;
+
+        // a renderer without a GPU has no buffer to upload
+        if (!('buffer' in renderer)) return;
+        if (positions !== undefined) renderer.buffer.updateBuffer(positions);
+        renderer.buffer.updateBuffer(this.staticBuffer);
+        renderer.buffer.updateBuffer(this.geometry.indexBuffer);
     }
 
     /** Pixi's batcher packs an element here. An element of the batched mode writes itself. */

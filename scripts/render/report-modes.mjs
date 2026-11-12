@@ -20,9 +20,11 @@ export function describeMode(info) {
     }
     const why = (reading) => (reading.reason ? ` (${reading.reason})` : '');
     const moved = drew.filter((mode) => mode !== readings.auto.mode);
+    // the code of the mesh mode may load on demand: the probe says how long that took
+    const arrived = readings.mesh.waited ? `, ${Math.round(readings.mesh.waited)} ms after it was asked for` : '';
 
     return (
-        `auto picked ${name(readings.auto)}${why(readings.auto)}. Asked for by name: mesh draws ${name(readings.mesh)}, ` +
+        `auto picked ${name(readings.auto)}${why(readings.auto)}. Asked for by name: mesh draws ${name(readings.mesh)}${arrived}, ` +
         `batched draws ${name(readings.batched)}${readings.batched.mode === 'batched' ? '' : why(readings.batched)}` +
         `${moved.length ? `. While it played, auto also drew ${moved.join(' and ')}` : ''}`
     );
@@ -135,4 +137,66 @@ export function createModeSummary() {
             return out;
         },
     };
+}
+
+/** The line that says what a rig is and what it plays. */
+export function describeRig(rig) {
+    const plays = rig.sequences.map((s) => `${s.animation}${s.skin ? ` (${s.skin})` : ''}`).join(', ');
+    const solves = [rig.physics && 'physics', rig.slider && 'slider'].filter(Boolean).join(' and ');
+
+    return `${rig.id}  ${rig.size} px, scale ${rig.placement.scale}, ${solves ? `solves ${solves}, ` : ''}plays ${plays}`;
+}
+
+/** The line that says what a scene holds and what its pictures are judged against. */
+export function describeScene(scene) {
+    const rigs = Object.values(scene.rigs).map(
+        (rig) => `${rig.id} plays ${rig.animation}${rig.skin ? ` (${rig.skin})` : ''}`,
+    );
+    const against = scene.official
+        ? `against spine-pixi-v8 for Spine ${scene.official}`
+        : `no official picture, ${scene.why}: the batched mode is judged against the mesh mode`;
+
+    return `${scene.id}  ${scene.size} px, ${scene.title}. ${rigs.join(', ')}, ${against}`;
+}
+
+/**
+ * The head of a renderer: its name, the GPU, and the versions of pixi.js the sides of a page run on.
+ *
+ * @param state `window.renderCheck` of the first page of the renderer.
+ * @param versions The pixi.js the pages were bundled with: `page`, and `reference` for the
+ * official runtime the pictures are judged by, or null where that is the pixi.js of the page.
+ */
+export function describeHead(renderer, state, versions) {
+    const { page, reference } = versions;
+    const sides = reference
+        ? `pixi.js ${page} for pixi-marrow. The official runtime is judged on pixi.js ${reference}, ` +
+          `the reference, and drawn on ${page} once more`
+        : `pixi.js ${page} for pixi-marrow and for the official runtime`;
+
+    return `${renderer}${state.gpu ? ` (${state.gpu})` : ''}, ${sides}`;
+}
+
+/**
+ * What a page says against the head of its renderer, each as an error of the page: a pixi.js of
+ * another version, or a runtime that does not run on the pixi.js of the page.
+ *
+ * @param pixi `window.renderCheck.pixi` of the page. A runtime the page did not load is null there.
+ * @param versions What `describeHead` got.
+ */
+export function strayPixi(pixi, versions) {
+    const errors = [];
+
+    if (!pixi) return errors;
+    if (pixi.version !== versions.page)
+        errors.push(`the page runs on pixi.js ${pixi.version}, not on ${versions.page}`);
+    if (pixi.reference && pixi.reference !== versions.reference) {
+        errors.push(`the reference runs on pixi.js ${pixi.reference}, not on ${versions.reference}`);
+    }
+    // an official runtime was loaded, and the bundle has a reference for it that the page did not get
+    if (versions.reference && pixi.official !== null && !pixi.reference) errors.push('the page has no reference');
+    for (const side of ['ours', 'official']) {
+        if (pixi[side] === false) errors.push(`${side} does not run on the pixi.js of the page`);
+    }
+
+    return errors;
 }

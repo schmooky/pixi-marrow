@@ -2,8 +2,8 @@ import type { Texture } from 'pixi.js';
 import { buildAtlasOutlines } from '../geometry/outlines';
 import type { AtlasModel } from '../model/atlas';
 import type { AtlasOutlines } from '../model/outlines';
-import { pageAllowsCuts } from '../render/cuts';
 import { createPageReader, type PageReader } from '../render/page-alpha';
+import { pageAllowsCuts } from '../render/page-block';
 import { isStillImage } from './textures';
 
 /*

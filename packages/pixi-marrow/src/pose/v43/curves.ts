@@ -184,7 +184,7 @@ export function sampleValues(timeline: Timeline43, count: number): number {
 /**
  * What the official timelines do to `count` values before the first key. From the setup pose they
  * take the setup values. From the first pose they mix toward them by the alpha in `SHARED`.
- * Otherwise nothing changes.
+ * Otherwise nothing changes. Returns true when a value is not what it was.
  */
 export function towardSetup(
     values: Float64Array,
@@ -192,16 +192,29 @@ export function towardSetup(
     index: number,
     count: number,
     from: number,
-): void {
+): boolean {
+    let changed = false;
+
     if (from === SETUP) {
-        for (let i = index; i < index + count; i++) values[i] = Number(setup[i]);
+        for (let i = index; i < index + count; i++) {
+            const value = Number(setup[i]);
+
+            if (Object.is(value, Number(values[i]))) continue;
+            values[i] = value;
+            changed = true;
+        }
     } else if (from === FIRST) {
         const alpha = Number(SHARED[ALPHA]);
 
         for (let i = index; i < index + count; i++) {
             const value = Number(values[i]);
+            const mixed = value + (Number(setup[i]) - value) * alpha;
 
-            values[i] = value + (Number(setup[i]) - value) * alpha;
+            if (Object.is(mixed, value)) continue;
+            values[i] = mixed;
+            changed = true;
         }
     }
+
+    return changed;
 }

@@ -1,3 +1,4 @@
+import type { AttachmentData } from '../../model/attachments';
 import type { SliderRig43, Split43 } from './slider-types';
 
 /*
@@ -66,6 +67,16 @@ export const PHYSICS_POSE = 3;
 
 /** Numbers per physics constraint in {@link Solve43.physics}: what the official `PhysicsConstraint` keeps between updates. */
 export const PHYSICS_STATE = 21;
+
+/** A bone no constraint touches: its world transform follows from its animated pose and its parent alone. */
+export const ROLE_FREE = 0;
+/** A bone a constraint poses, that the update cache holds once: it is posed in every solved update. */
+export const ROLE_HELD = 1;
+/** A bone whose world transform an update can write more than once: its stamp is set at the end of the update. */
+export const ROLE_MULTI = 2;
+
+/** Numbers in {@link Solve43.placed}: x, y, scaleX, scaleY, windX, windY, gravityX, gravityY, then 1 for yDown. */
+export const PLACED_SIZE = 9;
 
 /** What every plan has. */
 interface PlanBase {
@@ -183,6 +194,8 @@ export interface SolveScratch43 {
     readonly sorted: Uint8Array;
     /** Which bones had a constrained pose before the update cache was built. */
     readonly previous: Uint8Array;
+    /** Which bones were active before the update cache was built. */
+    readonly wasActive: Uint8Array;
     /** The update cache while it is built. */
     readonly items: number[];
     /** The official `PathConstraint.spaces`. */
@@ -197,6 +210,25 @@ export interface SolveScratch43 {
     curves: Float64Array;
     /** The official `PathConstraint.segments`. */
     readonly segments: Float64Array;
+    /** Per physics constraint: the world transform its bone had before the constraint moved it, while an update is probed. */
+    readonly seen: Float64Array;
+    /** The state of one physics constraint and the world transform of its bone, while a trial step runs. */
+    readonly kept: Float64Array;
+    /** The slots and the draw order of the pose state before an update that may show that the pose rests. */
+    shown: ShownSlots | null;
+    /** One byte per bone that nothing reads: where a pose that is not the animated one notes the bones it writes. */
+    readonly unread: Uint8Array;
+}
+
+/** A copy of what a pose state holds for its slots and its draw order. */
+export interface ShownSlots {
+    readonly colors: Float64Array;
+    readonly darkColors: Float64Array;
+    readonly attachments: (AttachmentData | null)[];
+    readonly sequenceIndices: Int32Array;
+    readonly deformLengths: Int32Array;
+    readonly deform: Float64Array[];
+    readonly drawOrder: Int16Array;
 }
 
 /** What every engine of one model shares to solve constraints. */
@@ -213,6 +245,8 @@ export interface Solver43 {
     readonly children: Int32Array;
     /** What the sliders of the model need. Null for a model without sliders. */
     readonly sliders: SliderRig43 | null;
+    /** One zero per bone: the `roles` of an engine without an active constraint. Nothing writes to it. */
+    readonly free: Uint8Array;
     readonly scratch: SolveScratch43;
 }
 
@@ -263,6 +297,73 @@ export interface Solve43 {
     cacheLength: number;
     /** How many constraints the cache holds. */
     solved: number;
+    /**
+     * What an update that looks at what changes does with each bone: one of the `ROLE_` values.
+     * A free bone is posed only when its animated pose or the world transform of its parent may
+     * have changed. A bone a constraint poses is posed in every solved update. A bone that an
+     * update can write more than once is one that is in the update cache twice, or that a
+     * constraint moves in the world. What it holds in the middle of an update says nothing, so
+     * its stamp is set at the end.
+     */
+    roles: Uint8Array;
+    /** The bones with the role `ROLE_MULTI`, each once. Only the first `multiCount` count. */
+    multiList: Int32Array;
+    multiCount: number;
+    /**
+     * 1 for each bone whose animated pose may have changed since the bone was last posed: an
+     * entry with a timeline for it was applied, or a setup pose call wrote it. Code that writes
+     * `PoseState.local` itself is not seen here: it raises the version of the pose state, which
+     * makes the next update pose every bone.
+     */
+    readonly fresh: Uint8Array;
+    /** True when the next solved update poses every bone: the order, the placement or the pose changed as a whole. */
+    force: boolean;
+    /** The world transform each bone of `multiList` had at the end of the last update, six numbers each. */
+    shown: Float64Array;
+    /** True when `shown` is out of date: updates ran that did not look at it. */
+    stale: boolean;
+    /**
+     * How many updates from now on pose every bone and stamp every bone, without a look at what
+     * changed. 0 while updates look. Nothing is noted in `fresh` and in `shown` in between.
+     */
+    busy: number;
+    /** How many times in a row an update that looked found a large part of the skeleton moving. */
+    streak: number;
+    /**
+     * Per slot: the key of a deform timeline whose vertices the deform holds, as they are. Null
+     * for a deform the engine knows nothing about. The list is null until a deform holds a key,
+     * and it stays null in an engine with sliders.
+     */
+    held: (Float32Array | null)[] | null;
+    /** Counts the changes of a draw order of the engine, of the animated one and of the one in the pose state. */
+    orderSerial: number;
+    /** The key the draw order timeline gave the animated draw order last. Null is the setup order. */
+    orderKey: Int16Array | null;
+    /** The `orderSerial` after `orderKey` was written. Another value now means that the key may be gone. */
+    orderAt: number;
+    /** The pose version a change gets in the call that is going on: the version after `PoseState.version`. */
+    pending: number;
+    /** The `PoseState.version` the engine left last. Another value means that other code changed the pose. */
+    seen: number;
+    /**
+     * True when the next update has to solve the pose again: something it reads may have changed
+     * since the last time. False while every input is what it was, so that the result is known.
+     */
+    dirty: boolean;
+    /** The placement and the forces the last solved update read. See {@link PLACED_SIZE}. */
+    readonly placed: Float64Array;
+    /**
+     * True when one more update with the same inputs is known to change nothing but the clocks of
+     * the physics. An update shows that: one that solved the pose from unchanged inputs and left
+     * every bone, every slot and the state of every physics constraint as it was. The world pass
+     * reads some of what the pass before wrote, so unchanged inputs alone do not show it.
+     */
+    resting: boolean;
+    /** How many updates in a row solved the pose although nothing it reads had changed. */
+    calm: number;
+    /** True while an update runs that may show that the pose rests: the physics constraints note what they read. */
+    probing: boolean;
+
     /** What every physics constraint keeps between updates. See {@link PHYSICS_STATE}. */
     readonly physics: Float64Array;
     /** The official `Physics` argument of `updateWorldTransform`: one of the `PHYSICS_` modes. */

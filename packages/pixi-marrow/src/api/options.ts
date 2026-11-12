@@ -25,10 +25,15 @@ export interface MarrowSpineOptions {
      * - `mesh` gives it meshes of its own: one draw call per instance, more where slots multiply,
      *   screen or are clipped. The GPU places the vertices, and a clip is a stencil mask.
      * - `batched` writes it into the batch of its render group: skeletons that follow each other
-     *   in the display list share one draw call, as sprites do. The CPU places the vertices and
-     *   copies them in every frame, and it cuts the triangles of clipped slots.
+     *   in the display list share one draw call, as sprites do. The CPU places the vertices that
+     *   moved and copies them, and it cuts the triangles of clipped slots.
      * - `auto` (the default) batches a skeleton of up to 1024 vertices and gives a larger one
      *   meshes.
+     *
+     * The code of the mesh mode is not in the root import. An asset loads it when `auto` picks
+     * the mesh mode for its skeleton, and when its load is asked with `renderMode: 'mesh'`. A
+     * display object that asks for the mesh mode without that draws in a batch until the code
+     * has loaded, and then changes over.
      *
      * `stats.renderMode` names the mode in use, and `perf.report()` says why. The picture is the
      * same in both modes to the eye and not to the bit: the vertices are placed by other code.

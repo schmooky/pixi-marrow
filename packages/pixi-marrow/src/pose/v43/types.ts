@@ -152,6 +152,13 @@ export interface Clip43 {
     readonly timelines: readonly Timeline43[];
     /** The property ids of every timeline. The official `timelineIds`. */
     readonly ids: ReadonlySet<number>;
+    /**
+     * True when the animation has a physics reset timeline. That one acts on the time of the last
+     * apply, so an apply at the same time is not always one that changes nothing.
+     */
+    readonly resets: boolean;
+    /** The bones that a timeline of the animation poses, each once. */
+    readonly bones: Int16Array;
 }
 
 /** What the engine needs to know about one attachment of a skin. */
@@ -211,6 +218,11 @@ export interface Pose43 {
     readonly local: Float64Array;
     /** The inherit mode of every bone. */
     readonly inherit: Uint8Array;
+    /**
+     * Where a timeline notes a bone whose local numbers or inherit mode it changed: it sets the
+     * byte of the bone to 1. For the animated pose that is `Solve43.fresh`.
+     */
+    readonly fresh: Uint8Array;
     /** The color of every slot: r, g, b, a. */
     readonly colors: Float64Array;
     /** The dark color of every slot: r, g, b. */

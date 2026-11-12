@@ -3,10 +3,12 @@ import type { AttachmentData } from '../../model/attachments';
 import type { PoseState } from '../state';
 import { factsOf, type Rig } from './rig';
 import { type Solver, setConstraintsToSetupPose, useSkin } from './solver';
+import { stampDrawOrder, stampSlot } from './stamps';
 
 /**
  * The official `Slot.setAttachment`. A changed attachment resets the sequence index. The deform
- * is kept only when the old and the new attachment share their timeline attachment.
+ * is kept only when the old and the new attachment share their timeline attachment. The slot is
+ * stamped when its attachment changes.
  */
 export function setSlotAttachment(rig: Rig, pose: PoseState, slot: number, attachment: AttachmentData | null): void {
     const current = pose.attachments[slot] ?? null;
@@ -18,6 +20,7 @@ export function setSlotAttachment(rig: Rig, pose: PoseState, slot: number, attac
     if (next === null || last === null || next !== last) pose.deformLengths[slot] = 0;
     pose.attachments[slot] = attachment;
     pose.sequenceIndices[slot] = -1;
+    stampSlot(pose, slot);
 }
 
 /** The attachment a slot shows for a name: the official `Skeleton.getAttachment`. An empty name is none. */
@@ -42,13 +45,21 @@ function setSlotToSetupPose(rig: Rig, pose: PoseState, slot: number): void {
     if (hasDark[slot] === 1) pose.darkColors.set(darkColors.subarray(slot * 3, slot * 3 + 3), slot * 3);
     pose.attachments[slot] = null;
     setSlotAttachment(rig, pose, slot, findAttachment(rig, pose, slot, attachments[slot] ?? null));
+    // a command, not an update: the slot is stamped whether or not it had these values
+    stampSlot(pose, slot);
 }
 
-/** The official `Skeleton.setSlotsToSetupPose`: the draw order, then every slot. */
-export function setSlotsToSetupPose(rig: Rig, pose: PoseState): void {
+/**
+ * The official `Skeleton.setSlotsToSetupPose`: the draw order, then every slot. A path constraint
+ * reads the attachment and the deform of its slot, so the next update computes every world transform.
+ */
+export function setSlotsToSetupPose(rig: Rig, pose: PoseState, solver: Solver): void {
     const count = rig.model.slots.count;
 
+    solver.all = true;
+
     for (let i = 0; i < count; i++) pose.drawOrder[i] = i;
+    stampDrawOrder(pose);
     for (let i = 0; i < count; i++) setSlotToSetupPose(rig, pose, i);
 }
 
@@ -100,6 +111,6 @@ export function setSkin(rig: Rig, pose: PoseState, solver: Solver, skin: number)
 export function initPose(rig: Rig, pose: PoseState, solver: Solver): void {
     pose.sequenceIndices.fill(-1);
     setBonesToSetupPose(rig, pose, solver);
-    setSlotsToSetupPose(rig, pose);
+    setSlotsToSetupPose(rig, pose, solver);
     useSkin(solver);
 }

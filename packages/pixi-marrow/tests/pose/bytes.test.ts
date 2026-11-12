@@ -38,9 +38,10 @@ describe('engine.bytes', () => {
             // the pose the constraints work on: seven numbers per bone at the least
             expect(engine.bytes).toBeGreaterThanOrEqual(state + player + model.bones.count * 7 * 8);
         } else if (model.constraints.length === 0) {
-            // no pose of its own for constraints. The 4.3 engine keeps its update order, 4 bytes per bone
+            // No pose of its own for constraints. An engine keeps what skipping needs: its update
+            // order and a mark per bone, 5 bytes per bone at most, and the placement it compares
             expect(engine.bytes).toBeGreaterThanOrEqual(state + player);
-            expect(engine.bytes).toBeLessThanOrEqual(state + player + model.bones.count * 4);
+            expect(engine.bytes).toBeLessThanOrEqual(state + player + model.bones.count * 5 + 72);
         }
         // nothing an update allocates stays with the instance
         const before = engine.bytes;

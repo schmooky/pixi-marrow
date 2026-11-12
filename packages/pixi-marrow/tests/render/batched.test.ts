@@ -6,7 +6,7 @@ import { MarrowBatcher } from '../../src/render/batcher';
 import { expectBatch, loadFamily, populate } from './batch-check';
 import { batcherOf, bodyOf, createStage, elementOf, readVertex, watchUploads } from './batch-stage';
 import { settle, WINDOW } from './heap';
-import { meshes, play, type Rig, step, visibleSlots } from './rig';
+import { drawPose, meshes, play, type Rig, step, visibleSlots } from './rig';
 
 /** Plays one frame on every rig, each at its own place of the loop on the first call. */
 function advance(rigs: readonly Rig[], seconds = 1 / 60): void {
@@ -187,7 +187,7 @@ describe('the batched mode', () => {
         expect(first.view.stats).toMatchObject({ indexRebuilds, colorUploads });
         // a slot that is hidden rewrites the indices of its skeleton, and only those are uploaded
         first.engine.state.colors[(visibleSlots(first)[0]?.slot ?? 0) * 4 + 3] = 0;
-        first.view.update(first.engine.state);
+        drawPose(first.view, first.engine.state);
         stage.render();
         expect(uploads.indices).toBe(1);
         expect(uploads.indexBytes).toBeLessThan(batcher.indexSize * 2);
@@ -231,7 +231,7 @@ describe('the batched mode', () => {
             state.drawOrder[at] = b;
             state.drawOrder[to] = a;
             if (other !== undefined) state.attachments[c] = i % 5 === 0 ? other.attachment : shown;
-            rig.view.update(state);
+            drawPose(rig.view, state);
             for (const body of bodies) {
                 if (pipe.validateRenderable(body)) throw new Error('the batch must be built again');
                 pipe.updateRenderable(body);

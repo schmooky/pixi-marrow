@@ -6,6 +6,7 @@ import { clipGroups } from './clip-check';
 import { settle, WINDOW } from './heap';
 import {
     createRig,
+    drawPose,
     loadRig,
     meshes,
     play,
@@ -110,7 +111,7 @@ describe('destroy', () => {
         expect(rig.view.stats).toMatchObject({ drawCalls: 0, vertices: 0, indices: 0, bufferBytes: 0 });
         // a second call does nothing, an update says what is wrong
         expect(() => rig.view.destroy()).not.toThrow();
-        expect(() => rig.view.update(rig.engine.state)).toThrow(MarrowError);
+        expect(() => drawPose(rig.view, rig.engine.state)).toThrow(MarrowError);
     });
 
     it('destroys a view that never drew', async () => {
@@ -175,7 +176,7 @@ describe('memory', () => {
                 state.drawOrder[at] = b;
                 state.drawOrder[to] = a;
                 if (other !== undefined) state.attachments[c] = i % 5 === 0 ? other.attachment : shown;
-                rig.view.update(state);
+                drawPose(rig.view, state);
             };
             const arrays = (): unknown[] => [
                 vertexData(rig.view).positions,
@@ -212,7 +213,7 @@ describe('memory', () => {
         const { state } = rig.engine;
         const run = (i: number): void => {
             state.sequenceIndices[flame] = i % 3;
-            rig.view.update(state);
+            drawPose(rig.view, state);
         };
 
         step(rig, 0);
