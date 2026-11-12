@@ -266,6 +266,5 @@ describe('memory with cuts', () => {
         expect(windows).toBeGreaterThan(0);
         expect(rig.view.stats.templateBuilds).toBe(1);
         expect(rig.view.stats.indexRebuilds).toBeGreaterThan(windows * WINDOW * 0.6);
-        // it decodes a page and runs until the heap settles, which takes seconds with coverage on a busy machine
-    }, 20000);
+    });
 });
