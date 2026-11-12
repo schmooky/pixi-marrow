@@ -45,11 +45,11 @@ export function readReport(owner: PerfOwner, view: SkeletonView): PerfEntry[] {
  */
 export function readMemory(owner: PerfOwner, view: SkeletonView): PerfMemory {
     const { asset, engine } = owner;
-    const { arrayBytes, gpuBytes } = inspectView(view);
+    const { arrayBytes, layoutBytes, gpuBytes } = inspectView(view);
     const gpuTextures = textureBytes(asset.textures);
 
     return {
-        shared: sharedBytes(asset.model, asset.atlas, asset.outlines),
+        shared: sharedBytes(asset.model, asset.atlas, asset.outlines) + layoutBytes,
         instance: engine.bytes + arrayBytes,
         gpu: gpuBytes + gpuTextures,
         gpuBuffers: gpuBytes,

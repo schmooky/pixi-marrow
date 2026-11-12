@@ -1,13 +1,17 @@
 import { type Buffer, type Container, Mesh } from 'pixi.js';
 import { i16, i32 } from '../geometry/read';
+import { GROUP_PAGES, layoutSlots } from './batch-layout';
 import type { CoverTest } from './cover';
 import type { CutState } from './cut-state';
 import { FILTER_MARGIN, type PageBlock, pageBlock } from './cuts';
 import { drawsPlain, type EdgeBend } from './gate';
-import type { DrawRanges } from './ranges';
+import { ownsStatics } from './layouts';
+import { AUTO_BATCH_VERTICES, type ModeReason, type RenderMode } from './mode';
+import type { ViewPaints } from './paints';
 import { u8 } from './read';
 import { MAX_PAGES } from './shader';
 import type { SkeletonView } from './skeleton-view';
+import type { DrawMode } from './stats';
 import type { Template } from './template';
 import type { VisibleList } from './visible';
 
@@ -26,7 +30,7 @@ interface VisibleSlot {
     slot: number;
     /** The slot whose clipping attachment cuts it, or -1. */
     clip: number;
-    /** The group of 8 atlas pages its draw range samples. */
+    /** The group of atlas pages its draw samples: 8 pages in the mesh mode, 16 in a batch. */
     pageGroup: number;
     /** True when a later opaque slot covers it. It keeps its place and adds no index. */
     covered: boolean;
@@ -56,10 +60,35 @@ export interface CutReport {
     opaqueMargin: boolean;
 }
 
+/** How a view draws and why, as plain data. */
+interface ModeReport {
+    /** The `renderMode` option of the view. */
+    option: RenderMode;
+    /** The mode the view draws in at the moment. */
+    mode: DrawMode;
+    /** Why it draws in that mode. */
+    reason: ModeReason;
+    /** The vertices the skeleton has in a batch when every region is a quad. `auto` decides by this number. */
+    vertices: number;
+    /** The most of those vertices a skeleton can have for `auto` to batch it. */
+    limit: number;
+    /** The batches the view draws in. 0 in the mesh mode and before Pixi built the instructions. */
+    batches: number;
+    /** How many skeletons draw in the first of those batches, this one included. */
+    sharedBy: number;
+    /** The bytes of the batch buffers that belong to the view: its vertices and its indices. 0 in the mesh mode. */
+    batchBytes: number;
+    /** The vertices and the indices of cut triangles the batch has room for. 0 for a view that never clipped in a batch. */
+    clipVertices: number;
+    clipIndices: number;
+}
+
 /** A view as plain data. See {@link inspectView}. */
 export interface ViewReport {
     /** The visible slots in draw order. */
     visible: VisibleSlot[];
+    /** The render mode of the view and what decided it. */
+    mode: ModeReport;
     /** The options of the cuts of overdraw and what stops them at the moment. */
     cuts: CutReport;
     /** How many attachments of the layout have an opaque rectangle, which can cover other slots. */
@@ -67,12 +96,23 @@ export interface ViewReport {
     /** Whether Pixi draws the meshes as their vertices say. See `drawsPlain`. */
     plain: boolean;
     /**
-     * The bytes of the typed arrays the view holds for its instance. These are the vertex layout
-     * with its vertex data, the visible list, the test of covered slots, and the index and mask
-     * data. Triangles that entries share with the model or with the outlines are not counted.
+     * The bytes of the typed arrays the view holds for its instance. These are the vertex data
+     * of its pose, the visible list, the test of covered slots, and the index and mask data of
+     * the mesh mode. In the batched mode the share of the batch buffers counts in place of index
+     * data: the vertices and indices of the skeleton as the batcher keeps them. What the
+     * instances of a model share is not counted, see {@link layoutBytes}.
      */
     arrayBytes: number;
-    /** The bytes of the vertex, index and mask buffers on the GPU. 0 for a view that was destroyed. */
+    /**
+     * The bytes of the typed arrays of the vertex layout, which the view shares with the other
+     * instances of its model that show the same skin with the same cuts.
+     */
+    layoutBytes: number;
+    /**
+     * The bytes of the vertex, index and mask buffers on the GPU. In the batched mode the view
+     * has no buffer of its own, and its share of the buffers of the batch counts. A view that
+     * changed its mode keeps the buffers of the mesh mode. 0 for a view that was destroyed.
+     */
     gpuBytes: number;
 }
 
@@ -82,18 +122,42 @@ export interface ViewParts {
     seen: VisibleList;
     cover: CoverTest;
     cutState: CutState;
-    ranges: DrawRanges;
+    /** What the view draws with in each mode, and the mode that draws now. */
+    paints: ViewPaints;
+    /** Why the view draws in its mode. */
+    reason: ModeReason;
+    /** The `renderMode` option of the view. */
+    renderMode: RenderMode;
+}
+
+const sumBytes = (arrays: readonly ArrayBufferView[]): number =>
+    arrays.reduce((sum, array) => sum + array.byteLength, 0);
+
+/**
+ * The bytes of the typed arrays a template has for its instance alone: the positions, the
+ * colors, and the frame and the page each entry shows. With a sequence in the layout the texture
+ * coordinates count too, since the instance then has its own.
+ *
+ * @example
+ * console.log(templateArrayBytes(template), layoutArrayBytes(template));
+ */
+export function templateArrayBytes(template: Template): number {
+    const { frames, pages, light, dark, positions, colors, statics } = template;
+
+    // the flags are bytes of the texture coordinates
+    return sumBytes([frames, pages, light, dark, positions, colors]) + (ownsStatics(template) ? statics.byteLength : 0);
 }
 
 /**
- * The bytes of the typed arrays of a template: what the layout knows per entry, and the vertex
- * data. The triangles of the entries are left out. They belong to the model, to the outlines or
- * to the one quad all region attachments share.
+ * The bytes of the typed arrays a template shares with the other instances of its layout: what
+ * the layout knows per entry, and the texture coordinates unless an entry has a sequence. The
+ * triangles of the entries are left out. They belong to the model, to the outlines or to the one
+ * quad all region attachments share.
  *
  * @example
- * console.log(templateArrayBytes(template) - templateBytes(template)); // the layout without vertex data
+ * console.log(layoutArrayBytes(template)); // once for all instances that show this skin
  */
-export function templateArrayBytes(template: Template): number {
+export function layoutArrayBytes(template: Template): number {
     const arrays = [
         template.slotEntries,
         template.slots,
@@ -108,22 +172,14 @@ export function templateArrayBytes(template: Template): number {
         template.pageAt,
         template.uvAt,
         template.offsetAt,
-        template.frames,
-        template.pages,
-        template.light,
-        template.dark,
         template.framePages,
         template.frameUVs,
         template.offsets,
         template.tightOffsets,
         template.opaqueOffsets,
-        template.positions,
-        // the flags are bytes of this array
-        template.statics,
-        template.colors,
     ];
 
-    return arrays.reduce((sum, array) => sum + array.byteLength, 0);
+    return sumBytes(arrays) + (ownsStatics(template) ? 0 : template.statics.byteLength);
 }
 
 /**
@@ -191,8 +247,12 @@ function shapeOf(template: Template, entry: number): SlotShape {
  * console.log(report.visible.filter((slot) => slot.covered).length, report.arrayBytes, report.gpuBytes);
  */
 export function inspectView(view: SkeletonView): ViewReport {
-    const { template, seen, cover, cutState, ranges } = view.parts;
+    const { template, seen, cover, cutState, paints, reason, renderMode } = view.parts;
+    const { element } = paints;
     const visible: VisibleSlot[] = [];
+    // the batch buffers hold the data of a skeleton once Pixi has built the instructions with it
+    const batchBytes = element?.placed ? element.bytes : 0;
+    const layout = element?.layout ?? layoutSlots(template, cover.skipped.length);
 
     for (let i = 0; i < seen.count; i++) {
         const entry = i32(seen.list, i);
@@ -200,7 +260,7 @@ export function inspectView(view: SkeletonView): ViewReport {
         visible.push({
             slot: i32(template.slots, entry),
             clip: i16(seen.clips, i),
-            pageGroup: Math.floor(i32(template.pages, entry) / MAX_PAGES),
+            pageGroup: Math.floor(i32(template.pages, entry) / (element === undefined ? MAX_PAGES : GROUP_PAGES)),
             covered: u8(cover.skipped, i) === 1,
             shape: shapeOf(template, entry),
             vertices: i32(template.counts, entry),
@@ -209,11 +269,30 @@ export function inspectView(view: SkeletonView): ViewReport {
 
     return {
         visible,
+        mode: {
+            option: renderMode,
+            mode: paints.mode,
+            reason,
+            vertices: layout.plain,
+            limit: AUTO_BATCH_VERTICES,
+            batches: element?.placed ? element.runs : 0,
+            sharedBy: element?.placed ? (element.batches[0]?.elements.length ?? 0) : 0,
+            batchBytes,
+            clipVertices: element?.clipVertices ?? 0,
+            clipIndices: element?.clipIndices ?? 0,
+        },
         cuts: describeCuts(cutState),
         opaqueRects: template.opaqueCount,
         plain: drawsPlain(view.container),
         arrayBytes:
-            templateArrayBytes(template) + seen.bytes + cover.bytes + cutState.allowed.byteLength + ranges.bytes,
-        gpuBytes: meshBufferBytes(view.container),
+            templateArrayBytes(template) +
+            seen.bytes +
+            cover.bytes +
+            cutState.allowed.byteLength +
+            (paints.mesh?.ranges.bytes ?? 0) +
+            (paints.body?.element.arrayBytes ?? 0) +
+            batchBytes,
+        layoutBytes: layoutArrayBytes(template),
+        gpuBytes: meshBufferBytes(view.container) + batchBytes,
     };
 }

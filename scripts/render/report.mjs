@@ -3,6 +3,14 @@
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import {
+    createModeSummary,
+    describeMode,
+    describeSceneBuilds,
+    describeSceneDraws,
+    describeSceneMode,
+    describeSceneRows,
+} from './report-modes.mjs';
 
 /** Failing frames per comparison that get a line of their own, unless every frame is listed. */
 const LINES_PER_LABEL = 3;
@@ -18,9 +26,48 @@ const SUMMARY_NAMES = {
     cuts: 'cuts on and off',
     polygons: 'polygons and quads',
     polygonsOfficial: 'polygons and official',
+    // the batched mode has lines of its own, so the lines above stay what they were
+    matchBatched: 'batched against official',
+    clippedBatched: 'of those, clipped',
+    solvedBatched: 'physics or slider rigs',
+    modes: 'batched and mesh',
+    pmaBatched: 'batched, premultiplied',
+    cutsBatched: 'batched, cuts on and off',
+    polygonsBatched: 'batched, polygons',
+    auto: 'auto and its mode',
+    // scenes: several instances in one stage
+    sceneTwice: 'scenes, official twice',
+    sceneMesh: 'scenes, mesh',
+    sceneBatched: 'scenes, batched',
+    sceneModes: 'scenes, batched and mesh',
+    sceneOwn: 'scenes, batched to mesh',
+    sceneAuto: 'scenes, default options',
 };
+/** The lines that follow the line of a comparison: its clipped frames and its frames of rigs with physics. */
+const PARTS = { match: ['clipped', 'solved'], matchBatched: ['clippedBatched', 'solvedBatched'] };
+/**
+ * The order of the summary. The lines of the mesh mode come first, in the order their comparisons
+ * first ran. Then the batched mode, then the scenes, each in the order of this list. The proofs
+ * come last.
+ */
+const LATER_LINES = [
+    'matchBatched',
+    'modes',
+    'pmaBatched',
+    'cutsBatched',
+    'polygonsBatched',
+    'auto',
+    'sceneTwice',
+    'sceneMesh',
+    'sceneBatched',
+    'sceneModes',
+    'sceneOwn',
+    'sceneAuto',
+];
 /** The kinds that compare ours with polygons to a picture of quads. */
 const POLYGON_KINDS = ['polygons', 'polygonsOfficial'];
+/** The kinds that measure and do not judge, unless a rule was switched on for them. Their line says `info`. */
+const INFO_KINDS = ['mode', 'modes', 'sceneMode', 'sceneRows', 'sceneDraws', 'sceneBuilds'];
 
 const percent = (share) => `${(100 * share).toFixed(3)}%`;
 const slug = (text) => String(text).replace(/[^A-Za-z0-9.]+/g, '-');
@@ -31,6 +78,9 @@ const place = (entry) => {
 
     return `${at}${entry.step === undefined ? '' : ` step ${entry.step} t=${entry.time}`}`;
 };
+
+/** True when the check holds the two render modes against a limit. `createReporter` sets it. */
+let modesJudged = false;
 
 /** The numbers of one comparison on one background. */
 function numbers(metrics) {
@@ -80,18 +130,27 @@ function groupNumbers(frames, proof) {
 function describeBuffers(entries) {
     const played = entries.filter((entry) => entry.info);
     const list = (some) => some.map((entry) => `${entry.animation} ${entry.info.rewrites}`).join(', ');
-    const kept = played.filter((entry) => entry.info.keys.length === 0);
-    const free = played.filter((entry) => entry.info.keys.length > 0);
+    const counted = played.filter((entry) => !entry.info.noStats);
+    const kept = counted.filter((entry) => entry.info.keys.length === 0);
+    const free = counted.filter((entry) => entry.info.keys.length > 0);
+    const built = played.filter((entry) => typeof entry.info.instructionBuilds === 'number');
     const parts = [];
 
     if (played.length === 0) return `skipped: ${entries[0].skipped}`;
-    const builds = range(minMax(played.map((entry) => entry.info.templateBuilds)));
-
     parts.push(`${played[0].info.frames} frames each`);
-    // setting a skin builds the vertex ranges a second time, before the animation plays
-    parts.push(`Template builds stay at ${builds}${played[0].skin ? ' after the skin was set' : ''}`);
+    if (counted.length > 0) {
+        const builds = range(minMax(counted.map((entry) => entry.info.templateBuilds)));
+
+        // setting a skin builds the vertex ranges a second time, before the animation plays
+        parts.push(`Template builds stay at ${builds}${played[0].skin ? ' after the skin was set' : ''}`);
+    } else parts.push('The display object has no counters for its buffers in this mode');
     if (kept.length) parts.push(`Index rewrites that must be 0: ${list(kept)}`);
     if (free.length) parts.push(`Index rewrites where slots can come and go: ${list(free)}`);
+    if (built.length) {
+        const builds = built.map((entry) => `${entry.animation} ${entry.info.instructionBuilds}`).join(', ');
+
+        parts.push(`Instruction builds by Pixi: ${builds}`);
+    } else parts.push('Instruction builds by Pixi were not counted');
 
     return parts.join('. ');
 }
@@ -168,9 +227,15 @@ function describe(entries, frames) {
 
     if (kind === 'draws') {
         const masks = info.masks?.[1] > 0 ? `, of which clip masks ${range(info.masks)}` : '';
+        const batched = info.batched ? `, batched ${range(info.batched)}` : '';
 
-        return `ours ${range(info.ours)}${masks}, official ${range(info.official)}`;
+        return `ours ${range(info.ours)}${masks}${batched}, official ${range(info.official)}`;
     }
+    if (kind === 'mode') return describeMode(info);
+    if (kind === 'sceneMode') return describeSceneMode(info);
+    if (kind === 'sceneRows') return describeSceneRows(info);
+    if (kind === 'sceneDraws') return describeSceneDraws(info);
+    if (kind === 'sceneBuilds') return describeSceneBuilds(info);
     if (kind === 'steady') return describeBuffers(entries);
     if (kind === 'overdraw') return describeOverdraw(info);
     if (kind === 'reading') {
@@ -198,11 +263,17 @@ function describe(entries, frames) {
     if (kind === 'proof') text += `weakest ${direct}`;
     else if (kind === 'formats') text += `not explained by a displacement: ${percent(n.displaced)} (${direct})`;
     else if (kind === 'cuts') text += `max ${n.max}, pixels that differ at all: ${percent(n.differ)}`;
+    else if (kind === 'modes')
+        text += `${direct}, pixels that differ at all: ${percent(n.differ)}${modesJudged ? '' : '. Measured, not judged'}`;
     else text += direct;
     if (kind === 'proof' && frames[0].solid.displaced !== undefined)
         text += `, not explained by a displacement: ${percent(n.displaced)}`;
     if (alpha) text += `. Alpha on a transparent target differs by up to ${alpha}: additive slots add none in ours`;
     if (clipped.length) text += `. Clipped: ${clipped.length} frames, ${worst(clipped)}`;
+    const fell = frames.filter((entry) => entry.drew === 'mesh');
+
+    // a frame the batched mode drew with meshes is the mesh picture: it says nothing about batching
+    if (fell.length) text += `. The batched side drew ${fell.length} of these frames with meshes`;
     const ties = frames.filter((entry) => entry.tie);
     const seconds = frames.filter((entry) => entry.second);
 
@@ -219,9 +290,15 @@ function describe(entries, frames) {
  * @param options.root The repo root, for the image paths it prints.
  * @param options.dir Where the images of this renderer go.
  * @param options.verbose True lists every frame, not only the failing ones.
+ * @param options.modesJudged True when the check holds the two render modes against a limit.
  */
-export function createReporter({ root, dir, verbose }) {
+export function createReporter({ root, dir, verbose, modesJudged: judged = false }) {
+    modesJudged = judged;
     const totals = new Map();
+    // what the scenes that look for a limit found: such a failure is a finding and fails nothing
+    const findings = [];
+    // which mode auto picked per rig, and the instruction builds while animations played
+    const modes = createModeSummary();
     // the triangle area of every rig added up, with the cuts of overdraw and without
     const overdraw = { rigs: 0, on: 0, off: 0, polygons: 0, covered: 0 };
     const total = (key) => {
@@ -234,7 +311,8 @@ export function createReporter({ root, dir, verbose }) {
         const name = [
             entry.reasons.length ? 'fail' : entry.tie ? 'tie' : 'pass',
             slug(rig.id),
-            slug(entry.animation),
+            // a frame of a scene has no animation of its own
+            ...(entry.animation ? [slug(entry.animation)] : []),
             ...(entry.skin ? [slug(entry.skin)] : []),
             `step${entry.step}`,
             slug(entry.label),
@@ -252,11 +330,17 @@ export function createReporter({ root, dir, verbose }) {
     }
 
     return {
-        /** Prints the cases of one rig, grouped by comparison. Returns the number of failures. */
+        /**
+         * Prints the cases of one rig or scene, grouped by comparison. Returns the number of
+         * failures. A scene with `limit` looks for a limit: its failures print as `FOUND`, count
+         * as findings and stay out of the lines of the summary.
+         */
         rig(rig, report) {
             const groups = new Map();
+            const limit = rig.limit === true;
             let failed = 0;
 
+            modes.add(rig, report.cases);
             for (const entry of report.cases) {
                 if (!groups.has(entry.label)) groups.set(entry.label, []);
                 groups.get(entry.label).push(entry);
@@ -265,7 +349,10 @@ export function createReporter({ root, dir, verbose }) {
                 const bad = entries.filter((entry) => entry.reasons.length);
                 const frames = entries.filter((entry) => entry.solid);
                 const clipped = frames.filter((entry) => entry.clipped);
-                const { kind, info } = entries[0];
+                const { kind, info, group } = entries[0];
+                // the line of the summary: a proof has one per label, the batched mode has its own
+                const line = group ?? (kind === 'proof' ? label : kind);
+                const [clippedLine, solvedLine] = PARTS[line] ?? [];
 
                 if (kind === 'overdraw') {
                     overdraw.rigs++;
@@ -277,20 +364,26 @@ export function createReporter({ root, dir, verbose }) {
                 // the clipped frames count in their comparison, and once more in a line of their own.
                 // So do the frames of a rig with physics or a slider against the official runtime
                 for (const [key, list] of [
-                    [kind === 'proof' ? label : kind, frames],
-                    ['clipped', clipped],
-                    ['solved', kind === 'match' && (rig.physics || rig.slider) ? frames : []],
+                    [line, frames],
+                    [clippedLine, clipped],
+                    [solvedLine, rig.physics || rig.slider ? frames : []],
                 ]) {
-                    if (list.length === 0) continue;
+                    if (list.length === 0 || !key || limit) continue;
                     const sum = total(key);
 
                     sum.frames += list.length;
                     sum.failed += list.filter((entry) => entry.reasons.length).length;
                     sum.ties = (sum.ties ?? 0) + list.filter((entry) => entry.tie).length;
+                    sum.fell = (sum.fell ?? 0) + list.filter((entry) => entry.drew === 'mesh').length;
                     sum.proof = kind === 'proof';
+                    sum.kind = kind;
                     sum.numbers.push(groupNumbers(list, sum.proof));
                 }
-                console.log(`    ${bad.length ? 'FAIL' : 'ok  '} ${label.padEnd(30)} ${describe(entries, frames)}`);
+                const state = bad.length ? (limit ? 'FOUND' : 'FAIL') : INFO_KINDS.includes(kind) ? 'info' : 'ok  ';
+
+                // a runtime that reports no render mode says so once, in the summary
+                if (kind === 'mode' && !info.known && bad.length === 0) continue;
+                console.log(`    ${state} ${label.padEnd(30)} ${describe(entries, frames)}`);
                 failed += bad.length;
                 for (const [index, entry] of (verbose ? entries : bad).entries()) {
                     if (!verbose && index === LINES_PER_LABEL) {
@@ -317,30 +410,44 @@ export function createReporter({ root, dir, verbose }) {
                 }
             }
             for (const note of report.notes) console.log(`    note ${note}`);
+            if (!limit) return failed;
+            if (failed > 0) findings.push(`${rig.id}: ${failed}`);
 
-            return failed;
+            return 0;
         },
+
+        /** What the scenes that look for a limit found so far: per scene its id and the number of findings. */
+        findings,
 
         /**
          * Prints one line per comparison over every rig. The clipped frames and the frames of the
          * rigs with physics or sliders follow their comparison.
          */
         summary() {
-            const parts = ['clipped', 'solved'];
-            const keys = [...totals.keys()].filter((key) => !parts.includes(key));
+            const parts = Object.values(PARTS).flat();
+            const rank = (key) => (totals.get(key).proof ? LATER_LINES.length + 1 : LATER_LINES.indexOf(key) + 1);
+            // a stable sort: lines of the same rank stay in the order they first appeared
+            const keys = [...totals.keys()].filter((key) => !parts.includes(key)).sort((a, b) => rank(a) - rank(b));
 
-            keys.splice(keys.indexOf('match') + 1, 0, ...parts.filter((key) => totals.has(key)));
+            for (const [key, following] of Object.entries(PARTS)) {
+                if (keys.includes(key)) {
+                    keys.splice(keys.indexOf(key) + 1, 0, ...following.filter((part) => totals.has(part)));
+                }
+            }
             for (const key of keys) {
                 const sum = totals.get(key);
                 const pick = sum.proof ? Math.min : Math.max;
                 const of = (name) => (sum.numbers.length ? pick(...sum.numbers.map((n) => n[name])) : 0);
-                let line = `  ${(SUMMARY_NAMES[key] ?? key).padEnd(24)} ${sum.frames} frames, ${sum.failed} failed, `;
+                // a comparison that is measured and has no limit cannot fail
+                const judged = sum.kind === 'modes' && !modesJudged ? 'not judged' : `${sum.failed} failed`;
+                let line = `  ${(SUMMARY_NAMES[key] ?? key).padEnd(24)} ${sum.frames} frames, ${judged}, `;
 
                 line += `${sum.proof ? 'weakest' : 'worst'} max ${of('max')}, over 1: ${percent(of('over1'))}, over 8: ${percent(of('over8'))}`;
                 if (key === 'formats') line += `, not explained by a displacement: ${percent(of('displaced'))}`;
-                if (key === 'cuts' || POLYGON_KINDS.includes(key))
+                if (['cuts', 'modes', ...POLYGON_KINDS].includes(sum.kind))
                     line += `, pixels that differ at all: ${percent(of('differ'))}`;
                 if (sum.ties) line += `, ${sum.ties} frames passed at the second placement only`;
+                if (sum.fell) line += `, ${sum.fell} frames were drawn with meshes by the batched side`;
                 console.log(line);
             }
             if (overdraw.rigs > 0 && overdraw.off > 0) {
@@ -351,6 +458,8 @@ export function createReporter({ root, dir, verbose }) {
                         `${share(overdraw.on)} with the default cuts (${overdraw.covered} covered slots), ${share(overdraw.polygons)} with polygons`,
                 );
             }
+            for (const line of modes.lines()) console.log(line);
+            if (findings.length > 0) console.log(`  ${'findings at a limit'.padEnd(24)} ${findings.join(', ')}`);
         },
     };
 }

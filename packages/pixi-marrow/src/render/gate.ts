@@ -36,6 +36,21 @@ export function drawsPlain(container: Container): boolean {
 /** What a renderer does that moves edges inside a pixel: it rounds positions, or its target is multisampled. */
 export type EdgeBend = 'roundPixels' | 'multisample';
 
+/** A view that is told how Pixi is about to draw it, right before each draw. */
+export interface DrawGate {
+    /**
+     * Checks what the pose does not say, at the time of the draw.
+     *
+     * @param bends What the renderer does that moves edges, true when it does something, false when not.
+     */
+    beforeDraw(bends: EdgeBend | boolean): void;
+    /**
+     * Tells the view that a renderer is about to draw it whose batches sample fewer textures
+     * than a run of the skeleton needs. The view draws with meshes from then on.
+     */
+    refuseBatch(): void;
+}
+
 /**
  * Whether a renderer is about to draw in a way that moves edges inside a pixel, and what it does.
  * It rounds vertex positions to whole pixels, or the target it draws to is multisampled. The

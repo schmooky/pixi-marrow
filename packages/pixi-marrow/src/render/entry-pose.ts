@@ -1,10 +1,13 @@
+import { MarrowError } from '../base/errors';
+import { resolveSequenceIndex } from '../geometry/atlas-regions';
 import { i16, i32 } from '../geometry/read';
 import { computeRegionWorldVertices } from '../geometry/region';
 import { computeWorldVertices, transformPoints } from '../geometry/vertices';
 import type { PoseState } from '../pose/state';
 import { writeDark, writeLight } from './colors';
 import { u8 } from './read';
-import type { Template } from './template';
+import { MAX_PAGES } from './shader';
+import { showFrame, type Template } from './template';
 
 /** The deform of a slot that has none. */
 const NO_DEFORM = new Float64Array(0);
@@ -61,4 +64,45 @@ export function tintEntry(
     const dark = writeDark(template, entry, state.darkColors, slot, u8(hasDark, slot) === 1);
 
     return light || dark;
+}
+
+/**
+ * Shows the region of a sequence the slot of an entry is at. Returns 0 when the vertex data
+ * holds it already, and 1 when texture coordinates were rewritten. Returns 2 when the region is
+ * also on a page of another group of 8, which is another draw range of the mesh mode.
+ *
+ * @example
+ * if (showSequence(template, state, entry, slot) > 0) staticBuffer.update();
+ */
+export function showSequence(template: Template, state: PoseState, entry: number, slot: number): number {
+    const attachment = template.attachments[entry];
+
+    if (attachment === undefined) return 0;
+    const before = Math.floor(i32(template.pages, entry) / MAX_PAGES);
+
+    if (!showFrame(template, entry, resolveSequenceIndex(attachment.sequence, i32(state.sequenceIndices, slot)))) {
+        return 0;
+    }
+
+    return Math.floor(i32(template.pages, entry) / MAX_PAGES) === before ? 1 : 2;
+}
+
+/**
+ * Throws the `MarrowError` of a view that cannot draw a pose: the view was destroyed, or the
+ * pose belongs to another skeleton model.
+ *
+ * @example
+ * checkPose(view.destroyed, state.model === model);
+ */
+export function checkPose(destroyed: boolean, sameModel: boolean): void {
+    if (destroyed) {
+        throw new MarrowError('invalid-data', 'The view was destroyed and cannot draw a pose.', {
+            fix: 'Create a new SkeletonView, or stop updating this one.',
+        });
+    }
+    if (!sameModel) {
+        throw new MarrowError('invalid-data', 'The pose belongs to another skeleton model than the view.', {
+            fix: 'Pass the PoseState of the model the view was created for.',
+        });
+    }
 }

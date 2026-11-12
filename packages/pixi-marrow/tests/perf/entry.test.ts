@@ -65,6 +65,8 @@ function reach(entry: string, upfront = false): { files: Set<string>; packages: 
 /** A message of the probes, and a reason of the perf report: text that only their code holds. */
 const PROBE_MARKER = 'has a probe that measures its updates';
 const REPORT_MARKER = 'a draw range samples up to 8';
+/** A message of the clip kernel, which loads with an asset that has a clipping attachment. */
+const KERNEL_MARKER = 'A clip polygon without a vertex cannot clip';
 
 const sizeCheck = (): string => readFileSync(join(pkgDir, '../../scripts/size-check.mjs'), 'utf8');
 
@@ -120,7 +122,10 @@ describe('the entry pixi-marrow/perf', () => {
 
     it('is kept out of the root import by the size check, with a marker only the probe code has', () => {
         expect(holdersOf(PROBE_MARKER)).toEqual(['perf/probe.ts']);
-        expect(sizeCheck()).toContain(`everything: ['*', ['${PROBE_MARKER}', '${REPORT_MARKER}']]`);
+        // the entry of the root import, up to the comment of the next entry
+        const root = /\n {4}everything: \[[\s\S]*?\n {4}\/\//.exec(sizeCheck())?.[0] ?? '';
+
+        for (const marker of [PROBE_MARKER, REPORT_MARKER, KERNEL_MARKER]) expect(root).toContain(`'${marker}'`);
         expect(sizeCheck()).toContain("'perf (createProbe)': ['createProbe', ['pixi.js', 'marrow-skeleton'], '/perf']");
     });
 

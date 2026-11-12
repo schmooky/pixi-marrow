@@ -3,7 +3,16 @@
  * and the built package with rolldown. It serves the bundle and fixtures/.cache from a local HTTP
  * server.
  */
-import { mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+    existsSync,
+    mkdirSync,
+    readdirSync,
+    readFileSync,
+    realpathSync,
+    rmSync,
+    symlinkSync,
+    writeFileSync,
+} from 'node:fs';
 import { createServer } from 'node:http';
 import { dirname, extname, join, normalize, sep } from 'node:path';
 import { rolldown } from 'rolldown';
@@ -80,7 +89,8 @@ function alive(pid) {
  *
  * @param page The browser entry, relative to the repo root. It exports `start`, which gets `PIXI`
  * and the loaders of the runtimes.
- * @returns `dir` is the folder that holds `entry.js` and its chunks, `remove` deletes the scratch project.
+ * @returns `dir` is the folder that holds `entry.js` and its chunks. `made` is an empty folder for
+ * fixtures a tool writes itself, see `serve`. `remove` deletes the scratch project with both.
  */
 export async function bundlePage(root, page = 'scripts/render/page.js') {
     const pkgDir = join(root, 'packages/pixi-marrow');
@@ -130,7 +140,13 @@ export async function bundlePage(root, page = 'scripts/render/page.js') {
     await bundle.write({ dir: join(work, 'dist'), format: 'esm', entryFileNames: 'entry.js' });
     await bundle.close();
 
-    return { dir: join(work, 'dist'), remove: () => rmSync(work, { recursive: true, force: true }) };
+    mkdirSync(join(work, 'made'));
+
+    return {
+        dir: join(work, 'dist'),
+        made: join(work, 'made'),
+        remove: () => rmSync(work, { recursive: true, force: true }),
+    };
 }
 
 /**
@@ -140,9 +156,11 @@ export async function bundlePage(root, page = 'scripts/render/page.js') {
  *
  * @param options.isolated True sends the two headers that make the page cross-origin isolated.
  * Chrome measures the memory of a page with `performance.measureUserAgentSpecificMemory` only then.
+ * @param options.made A folder with fixtures a tool wrote itself, laid out like fixtures/.cache.
+ * A file that is not in the cache is served from there, next to the atlas and images of the cache.
  * @returns The origin and a function that stops the server.
  */
-export async function serve(root, bundleDir, { isolated = false } = {}) {
+export async function serve(root, bundleDir, { isolated = false, made = null } = {}) {
     const cacheDir = join(root, 'fixtures/.cache');
     const resolve = (base, path) => {
         const file = normalize(join(base, path));
@@ -150,6 +168,11 @@ export async function serve(root, bundleDir, { isolated = false } = {}) {
         if (!file.startsWith(base + sep)) throw new Error('outside');
 
         return file;
+    };
+    const fixture = (path) => {
+        const cached = resolve(cacheDir, path);
+
+        return made === null || existsSync(cached) ? cached : resolve(made, path);
     };
     const server = createServer((request, response) => {
         const { pathname } = new URL(request.url, 'http://x');
@@ -170,7 +193,7 @@ export async function serve(root, bundleDir, { isolated = false } = {}) {
                 parts[0] === 'bundle'
                     ? resolve(bundleDir, parts.slice(1).join('/'))
                     : parts[0] === 'fixtures'
-                      ? resolve(cacheDir, parts.slice(2).join('/'))
+                      ? fixture(parts.slice(2).join('/'))
                       : null;
 
             if (file === null) throw new Error('unknown');

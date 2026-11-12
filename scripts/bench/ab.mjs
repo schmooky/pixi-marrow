@@ -4,15 +4,26 @@
  * the same rigs, animations, instance counts, canvas and build of pixi.js on both sides. It
  * shares the page server, the browser start and the plan of the render check.
  *
- * usage: pnpm bench:ab [--mode=ab|overdraw] [--rigs=4.2/tank-pro,raptor] [--instances=1,50,200]
- *                      [--renderer=webgl|webgpu|both] [--runs=3] [--frames=200] [--warmup=40]
- *                      [--size=1280x720] [--out=.bench]
+ * usage: pnpm bench:ab [--mode=ab|overdraw] [--render-mode=auto|mesh|batched] [--mesh=verdict|all|none]
+ *                      [--rigs=4.2/tank-pro,raptor] [--instances=1,50,200] [--renderer=webgl|webgpu|both]
+ *                      [--runs=3] [--frames=200] [--warmup=40] [--size=1280x720] [--out=.bench]
+ *                      [--memory=all|off] [--check]
  *
  * The values above are the defaults of the A/B mode. The overdraw mode has its own: 24 instances,
  * 5 runs of 100 frames per setting after 30, on a canvas of 1920x1080.
  *
+ * --render-mode is the render mode of pixi-marrow in both modes of the bench. `auto` is the
+ * default of the runtime: its display objects get no option, as an application creates them.
+ * `mesh` and `batched` ask for a mode by name. The page reads back the mode the runtime drew in,
+ * see scripts/render/mode.js, and the table of a rig says so. A runtime that reports no mode has
+ * one render path and ignores the option.
+ *
  * --mode=ab (the default). Per rig and instance count a block of each side runs: the instances
  * are created, play a looping animation for the warm-up frames, then every frame is timed.
+ * A third side, `mesh`, is pixi-marrow with the mesh mode asked for by name. It tells what the
+ * render mode of `ours` gains or costs against the mesh mode, in the same seconds. --mesh says
+ * for which rigs it runs: `verdict` (the default) for the rigs the verdict needs it for, `all`
+ * for every rig, `none` for no rig. With --render-mode=mesh it never runs.
  *
  *   update ms    what the runtime does on the CPU when it is asked to advance all instances by
  *                1/60 second: `spine.update(dt)` on both sides, each with its own ticker off
@@ -33,11 +44,20 @@
  *                Neither counts the buffers and textures the GPU process holds
  *
  * The sides take turns inside one page, and the side that goes first changes with every run.
- * A number is the median over the runs. `+-` is half the distance between the fastest and the
+ * A time is the median over the runs. `+-` is half the distance between the fastest and the
  * slowest run. A ratio with a question mark is inside that spread: the runs of the two sides
- * overlap. The memory of one instance includes what the first instance allocates once, so read
- * the memory at the largest count. Below 20 instances no memory is printed: a garbage collection
- * also frees code that did not run for a while, which is more than a few instances hold.
+ * overlap.
+ *
+ * The memory is not read in those blocks. Every memory number comes from a page of its own that
+ * has drawn nothing before. A stage keeps what it drew last, so a block on a used stage starts
+ * with the instances of the block before it still in memory: scripts/bench/heap.mjs has the
+ * measurement that showed it. Every side is read twice, the second time with the sides in the
+ * opposite order, and the `+-` next to the heap is half the distance between the two readings.
+ * One more page reads an empty block, which must read about nothing. The memory is read at the
+ * largest instance count. --memory=all reads it at every count from 20 on: below that, what the
+ * first instance allocates once is more than a few instances hold. --memory=off reads none.
+ * Under the table of a rig, the heap at the largest count is split into the stores of typed
+ * arrays and the objects, and the objects by the package whose code allocated them.
  *
  * `med` and `p95` are over the samples of a run. A sample is one frame. On WebGL with fewer than
  * 4 instances it is the mean of some frames in a row, 4 for one instance. The clock of a page
@@ -68,6 +88,12 @@
  * Before a rig loads, its page times an empty stage, and the run says what share of that time
  * was waits.
  *
+ * The A/B mode ends with a verdict: the list of milestone M5 that says when the batched mode is
+ * done, rule by rule, per renderer and rig, at 200 instances. See scripts/bench/verdict.mjs. A
+ * time that lies inside the spread of the runs is undecided, never a pass. --check makes the exit
+ * code follow the verdict: 1 when a rule fails, 2 when none fails and one is undecided or was
+ * not measured.
+ *
  * The time step is fixed at 1/60 second. Instances start at different places of the loop. The
  * raw numbers of every block go to a JSON file in `.bench/`. The exit code is not 0 when a side
  * fails to load, throws, or draws nothing.
@@ -81,11 +107,15 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { modeOptions } from '../render/mode.js';
 import { planRigs } from '../render/plan.mjs';
 import { bundlePage, serve } from '../render/serve.mjs';
-import { ensureBuilt, launchChrome, parseArgs } from '../render/setup.mjs';
+import { ensureBuilt, inTime, launchChrome, parseArgs } from '../render/setup.mjs';
+import { measureSides, readModules } from './heap.mjs';
 import { describeMachine, describeVersions, ignoredByGit } from './machine.mjs';
-import { changesAgainstOff, combine, describePage, printAb, printOverdraw, quantile, summarize } from './table.mjs';
+import { blockFailure, reportAb, reportOverdraw } from './rig-report.mjs';
+import { describePage } from './table.mjs';
+import { judgeVerdict, needsMesh, printVerdict } from './verdict.mjs';
 
 /**
  * The rigs of a run without --rigs. They differ in kind: a rigid rig with few bones, a rig of
@@ -111,8 +141,6 @@ const SETTINGS = [
     { name: 'auto', options: {} },
     { name: 'on', options: { tightMesh: 'on' } },
 ];
-/** A frame is bound by fill when a quarter of the pixels takes less than this share of the time. */
-const FILL_BOUND = 0.6;
 /** The share of the time of an empty stage that went into waits for other programs, from which a rig gets a note. */
 const BUSY_NOTE = 0.1;
 /** A sample of the A/B mode spans at least this many instance updates, see the usage text. */
@@ -135,8 +163,13 @@ const mode = args.mode === 'overdraw' ? 'overdraw' : 'ab';
 const wanted = ['webgl', 'webgpu'].includes(args.renderer) ? [args.renderer] : ['webgl', 'webgpu'];
 const counts = (args.instances ?? DEFAULTS[mode].instances).split(',').map(Number);
 const [width, height] = (args.size ?? DEFAULTS[mode].size).split('x').map(Number);
+const renderMode = ['mesh', 'batched'].includes(args['render-mode']) ? args['render-mode'] : 'auto';
+const meshSide = ['all', 'none'].includes(args.mesh) ? args.mesh : 'verdict';
 const settings = {
     mode,
+    // the render mode of ours, and for which rigs the A/B mode adds ours in the mesh mode as a third side
+    renderMode,
+    meshSide,
     runs: Number(args.runs ?? DEFAULTS[mode].runs),
     frames: Number(args.frames ?? DEFAULTS[mode].frames),
     warmup: Number(args.warmup ?? DEFAULTS[mode].warmup),
@@ -145,30 +178,37 @@ const settings = {
 };
 
 /** Runs something in the page, and gives up after a time. */
-async function inPage(page, timeout, run, argument) {
-    let timer;
+const inPage = (page, timeout, run, argument) => inTime(page.evaluate(run, argument), timeout);
 
-    try {
-        return await Promise.race([
-            page.evaluate(run, argument),
-            new Promise((_, reject) => {
-                timer = setTimeout(() => reject(new Error(`timed out after ${timeout / 1000} s`)), timeout);
-            }),
-        ]);
-    } finally {
-        clearTimeout(timer);
-    }
+/**
+ * The sides of a rig in the A/B mode. `runtime` is the runtime of the page that draws a side and
+ * `options` what its display objects are created with. The side `mesh` is ours once more, with
+ * the mesh mode asked for by name.
+ */
+function sidesOf(rig) {
+    const sides = [
+        { side: 'ours', runtime: 'ours', options: modeOptions(renderMode) },
+        { side: 'official', runtime: 'official', options: {} },
+    ];
+    const wanted = meshSide === 'all' || (meshSide === 'verdict' && needsMesh(rig));
+
+    if (wanted && renderMode !== 'mesh') sides.push({ side: 'mesh', runtime: 'ours', options: modeOptions('mesh') });
+
+    return sides;
 }
 
-/** The blocks of one run of a rig in the A/B mode, in the order they are measured. */
-function blocksOfRun(run, renderer) {
+/**
+ * The blocks of one run of a rig in the A/B mode, in the order they are measured. The side that
+ * goes first moves on with every run.
+ */
+function blocksOfRun(run, renderer, sides) {
     const common = { frames: settings.frames, warmup: settings.warmup };
-    const order = run % 2 === 0 ? ['ours', 'official'] : ['official', 'ours'];
+    const order = sides.map((_, index) => sides[(index + run) % sides.length]);
 
     return counts.flatMap((instances) =>
         order.map((side) => ({
             ...common,
-            side,
+            ...side,
             instances,
             group: renderer === 'webgl' ? Math.max(1, Math.ceil(GROUP_INSTANCES / instances)) : 1,
         })),
@@ -183,9 +223,11 @@ function timedPart(raw) {
 }
 
 /** The A/B mode: runs the blocks of every run of a rig and adds what they measured to `blocks`. */
-async function measureBlocks(page, renderer, blocks) {
+async function measureBlocks(page, renderer, rig, blocks) {
+    const sides = sidesOf(rig);
+
     for (let run = 0; run < settings.runs; run++) {
-        for (const job of blocksOfRun(run, renderer)) {
+        for (const job of blocksOfRun(run, renderer, sides)) {
             const raw = await inPage(page, BLOCK_TIMEOUT, (it) => window.bench.block(it), job);
 
             blocks.push({
@@ -206,7 +248,12 @@ async function measureBlocks(page, renderer, blocks) {
  */
 async function measureTurns(page, blocks) {
     const kept = TURN.span - TURN.skip;
-    const job = { settings: SETTINGS, warmup: settings.warmup, rounds: Math.ceil(settings.frames / kept), ...TURN };
+    // every setting of tightMesh in the render mode of this run
+    const modes = SETTINGS.map((setting) => ({
+        ...setting,
+        options: { ...setting.options, ...modeOptions(renderMode) },
+    }));
+    const job = { settings: modes, warmup: settings.warmup, rounds: Math.ceil(settings.frames / kept), ...TURN };
 
     for (let run = 0; run < settings.runs; run++) {
         for (const instances of counts) {
@@ -256,7 +303,7 @@ async function runRig(browser, origin, renderer, rig) {
         if (state.error || state.renderer !== renderer) return { state, blocks, errors };
         await inPage(page, PAGE_TIMEOUT, (plan) => window.bench.load(plan), rig);
         if (mode === 'overdraw') await measureTurns(page, blocks);
-        else await measureBlocks(page, renderer, blocks);
+        else await measureBlocks(page, renderer, rig, blocks);
 
         return { state, blocks, errors };
     } catch (error) {
@@ -268,77 +315,6 @@ async function runRig(browser, origin, renderer, rig) {
 
 /** A list of milliseconds with four decimals: the clock of a page is no finer. */
 const rounded = (values) => values.map((ms) => Math.round(ms * 1e4) / 1e4);
-
-/** Why a block does not count, or an empty string. */
-function blockFailure(block) {
-    if (block.error) return block.error;
-    if (block.covered === 0) return 'drew nothing';
-    if (Math.max(...block.calls) === 0) return 'issued no draw call';
-
-    return '';
-}
-
-/** The runs of the blocks that share a side, a setting and an instance count. */
-function combined(blocks, match) {
-    const runs = blocks.filter((block) => !blockFailure(block) && match(block));
-
-    return runs.length ? combine(runs.map((block) => summarize(block, block.instances))) : null;
-}
-
-/** Prints the tables of one rig. Returns what it printed as data, for the JSON file. */
-function report(blocks) {
-    if (mode === 'ab') {
-        const groups = counts.map((instances) => ({
-            instances,
-            ours: combined(blocks, (b) => b.side === 'ours' && b.instances === instances),
-            official: combined(blocks, (b) => b.side === 'official' && b.instances === instances),
-        }));
-        const covered = (side, instances) =>
-            blocks.find((b) => b.side === side && b.instances === instances && b.run === 0)?.covered;
-
-        printAb(groups);
-        for (const instances of counts) {
-            const [a, b] = [covered('ours', instances), covered('official', instances)];
-
-            // the two sides should draw the same picture. A gap is a hint, not a pixel check
-            if (a && b && Math.abs(a - b) / Math.max(a, b) > 0.1) {
-                console.log(
-                    `    note: with ${instances} instances ours covers ${a} px of the proof picture and official ${b} px`,
-                );
-            }
-        }
-
-        return groups;
-    }
-
-    return counts.map((instances) => {
-        const good = (block) => block.instances === instances && !blockFailure(block);
-        const rows = SETTINGS.map((setting) => ({
-            name: setting.name,
-            ...combined(blocks, (b) => b.setting === setting.name && b.instances === instances),
-            changes: changesAgainstOff(blocks.filter(good), setting.name, settings.runs),
-        })).filter((row) => row.render);
-        const shares = changesAgainstOff(blocks.filter(good), 'quarter', settings.runs).map((change) => change + 1);
-        const fill = { instances, settings: rows, quarter: null };
-
-        if (rows.length === 0) return fill;
-        if (counts.length > 1) console.log(`    ${instances} instances`);
-        printOverdraw(rows);
-        if (shares.length > 0) {
-            const share = quantile(shares, 0.5);
-            const percent = (value) => `${(100 * value).toFixed(0)}%`;
-
-            fill.quarter = { share, shares, fillBound: share < FILL_BOUND };
-            console.log(
-                `    off at half the size, a quarter of the pixels: ${percent(share)} of the render time of off ` +
-                    `(${percent(Math.min(...shares))} to ${percent(Math.max(...shares))}). ` +
-                    `The frame is ${fill.quarter.fillBound ? '' : 'not '}bound by fill`,
-            );
-        }
-
-        return fill;
-    });
-}
 
 async function main() {
     ensureBuilt(root, 'bench');
@@ -355,6 +331,7 @@ async function main() {
     const bundle = await bundlePage(root, 'scripts/bench/page.js');
     const server = await serve(root, bundle.dir, { isolated: true });
     const browser = await launchChrome(BENCH_FLAGS);
+    const chunks = readModules(bundle.dir);
     const result = {
         tool: 'pixi-marrow bench:ab',
         date: new Date().toISOString(),
@@ -368,7 +345,7 @@ async function main() {
     let ran = 0;
 
     console.log(
-        `bench: ${mode} mode, ${result.machine.cpu} with ${result.machine.cores} cores` +
+        `bench: ${mode} mode, ours with renderMode ${renderMode}, ${result.machine.cpu} with ${result.machine.cores} cores` +
             `${result.machine.power ? ` on ${result.machine.power}` : ''}, Chrome ${result.machine.chrome}, ` +
             `canvas ${width}x${height}, ${settings.runs} runs of ${settings.frames} frames after ${settings.warmup}, dt 1/60 s`,
     );
@@ -439,7 +416,24 @@ async function main() {
                 }
                 for (const error of errors) console.log(`    error ${error}`);
                 if (errors.length) failed++;
-                const summary = blocks.length ? report(blocks) : null;
+                const memory =
+                    mode === 'ab' && blocks.length > 0 && args.memory !== 'off'
+                        ? await measureSides({ browser, origin: server.origin, renderer, width, height, chunks }, rig, {
+                              sides: sidesOf(rig),
+                              counts,
+                              all: args.memory === 'all',
+                          })
+                        : [];
+
+                for (const reading of memory.filter((entry) => entry.error)) {
+                    console.log(`    FAIL memory of ${reading.side}, ${reading.instances} instances: ${reading.error}`);
+                    failed++;
+                }
+                const summary = blocks.length
+                    ? mode === 'ab'
+                        ? reportAb(blocks, memory, { counts, renderMode })
+                        : reportOverdraw(blocks, { counts, runs: settings.runs, names: SETTINGS.map((it) => it.name) })
+                    : null;
 
                 entry.rigs.push({
                     id: rig.id,
@@ -450,6 +444,7 @@ async function main() {
                     emptyFrame: state.emptyFrame ?? null,
                     seconds: (Date.now() - started) / 1000,
                     summary,
+                    memory,
                     blocks,
                 });
             }
@@ -466,6 +461,11 @@ async function main() {
         console.log('bench: no renderer came up, so nothing was measured');
         failed++;
     }
+    // the verdict is about the A/B numbers, so it is part of the JSON file too
+    if (mode === 'ab') {
+        result.verdict = judgeVerdict(result, wanted);
+        printVerdict(result.verdict);
+    }
     const outDir = resolve(root, args.out ?? '.bench');
     const file = join(outDir, `${mode}-${result.date.replace(/[-:]/g, '').replace(/\..*$/, '')}.json`);
 
@@ -477,8 +477,10 @@ async function main() {
     if (inRepo && !ignoredByGit(root, outDir))
         console.log(`bench: note, git does not ignore ${relative(root, outDir)}/`);
     if (failed) console.log(`bench: ${failed} failures`);
+    if (failed) return 1;
+    if (args.check !== 'true' || mode !== 'ab') return 0;
 
-    return failed ? 1 : 0;
+    return { pass: 0, fail: 1, undecided: 2 }[result.verdict.outcome];
 }
 
 try {

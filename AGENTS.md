@@ -7,7 +7,7 @@ Instructions for AI coding agents and for people working in this repo. Read it b
 pixi-marrow is a Spine runtime for PixiJS v8. It has its own pose core and its own render path, and it plays Spine 4.1, 4.2 and 4.3 skeletons. The plan, the classes and the milestones are in `docs/DESIGN.md`.
 
 <!-- facts:status -->
-Pre-release, milestone M4. Skeletons of Spine 4.1, 4.2 and 4.3 load, play and draw in PixiJS v8 with every constraint solved: IK, transform, path, physics and sliders. The poses equal the official cores to the bit, and the picture matches the official Pixi runtime.
+Pre-release, milestone M5. Skeletons of Spine 4.1, 4.2 and 4.3 load, play and draw in PixiJS v8 with every constraint solved: IK, transform, path, physics and sliders. The poses equal the official cores to the bit, and the picture matches the official Pixi runtime. Small skeletons share draw calls.
 <!-- /facts:status -->
 
 ```
@@ -52,14 +52,14 @@ A file imports only from its own layer or the layers above it in this table. `pn
 | model | `src/model` | The immutable skeleton model |
 | formats | `src/formats` | Version sniffing and importers |
 | pose | `src/pose` | Timelines, player, constraints, skinning kernels |
-| geometry | `src/geometry` | Vertex positions and UVs, region outlines, opaque rectangles, the triangulator |
-| render | `src/render` | The view: Pixi meshes, the shader, clip masks, overdraw cuts |
+| geometry | `src/geometry` | Vertex positions and UVs, region outlines, opaque rectangles, the triangulator, the clip kernel |
+| render | `src/render` | The view: the batched and the mesh mode, shaders, clipping, overdraw cuts |
 | api | `src/api` | The display object and handles |
 | features | `src/bake`, `src/debug`, `src/perf`, `src/optimize` | Optional entry points |
 
 `base`, `model`, `formats`, `pose`, `geometry`, `render`, `api`, `optimize` and `perf` have files today. The others arrive with their milestones.
 
-`src/render` turns a pose into Pixi meshes (`SkeletonView`). `src/api` is the public display object (`MarrowSpine`) on top of a pose engine and a view.
+`src/render` turns a pose into a picture (`SkeletonView`) in one of two modes. The batched mode feeds Pixi's batch pipe through batchers of our own, so skeletons share draw calls. The mesh mode draws Pixi meshes with our shader, for large rigs. `src/api` is the public display object (`MarrowSpine`) on top of a pose engine and a view.
 
 `src/pose` has two engines behind one interface: `legacy` plays 4.1 and 4.2 skeletons, `v43` plays 4.3 skeletons. The official runtimes mix animations differently, so they do not share a player. Each engine ports the constraint solvers and the update order of its own official runtime.
 
@@ -80,6 +80,9 @@ Every constraint is solved: IK, transform, path, physics and sliders. A slider o
 - Code that most games never call loads on demand, not with the root import. The size check guards the root.
 - An optimization that is on by default must be exact. It needs a test that runs it on and off.
 - An optimization that is not exact to the bit is an option. Its doc states what changes in the picture, and the pixel check bounds it. `tightMesh: 'on'` is the first one.
+- The two render modes each pass the pixel check against the official runtime. They are not equal to each other to the bit, and the pixel check bounds their difference.
+- A change of draw order, visibility, attachment or color never makes Pixi rebuild the instructions of a render group. Data is rewritten in place.
+- Nothing is registered with Pixi at import. The package has no side effects.
 - Never fail silently. Unsupported data throws `MarrowError` with a code, the cause and the fix.
 - Source files stay under 500 lines. No `as any`, no double casts, no TypeScript suppression comments.
 - Public symbols have TSDoc with a one-line summary and an `@example`.

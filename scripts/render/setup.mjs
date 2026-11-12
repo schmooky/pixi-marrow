@@ -67,3 +67,23 @@ export function launchChrome(extra = []) {
         args: [...flags, ...extra],
     });
 }
+
+/**
+ * Waits for a promise and gives up after a time: a page that hangs must not hang the tool.
+ *
+ * @param timeout Milliseconds after which the returned promise rejects with `timed out`.
+ */
+export async function inTime(promise, timeout) {
+    let timer;
+
+    try {
+        return await Promise.race([
+            promise,
+            new Promise((_, reject) => {
+                timer = setTimeout(() => reject(new Error(`timed out after ${timeout / 1000} s`)), timeout);
+            }),
+        ]);
+    } finally {
+        clearTimeout(timer);
+    }
+}

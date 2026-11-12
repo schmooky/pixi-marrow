@@ -52,6 +52,8 @@ export function drawCallCase(ctx) {
         reasons,
         info: {
             ours: range(draws.ours.map((frame) => frame.gpu)),
+            // one instance alone in the batched mode. It has no rule: what counts is many instances
+            batched: range(draws.batched),
             official: range(draws.official),
             stat: range(draws.ours.map((frame) => frame.stat).filter((count) => typeof count === 'number')),
             masks: range(draws.ours.map((frame) => frame.masks)),
@@ -68,15 +70,24 @@ export function drawCallCase(ctx) {
  * `plan.rewriters`. With one of those keys a slot can appear, vanish or move, for example when its
  * alpha reaches 0, so there the count is information. A slider plays an animation of its own on
  * top, so what that one keys counts as well.
+ *
+ * A third number is counted from outside: how often Pixi built the instructions of the render
+ * group again while the animation played, see `countBuilds`. The stable layout aims at zero, with
+ * draw order and attachment keys too. It is information, and a failure in the batched mode when
+ * `options.strictRebuilds` is set.
+ *
+ * @param mode The render mode the instance asks for: `mesh` or `batched`.
  */
-async function play(ctx, { animation, dt, features }) {
-    const { plan, studio } = ctx;
-    const where = { label: 'buffers while playing', kind: 'steady', animation, skin: plan.steadySkin };
+async function play(ctx, { animation, dt, features }, mode) {
+    const { plan, studio, options } = ctx;
+    const label = mode === 'batched' ? 'buffers while playing, batched' : 'buffers while playing';
+    const where = { label, kind: 'steady', animation, skin: plan.steadySkin };
     const url = (file) => `/fixtures/ours/${plan.version}/${file}`;
-    const instance = await ctx.ours.create({ skeleton: url(plan.files.skel), atlas: url(plan.files.atlas) });
+    const instance = await ctx.ours.create({ skeleton: url(plan.files.skel), atlas: url(plan.files.atlas), mode });
     const frame = (seconds) => {
         instance.update(seconds);
-        studio.draw(instance.root, BACKGROUNDS.solid);
+
+        return studio.draw(instance.root, BACKGROUNDS.solid).builds;
     };
 
     try {
@@ -86,27 +97,33 @@ async function play(ctx, { animation, dt, features }) {
         // the first frames fill the buffers, and a skin that was set builds the ranges for it
         frame(0);
         frame(dt);
-        const before = instance.stats();
-
-        if (typeof before?.indexRebuilds !== 'number' || typeof before?.templateBuilds !== 'number') {
-            return { ...where, reasons: [], skipped: 'the display object has no stats for it' };
-        }
+        const before = instance.stats() ?? {};
+        const counted = typeof before.indexRebuilds === 'number' && typeof before.templateBuilds === 'number';
         const named = instance.info()?.animations.find((entry) => entry.name === animation);
         const keyed = [...new Set([...(named?.features ?? features), ...plan.sliderFeatures])];
         const keys = keyed.filter((feature) => plan.rewriters.includes(feature));
         // the frames after which the index buffer had been rewritten
         const at = [];
         let count = before.indexRebuilds;
+        let instructionBuilds = 0;
 
         for (let i = 0; i < FRAMES; i++) {
-            frame(dt);
-            if (instance.stats().indexRebuilds !== count) at.push(i);
-            count = instance.stats().indexRebuilds;
+            instructionBuilds += frame(dt);
+            if (instance.stats()?.indexRebuilds !== count) at.push(i);
+            count = instance.stats()?.indexRebuilds;
         }
-        const after = instance.stats();
+        const after = instance.stats() ?? {};
         const rewrites = after.indexRebuilds - before.indexRebuilds;
         const reasons = [];
+        const info = { frames: FRAMES, keys, instructionBuilds: studio.countsBuilds ? instructionBuilds : null };
 
+        if (options.strictRebuilds && mode === 'batched' && instructionBuilds > 0) {
+            reasons.push(
+                `Pixi built the instructions of the render group ${instructionBuilds} times in ${FRAMES} frames`,
+            );
+        }
+        // the batched mode may keep other counters. What it has is checked, the rest is left out
+        if (!counted) return { ...where, reasons, info: { ...info, noStats: true } };
         if (after.templateBuilds !== before.templateBuilds) {
             reasons.push(`templateBuilds went from ${before.templateBuilds} to ${after.templateBuilds} while playing`);
         } else if (!plan.steadySkin && after.templateBuilds !== 1) {
@@ -123,9 +140,8 @@ async function play(ctx, { animation, dt, features }) {
             ...where,
             reasons,
             info: {
-                frames: FRAMES,
+                ...info,
                 rewrites,
-                keys,
                 templateBuilds: after.templateBuilds,
                 positionUploads: after.positionUploads - before.positionUploads,
                 colorUploads: after.colorUploads - before.colorUploads,
@@ -136,20 +152,23 @@ async function play(ctx, { animation, dt, features }) {
     }
 }
 
-/** The buffer check of every animation in `plan.steady`. */
+/** The buffer check of every animation in `plan.steady`, in each render mode that is drawn. */
 export async function bufferCases(ctx) {
     const cases = [];
 
-    for (const entry of ctx.plan.steady) {
-        try {
-            cases.push(await play(ctx, entry));
-        } catch (error) {
-            cases.push({
-                label: 'buffers while playing, failed',
-                kind: 'error',
-                animation: entry.animation,
-                reasons: [message(error)],
-            });
+    for (const mode of ['mesh', 'batched']) {
+        if (!ctx.run[mode]) continue;
+        for (const entry of ctx.plan.steady) {
+            try {
+                cases.push(await play(ctx, entry, mode));
+            } catch (error) {
+                cases.push({
+                    label: `buffers while playing${mode === 'batched' ? ', batched' : ''}, failed`,
+                    kind: 'error',
+                    animation: entry.animation,
+                    reasons: [message(error)],
+                });
+            }
         }
     }
 

@@ -38,6 +38,8 @@ export function summarize(raw, instances) {
         // one frame as an application pays for it: all parts of the same frame added up
         frame: frames(raw.update.map((ms, i) => ms + raw.submit[i] + raw.wait[i])),
         draws: [Math.min(...raw.calls), Math.max(...raw.calls)],
+        // the draw calls of a frame on average, for a rig whose count moves from frame to frame
+        drawsMean: mean(raw.calls),
         heapPerInstance: perInstance(raw.heapBytes),
         agentPerInstance: perInstance(raw.agentBytes),
         covered: raw.covered,
@@ -55,27 +57,22 @@ function overRuns(values) {
 }
 
 /** True when the runs of two measurements overlap, so their difference is inside the spread. */
-function overlap(a, b) {
+export function overlap(a, b) {
     return a.min <= b.max && b.min <= a.max;
 }
 
-const ms = (value) => value.toFixed(3);
+export const ms = (value) => value.toFixed(3);
 /** Half the distance between the fastest and the slowest run. */
-const spread = (runs) => ms((runs.max - runs.min) / 2);
+export const spread = (runs) => ms((runs.max - runs.min) / 2);
 const kilobytes = (runs) => (runs ? (runs.median / 1024).toFixed(1) : 'n/a');
-/**
- * The fewest instances whose memory is printed. A garbage collection also frees code that did
- * not run for a while, some hundred KB between two readings. Divided by a few instances that is
- * more than an instance holds.
- */
-const MEMORY_INSTANCES = 20;
-
+/** Half the distance between the smallest and the largest memory reading, in KB. */
+const memorySpread = (runs) => (runs ? ((runs.max - runs.min) / 2048).toFixed(1) : '');
 /**
  * Prints rows as a table.
  *
  * @param left The indices of the columns that are aligned to the left. The others hold numbers.
  */
-function print(rows, left) {
+export function print(rows, left) {
     const widths = [];
 
     for (const row of rows) {
@@ -105,6 +102,7 @@ export function combine(summaries) {
         frame: pick((s) => s.frame.median),
         frameP95: pick((s) => s.frame.p95),
         draws: [Math.min(...summaries.map((s) => s.draws[0])), Math.max(...summaries.map((s) => s.draws[1]))],
+        drawsMean: pick((s) => s.drawsMean),
         heapPerInstance: pick((s) => s.heapPerInstance),
         agentPerInstance: pick((s) => s.agentPerInstance),
         ours: summaries[0].ours,
@@ -120,11 +118,36 @@ function ratio(a, b) {
 
 const drawRange = ([low, high]) => (low === high ? `${low}` : `${low} to ${high}`);
 
+/** A row of ratios between two sides of the A/B table: the times, and the memory where it is printed. */
+function ratioRow(name, a, b, memoryRatio) {
+    return [
+        '',
+        name,
+        ratio(a.update, b.update),
+        '',
+        '',
+        ratio(a.cpu, b.cpu),
+        '',
+        '',
+        ratio(a.render, b.render),
+        '',
+        '',
+        ratio(a.frame, b.frame),
+        '',
+        '',
+        '',
+        memoryRatio(a.heapPerInstance, b.heapPerInstance),
+        '',
+        memoryRatio(a.agentPerInstance, b.agentPerInstance),
+    ];
+}
+
 /**
- * The table of one rig in the A/B mode: per instance count one row for each side and one row
- * with ours divided by official.
+ * The table of one rig in the A/B mode: per instance count one row for each side, one row with
+ * ours divided by official, and one with ours divided by ours in the mesh mode where that ran.
  *
- * @param groups Per instance count: `instances`, and the combined runs of `ours` and `official`.
+ * @param groups Per instance count: `instances`, and the combined runs of `ours`, `official`
+ * and `mesh`. A side that did not run is null.
  */
 export function printAb(groups) {
     const rows = [
@@ -145,6 +168,7 @@ export function printAb(groups) {
             '',
             'draws',
             'heap KB',
+            '',
             'page KB',
         ],
         [
@@ -164,17 +188,20 @@ export function printAb(groups) {
             '+-',
             '',
             'per inst',
+            '+-',
             'per inst',
         ],
     ];
 
-    for (const { instances, ours, official } of groups) {
-        const memory = (runs) => (instances < MEMORY_INSTANCES ? 'n/a' : kilobytes(runs));
-        const memoryRatio = (a, b) => (instances < MEMORY_INSTANCES ? '' : ratio(a, b));
+    for (const { instances, ours, official, mesh } of groups) {
+        // a side without a memory reading has none to print: below 20 instances, or with --memory=off
+        const memory = (runs) => kilobytes(runs);
+        const memoryRatio = (a, b) => ratio(a, b);
 
         for (const [name, side] of [
             ['ours', ours],
             ['official', official],
+            ['mesh', mesh],
         ]) {
             if (!side) continue;
             rows.push([
@@ -194,29 +221,12 @@ export function printAb(groups) {
                 spread(side.frame),
                 drawRange(side.draws),
                 memory(side.heapPerInstance),
+                memorySpread(side.heapPerInstance),
                 memory(side.agentPerInstance),
             ]);
         }
-        if (!ours || !official) continue;
-        rows.push([
-            '',
-            'ours/official',
-            ratio(ours.update, official.update),
-            '',
-            '',
-            ratio(ours.cpu, official.cpu),
-            '',
-            '',
-            ratio(ours.render, official.render),
-            '',
-            '',
-            ratio(ours.frame, official.frame),
-            '',
-            '',
-            '',
-            memoryRatio(ours.heapPerInstance, official.heapPerInstance),
-            memoryRatio(ours.agentPerInstance, official.agentPerInstance),
-        ]);
+        if (ours && official) rows.push(ratioRow('ours/official', ours, official, memoryRatio));
+        if (ours && mesh) rows.push(ratioRow('ours/mesh', ours, mesh, memoryRatio));
     }
     print(rows, [1]);
 }
@@ -254,8 +264,11 @@ export function printOverdraw(settings) {
     ];
 
     for (const setting of settings) {
+        // a render mode that draws through no mesh of its own has no area to read
         const area =
-            off.ours?.area > 0 && setting.ours ? `${((100 * setting.ours.area) / off.ours.area).toFixed(1)}%` : '';
+            off.ours?.area > 0 && setting.ours?.area > 0
+                ? `${((100 * setting.ours.area) / off.ours.area).toFixed(1)}%`
+                : 'n/a';
 
         rows.push([
             setting.name,

@@ -36,6 +36,8 @@ export class VisibleList {
     count = 0;
     /** Clipping attachments that are applied in the pose that was collected last. */
     applied = 0;
+    /** Visible entries that a clipping attachment cuts in the pose that was collected last. */
+    clipped = 0;
     /** True when the list differs from the one the index buffers were written for. */
     dirty = true;
     /** Per slot: the entry of the attachment it shows, or a negative code. */
@@ -116,6 +118,7 @@ export class VisibleList {
         const { drawOrder, active, colors } = state;
         let count = 0;
         let applied = 0;
+        let clipped = 0;
         let clip = NO_CLIP;
         let end = NO_CLIP;
 
@@ -135,6 +138,7 @@ export class VisibleList {
             }
             if (live && entry >= 0 && f64(colors, slot * 4 + 3) * f64(tints, entry * 4 + 3) !== 0) {
                 this.show(count++, entry, clip);
+                if (clip !== NO_CLIP) clipped++;
             }
             if (slot === end) {
                 clip = NO_CLIP;
@@ -144,6 +148,7 @@ export class VisibleList {
         if (count !== this.count) this.dirty = true;
         this.count = count;
         this.applied = applied;
+        this.clipped = clipped;
 
         return count;
     }

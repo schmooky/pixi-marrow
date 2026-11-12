@@ -56,9 +56,15 @@ const OPAQUE = 255;
 /** What a slot gets that no kept rectangle covers. */
 const NONE = -1;
 
+/** The arrays of a test that has not searched yet. A view without an opaque rectangle never does. */
+const NO_INTS = new Int32Array(0);
+const NO_BYTES = new Uint8Array(0);
+const NO_FLOATS = new Float64Array(0);
+
 /**
- * Finds the slots that a later slot covers. One instance belongs to one view and allocates
- * nothing after it was created.
+ * Finds the slots that a later slot covers. One instance belongs to one view. It allocates its
+ * scratch arrays with the first run and nothing after that. A view that never has an opaque
+ * rectangle to test with holds one flag per slot and no more.
  *
  * @example
  * const cover = new CoverTest(model.slots.count);
@@ -71,21 +77,21 @@ export class CoverTest {
     /** Slots that are covered at the moment. */
     covered = 0;
     /** The places of the covered entries in the visible list, from the top of the draw order down. */
-    private readonly marks: Int32Array;
+    private marks: Int32Array = NO_INTS;
     /** Per covered entry: the kept rectangle that covered it last. It is asked first in the next frame. */
-    private readonly coveredBy: Uint8Array;
+    private coveredBy: Uint8Array = NO_BYTES;
     /** Per kept rectangle: its entry. */
-    private readonly entries: Int32Array = new Int32Array(MAX_OCCLUDERS);
+    private entries: Int32Array = NO_INTS;
     /** Per kept rectangle: the place of its slot in the visible list. */
-    private readonly places: Int32Array = new Int32Array(MAX_OCCLUDERS);
+    private places: Int32Array = NO_INTS;
     /** Per kept rectangle: the run its corners were computed in. */
-    private readonly placed: Int32Array = new Int32Array(MAX_OCCLUDERS);
+    private placed: Int32Array = NO_INTS;
     /** Per kept rectangle: 1 while it hides in that run. 0 when it is too small or covered itself. */
-    private readonly live: Uint8Array = new Uint8Array(MAX_OCCLUDERS);
+    private live: Uint8Array = NO_BYTES;
     /** Per kept rectangle: its four corners in world space. */
-    private readonly quads: Float64Array = new Float64Array(MAX_OCCLUDERS * 8);
+    private quads: Float64Array = NO_FLOATS;
     /** Per kept rectangle: the box around the corners as minX, minY, maxX, maxY. */
-    private readonly boxes: Float64Array = new Float64Array(MAX_OCCLUDERS * 4);
+    private boxes: Float64Array = NO_FLOATS;
     /** How many rectangles are kept. */
     private kept = 0;
     /** True when the kept rectangles are those of another list of slots. */
@@ -102,8 +108,6 @@ export class CoverTest {
     /** @param slots The slot count of the model: the most entries that can be visible. */
     constructor(slots: number) {
         this.skipped = new Uint8Array(slots);
-        this.marks = new Int32Array(slots);
-        this.coveredBy = new Uint8Array(slots);
     }
 
     /** The bytes of the typed arrays of the test. */
@@ -151,6 +155,7 @@ export class CoverTest {
         world: Float64Array,
         bones: Int16Array,
     ): boolean {
+        if (this.marks === NO_INTS) this.allocate();
         if (this.stale) this.pick(template, visible, clips, count);
         this.turn++;
         if (!this.due) return this.verify(template, visible, count, world, bones);
@@ -185,6 +190,20 @@ export class CoverTest {
         this.stale = true;
 
         return changed;
+    }
+
+    /** Creates the scratch arrays, when the first run needs them. */
+    private allocate(): void {
+        const slots = this.skipped.length;
+
+        this.marks = new Int32Array(slots);
+        this.coveredBy = new Uint8Array(slots);
+        this.entries = new Int32Array(MAX_OCCLUDERS);
+        this.places = new Int32Array(MAX_OCCLUDERS);
+        this.placed = new Int32Array(MAX_OCCLUDERS);
+        this.live = new Uint8Array(MAX_OCCLUDERS);
+        this.quads = new Float64Array(MAX_OCCLUDERS * 8);
+        this.boxes = new Float64Array(MAX_OCCLUDERS * 4);
     }
 
     /** Tests the marked entries again, from the top of the draw order down. Returns whether a mark was taken back. */

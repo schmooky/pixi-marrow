@@ -1,6 +1,7 @@
 import { type Buffer, Container, Mesh } from 'pixi.js';
 import { describe, expect, it, vi } from 'vitest';
 import { MarrowError } from '../../src/base/errors';
+import { createMaskShader, releaseShader } from '../../src/render/shader';
 import { clipAttachment, clipGroups, expectClips, maskShape } from './clip-check';
 import { settle, WINDOW } from './heap';
 import { loadRig, meshes, play, type Rig, readDrawn, slotIndex, step, vertexData } from './rig';
@@ -161,10 +162,62 @@ describe('a clip mask', () => {
         rig.view.update(state);
         expectClips(rig);
         expect(stats.bufferBytes).toBe(grown);
-        expect(buffers.map((buffer) => buffer.data)).toEqual(arrays);
-        // the indices of the star that the quad does not use are triangles without area
+        // the polygon keeps its array. The triangles are the six numbers of the quad, in their own array
+        expect(buffers[0]?.data).toBe(arrays[0]);
         expect(maskShape(firstMask(rig)).triangles.length).toBe(6);
-        expect(Array.from(buffers[1]?.data ?? []).slice(6)).toEqual(new Array(108).fill(0));
+        expect(buffers[1]?.data.length).toBe(6);
+    });
+
+    it('keeps an index array of its own only for a polygon that a deform shapes', async () => {
+        const rig = await clipped();
+        const { stats } = rig.view;
+        const { state } = rig.engine;
+        const gun = slotIndex(rig, 'gun');
+        const head = slotIndex(rig, 'head');
+        const [, indexBuffer] = clipGroups(rig.view)[0]?.mask.geometry.buffers ?? [];
+        const shared = indexBuffer?.data;
+        const deform = (polygon: readonly number[]): void => {
+            state.deform[gun] = Float64Array.from(polygon);
+            state.deformLengths[gun] = polygon.length;
+        };
+
+        expect(stats.maskRebuilds).toBe(1);
+        // a deform gives every pose its own shape: the triangles are cut for the pose
+        state.attachments[gun] = clipAttachment('bent', head, CONCAVE);
+        deform(CONCAVE.map((value, at) => (at === 4 ? value + 30 : value)));
+        rig.view.update(state);
+        expectClips(rig);
+        const own = indexBuffer?.data;
+
+        expect(own).not.toBe(shared);
+        expect(own?.length).toBe(12);
+        expect(stats.maskRebuilds).toBe(2);
+        // the same triangles again: nothing uploads
+        rig.view.update(state);
+        expect(indexBuffer?.data).toBe(own);
+        expect(stats.maskRebuilds).toBe(2);
+        // a deformed quad fits the array. The indices it does not use are triangles without area
+        state.attachments[gun] = clipAttachment('quad', head, QUAD);
+        deform(QUAD);
+        rig.view.update(state);
+        expectClips(rig);
+        expect(indexBuffer?.data).toBe(own);
+        expect(Array.from(own ?? []).slice(6)).toEqual(new Array(6).fill(0));
+        expect(maskShape(firstMask(rig)).triangles.length).toBe(6);
+        expect(stats.maskRebuilds).toBe(3);
+        // without the deform the quad is the same shape in every pose and has triangles to share
+        state.deformLengths[gun] = 0;
+        rig.view.update(state);
+        expectClips(rig);
+        expect(indexBuffer?.data).not.toBe(own);
+        expect(indexBuffer?.data.length).toBe(6);
+        expect(stats.maskRebuilds).toBe(4);
+        // and back: the array of its own still holds the quad, and uploads again
+        deform(QUAD);
+        rig.view.update(state);
+        expectClips(rig);
+        expect(indexBuffer?.data).toBe(own);
+        expect(stats.maskRebuilds).toBe(5);
     });
 
     it('leaves the bounds of the skeleton as they are', async () => {
@@ -189,11 +242,14 @@ describe('a clip mask', () => {
         const buffers = buffersOf(rig);
         const all = meshes(rig.view);
         const groups = clipGroups(rig.view);
-        const shaders = new Set([...all, ...groups.map((group) => group.mask)].map((mesh) => mesh.shader));
+        const shaders = new Set(all.map((mesh) => mesh.shader));
+        // all masks draw with one shader, which lives while somebody holds it
+        const shared = createMaskShader();
 
         // positions, texture coordinates, colors, three index buffers, and the two buffers of the mask
         expect(buffers.size).toBe(3 + 3 + 2);
-        expect(shaders.size).toBe(2);
+        expect(shaders.size).toBe(1);
+        expect(groups.map((group) => group.mask.shader)).toEqual([shared]);
         rig.view.destroy();
         for (const buffer of buffers) expect(buffer.destroyed).toBe(true);
         for (const mesh of all) expect(mesh.destroyed).toBe(true);
@@ -201,7 +257,10 @@ describe('a clip mask', () => {
             expect(group.mask.destroyed).toBe(true);
             expect(group.container.destroyed).toBe(true);
         }
+        // the shader of the ranges samples the pages of this rig, and nobody else holds it
         for (const shader of shaders) expect(shader?.glProgram).toBeNull();
+        expect(shared.glProgram).not.toBeNull();
+        releaseShader(shared);
         expect(rig.view.stats).toMatchObject({ drawCalls: 0, maskDraws: 0, clips: 0, bufferBytes: 0 });
     });
 });

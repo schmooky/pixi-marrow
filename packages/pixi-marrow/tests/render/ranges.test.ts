@@ -193,7 +193,7 @@ describe('draw ranges', () => {
         const { model, atlas, lookup } = await loadRig('4.3/chibi-stickers.skel');
         const pages = atlas.pages.map(() => new Texture({ source: new TextureSource({ width: 2, height: 2 }) }));
         const engine = await createPoseEngine(model);
-        const view = new SkeletonView(model, atlas, pages);
+        const view = new SkeletonView(model, atlas, pages, { renderMode: 'mesh' });
         const rig: Rig = { model, atlas, lookup, engine, view };
         const seen = new Set<number>();
 

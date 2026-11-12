@@ -3,8 +3,9 @@ import { describe, expect, it } from 'vitest';
 import type { AtlasPage } from '../../src/model/atlas';
 import { type PageBlock, pageAllowsCuts, pageBlock, sharedTriangleBytes } from '../../src/render/cuts';
 import { bendsEdges } from '../../src/render/gate';
-import { describeCuts, inspectView, templateArrayBytes } from '../../src/render/inspect';
-import { buildTemplate } from '../../src/render/template';
+import { describeCuts, inspectView, layoutArrayBytes, templateArrayBytes } from '../../src/render/inspect';
+import { ownsStatics, releaseTemplate } from '../../src/render/layouts';
+import { buildTemplate, showFrame } from '../../src/render/template';
 import { type CoverSlot, coverFiles, coverRig, framesUntilCovered, opaqueSquares, slotOf } from './cover-rig';
 import { cutView, PENTAGON, pageTextures, plainOutlines, setPolygon } from './cuts';
 import { createRig, step } from './rig';
@@ -131,18 +132,27 @@ describe('what a view says about its cuts', () => {
 
     it('are described from the state the view hands out, which is the state it draws with', async () => {
         const rig = await coverRig(BEHIND, { tightMesh: 'on' });
-        const { cutState, template, seen, cover, ranges } = rig.view.parts;
-
         step(rig, 0);
+        const { cutState, template, seen, cover, paints } = rig.view.parts;
 
         expect(describeCuts(cutState)).toEqual(inspectView(rig.view).cuts);
         expect(cutState).toMatchObject({ tight: true, hollow: true, occlusion: true, hostile: false });
         expect(cutState.held?.regions).toHaveLength(rig.atlas.regionNames.length);
         expect(cutState.allowed).toEqual(Uint8Array.of(1));
         // the same objects in every call, and the template of the last layout
-        expect(rig.view.parts).toEqual({ cutState, template, seen, cover, ranges });
+        expect(rig.view.parts).toEqual({
+            cutState,
+            template,
+            seen,
+            cover,
+            paints,
+            reason: 'option',
+            renderMode: 'mesh',
+        });
+        expect(rig.view.parts.paints).toBe(paints);
         expect(seen.count).toBe(2);
-        expect(ranges.active).toBe(1);
+        expect(paints.mesh?.ranges.active).toBe(1);
+        expect(paints).toMatchObject({ mode: 'mesh', ready: true, body: undefined, element: undefined });
     });
 
     it('states that a view has no outlines', async () => {
@@ -295,10 +305,12 @@ describe('the bytes of a view', () => {
         const slots = 2;
         const entries = 2;
         const vertices = 8;
-        // per entry: 13 numbers of 4 bytes, the hollow flag, an area of 8 bytes and a tint of 32
-        const perEntry = entries * (13 * 4 + 1 + 8 + 32);
-        const layout = (slots + 1) * 4 + perEntry + entries * 4 + entries * 32 + entries * 64;
-        const vertexData = vertices * 8 + vertices * 12 + vertices * 4;
+        // per entry, shared by the instances of the layout: 9 numbers of 4 bytes, the hollow flag, an area of 8 bytes and a tint of 32
+        const perEntry = entries * (9 * 4 + 1 + 8 + 32);
+        const texture = vertices * 12;
+        const layout = (slots + 1) * 4 + perEntry + entries * 4 + entries * 32 + entries * 64 + texture;
+        // per entry, for the instance alone: the frame, the page and two colors of 4 bytes
+        const own = entries * 4 * 4 + vertices * 8 + vertices * 4;
         const lists = slots * (4 + 2 + 4) + slots * (1 + 4 + 1) + COVER_FIXED + 1;
 
         step(rig, 0);
@@ -306,8 +318,10 @@ describe('the bytes of a view', () => {
         // one range with room for both quads
         const indexData = 12 * 2;
 
-        expect(report.arrayBytes).toBe(layout + vertexData + lists + indexData);
-        expect(report.gpuBytes).toBe(vertexData + indexData);
+        expect(report.arrayBytes).toBe(own + lists + indexData);
+        expect(report.layoutBytes).toBe(layout);
+        // the buffers hold positions, colors and a copy of the texture coordinates
+        expect(report.gpuBytes).toBe(vertices * (8 + 12 + 4) + indexData);
         expect(rig.view.stats.bufferBytes).toBe(report.gpuBytes);
     });
 
@@ -329,15 +343,17 @@ describe('the bytes of a view', () => {
         step(rig, 0);
         const before = inspectView(plain.view);
         const after = inspectView(rig.view);
-        // a slot more in every list, a vertex more with 8 bytes of color each, ten numbers of a polygon
-        const lists = 4 + (4 + 2 + 4) + (1 + 4 + 1);
-        const vertexData = 9 * (8 + 12 + 8) - 8 * (8 + 12 + 4);
+        // a slot more in every list, and a vertex more with 8 bytes of color each
+        const lists = 4 + 2 + 4 + (1 + 4 + 1);
+        const own = 9 * (8 + 8) - 8 * (8 + 4);
         // the polygon has 9 indices, which makes room for 16 in place of 12, and the range sits behind a mask
         const indexData = 16 * 2 - 12 * 2;
         const mask = 6 * 4 + 4 * 2;
 
-        expect(after.arrayBytes - before.arrayBytes).toBe(lists + vertexData + 10 * 8 + indexData + mask);
-        expect(after.gpuBytes - before.gpuBytes).toBe(vertexData + indexData + mask);
+        expect(after.arrayBytes - before.arrayBytes).toBe(lists + own + indexData + mask);
+        // the layout: a slot more, the texture coordinates of a vertex more, ten numbers of a polygon
+        expect(after.layoutBytes - before.layoutBytes).toBe(4 + 12 + 10 * 8);
+        expect(after.gpuBytes - before.gpuBytes).toBe(own + 12 + indexData + mask);
     });
 
     it('count a vertex buffer once that several draw ranges share', async () => {
@@ -355,11 +371,49 @@ describe('the bytes of a view', () => {
         expect(report.gpuBytes).toBe(rig.view.stats.bufferBytes);
     });
 
-    it('count the layout of a template without the triangles its entries share', async () => {
+    it('count the layout of a template apart from what an instance writes, without the triangles its entries share', async () => {
         const rig = await coverRig(BEHIND);
         const template = buildTemplate(rig.model, rig.atlas, rig.lookup, -1, null, false);
+        const other = buildTemplate(rig.model, rig.atlas, rig.lookup, -1, null, false);
 
-        expect(templateArrayBytes(template)).toBe(3 * 4 + 2 * 93 + 2 * 4 + 2 * 32 + 8 * 24);
+        expect(layoutArrayBytes(template)).toBe(3 * 4 + 2 * 77 + 2 * 4 + 2 * 32 + 8 * 12);
+        expect(templateArrayBytes(template)).toBe(2 * 16 + 8 * 8 + 8 * 4);
+        // two instances of one layout: the same arrays for what no pose writes, and their own for the rest
+        expect(other.statics).toBe(template.statics);
+        expect(other.first).toBe(template.first);
+        expect(other.offsets).toBe(template.offsets);
+        for (const key of ['positions', 'colors', 'light', 'dark', 'frames', 'pages'] as const) {
+            expect(other[key], key).not.toBe(template[key]);
+            expect(other[key], key).toEqual(template[key]);
+        }
+    });
+
+    it('gives an instance its own texture coordinates when an entry has a sequence', async () => {
+        const rig = await coverRig([{ name: 'flip', shows: 'seq' }]);
+        const template = buildTemplate(rig.model, rig.atlas, rig.lookup, -1, null, false);
+        const other = buildTemplate(rig.model, rig.atlas, rig.lookup, -1, null, false);
+
+        expect(other.statics).not.toBe(template.statics);
+        expect(other.frameUVs).toBe(template.frameUVs);
+        expect([ownsStatics(template), ownsStatics(rig.view.parts.template)]).toEqual([true, true]);
+        // the second frame of one instance leaves the other one at its first
+        expect(showFrame(other, 0, 1)).toBe(true);
+        expect(other.statics).not.toEqual(template.statics);
+        expect(template.frames[0]).toBe(0);
+        expect(templateArrayBytes(template)).toBe(16 + 4 * (8 + 4) + 4 * 12);
+    });
+
+    it('forgets a layout once its last instance lets it go', async () => {
+        const rig = await coverRig(BEHIND);
+        const first = buildTemplate(rig.model, rig.atlas, rig.lookup, -1, null, false);
+        const second = buildTemplate(rig.model, rig.atlas, rig.lookup, -1, null, false);
+
+        releaseTemplate(first);
+        expect(buildTemplate(rig.model, rig.atlas, rig.lookup, -1, null, false).statics).toBe(second.statics);
+        releaseTemplate(second);
+        // letting go twice counts once
+        releaseTemplate(second);
+        expect(buildTemplate(rig.model, rig.atlas, rig.lookup, -1, null, false).statics).toBe(second.statics);
     });
 
     it('count the triangles that views share for the outlines once a view laid a polygon out', async () => {

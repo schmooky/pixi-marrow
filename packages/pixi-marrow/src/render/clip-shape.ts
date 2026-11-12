@@ -1,6 +1,6 @@
 import { MarrowError } from '../base/errors';
 import type { SpineVersion } from '../base/version';
-import { f64 } from '../geometry/read';
+import { f32, f64 } from '../geometry/read';
 import { Triangulator } from '../geometry/triangulator';
 import { computeWorldVertices } from '../geometry/vertices';
 import type { ClippingAttachmentData } from '../model/attachments';
@@ -17,6 +17,16 @@ import type { ClippingAttachmentData } from '../model/attachments';
  *   as it is. A polygon that is not convex is replaced by its convex hull when the attachment is
  *   `inverse` or marked `convex`, and cut into triangles otherwise.
  * - 4.3 `inverse` keeps what is outside of the polygon.
+ *
+ * Ear clipping is the costly step. Measured in Node 24 on an Apple M4 for the 39 vertices of the
+ * coin: 2.4 microseconds per pose with ear clipping, 0.12 without.
+ *
+ * A polygon without weights and without a deform only moves with one bone. Every pose of it is
+ * the same shape, moved, turned, scaled or sheared. Ear clipping asks on which side of a line a
+ * point lies, and such a move does not change the answer. The triangles are therefore cut once
+ * per attachment and vertex order, from the vertices of the attachment, and every pose of every
+ * instance uses them. A bone that mirrors turns the vertex order around, which is the second
+ * order. `ClipShape.reuse` turns this off, and the tests compare both ways.
  */
 
 /** A mask draws with 16-bit indices. */
@@ -62,19 +72,32 @@ function reverse(v: Float64Array, n: number): void {
     }
 }
 
-/** The official 4.1 and 4.2 `SkeletonClipping.makeClockwise`, with its order of additions. */
-function makeClockwiseLegacy(v: Float64Array, n: number): void {
+/** Whether a polygon is clockwise by the test of the official 4.1 and 4.2 `makeClockwise`, with its order of additions. */
+function isClockwise(v: Float64Array, n: number): boolean {
     let area = f64(v, n - 2) * f64(v, 1) - f64(v, 0) * f64(v, n - 1);
 
     for (let i = 0, end = n - 3; i < end; i += 2) {
         area += f64(v, i) * f64(v, i + 3) - f64(v, i + 2) * f64(v, i + 1);
     }
-    if (area < 0) return;
-    reverse(v, n);
+
+    return area < 0;
 }
 
-/** The official 4.3 `SkeletonClipping.makeClockwise`. Returns whether every corner turns the same way. */
-function makeClockwise43(v: Float64Array, n: number): boolean {
+/** The official 4.1 and 4.2 `SkeletonClipping.makeClockwise`. Returns whether it turned the vertex order around. */
+function makeClockwiseLegacy(v: Float64Array, n: number): boolean {
+    if (isClockwise(v, n)) return false;
+    reverse(v, n);
+
+    return true;
+}
+
+/** Set in what {@link makeClockwise43} returns when every corner turns the same way. */
+const CONVEX = 1;
+/** Set in what {@link makeClockwise43} returns when it turned the vertex order around. */
+const REVERSED = 2;
+
+/** The official 4.3 `SkeletonClipping.makeClockwise`. Returns {@link CONVEX} and {@link REVERSED}, each set or not. */
+function makeClockwise43(v: Float64Array, n: number): number {
     let noCW = true;
     let noCCW = true;
     let area = 0;
@@ -100,10 +123,10 @@ function makeClockwise43(v: Float64Array, n: number): boolean {
     if (area >= 0) {
         reverse(v, n);
 
-        return noCW;
+        return REVERSED | (noCW ? CONVEX : 0);
     }
 
-    return noCCW;
+    return noCCW ? CONVEX : 0;
 }
 
 /** Sorts the vertices of `v` into `sorted` by x, then by y: the insertion sort of the official `makeConvex`. */
@@ -176,10 +199,52 @@ function makeConvex(v: Float64Array, n: number, sorted: Float64Array): number {
     return s - 2;
 }
 
+/** The triangles of a polygon that is the same shape in every pose, for one vertex order. Never written again. */
+interface FixedCut {
+    /** Three vertex numbers per triangle. */
+    readonly triangles: Int32Array;
+    /** The same numbers with 16 bits each, and one more 0 when their count is odd. */
+    readonly indices: Uint16Array;
+}
+
+/** The cuts of one clipping attachment: of its vertices in the order of the file, and in reverse order. */
+interface FixedCuts {
+    stored: FixedCut | undefined;
+    reversed: FixedCut | undefined;
+}
+
+/** The cuts of every clipping attachment that was shown without weights and without a deform. All instances share them. */
+const fixedCuts = new WeakMap<ClippingAttachmentData, FixedCuts>();
+
+/** The 16-bit indices of a fan, by how many numbers it has. The fan of a count is the same for every polygon. */
+const fans = new Map<number, Uint16Array>();
+
+/** The indices of a fan of `count` numbers around vertex 0, in an array that all masks share. */
+function fanIndices(count: number): Uint16Array {
+    let indices = fans.get(count);
+
+    if (indices === undefined) {
+        // an even count keeps the bytes a multiple of 4, which WebGPU asks of an index buffer
+        indices = new Uint16Array(count + (count & 1));
+        for (let i = 0, at = 0; at < count; i++, at += 3) {
+            indices[at + 1] = i + 1;
+            indices[at + 2] = i + 2;
+        }
+        fans.set(count, indices);
+    }
+
+    return indices;
+}
+
 /**
  * The polygon of a clipping attachment in a pose, shaped as the official clipper of the model's
  * version shapes it, and cut into the triangles of a mask. One object serves every clip: it keeps
  * its scratch arrays and allocates only for a polygon with more vertices than every one before.
+ *
+ * A polygon without weights and without a deform is the same shape in every pose. Its triangles
+ * are cut once per attachment and vertex order, and every later call hands them out again, see
+ * {@link fixedIndices}. That first call allocates the two small arrays that hold them. The model
+ * is immutable, so the vertices of an attachment stay what they were when its triangles were cut.
  *
  * @example
  * const shape = new ClipShape();
@@ -199,10 +264,26 @@ export class ClipShape {
     indexCount = 0;
     /** Whether the clip keeps what is outside of the shape. Only a 4.3 attachment can ask for it. */
     inverse = false;
+    /**
+     * The numbers of {@link triangles} as 16-bit indices, in an array that is never written again,
+     * or null. It holds {@link indexCount} numbers, and one more 0 when that count is odd. Every
+     * mask that shows these triangles can draw from this one array and needs none of its own.
+     *
+     * It is set for a polygon without weights and without a deform, and for every polygon that
+     * is covered by a fan. It is null for a polygon that ear clipping cuts anew in every pose.
+     */
+    fixedIndices: Uint16Array | null = null;
+    /**
+     * Whether triangles that hold for every pose are cut once and used again. Default true. With
+     * false every call cuts the polygon of its pose, which covers the same area and takes longer,
+     * and {@link fixedIndices} stays null. Tests compare the two.
+     */
+    reuse = true;
     private readonly triangulator: Triangulator = new Triangulator();
     /** The triangles of a fan around vertex 0. A convex polygon needs no ear clipping. */
     private fan: Int32Array = new Int32Array(0);
-    private sorted: Float64Array = new Float64Array(0);
+    /** Room for a second copy of a polygon: the sorted vertices of a hull, or the vertices of an attachment. */
+    private scratch: Float64Array = new Float64Array(0);
 
     /**
      * Places the polygon with the bones of a pose and shapes it. `world`, `deform` and
@@ -219,6 +300,8 @@ export class ClipShape {
         deformLength: number,
     ): void {
         const n = attachment.worldVerticesLength;
+        // without weights and without a deform one bone moves the whole polygon: its shape stays
+        const rigid = this.reuse && attachment.bones === null && deformLength === 0;
 
         checkClip(attachment);
         // a convex hull is built in place and needs room to grow before it shrinks
@@ -226,15 +309,18 @@ export class ClipShape {
         computeWorldVertices(attachment, world, bone, deform, deformLength, this.polygon);
         this.inverse = version === '4.3' && attachment.inverse;
         if (version !== '4.3') {
-            makeClockwiseLegacy(this.polygon, n);
-            this.cut(n);
+            const reversed = makeClockwiseLegacy(this.polygon, n);
+
+            if (rigid) this.recall(attachment, n, reversed);
+            else this.cut(n);
 
             return;
         }
-        const convex = makeClockwise43(this.polygon, n);
+        const turned = makeClockwise43(this.polygon, n);
 
-        if (convex) this.spread(n);
+        if ((turned & CONVEX) !== 0) this.spread(n);
         else if (attachment.inverse || attachment.convex) this.spread(this.hull(n));
+        else if (rigid) this.recall(attachment, n, (turned & REVERSED) !== 0);
         else this.cut(n);
     }
 
@@ -243,6 +329,56 @@ export class ClipShape {
         this.vertexCount = n >> 1;
         this.indexCount = this.triangulator.triangulate(this.polygon, this.vertexCount);
         this.triangles = this.triangulator.triangles;
+        this.fixedIndices = null;
+    }
+
+    /**
+     * Hands out the triangles that were cut for an attachment and a vertex order, and cuts them on
+     * the first call. `reversed` says whether the polygon of the pose had its vertex order turned.
+     */
+    private recall(attachment: ClippingAttachmentData, n: number, reversed: boolean): void {
+        let cuts = fixedCuts.get(attachment);
+
+        if (cuts === undefined) {
+            cuts = { stored: undefined, reversed: undefined };
+            fixedCuts.set(attachment, cuts);
+        }
+        let cut = reversed ? cuts.reversed : cuts.stored;
+
+        if (cut === undefined) {
+            cut = this.cutAttachment(attachment, n, reversed);
+            if (reversed) cuts.reversed = cut;
+            else cuts.stored = cut;
+        }
+        this.vertexCount = n >> 1;
+        this.indexCount = cut.triangles.length;
+        this.triangles = cut.triangles;
+        this.fixedIndices = cut.indices;
+    }
+
+    /**
+     * Cuts the vertices of an attachment into triangles, in the vertex order the polygon of a pose
+     * has. No bone is applied. The vertices are the polygon of every pose before its bone moved,
+     * turned, scaled or sheared it, and none of that changes which ears ear clipping finds.
+     */
+    private cutAttachment(attachment: ClippingAttachmentData, n: number, reversed: boolean): FixedCut {
+        if (this.scratch.length < n) this.scratch = new Float64Array(n);
+        const local = this.scratch;
+
+        for (let i = 0; i < n; i++) local[i] = f32(attachment.vertices, i);
+        if (reversed) reverse(local, n);
+        // The pose is clockwise in this order. Where the vertices are not, the bone mirrors them:
+        // mirrored here too, they are clockwise, as ear clipping needs them
+        if (!isClockwise(local, n)) {
+            for (let i = 1; i < n; i += 2) local[i] = -f64(local, i);
+        }
+        const count = this.triangulator.triangulate(local, n >> 1);
+        const triangles = this.triangulator.triangles.slice(0, count);
+        const indices = new Uint16Array(count + (count & 1));
+
+        indices.set(triangles);
+
+        return { triangles, indices };
     }
 
     /** Covers a convex polygon with a fan of triangles. The official clipper uses such a polygon whole. */
@@ -260,12 +396,14 @@ export class ClipShape {
         this.vertexCount = vertices;
         this.indexCount = count;
         this.triangles = this.fan;
+        // a hull of a polygon without area can have two vertices. A mask draws no empty array
+        this.fixedIndices = this.reuse && count > 0 ? fanIndices(count) : null;
     }
 
     /** Replaces the polygon by its convex hull. Returns twice the vertex count of the hull. */
     private hull(n: number): number {
-        if (this.sorted.length < n) this.sorted = new Float64Array(n);
+        if (this.scratch.length < n) this.scratch = new Float64Array(n);
 
-        return makeConvex(this.polygon, n, this.sorted);
+        return makeConvex(this.polygon, n, this.scratch);
     }
 }

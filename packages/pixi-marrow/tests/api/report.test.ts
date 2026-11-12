@@ -9,6 +9,7 @@ import { FRAME, fixtureAsset } from './helpers';
 
 /** The features of a report, in the order of its rows. */
 const FEATURES: readonly PerfFeature[] = [
+    'renderMode',
     'drawCalls',
     'blend',
     'pages',
@@ -58,8 +59,9 @@ const NINE_PAGES = {
 describe('the perf report of a display object', () => {
     const made: MarrowSpine[] = [];
 
+    /** A display object in the mesh mode, whose rows these tests read, unless asked otherwise. */
     function create(asset: MarrowAsset, options: ConstructorParameters<typeof MarrowSpine>[1] = {}): MarrowSpine {
-        const spine = new MarrowSpine(asset, { ...options, autoUpdate: false });
+        const spine = new MarrowSpine(asset, { renderMode: 'mesh', ...options, autoUpdate: false });
 
         made.push(spine);
 

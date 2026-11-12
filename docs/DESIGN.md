@@ -16,6 +16,8 @@ Change with M3: IK, transform and path constraints are solved in both engines, a
 
 Change with M4: physics constraints and sliders are solved, so every constraint of the three versions is (sections 5.3 and 10). The option to ignore constraints is gone. The perf report loads on demand and is asynchronous (section 8.5). The A/B bench lives in this repository and runs on one desktop machine. Numbers per device class wait for spine-benchmark (section 16). That bench moved the batched render mode up: it is M5 now, before pose skipping (sections 7.2 and 16.1).
 
+Change with M5: the batched render mode is built, and `renderMode: 'auto'` picks it for every skeleton of up to 1024 batch vertices (section 7.2). Clips are cut on the CPU in that mode, by a port of the official clipper (section 7.5). The static part of a layout is shared between the instances of an asset (section 8.6). The heap numbers of M4 were wrong and are corrected (section 16.1).
+
 This document is the plan. Every performance number in it is an estimate until the benchmark measures it. Section 0 lists what has been verified.
 
 ## 0. Verified facts this design rests on
@@ -102,13 +104,13 @@ Price:
 |---|---|---|
 | Versions | One version per package, 4.2 or 4.3 | 4.1, 4.2, 4.3 together |
 | Additive slots | New batch at every change of blend mode | Same batch as normal slots |
-| Atlas pages | Batch by texture, up to the batcher limit | Same, plus one draw per skeleton in mesh mode |
+| Atlas pages | Batch by texture, up to the batcher limit | The same in batched mode. In mesh mode up to 8 pages in one draw per skeleton. |
 | Vertex data | All attributes repacked each frame | UVs, indices and weights uploaded once. Positions only when needed. |
-| Attachment or draw-order key | Full instruction rebuild | Index buffer rewrite |
+| Attachment or draw-order key | Full instruction rebuild | Index rewrite in place, in both modes. No instruction rebuild. |
 | Rigid region attachments | Positions computed on CPU and uploaded | Placed in the vertex shader from bone matrices (GPU mode) |
 | Hidden slots (alpha 0) | Left out of the batch, but their vertices are still computed, and each change of visibility rebuilds the instructions | Left out by an index rewrite. No vertex work, no rebuild. |
 | Overdraw | Quads as authored | Invisible regions left out, covered slots skipped. Tight outlines as an option. |
-| Clipping | CPU triangle clipping always, so vertex counts change every frame | Stencil mask. The vertex layout stays stable. |
+| Clipping | CPU triangle clipping always, so vertex counts change every frame and the instructions are rebuilt | Batched mode: CPU clipping into a room of constant size, no rebuild. Mesh mode: stencil mask. |
 | Idle skeleton | Full pose and vertex pass every tick | Sleeps: no pose work, no upload |
 | Pose work | Every timeline and every bone, every frame | Only what can change the picture (section 2) |
 | Setup | Extensions register on import | Nothing to call. First use registers. |
@@ -316,14 +318,33 @@ Baked animations replace steps 2 to 4 with one number: the clip time.
 
 ### 7.2 Two render modes
 
-| Mode | For | Draw calls | Per-frame upload |
+Both are built, the batched mode in M5.
+
+| Mode | For | Draw calls | Vertices are placed |
 |---|---|---|---|
-| mesh | Larger skeletons | One per blend group, usually one | Bone matrices, plus positions of CPU-skinned ranges |
-| batched | Many small skeletons | Shared with other marrow skeletons | Positions and colors, like Pixi meshes |
+| batched | Skeletons of up to 1024 batch vertices | Shared with the other pixi-marrow skeletons of the render group | On the CPU, into the buffer of the batch |
+| mesh | Larger skeletons | One per draw range of every instance | In the vertex shader |
 
-`renderMode: 'auto'` picks by vertex count and by how many instances share the render group. The threshold is a constant until the benchmark tunes it per device class.
+`renderMode: 'auto'` is the default. It picks the batched mode when the skeleton needs at most 1024 vertices in a batch and the renderer can sample the pages of a run. `mesh` and `batched` force one side. The property can change at run time. `await spine.perf.report()` names the mode and the reason: `small`, `large`, `limit` or `option`.
 
-Only the mesh mode is built. The M4 bench shows what that costs. With 200 instances of one rig on stage the official runtime issues 1 draw call, because Pixi's batcher joins the instances. pixi-marrow issues 200, one per instance. On large rigs pixi-marrow still needs less time per frame. On small rigs the frame takes as long or longer, up to 1.28 times on WebGPU (section 16.1). The batched mode closes this gap. It was part of M6 and is M5 since this measurement.
+How the batched mode works:
+
+- Two batchers of our own, one with dark tint, feed Pixi's batch pipe. They carry the premultiplied pipeline of 7.1: normal and additive slots share a batch, multiply and screen break it. A skeleton without dark colors joins an open batch with dark tint.
+- A skeleton is one element per run of slots that share a blend state and a group of up to 16 pages. An element has a constant size: every slot has room for its largest attachment, and unused indices are degenerate triangles.
+- So a change of draw order, visibility, attachment or color rewrites data in place. Pixi does not rebuild the instructions of the render group. Pixi's own batcher packs indices only when a batch is built, which is why the batcher is ours. The official runtime rebuilds on most frames.
+- An instance holds no Pixi mesh, geometry, buffer or shader. It holds one view container and its elements.
+- Nothing is registered at import. The pipe installs itself into a renderer at the first render of a skeleton, and the batchers are registered then.
+
+Why 1024: on WebGL2 on the bench machine a batch saves about 2.7 microseconds per instance and costs about 5 nanoseconds per vertex, which crosses near 570 vertices. On WebGPU the batched frame takes 0.64 to 0.76 of the mesh frame from 44 to 819 vertices. A draw call costs more on a phone than on this desktop, so the limit sits above the WebGL2 crossover. The rig raptor-pro has 667 vertices. It pays 3 percent of frame time for the limit on WebGL2 and gains 27 percent on WebGPU.
+
+Limits, stated:
+
+- A Pixi object between two skeletons in draw order breaks our batch. It does not break the batch of the official runtime, which uses Pixi's default batcher.
+- The two modes are not equal to the bit, because one places vertices in 64-bit on the CPU and the other in 32-bit on the GPU. Each passes the pixel check against the official runtime. Against each other they differ by 5 levels at most, on 0.006 percent of pixels by more than 1.
+- Mesh mode on WebGPU fails above 2047 mesh draws in a frame: Pixi's uniform buffer batch is full then. The batched mode has no such limit.
+- A skeleton can grow its room, which rebuilds the instructions once. A clipped animation settles within its first turn.
+
+The batched mode relies on these parts inside Pixi, checked against the source of 8.16.0 and 8.23.0. The `Batcher` base class and the fields of a batch element. `renderPipes.batch` and the protocol of a render pipe. `Container.onRender` and `ViewContainer`. The bind layout of the batch adaptors and `renderer.limits.maxBatchableTextures`. The official runtime builds on the same parts.
 
 ### 7.3 Stable plan
 
@@ -373,7 +394,13 @@ Built in M3 with one strategy, the stencil mask. The slots a clip cuts draw insi
 | Picture | Clipped frames match the official runtime within 2 of 255 levels, at three picture sizes |
 | Not exact | A clip polygon that crosses itself. The official clipper and a stencil mask disagree about such a shape. |
 
-A CPU strategy for clips that cut few triangles, as the first draft planned, is not built. It would bring back vertex counts that change every frame.
+Built in M5, the second strategy: in batched mode a clip is cut on the CPU, because a mask breaks every batch. The kernel in `src/geometry/clip-triangles.ts` is a port of the official `SkeletonClipping` of each version. Its output equals the official one to the bit, on every clipped fixture and on 27,000 random cases per version. It is 2.3 to 5 times as fast as the official clipper per triangle.
+
+- A verdict per slot comes first: nothing is left, the slot is whole, or it is cut. A whole slot draws with its shared vertices. Only a cut slot runs the clipper. On spineboy-pro 214 of 216 slots inside a clip need no cut.
+- Cut vertices go into a room behind the rooms of the slots. The room is a high-water mark per model, so vertex counts that change every frame rebuild nothing once the room has settled.
+- The clip polygon of a region without weights or deform is triangulated once per attachment, not once per pose. That was 64 percent of the update of coin-pro.
+- The kernel loads on demand, with an asset that has a clipping attachment.
+- The picture: clipped frames in batched mode equal the official runtime in every pixel. The stencil path is within 1 level.
 
 The rules that differ between versions, all ported: 4.3 can use a convex polygon whole, can replace a concave one by its hull, and can keep the outside (`inverse`). In 4.3 an end slot that shows a clip ends the active clip and starts the new one. In 4.2 the first clip then runs to the end of the draw order.
 
@@ -413,7 +440,7 @@ Each item in this list has a parity test that runs with the item on and off.
 
 | Option | Values | `auto` decides by | Exact |
 |---|---|---|---|
-| `renderMode` | `auto`, `mesh`, `batched` | Vertex count, instance count | Yes |
+| `renderMode` | `auto`, `mesh`, `batched` | Batch vertices of the skeleton: up to 1024 is batched | Within the pixel check. The modes differ in rare pixels, see 7.2. |
 | `skinning` | `auto`, `cpu`, `gpu` | Weighted vertex count, influences per vertex, deform keys | Yes, within float tolerance |
 | `tightMesh` | `auto`, `on`, `off` | `auto` drops regions without a visible pixel. `on` is opt-in, see 8.3. | Yes for `auto` |
 | `occlusion` | `auto`, `off` | Opaque rectangles present, the 4 largest occluders, world area of at least 1024 | Yes |
@@ -487,6 +514,8 @@ Measured, not assumed:
 - Since M3 the baseline counts `engine.bytes`: the pose state and what constraints add to an instance. A constrained bone costs 56 bytes more in 4.1 and 4.2 and 104 bytes more in 4.3. A skeleton without solved constraints pays nothing for them. Of the 104 bytes, 48 keep the world transform that a bone shows between a skin change and the next update equal to the official one. Cutting it turned out not to be exact: an active bone under an inactive parent reads the stale world transform of that parent.
 - Since M4 the baseline also counts physics and slider state. A physics constraint adds 144 bytes to an instance in 4.2 and 180 in 4.3. A skeleton without physics or sliders pays nothing. The baseline is 1,530,600 bytes for one instance of each of the 114 fixtures, 6.6 percent above M3, all of it on the 20 files with physics or a slider.
 - The lookup of attachments by skin, slot and name is built once per model since M4. Before, every drawn instance built its own.
+- Since M5 the static arrays of a layout are shared by the instances of a model, skin and set of cuts. One view shader serves every view of the same pages, and one mask shader every mask. tank-pro in mesh mode went from 188 to 131 KB per instance. An instance of coin-pro went from 33 to 16.5 KB.
+- The bench reads the heap on a fresh page per reading since M5, twice in opposite order. The two readings differ by 0.4 percent at most.
 - The spine-benchmark A/B reports heap and GPU memory next to frame time.
 
 ## 9. Public API sketch
@@ -567,7 +596,7 @@ One package. Few entry points. No runtime dependencies.
 
 Peer: `pixi.js`. Dev dependencies only: the three official cores and `spine-pixi-v8`, under npm aliases.
 
-Importers are separate modules loaded by version, so a game that ships 4.3 binary files does not carry the JSON or 4.1 readers. Size budget for the root import with one importer: 60 KB gzipped. It is a target to confirm at M2, checked in CI after that.
+Importers are separate modules loaded by version, so a game that ships 4.3 binary files does not carry the JSON or 4.1 readers. Since M5 the root import is 31.1 kB gzipped: the batched mode weighs 4.9 kB of it and the mesh mode 3.2 kB. The clip kernel is a chunk of 5.5 kB that loads with an asset that clips. The mesh mode and its mask code could load on demand, for about 4.8 kB less in the root. That is not built. Size budget for the root import with one importer: 60 KB gzipped. It is a target to confirm at M2, checked in CI after that.
 
 ## 12. Repo setup, compared with pixi-silk
 
@@ -643,6 +672,9 @@ The pose core is only as good as its proof. The parity suite is built before the
 | Plan stability | Node | Attachment and draw-order keys cause zero template rebuilds |
 | Allocation | Node | A played loop allocates nothing after warm-up |
 | Docs examples | Node and Chrome | Every example compiles and renders |
+| Mode parity | Headless Chrome | The batched mode equals the official frame under the rules of pixel parity. The two modes differ from each other by 6 levels at most, on 0.05 percent of pixels by more than 1. |
+| Scenes | Headless Chrome | 19 scenes with many instances draw like the official runtime in both modes. They cover overlap, two rigs interleaved, a Pixi object in between, and parents with alpha, tint, mask, filter and render group. Instances are added, removed, moved and destroyed between frames. |
+| Clip parity | Node | The CPU clip kernel writes the vertices and indices of the official `clipTriangles`, bit for bit, in all three versions |
 | A/B bench | Headless Chrome | Not a test. `pnpm bench:ab` measures CPU time, frame time, draw calls and heap against the official Pixi runtime, and tight meshes on against off (section 16). |
 
 No tolerance: pose values are 64-bit, like the numbers of the official JavaScript core, and the engines port its arithmetic in the same order. Pose parity is exact equality. The one bounded difference is in mesh UVs of JSON files, where the model stores `regionUVs` in 32-bit and the official reader keeps 64-bit. The largest difference seen is 5.96e-8, far below one texel.
@@ -654,6 +686,12 @@ Since M4 the reference is the played official skeleton with nothing switched off
 The pixel check as built in M3: 456 frames against the official runtime per renderer, worst difference 4 of 255 levels, 0.008 percent of pixels off by more than 1. A frame that fails is drawn again, moved by a fraction of a pixel, and fails only when it fails at both places. The two runtimes place vertices in different code, so a vertex on a subpixel boundary can round two ways. Three frames pass at the second place only. A defect does not pass: the check proves that on shifted, tinted and hidden slots.
 
 Since M4 both sides run every constraint, physics and sliders included, from the same first update. The check draws 732 frames against the official runtime per renderer, on 45 rigs: worst difference 4 of 255 levels, 0.008 percent of pixels off by more than 1. The 284 frames of rigs with physics or a slider differ by 2 levels at most. Five frames pass at the second place only. The cuts on and off differ in no pixel on 530 frames.
+
+Since M5 the check draws every rig in both render modes, in 160 seconds for both renderers. The batched mode against the official runtime: 366 frames per renderer, and no pixel differs, clipped frames and rigs with physics included. It places vertices on the CPU in 64-bit as the official runtime does. The mesh mode stands as before, worst 4. The two modes against each other: 482 frames, worst 5, 0.006 percent of pixels off by more than 1. The scenes: 56 frames per mode, worst 3 in mesh mode and 1 in batched mode. Two instances swapped in draw order fail, as they must.
+
+The check also counts how often Pixi rebuilds the instructions of the render group while 111 animations play 30 frames each. It counts 11 rebuilds in batched mode and 26 in mesh mode, in 7 animations. Those are rooms that grow and runs whose blend structure changes. The official runtime rebuilds in 7 to 27 of 15 frames of a scene.
+
+One failure stays unexplained. In one run during M5 a frame of celestial-circus-pro on a multisampled target differed by 3 in mesh mode on WebGPU. It did not show again in 30 runs of that case and 7 full runs.
 
 Fixtures: 57 official example rigs across 4.1, 4.2 and 4.3, each as JSON and binary, listed in `fixtures/manifest.json` at pinned commits with a hash per file. They are downloaded on demand and not committed, because the licence of the example assets has not been read. Your own rigs go into `fixtures/local/`, which is not committed either.
 
@@ -669,7 +707,7 @@ One finding from building the suite: the official binary readers ignore the offs
 | M2b First frames | Render: `SkeletonView` draws through Pixi meshes with its own geometry and shader. CPU skinning into buffers, premultiplied pipeline, additive in the same draw, pages in one draw, stable vertex layout, hidden slots left out. The display object `MarrowSpine` with `MarrowAsset` and `Track`. Pixel check in headless Chrome (`pnpm check:render`). | Built 2026-11-11. On 12 rigs in 34 versions the picture matches the official Pixi runtime within 4 of 255 levels, on WebGL2 and WebGPU. At most 0.02 percent of pixels are off by more than 1. One draw call for every rig with only normal and additive slots. Known gap: clipping, which is M3. Not done: a custom render pipe, which the design named. Pixi meshes gave the same result with less reliance on Pixi internals. |
 | M3 Constraints and overdraw | Pose: IK, transform and path constraints in both engines, with the generalized transform constraints of 4.3. Render: clipping through a stencil mask, invisible regions left out, covered slots skipped, tight meshes as an option, outlines from a sidecar file or a scan in idle time. | Built 2026-11-11. Pose parity with constraints is exact on all 114 fixtures and 15 hand-written rigs, five per version. The pixel check passes on WebGL2 and WebGPU with constraints and clipping on both sides. The exact cuts change no pixel. Tight meshes draw 90.5 percent of the triangle area and stay opt-in, because they are not exact to the bit. Not done: the perf report, which moves to M4 with the perf probes. |
 | M4 Complete | Physics, sliders, additive tracks. Perf report and perf probes. An A/B bench against the official Pixi runtime. | Built 2026-11-11. Physics constraints and sliders in both engines, the remaining track options, physics control, `perf.report()`, `perf.memory()`, the probe entry and `pnpm bench:ab`. Pose parity is exact on 135 skeleton files with every constraint on. The pixel check passes on WebGL2 and WebGPU with physics and sliders live. Not done: the A/B inside spine-benchmark and numbers per device class. The package is not published and its licence is not decided, so spine-benchmark cannot load it yet. `tightMesh` stays an option until devices are measured. |
-| M5 Batched mode | Small skeletons that share a render group share draw calls, with the premultiplied shader, additive slots in the batch and pages joined by texture. `renderMode: 'auto'` picks the mode per skeleton. The heap of an instance with a clip is explained and cut. | Measured by `pnpm bench:ab` at 200 instances, on WebGL2 and WebGPU. Rigs without a clip need no more draw calls than the official runtime. speedy-ess and sack-pro take less time per frame than the official runtime, and coin-pro takes no longer. The pixel check passes in both modes. |
+| M5 Batched mode | Small skeletons that share a render group share draw calls, with the premultiplied shader, additive slots in the batch and pages joined by texture. `renderMode: 'auto'` picks the mode per skeleton. The heap of an instance with a clip is explained and cut. | Built 2026-11-12. Two batchers of our own, constant-size elements with rewrites in place, CPU clipping by a port of the official clipper, layouts shared per asset. 200 instances of a rig without a blend break draw in 1 call. The frame takes 30 to 89 percent of the official time on the five bench rigs. The pixel check passes in both modes. One rule of the list is missed: raptor-pro is 4 percent slower in batched mode than in mesh mode on WebGL2 (section 16.2). Not done: a CI run against pixi.js 8.16.0, and loading the mesh mode on demand. |
 | M6 Pose skipping | Constant folding, needed set, timeline skipping, path cache, shared pose, sleep | Optimization parity passes. A/B shows the gain. |
 | M7 GPU | GPU skinning, slot palette | Zero vertex upload for rigid rigs. A/B on low-end and mid devices. |
 | M8 Baked | Baker at build time and run time, baked playback, instancing, `balanced` preset | Eligible fixtures play baked with pixel parity at sample points |
@@ -684,11 +722,11 @@ Ours as a share of the official `spine-pixi-v8` of the rig's version. Lower is b
 
 | Rig | CPU per frame, WebGL2 | Frame, WebGL2 | CPU per frame, WebGPU | Frame, WebGPU | Draw calls, ours and official | Heap per instance in KB, ours and official |
 |---|---|---|---|---|---|---|
-| 4.2 tank-pro | 36 percent | 47 percent | 41 percent | 59 percent | about 712 and 488 | 62 and 161 |
-| 4.3 raptor-pro | 59 percent | 65 percent | 51 percent | 60 percent | 200 and 1 | 19.5 and 70.5 |
-| 4.2 coin-pro | 54 percent | 83 percent | 62 percent | 111 percent | 800 and 400 | 15.5 and 5.2 |
-| 4.2 speedy-ess | 77 percent | inside the spread | 87 percent | 128 percent | 200 and 1 | 11.6 and 18.2 |
-| 4.3 sack-pro, with physics | 92 percent | 101 percent | 89 percent | 111 percent | 200 and 1 | 17.1 and 24.3 |
+| 4.2 tank-pro | 36 percent | 47 percent | 41 percent | 59 percent | about 712 and 488 | 188 and 283 |
+| 4.3 raptor-pro | 59 percent | 65 percent | 51 percent | 60 percent | 200 and 1 | 70.6 and 105.5 |
+| 4.2 coin-pro | 54 percent | 83 percent | 62 percent | 111 percent | 800 and 400 | 32.9 and 15.3 |
+| 4.2 speedy-ess | 77 percent | inside the spread | 87 percent | 128 percent | 200 and 1 | 29.7 and 26.2 |
+| 4.3 sack-pro, with physics | 92 percent | 101 percent | 89 percent | 111 percent | 200 and 1 | 41.7 and 46.6 |
 
 CPU per frame is the update plus the CPU part of the render. The official runtime computes vertices while it renders and pixi-marrow in its update, so the update alone does not compare. Frame is the CPU time plus the wait for the GPU. In absolute terms the CPU time on WebGL2 is 6.3 against 17.4 ms for tank-pro and 2.7 against 4.5 ms for raptor-pro.
 
@@ -696,7 +734,11 @@ What the numbers say:
 
 - pixi-marrow needs less CPU time on every rig measured.
 - It does not join instances into one draw call, and the official runtime does. On small rigs that eats the CPU gain: the frame takes as long or longer.
-- It holds less heap per instance on four rigs of five. coin-pro holds two to three times as much. The cause is not found yet. The rig has a clip, and a clip brings a mask mesh with buffers of its own.
+- It holds less heap per instance on three rigs of five. speedy-ess holds 13 percent more and coin-pro more than twice as much.
+
+The heap column was measured again in M5. The first numbers were too low for both runtimes. A destroyed instance stays reachable through the instruction set of Pixi's render group, so a reading after another block on the same page is wrong. Every reading is on a fresh page now, taken twice in opposite order, and the two differ by 0.4 percent at most.
+
+Where the heap of an instance goes, for coin-pro without its clip: 22.8 KB against 11.7 KB of the official object. The view template and state take 5.1 KB, the pose engine 4.65 KB, Pixi buffers 3.35 KB, the shader and its bind group 2.1 KB and the cover test 1.6 KB. The clip adds 9.65 KB: a mask mesh, a container, a shader and a range mesh of its own. The official runtime keeps one container per instance and its vertices in Pixi's shared batch buffers.
 
 `pnpm bench:ab --mode=overdraw`: 24 instances scaled to cover a canvas of 1920 by 1080 several times, 5 runs. Render time with `tightMesh: 'on'` against `off`, on WebGL2:
 
@@ -710,7 +752,29 @@ What the numbers say:
 
 Every run had the same sign. On WebGPU four rigs gain 3 to 22 percent with a wide spread between runs, and chibi-stickers shows no steady gain. The default cuts cost nothing: `auto` is within 0.3 percent of `off`. So tight meshes pay in a scene that is bound by fill, by 3 to 12 percent on this GPU. They are not exact to the bit and they add vertices. They stay an option until a phone GPU is measured.
 
-Your three must-haves: fewer batch breaks and the premultiplied pipeline land in M2, overdraw in M3. One part is open after M4: within one skeleton pixi-marrow breaks less, across many instances of small skeletons the official runtime draws less often. M2 is the largest milestone because the first correct frame needs model, pose and render together.
+### 16.2 Measured in M5
+
+`pnpm bench:ab --check --runs=5` on the same machine, on AC power: 200 instances, default options, so `renderMode: 'auto'`, which batches all five rigs. Medians of 5 runs. Ours and official.
+
+| Rig | Draw calls | CPU per frame in ms, WebGL2 | Frame in ms, WebGL2 | Frame in ms, WebGPU | Heap per instance in KB |
+|---|---|---|---|---|---|
+| 4.2 tank-pro | 401 and about 488 | 5.28 and 17.40 | 8.17 and 20.66 | 10.29 and 24.33 | 156 and 283 |
+| 4.3 raptor-pro | 1 and 1 | 2.64 and 4.72 | 4.23 and 7.01 | 4.47 and 10.28 | 70 and 105 |
+| 4.2 coin-pro | 1 and 400 | 0.47 and 2.13 | 1.03 and 3.46 | 2.16 and 3.79 | 16.5 and 15.3 |
+| 4.2 speedy-ess | 1 and 1 | 0.39 and 0.62 | 0.82 and 1.05 | 0.96 and 1.23 | 18.2 and 26.7 |
+| 4.3 sack-pro, with physics | 1 and 1 | 1.29 and 1.54 | 2.25 and 2.53 | 2.39 and 2.77 | 34.4 and 46.6 |
+
+The frame takes 30 to 89 percent of the official time on WebGL2 and 42 to 86 percent on WebGPU. The rig tank-pro needs two draw calls per instance. The cause was not looked into.
+
+The list of M5 has 16 rows. 15 pass. One fails: raptor-pro in batched mode takes 4.23 ms per frame on WebGL2 and 4.08 ms in mesh mode, 4 percent more. On WebGPU it takes 4.47 against 5.27 ms. The limit of 1024 vertices stays. It trades those 4 percent on a desktop for 1 draw call in place of 200, which weighs more on a phone. That is a judgement and not a measurement: no phone was measured.
+
+Against mesh mode a batched instance holds more heap where a rig is large: tank-pro 156 against 131 KB, raptor-pro 70 against 56 KB. It keeps its positions in skeleton space next to the copy in the batch. The cover test, the clipper and a move without an update read them.
+
+1200 instances of coin-pro draw in 1 call on WebGPU. In M4 they failed with a full uniform buffer batch.
+
+A bench on battery is not valid. On low battery the typed array code of pixi-marrow ran 2.2 times slower and the official runtime 1.3 times.
+
+Your three must-haves: fewer batch breaks and the premultiplied pipeline land in M2, overdraw in M3. The part that was open after M4 is closed in M5: many instances of small skeletons share draw calls. What stays: a Pixi object between two skeletons ends our batch and not the batch of the official runtime. M2 is the largest milestone because the first correct frame needs model, pose and render together.
 
 ## 17. Risks
 
@@ -720,7 +784,7 @@ Your three must-haves: fewer batch breaks and the premultiplied pipeline land in
 | Older solvers differ from 4.3 in ways a mode flag cannot cover | Per-constraint experiment first (section 10). Fallback: a separate kernel per version for that constraint. |
 | Physics drifts from the official result | It does not: the port keeps the order of the official arithmetic, and physics parity is exact equality like the rest (M4). |
 | A new Spine release changes the solver | The parity suite shows exactly which frames diverge. Port, then extend the model. |
-| Pixi internals used by a custom pipe and batcher change between minors | Test against the lowest supported and the latest Pixi in CI |
+| Pixi internals used by a custom pipe and batcher change between minors | The parts used are listed in 7.2 and were checked against the source of 8.16.0 and 8.23.0. Not done: a CI run against the lowest supported Pixi. |
 | WebGPU and WebGL2 differ on stencil or data textures | Both renderers in pixel parity from M2 |
 | Tight outlines cost load time | Sidecar from the optimizer. Load-time scan only in idle frames. |
 | More than 65,535 vertices in one template | 32-bit indices when needed |

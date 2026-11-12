@@ -39,11 +39,39 @@ export function countDraws() {
 }
 
 /**
+ * Counts how often Pixi builds the instructions of a render group. Read `count`, reset it to 0.
+ *
+ * A render group keeps a list of instructions, one per batch, mesh, mask or filter step, and runs
+ * that list every frame. It builds the list again when a child was added or removed, when
+ * `visible` or `renderable` changed below it, or when a render pipe says that an object no longer
+ * fits its instruction. That build walks every object of the group. The one place where it
+ * happens is `_buildInstructions` of the render group system, which is wrapped here. Checked
+ * against pixi.js 8.23.0. `counted` is false when a renderer has no such method.
+ */
+export function countBuilds(renderer) {
+    const system = renderer.renderGroup;
+    const builds = { count: 0, counted: typeof system?._buildInstructions === 'function' };
+
+    if (!builds.counted) return builds;
+    const original = system._buildInstructions;
+
+    system._buildInstructions = function (...args) {
+        builds.count++;
+
+        return original.apply(this, args);
+    };
+
+    return builds;
+}
+
+/**
  * A render texture of `size` by `size` pixels and the means to draw into it and read it back.
  * On WebGPU the texture is copied to a buffer: the extract system of Pixi goes through a 2D canvas
  * there, which divides by alpha and loses the raw values. `antialias` makes the target multisampled.
+ *
+ * @param builds What `countBuilds` returned, or null where nobody asks how often Pixi built instructions.
  */
-export function createStudio(PIXI, renderer, size, draws, antialias = false) {
+export function createStudio(PIXI, renderer, size, draws, antialias = false, builds = null) {
     const target = PIXI.RenderTexture.create({ width: size, height: size, resolution: 1, antialias });
     const isGpu = renderer.type === PIXI.RendererType.WEBGPU;
     const bytesPerRow = Math.ceil((size * 4) / 256) * 256;
@@ -83,30 +111,55 @@ export function createStudio(PIXI, renderer, size, draws, antialias = false) {
         return pixels;
     }
 
+    /** Draws a container alone on a background. Returns the draw calls and the instruction builds it took. */
+    function render(container, background) {
+        draws.count = 0;
+        if (builds) builds.count = 0;
+        renderer.render({ container, target, clear: true, clearColor: background.color });
+
+        return { draws: draws.count, builds: builds ? builds.count : 0 };
+    }
+
     return {
         size,
-        /** Draws a container alone on a background and reads nothing back. */
-        draw(container, background) {
-            renderer.render({ container, target, clear: true, clearColor: background.color });
-        },
+        /** True when the instruction builds of a render are counted, see `countBuilds`. */
+        countsBuilds: builds?.counted === true,
+        /**
+         * Draws a container alone on a background and reads nothing back.
+         *
+         * @returns The draw calls the render took, and how often Pixi built instructions for it.
+         */
+        draw: render,
         /**
          * Draws a container alone on a background and reads the picture back.
          *
-         * @returns The pixels and the draw calls the render took.
+         * @returns The pixels, the draw calls the render took and the instruction builds.
          */
         async shoot(container, background) {
-            draws.count = 0;
-            renderer.render({ container, target, clear: true, clearColor: background.color });
-            const count = draws.count;
+            const counted = render(container, background);
             const pixels = isGpu ? await readGpu() : renderer.texture.getPixels(target).pixels;
 
-            return { pixels, draws: count };
+            return { pixels, ...counted };
         },
     };
 }
 
 /**
+ * The pixels of a picture as 32-bit words, one per pixel, or null when its bytes do not start on
+ * a word. Two pixels are the same when their words are: that is one read where the bytes need four.
+ */
+function wordsOf(pixels) {
+    return pixels.byteOffset % 4 === 0 ? new Uint32Array(pixels.buffer, pixels.byteOffset, pixels.length >> 2) : null;
+}
+
+/** The word a picture holds for a pixel with these four bytes. */
+const wordOf = (bytes) => new Uint32Array(Uint8Array.from(bytes).buffer)[0];
+
+/**
  * Compares two pictures of the same size.
+ *
+ * Most pixels of two pictures that are compared here are the same, so a pixel is first read as a
+ * word from both. Only a pixel that differs is looked at channel by channel.
  *
  * @param alpha False leaves the alpha channel out.
  * @returns `max` is the largest channel difference. `differ` counts the pixels that differ at all,
@@ -125,9 +178,19 @@ export function compare(a, b, size, background, alpha = true) {
     let over8 = 0;
     let covered = 0;
     let worst = -1;
+    const wordsA = wordsOf(a);
+    const wordsB = wordsOf(b);
+    const words = wordsA !== null && wordsB !== null;
+    const cleared = wordOf(background.bytes);
 
     for (let i = 0, p = 0; i < a.length; i += 4, p++) {
         let d = 0;
+
+        // the same pixel in both pictures: it differs by nothing, and it is covered unless it is the background
+        if (words && wordsA[p] === wordsB[p]) {
+            if (wordsA[p] !== cleared) covered++;
+            continue;
+        }
 
         for (let c = 0; c < channels; c++) {
             const dc = Math.abs(a[i + c] - b[i + c]);
@@ -185,10 +248,18 @@ export function compare(a, b, size, background, alpha = true) {
     };
 }
 
+/** The halves of the pictures that were halved before. A picture is compared with several others. */
+const halves = new WeakMap();
+
 /** A picture at half its size: every pixel is the mean of a block of four. */
 function halve(pixels, size) {
     const half = size / 2;
+    const known = halves.get(pixels);
+
+    if (known) return known;
     const out = new Uint8ClampedArray(half * half * 4);
+
+    halves.set(pixels, out);
 
     for (let y = 0; y < half; y++) {
         for (let x = 0; x < half; x++) {
@@ -244,10 +315,19 @@ export function displacedShare(first, second, fullSize, background) {
         return true;
     };
     const drawn = (pixels, i) => background.bytes.some((byte, c) => pixels[i + c] !== byte);
+    // a half picture is an array of its own, so it starts on a word
+    const wordsA = wordsOf(a);
+    const wordsB = wordsOf(b);
+    const cleared = wordOf(background.bytes);
     let covered = 0;
     let count = 0;
 
     for (let p = 0; p < size * size; p++) {
+        // the same pixel in both: it is inside every range, and drawn unless it is the background
+        if (wordsA[p] === wordsB[p]) {
+            if (wordsA[p] !== cleared) covered++;
+            continue;
+        }
         if (drawn(a, p * 4) || drawn(b, p * 4)) covered++;
         if (!inside(a, b, p) || !inside(b, a, p)) count++;
     }
@@ -258,8 +338,15 @@ export function displacedShare(first, second, fullSize, background) {
 /** The number of pixels a picture drew on. */
 export function coverage(pixels, background) {
     const [r, g, b, a] = background.bytes;
+    const words = wordsOf(pixels);
+    const cleared = wordOf(background.bytes);
     let count = 0;
 
+    if (words !== null) {
+        for (let p = 0; p < words.length; p++) if (words[p] !== cleared) count++;
+
+        return count;
+    }
     for (let i = 0; i < pixels.length; i += 4) {
         if (pixels[i] !== r || pixels[i + 1] !== g || pixels[i + 2] !== b || pixels[i + 3] !== a) count++;
     }

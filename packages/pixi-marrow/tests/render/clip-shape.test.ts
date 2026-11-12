@@ -1,91 +1,18 @@
 import { SkeletonClipping as Clipping42, Triangulator as Triangulator42 } from 'spine-core-4.2';
 import { describe, expect, it } from 'vitest';
 import { MarrowError } from '../../src/base/errors';
-import { SPINE_VERSIONS, type SpineVersion } from '../../src/base/version';
+import { SPINE_VERSIONS } from '../../src/base/version';
 import { ClipShape, checkClip } from '../../src/render/clip-shape';
-import { clipAttachment, expectArea, type MaskSamples } from './clip-check';
+import { clipAttachment } from './clip-check';
 import { officialClipper } from './clip-official';
+import { around, expectShape, L_SHAPE, NO_DEFORM, random, shapeOf, trianglesOf, WORLD } from './clip-shape-rig';
 import { settle, WINDOW } from './heap';
 
 /*
- * The shape of a clip against the official `SkeletonClipping` of each version: the real clipper
- * says which points it keeps, and the triangles of the shape must cover those points. The bone
- * is not moved, so the polygon in the pose is the polygon of the attachment.
+ * The shape of a clip against the official `SkeletonClipping` of each version. The bone is not
+ * moved, so the polygon in the pose is the polygon of the attachment. The helpers are in
+ * `clip-shape-rig.ts`.
  */
-
-/** One bone that is not moved, in the layout of `PoseState.world`. */
-const WORLD = Float64Array.of(1, 0, 0, 1, 0, 0);
-const NO_DEFORM = new Float64Array(0);
-
-/** A small generator of the same numbers on every run, 0 to 1. */
-function random(seed: number): () => number {
-    let state = seed;
-
-    return () => {
-        state = (state + 0x6d2b79f5) | 0;
-        let t = Math.imul(state ^ (state >>> 15), 1 | state);
-
-        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-
-        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-}
-
-/** A polygon around a center: with a fixed radius it is convex, with random ones mostly not. The numbers fit 32 bits. */
-function around(corners: number, next: () => number, convex: boolean, clockwise = true): number[] {
-    const polygon = Array.from({ length: corners }, (_, i) => {
-        const angle = ((clockwise ? -2 : 2) * Math.PI * (i + (convex ? 0 : next() * 0.8))) / corners;
-        const radius = convex ? 40 : 5 + next() * 60;
-
-        return [Math.fround(12 + Math.cos(angle) * radius), Math.fround(-7 + Math.sin(angle) * radius)];
-    });
-
-    return polygon.flat();
-}
-
-const L_SHAPE = [0, 0, 0, 20, 10, 20, 10, 10, 20, 10, 20, 0];
-
-interface Flags {
-    inverse?: boolean;
-    convex?: boolean;
-}
-
-/** Shapes a polygon as one version does. */
-function shapeOf(shape: ClipShape, version: SpineVersion, polygon: readonly number[], flags: Flags = {}): ClipShape {
-    shape.compute(version, clipAttachment('clip', -1, polygon, flags), WORLD, 0, NO_DEFORM, 0);
-
-    return shape;
-}
-
-/** The triangles of a shape as plain numbers. */
-const trianglesOf = (shape: ClipShape): number[] => Array.from(shape.triangles.subarray(0, shape.indexCount));
-
-/** Shapes a polygon and compares the area it keeps with the official clipper of the version. */
-function expectShape(
-    shape: ClipShape,
-    version: SpineVersion,
-    polygon: readonly number[],
-    flags: Flags = {},
-): MaskSamples {
-    const attachment = clipAttachment('clip', -1, polygon, flags);
-    const clipper = officialClipper(version, 1);
-
-    shape.compute(version, attachment, WORLD, 0, NO_DEFORM, 0);
-    expect(clipper.start(0, attachment, polygon)).toBe(true);
-    const samples = expectArea(
-        {
-            positions: shape.polygon.subarray(0, shape.vertexCount * 2),
-            triangles: trianglesOf(shape),
-            inverse: shape.inverse,
-        },
-        polygon,
-        clipper,
-    );
-
-    clipper.end();
-
-    return samples;
-}
 
 describe.each(SPINE_VERSIONS)('ClipShape as Spine %s', (version) => {
     const legacy = version !== '4.3';
