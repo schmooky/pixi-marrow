@@ -39,13 +39,18 @@ export function countDraws() {
 }
 
 /**
- * Counts the buffer uploads of the page, on WebGL2 and on WebGPU, for every runtime alike. Read
- * `calls` and `bytes`, reset both to 0.
+ * Counts the buffer and texture uploads of the page, on WebGL2 and on WebGPU, for every runtime
+ * alike. Read `calls` and `bytes`, reset both to 0.
  *
  * An upload is a call of `bufferData` or `bufferSubData` with data, or of `GPUQueue.writeBuffer`.
  * A `bufferData` that only sets a size allocates and uploads nothing: it counts as a call of 0
  * bytes. Vertex, index and uniform buffers all go through these calls. A buffer that WebGPU
  * fills while it creates it is not seen here. That happens once per buffer, not per frame.
+ *
+ * A texture upload from an array counts too: `texImage2D` and `texSubImage2D` with a typed array,
+ * and `GPUQueue.writeTexture` with the bytes of the rows it writes. Data textures, like the bones
+ * of a skeleton that the vertex shader places, go to the GPU this way. An upload of an image
+ * counts as a call of 0 bytes.
  */
 export function countUploads() {
     const uploads = { calls: 0, bytes: 0 };
@@ -71,6 +76,16 @@ export function countUploads() {
     wrap(globalThis.WebGL2RenderingContext, 'bufferData', (args) => bytesOf(args[1], args[3], args[4]));
     wrap(globalThis.WebGL2RenderingContext, 'bufferSubData', (args) => bytesOf(args[2], args[3], args[4]));
     wrap(globalThis.GPUQueue, 'writeBuffer', (args) => bytesOf(args[2], args[3], args[4]));
+    // the pixels are the last argument but one where a source offset follows them
+    const texels = (args, at) => (ArrayBuffer.isView(args[at]) ? args[at].byteLength : 0);
+
+    wrap(globalThis.WebGL2RenderingContext, 'texImage2D', (args) => (args.length >= 9 ? texels(args, 8) : 0));
+    wrap(globalThis.WebGL2RenderingContext, 'texSubImage2D', (args) => (args.length >= 9 ? texels(args, 8) : 0));
+    wrap(globalThis.GPUQueue, 'writeTexture', ([, , layout, size]) => {
+        const rows = size?.height ?? size?.[1] ?? 1;
+
+        return (layout?.bytesPerRow ?? 0) * rows;
+    });
 
     return uploads;
 }

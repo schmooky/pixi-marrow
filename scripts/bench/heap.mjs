@@ -241,7 +241,7 @@ export async function measureSides(context, rig, { sides, counts, all }) {
  * Puts the memory readings of a rig into the combined runs of its sides, in the form the table
  * reads: the median, the smallest and the largest reading per instance.
  *
- * @param groups Per instance count the combined runs of `ours`, `official` and `mesh`.
+ * @param groups Per instance count the combined runs of `ours`, `official`, `mesh` and `gpu`.
  */
 export function addMemory(groups, memory) {
     const over = (readings, key) => {
@@ -255,7 +255,7 @@ export function addMemory(groups, memory) {
     };
 
     for (const group of groups) {
-        for (const name of ['ours', 'official', 'mesh']) {
+        for (const name of ['ours', 'official', 'mesh', 'gpu']) {
             const readings = memory.filter((it) => it.side === name && it.instances === group.instances && !it.error);
 
             if (!group[name] || readings.length === 0) continue;
