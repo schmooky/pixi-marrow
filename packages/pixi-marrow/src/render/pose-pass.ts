@@ -55,6 +55,8 @@ export interface PosePass {
     regrouped: boolean;
     /** True when the alpha of an entry with an opaque rectangle changed: it can hide other slots, or no longer. */
     recolored: boolean;
+    /** True when the vertex shader took an entry over from the CPU or gave it back: its shape changed, as a deform stopped. */
+    reshaped: boolean;
 }
 
 /**
@@ -81,6 +83,7 @@ export function createPosePass(): PosePass {
         framed: 0,
         regrouped: false,
         recolored: false,
+        reshaped: false,
     };
 }
 
@@ -236,6 +239,7 @@ export function poseEntries(
     pass.skinned = 0;
     pass.regrouped = false;
     pass.recolored = false;
+    pass.reshaped = false;
     for (let i = 0; i < count; i++) {
         const entry = i32(list, i);
         const slot = i32(slots, entry);

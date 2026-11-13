@@ -193,6 +193,8 @@ export class SkinPose {
     ): void {
         frameEntry(pass, template, state, entry, slot, undefined);
         colorEntry(pass, template, state, this.model.slots.hasDark, entry, slot, undefined);
+        // a deform that starts or stops moves the vertices although no bone moved
+        if (u8(this.colors, slot * 8 + 7) !== (gpu ? 0 : BY_CPU)) pass.reshaped = true;
         if (!this.paint(template, entry, slot, gpu)) return;
         this.painted++;
         this.low = Math.min(this.low, slot);
@@ -230,4 +232,5 @@ function clearColors(pass: PosePass, vertices: number): void {
     pass.framed = 0;
     pass.regrouped = false;
     pass.recolored = false;
+    pass.reshaped = false;
 }

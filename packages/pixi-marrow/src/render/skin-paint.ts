@@ -86,8 +86,12 @@ export class MeshSkin {
         this.textures.pose(pass, template, this.layout, state, visible, template.opaqueCount > 0);
     }
 
-    /** See `SkinPose.settle`. */
+    /**
+     * See `SkinPose.settle`. Does nothing for another template: the view draws in a batch then,
+     * where the CPU places every vertex, and the skin data is that of the layout it left.
+     */
     settle(template: Template, state: PoseState, visible: VisibleList): void {
+        if (template !== this.template) return;
         this.textures.settle(template, this.layout, state, visible);
     }
 

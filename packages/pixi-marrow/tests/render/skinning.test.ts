@@ -200,6 +200,59 @@ describe('skinning on the GPU', () => {
         expect(expectSkinned(rig).find((drawn) => drawn.slot === item.slot)?.cpu).toBe(false);
     });
 
+    it('counts a deform that stops as a move, so the bounds follow it although no bone moved', async () => {
+        const gpu = await loadSkinned('4.2/spineboy-pro.skel');
+        const cpu = await loadSkinned('4.2/spineboy-pro.skel', () => ({ skinning: 'cpu' }));
+        const box = (rig: Rig): number[] => {
+            const bounds = meshes(rig.view)[0]?.geometry.bounds;
+
+            return [bounds?.minX ?? 0, bounds?.minY ?? 0, bounds?.maxX ?? 0, bounds?.maxY ?? 0];
+        };
+        // the engine stamps the slot alone when a deform ends: the setup pose of the slots does that
+        const touch = (rig: Rig, slot: number): void => {
+            const { state } = rig.engine;
+
+            state.version = nextVersion(state.version);
+            state.slotStamps[slot] = state.version;
+            rig.view.update(state);
+        };
+
+        for (const rig of [gpu, cpu]) step(rig, 0);
+        const item = readDrawn(gpu).find((drawn) => drawn.attachment.type === 'mesh');
+
+        if (item === undefined || item.attachment.type !== 'mesh') throw new Error('no mesh');
+        const source = meshSource(gpu.lookup, item.attachment);
+        const length = source.bones === null ? source.vertices.length : (source.vertices.length / 3) * 2;
+
+        for (const rig of [gpu, cpu]) {
+            rig.engine.state.deform[item.slot] = new Float64Array(length).map((_, i) =>
+                source.bones === null ? (source.vertices[i] ?? 0) + 5000 : 5000,
+            );
+            rig.engine.state.deformLengths[item.slot] = length;
+            touch(rig, item.slot);
+        }
+        expect(box(gpu)).toEqual(box(cpu));
+        for (const rig of [gpu, cpu]) {
+            rig.engine.state.deformLengths[item.slot] = 0;
+            touch(rig, item.slot);
+        }
+        expect(box(gpu)).toEqual(box(cpu));
+    });
+
+    it('reads no skin data of an old layout in a batch, after a skin change laid the view out again', async () => {
+        const rig = await loadSkinned('4.2/goblins-pro.skel');
+
+        step(rig, 0);
+        step(rig, 0.1);
+        rig.view.renderMode = 'batched';
+        step(rig, 0.1);
+        rig.engine.setSkin(rig.model.skins.findIndex((skin) => skin.name === 'goblin'));
+        rig.engine.setupPoseSlots();
+        step(rig, 0.1);
+        expect(() => rig.view.container.getBounds()).not.toThrow();
+        expect(() => rig.view.parts).not.toThrow();
+    });
+
     it('shares the skin data of a layout between views and frees it with the last one', async () => {
         const rig = await loadSkinned('4.2/raptor-pro.skel');
         const textures = rig.atlas.pages.map(() => new Texture({ source: new TextureSource({ width: 1, height: 1 }) }));

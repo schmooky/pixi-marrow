@@ -397,7 +397,7 @@ export class SkeletonView implements DrawGate {
         if (element === undefined && mesh !== undefined) mesh.pose(pass, template, state, seen);
         else poseEntries(pass, template, state, bones, hasDark, seen, element);
         notePass(stats, pass);
-        const moved = pass.placed > 0 || pass.skinned > 0 || listed;
+        const moved = pass.placed > 0 || pass.skinned > 0 || pass.reshaped || listed;
 
         if (moved) this.boundsDirty = true;
         // a sequence on a page of another group of 8 moves its entry to another draw range
