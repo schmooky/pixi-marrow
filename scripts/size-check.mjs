@@ -48,6 +48,8 @@ const IMPORTS = {
             'marrowAtlasLoader',
             'Pixi Assets holds no',
             'marrow-debug',
+            // the baked playback loads on demand: a reason it gives
+            'the next update plays baked',
         ],
     ],
     // the headless core has no Pixi in it. pixi.js is external, so an import of it stays visible
@@ -64,6 +66,8 @@ const IMPORTS = {
     'perf (createProbe)': ['createProbe', ['pixi.js', 'marrow-skeleton'], '/perf'],
     // the overlays draw with pixi-silk, an optional peer that stays outside the bundle like pixi.js
     'debug (MarrowDebug)': ['MarrowDebug', [], '/debug'],
+    // the baker runs in Node: no Pixi and no code of the root import
+    'bake (bakeAnimation)': ['bakeAnimation', ['pixi.js', 'marrow-skeleton'], '/bake'],
 };
 
 // a scratch project that depends on the built package, so resolution goes through its package.json
@@ -74,12 +78,14 @@ symlinkSync(pkgDir, join(work, 'node_modules/pixi-marrow'), 'dir');
 /**
  * Chunks of the root import that load on demand and are listed by name, each found by a text
  * only its code holds: the mesh mode by the label of its meshes, the code for clips by a message
- * of the clip kernel, the cuts of overdraw by a field of the search for covered slots.
+ * of the clip kernel, the cuts of overdraw by a field of the search for covered slots, the baked
+ * playback by a reason it gives.
  */
 const NAMED_CHUNKS = {
     'the mesh mode': 'marrow-range',
     'the code for clips': 'A clip polygon without a vertex cannot clip',
     'the cuts of overdraw': 'coveredBy',
+    'the baked playback': 'the next update plays baked',
 };
 
 const kb = (n) => `${(n / 1024).toFixed(2)} kB`;

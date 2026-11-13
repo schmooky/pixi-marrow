@@ -110,7 +110,7 @@ function loopCompleted(entry: LegacyEntry, v41: boolean): boolean {
  * The official `queueEvents`: reports the fired events of an entry, with `complete` in its place
  * among them, and empties the list of fired events. The animation time of the entry is read from `SHARED`.
  */
-function queueEvents(player: LegacyPlayer, entry: LegacyEntry): void {
+export function queueEvents(player: LegacyPlayer, entry: LegacyEntry): void {
     const { animationStart, animationEnd } = entry;
     const fired = player.fired;
     const n = fired.length;
@@ -242,7 +242,7 @@ function addOutTimelines(player: LegacyPlayer, from: LegacyEntry, fired: EventKe
  * times its timelines are applied with at `LAST_TIME` and `TIME`. A reversed entry is applied at
  * the time counted from the end of its animation.
  */
-function setTimes(entry: LegacyEntry): void {
+export function setTimes(entry: LegacyEntry): void {
     const start = entry.animationStart;
     let time = start;
 

@@ -20,6 +20,7 @@ export interface AttachOptions {
   followAttachment?: boolean;
   followColor?: boolean;
 }
+export type BakeMode = "off" | "auto" | readonly string[];
 export declare class Bone<N extends MarrowNames = MarrowNames> {
   readonly name: N["bones"];
   private readonly state;
@@ -136,7 +137,7 @@ export declare class MarrowPerf {
   report(): Promise<PerfEntry[]>;
   memory(): Promise<PerfMemory>;
 }
-export declare class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpineLinks<N> {
+export declare class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysics<N> {
   readonly asset: MarrowAsset;
   readonly engine: PoseEngine;
   private readonly skeletonView;
@@ -144,8 +145,10 @@ export declare class MarrowSpine<N extends MarrowNames = MarrowNames> extends Sp
   private readonly book;
   private readonly pump;
   private ticking;
-  private afterReset;
   private tools;
+  private readonly pacer;
+  private readonly idle;
+  private lodOn;
   private probe;
   constructor(asset: MarrowAsset, options?: MarrowSpineOptions);
   static load<N extends MarrowNames = MarrowNames>(options: MarrowLoadOptions & MarrowSpineOptions): Promise<MarrowSpine<N>>;
@@ -161,8 +164,6 @@ export declare class MarrowSpine<N extends MarrowNames = MarrowNames> extends Sp
   set timeScale(value: number);
   get defaultMix(): number;
   set defaultMix(seconds: number);
-  get physics(): PhysicsMode;
-  set physics(mode: PhysicsMode);
   get autoUpdate(): boolean;
   set autoUpdate(value: boolean);
   setMix(from: N["animations"], to: N["animations"], seconds: number): void;
@@ -170,12 +171,9 @@ export declare class MarrowSpine<N extends MarrowNames = MarrowNames> extends Sp
   queue(name: N["animations"], options?: QueueOptions): Track<N>;
   stop(options?: StopOptions): void;
   update(seconds: number): void;
-  resetPhysics(): void;
-  physicsTranslate(x: number, y: number): void;
-  physicsRotate(x: number, y: number, degrees: number): void;
   override destroy(options?: DestroyOptions): void;
   private measure;
-  private endReset;
+  private pose;
   private draw;
   private onTick;
   private animationIndex;
@@ -196,7 +194,15 @@ export interface MarrowSpineOptions {
   renderMode?: "auto" | "mesh" | "batched";
   tightMesh?: "auto" | "on" | "off";
   occlusion?: "auto" | "off";
+  perf?: PerfPreset | PerfOptions;
+  skinning?: PerfSettings["skinning"];
+  bake?: PerfSettings["bake"];
+  idleCache?: PerfSettings["idleCache"];
+  offscreen?: PerfSettings["offscreen"];
+  updateRate?: PerfSettings["updateRate"];
+  lod?: PerfSettings["lod"];
 }
+export type OffscreenMode = "update" | "throttle" | "pause";
 export type OutlinesState = "given" | "scanned" | "scanning" | "unread" | "off";
 export interface PageRect {
   x: number;
@@ -204,19 +210,33 @@ export interface PageRect {
   width: number;
   height: number;
 }
+export declare const PERF_PRESETS: Readonly<Record<PerfPreset, Readonly<PerfSettings>>>;
 export interface PerfEntry {
   feature: PerfFeature;
   value: string;
   reason: string;
   animation?: string;
 }
-export type PerfFeature = "renderMode" | "motion" | "links" | "drawCalls" | "blend" | "pages" | "clipping" | "tightMesh" | "occlusion" | "outlines" | "darkTint" | "physics" | "constraints" | "bones" | "slots" | "vertices" | "uploads" | "layout";
+export type PerfFeature = "renderMode" | "motion" | "links" | "drawCalls" | "blend" | "pages" | "clipping" | "tightMesh" | "occlusion" | "outlines" | "darkTint" | "physics" | "bake" | "constraints" | "bones" | "slots" | "vertices" | "uploads" | "layout";
 export interface PerfMemory {
   shared: number;
   instance: number;
   gpu: number;
   gpuBuffers: number;
   gpuTextures: number;
+}
+export interface PerfOptions extends Partial<PerfSettings> {
+  preset?: PerfPreset;
+}
+export type PerfPreset = "exact" | "balanced" | "fast";
+export interface PerfSettings {
+  tightMesh: "auto" | "on" | "off";
+  skinning: SkinningMode;
+  bake: BakeMode;
+  idleCache: "off" | "auto";
+  offscreen: OffscreenMode;
+  updateRate: UpdateRate;
+  lod: "off" | "auto";
 }
 export type PhysicsMode = "none" | "reset" | "update" | "pose";
 export interface PlayOptions {
@@ -261,6 +281,7 @@ export interface SkeletonInfo {
   counts: SkeletonCounts;
   features: SkeletonFeature[];
 }
+export type SkinningMode = "auto" | "cpu" | "gpu";
 export declare class Slot<N extends MarrowNames = MarrowNames> {
   readonly name: N["slots"];
   readonly bone: N["bones"];
@@ -317,6 +338,7 @@ export type TrackFields = Partial<Record<TrackField, number | boolean | string>>
 export interface UpdateProbe {
   record(pose: number, geometry: number, events: number): void;
 }
+export type UpdateRate = "display" | number;
 export interface ViewStats {
   renderMode: DrawMode;
   drawCalls: number;
@@ -603,6 +625,10 @@ export interface PoseEngine {
   physicsTranslate(x: number, y: number): void;
   physicsRotate(x: number, y: number, degrees: number): void;
   update(dt: number): void;
+  source: PoseSource | null;
+  solo(): TrackEntry | null;
+  advance(dt: number, time?: Float64Array): void;
+  holdsSetup(animation: number, bones?: Uint8Array): boolean;
   takeEvents(): PoseEvent[];
 }
 export type PoseEngineFactory = () => PoseEngine;
@@ -614,6 +640,10 @@ export interface PoseEvent {
   key?: EventKey;
 }
 export type PoseEventType = "start" | "interrupt" | "end" | "dispose" | "complete" | "event";
+export interface PoseSource {
+  update(dt: number): boolean;
+  posed(): void;
+}
 export interface PoseState {
   readonly model: SkeletonModel;
   x: number;
@@ -790,6 +820,8 @@ export interface TrackEntry {
   readonly mixDuration: number;
   readonly reverse: boolean;
   readonly shortestRotation: boolean;
+  readonly animationStart: number;
+  readonly animationEnd: number;
 }
 export type TrackField = "loop" | "delay" | "trackTime" | "trackEnd" | "timeScale" | "alpha" | "mixTime" | "mixDuration" | "reverse" | "shortestRotation" | "eventThreshold" | "animationStart" | "animationEnd" | "animationLast" | "holdPrevious" | "mixBlend" | "attachmentThreshold" | "drawOrderThreshold" | "mixAttachmentThreshold" | "alphaAttachmentThreshold" | "mixDrawOrderThreshold" | "additive" | "keepHold";
 export type TrackFields = Partial<Record<TrackField, number | boolean | string>>;
@@ -961,6 +993,54 @@ export interface ProbeTarget {
   readonly stats: ViewStats;
   readonly destroyed: boolean;
 }
+```
+
+## pixi-marrow/bake
+
+```ts
+export declare function addBakedClips(asset: {
+  readonly model: SkeletonModel;
+}, clips: readonly BakedClip[]): void;
+export declare function bakeAnimation(model: SkeletonModel, animation: string | number, options?: BakeOptions): Promise<BakedClip>;
+export declare function bakeAnimations(model: SkeletonModel, options?: BakeOptions): Promise<BakedClip[]>;
+export declare function bakedBytes(clip: BakedClip): number;
+export interface BakedClip {
+  readonly animation: string;
+  readonly skins: readonly string[];
+  readonly fps: number;
+  readonly duration: number;
+  readonly frames: number;
+  readonly hash: string | null;
+  readonly boneCount: number;
+  readonly slotCount: number;
+  readonly placement: Float64Array;
+  readonly bones: Int16Array;
+  readonly world: Float32Array;
+  readonly colorSlots: Int16Array;
+  readonly colorMasks: Uint8Array;
+  readonly colors: Float32Array;
+  readonly darkSlots: Int16Array;
+  readonly darkMasks: Uint8Array;
+  readonly darkColors: Float32Array;
+  readonly attachmentSlots: Int16Array;
+  readonly attachmentNames: readonly (string | null)[];
+  readonly attachments: Int16Array;
+  readonly sequenceSlots: Int16Array;
+  readonly sequences: Int32Array;
+  readonly deformSlots: Int16Array;
+  readonly deformStarts: Int32Array;
+  readonly deformLengths: Int32Array;
+  readonly deforms: Float32Array;
+  readonly drawOrders: Int16Array;
+  readonly drawOrderFrames: Uint16Array;
+}
+export interface BakeOptions {
+  fps?: number;
+  skins?: readonly string[];
+  placement?: readonly [number, number, number, number];
+}
+export declare function decodeBakedClips(bytes: Uint8Array): BakedClip[];
+export declare function encodeBakedClips(clips: readonly BakedClip[]): Uint8Array;
 ```
 
 ## pixi-marrow/debug

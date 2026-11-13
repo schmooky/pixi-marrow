@@ -17,6 +17,16 @@ export type {
     StopOptions,
     UpdateProbe,
 } from './api/options';
+export type {
+    BakeMode,
+    OffscreenMode,
+    PerfOptions,
+    PerfPreset,
+    PerfSettings,
+    SkinningMode,
+    UpdateRate,
+} from './api/presets';
+export { PERF_PRESETS } from './api/presets';
 export type { PerfEntry, PerfFeature } from './api/report-base';
 export type { Slot } from './api/slot';
 export { MarrowSpine } from './api/spine';

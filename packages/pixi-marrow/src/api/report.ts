@@ -355,6 +355,24 @@ function layoutRow({ stats }: ReportSource): PerfEntry {
     };
 }
 
+/** The row about baked playback: how many updates played baked, and why the last one did or did not. */
+function bakeRow({ bake }: ReportSource): PerfEntry {
+    if (bake === null) {
+        return {
+            feature: 'bake',
+            value: 'off',
+            reason: 'the option bake is "off", or the code of baked playback has not loaded yet: the pose engine poses every update',
+        };
+    }
+    const { baked, unbaked, last, bytes } = bake;
+
+    return {
+        feature: 'bake',
+        value: `${baked} of ${baked + unbaked} updates baked`,
+        reason: `last update: ${last}. The baked clips of the asset take ${(bytes / 1024).toFixed(1)} KB`,
+    };
+}
+
 /**
  * The rows of the perf report of one instance, in a fixed order.
  *
@@ -374,6 +392,7 @@ export function buildReport(source: ReportSource): PerfEntry[] {
         ...cutRows(source),
         darkTintRow(source),
         physicsRow(source),
+        bakeRow(source),
         constraintsRow(source),
         bonesRow(source),
         slotsRow(source),

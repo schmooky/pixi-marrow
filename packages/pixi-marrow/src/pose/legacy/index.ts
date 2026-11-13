@@ -1,11 +1,13 @@
 import { MarrowError } from '../../base/errors';
 import type { AttachmentData } from '../../model/attachments';
 import type { SkeletonModel } from '../../model/model';
-import type { PhysicsMode, PoseEngine, PoseEvent, SlotPose, TrackEntry, TrackFields } from '../engine';
+import type { PhysicsMode, PoseEngine, PoseEvent, PoseSource, SlotPose, TrackEntry, TrackFields } from '../engine';
 import { changeSkin, combineSkins } from '../shared/combine-skins';
 import { checkDark, checkSlot, writeColor } from '../shared/slot-writes';
 import { createPoseState, type PoseState, poseStateBytes } from '../state';
+import { advanceTracks, holdsSetup, poseBehind, soloEntry } from './advance';
 import { applyTracks } from './apply';
+import { SHARED, TIME } from './curves';
 import { configureEntry, LegacyEntry } from './entry';
 import { updateWorldTransform } from './pass';
 import { rotatePhysics, translatePhysics } from './physics-state';
@@ -23,6 +25,7 @@ import { clipOf, type Rig, rigOf } from './rig';
 import { initPose, setBonesToSetupPose, setSkin, setSlotAttachment, setSlotsToSetupPose } from './skeleton';
 import { createSolver, type Solver, stirPhysics } from './solver';
 import { closeStamps, openStamps, stampSlot } from './stamps';
+import type { Clip } from './timelines';
 import { updateTracks } from './update';
 
 /** What `takeEvents` returns when nothing happened. Frozen, because every engine returns this one list. */
@@ -36,10 +39,17 @@ const PHYSICS_MODES: readonly PhysicsMode[] = ['none', 'reset', 'update', 'pose'
 /** The pose engine for 4.1 and 4.2: the official `AnimationState` and `Skeleton` of those versions in one object. */
 class LegacyEngine implements PoseEngine {
     readonly state: PoseState;
+    source: PoseSource | null = null;
     private readonly rig: Rig;
     private readonly solver: Solver;
     private readonly player: LegacyPlayer;
     private mode: PhysicsMode = 'update';
+    /**
+     * The animation that {@link advance} left the animated pose of the bones behind, or null.
+     * Its time is in {@link behindTime}.
+     */
+    private behind: Clip | null = null;
+    private behindTime = 0;
     /**
      * The version of the pose as this engine last left it. Another version means that someone else
      * wrote the pose. Only {@link begin} reads it and only {@link end} writes it, so that no call
@@ -163,15 +173,18 @@ class LegacyEngine implements PoseEngine {
                 fix: 'Pass an entry that setAnimation or addAnimation of this engine returned.',
             });
         }
+        this.catchUp();
         configureEntry(entry, fields, this.rig.v41);
         this.player.stirred = true;
     }
 
     clearTrack(track: number): void {
+        this.catchUp();
         clearTrack(this.player, track);
     }
 
     clearTracks(): void {
+        this.catchUp();
         clearTracks(this.player);
     }
 
@@ -225,6 +238,7 @@ class LegacyEngine implements PoseEngine {
     }
 
     setupPose(): void {
+        this.behind = null;
         this.begin();
         setBonesToSetupPose(this.rig, this.state, this.solver);
         setSlotsToSetupPose(this.rig, this.state, this.solver);
@@ -232,6 +246,7 @@ class LegacyEngine implements PoseEngine {
     }
 
     setupPoseBones(): void {
+        this.behind = null;
         this.begin();
         setBonesToSetupPose(this.rig, this.state, this.solver);
         this.changed();
@@ -244,8 +259,47 @@ class LegacyEngine implements PoseEngine {
     }
 
     update(dt: number): void {
+        if (this.source?.update(dt) === true) return;
+        this.pose(dt);
+        this.source?.posed();
+    }
+
+    solo(): TrackEntry | null {
+        return soloEntry(this.player);
+    }
+
+    advance(dt: number, time?: Float64Array): void {
+        this.begin();
+        this.behind = advanceTracks(this.player, dt);
+        this.behindTime = Number(SHARED[TIME]);
+        if (time !== undefined) time[0] = Number(SHARED[TIME]);
+        this.state.time += dt;
+        this.solver.all = true;
+        this.end();
+    }
+
+    holdsSetup(animation: number, bones?: Uint8Array): boolean {
+        return holdsSetup(this.player, clipOf(this.rig, animation), bones);
+    }
+
+    /**
+     * Brings the animated pose of the bones and the constraints to the time {@link advance} left
+     * it behind. A baked frame wrote the slots and the world transforms, not these. A command
+     * whose result depends on them calls it first: one that clears a track keeps the pose, and a
+     * change of alpha mixes from it. A track change that mixes does not need it, because the
+     * entry it mixes from writes those values from the setup pose.
+     */
+    private catchUp(): void {
+        if (this.behind === null) return;
+        poseBehind(this.player, this.behind, this.behindTime);
+        this.behind = null;
+    }
+
+    /** The update without a source: the official `AnimationState.update` and `apply`, then the world transforms. */
+    private pose(dt: number): void {
         const { state, player, solver } = this;
 
+        this.behind = null;
         this.begin();
         // a test asks for the whole update: nothing counts as known to be as it was
         if (!this.rig.skips) {
