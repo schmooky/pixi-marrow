@@ -204,7 +204,7 @@ export function printAb(groups) {
         ],
     ];
 
-    for (const { instances, ours, official, mesh } of groups) {
+    for (const { instances, ours, official, mesh, idle } of groups) {
         // a side without a memory reading has none to print: below 20 instances, or with --memory=off
         const memory = (runs) => kilobytes(runs);
         const memoryRatio = (a, b) => ratio(a, b);
@@ -213,6 +213,7 @@ export function printAb(groups) {
             ['ours', ours],
             ['official', official],
             ['mesh', mesh],
+            ['idle', idle],
         ]) {
             if (!side) continue;
             rows.push([
@@ -240,6 +241,7 @@ export function printAb(groups) {
         }
         if (ours && official) rows.push(ratioRow('ours/official', ours, official, memoryRatio));
         if (ours && mesh) rows.push(ratioRow('ours/mesh', ours, mesh, memoryRatio));
+        if (idle && ours) rows.push(ratioRow('idle/ours', idle, ours, memoryRatio));
     }
     print(rows, [1]);
 }

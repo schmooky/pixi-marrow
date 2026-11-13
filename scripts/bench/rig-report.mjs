@@ -52,6 +52,7 @@ export function reportAb(blocks, memory, { counts, renderMode }) {
         ours: combined(blocks, (b) => b.side === 'ours' && b.instances === instances),
         official: combined(blocks, (b) => b.side === 'official' && b.instances === instances),
         mesh: combined(blocks, (b) => b.side === 'mesh' && b.instances === instances),
+        idle: combined(blocks, (b) => b.side === 'idle' && b.instances === instances),
     }));
     const largest = Math.max(...counts);
     const covered = (side, instances) =>
@@ -60,6 +61,15 @@ export function reportAb(blocks, memory, { counts, renderMode }) {
     addMemory(groups, memory);
     printAb(groups);
     console.log(`    ${describeRenderMode(blocks, counts, renderMode)}`);
+    for (const instances of counts) {
+        const block = blocks.find((b) => b.side === 'idle' && b.instances === instances && b.ours);
+
+        if (!block) continue;
+        const { shown = 0, bytes = 0 } = block.ours.idle ?? {};
+        const each = shown > 0 ? `, ${(bytes / shown / 1024).toFixed(1)} KB of texture per image` : '';
+
+        console.log(`    idle cache, ${instances} instances: ${shown} show an image after the warm-up${each}`);
+    }
     const split = describeSplit(memory.filter((reading) => reading.instances === largest));
 
     if (split.length > 0) console.log(`    heap of an instance among ${largest}, in KB:`);
