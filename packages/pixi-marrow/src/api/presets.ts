@@ -45,7 +45,8 @@ export interface PerfSettings {
     updateRate: UpdateRate;
     /**
      * `auto` leaves physics out while the skeleton is drawn smaller than 96 pixels across, so the
-     * bones keep the pose of the animations. `off` (the `exact` default) always runs physics.
+     * bones keep the pose of the animations. Physics comes back at 120 pixels, with a reset. `off`
+     * (the `exact` default) always runs physics.
      */
     lod: 'off' | 'auto';
 }
