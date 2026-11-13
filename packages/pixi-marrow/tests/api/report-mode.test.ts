@@ -92,7 +92,7 @@ describe('the render mode of a display object', () => {
         expect(spine.renderMode).toBe('auto');
     });
 
-    it('is the first row of the report, with the reason for the mode', async () => {
+    it('is the first row of the report after the perf settings and the pacing, with the reason for the mode', async () => {
         const small = await fixtureAsset('4.2/speedy-ess.skel');
         const large = await fixtureAsset('4.2/raptor-pro.skel');
         const clipped = await coverAsset([
@@ -126,7 +126,10 @@ describe('the render mode of a display object', () => {
 
         for (const [spine, value, reason] of cases) {
             spine.update(FRAME);
-            expect((await spine.perf.report())[0]).toEqual({ feature: 'renderMode', value, reason });
+            const rows = await spine.perf.report();
+
+            expect(rows.slice(0, 3).map((entry) => entry.feature)).toEqual(['perf', 'pacing', 'renderMode']);
+            expect(rows[2]).toEqual({ feature: 'renderMode', value, reason });
             expect(spine.stats.renderMode).toBe(value);
         }
         // auto says which side of its limit the skeleton is on
