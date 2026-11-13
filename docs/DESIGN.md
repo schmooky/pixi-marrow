@@ -468,7 +468,7 @@ Pose:
 
 Planned here and not built, each with its measurement in section 2: keyframe cursors, constant timelines folded at load, and leaving out bones or timelines that nobody reads. The pose state is public and must equal the official one in every number.
 
-Each item is held by a check. Pose parity is exact, with the stamp check after every call. A test proves that an update allocates nothing. The pixel check compares both render modes with the official runtime.
+Each item is held by a check. Pose parity is exact, with the stamp check after every call. Each engine runs the parity scripts with its skipping on and off. A test proves that an update allocates nothing. The pixel check compares both render modes with the official runtime, and the exact cuts on and off.
 
 ### 8.2 Automatic with override
 
