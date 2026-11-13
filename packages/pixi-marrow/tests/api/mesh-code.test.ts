@@ -8,6 +8,9 @@ import { pageTextures } from '../render/cuts';
 import { coverAsset } from './cover-asset';
 import { FRAME, fixtureAsset } from './helpers';
 
+/** The row of the report about the render mode. The row of the perf settings comes before it. */
+const isModeRow = (entry: { feature: string }): boolean => entry.feature === 'renderMode';
+
 /*
  * The code of the mesh mode loads on demand. Here its chunk waits until a test lets it in, so
  * that the time before it arrives can be looked at. The tests run in order.
@@ -76,7 +79,7 @@ describe('the code of the mesh mode', () => {
 
         spine.update(FRAME);
         expect(spine.stats.renderMode).toBe('batched');
-        expect((await spine.perf.report())[0]?.reason).toBe(
+        expect((await spine.perf.report()).find(isModeRow)?.reason).toBe(
             `the option renderMode is "auto": the skeleton has 44 vertices in a batch, which is at most 1024. ${SHARES}`,
         );
         expect(meshCodeState()).toBe('idle');
@@ -96,7 +99,7 @@ describe('the code of the mesh mode', () => {
 
         spine.update(FRAME);
         expect(spine.stats).toMatchObject({ renderMode: 'batched', drawCalls: 1 });
-        expect((await spine.perf.report())[0]).toEqual({
+        expect((await spine.perf.report()).find(isModeRow)).toEqual({
             feature: 'renderMode',
             value: 'batched',
             reason: 'the option renderMode is "mesh". The code of the mesh mode is loading, and until it is there the skeleton draws in a batch',
@@ -107,7 +110,7 @@ describe('the code of the mesh mode', () => {
         expect(meshCodeState()).toBe('loaded');
         // the instance that waited changes over with its next update, in the middle of its animation
         expect(spine.stats.renderMode).toBe('batched');
-        expect((await spine.perf.report())[0]?.reason).toBe(
+        expect((await spine.perf.report()).find(isModeRow)?.reason).toBe(
             'the option renderMode is "mesh". The code of the mesh mode has loaded, and the skeleton changes over with its next update. Until then it draws in a batch',
         );
         const { time } = run;
@@ -115,7 +118,7 @@ describe('the code of the mesh mode', () => {
         spine.update(FRAME);
         expect(spine.stats).toMatchObject({ renderMode: 'mesh', drawCalls: 1 });
         expect(run.time).toBeCloseTo(time + FRAME, 10);
-        expect((await spine.perf.report())[0]).toEqual({
+        expect((await spine.perf.report()).find(isModeRow)).toEqual({
             feature: 'renderMode',
             value: 'mesh',
             reason: `the option renderMode is "mesh". ${OWNS}`,
@@ -124,7 +127,7 @@ describe('the code of the mesh mode', () => {
         const large = create(asset);
 
         expect(large.stats.renderMode).toBe('mesh');
-        expect((await large.perf.report())[0]?.reason).toBe(
+        expect((await large.perf.report()).find(isModeRow)?.reason).toBe(
             `the option renderMode is "auto": the skeleton has ${MANY.length * 4} vertices in a batch, which is more than 1024. ${OWNS}`,
         );
     });

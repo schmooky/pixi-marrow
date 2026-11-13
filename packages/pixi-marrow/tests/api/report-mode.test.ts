@@ -8,6 +8,9 @@ import type { CoverSlot } from '../render/cover-rig';
 import { coverAsset } from './cover-asset';
 import { FRAME, fixtureAsset } from './helpers';
 
+/** The row of the report about the render mode. The row of the perf settings comes before it. */
+const isModeRow = (entry: { feature: string }): boolean => entry.feature === 'renderMode';
+
 /** Slots that lie apart, so that none covers another. */
 const apart = (slots: readonly CoverSlot[]): CoverSlot[] =>
     slots.map((slot, index) => ({ ...slot, at: [index * 400, 0] }));
@@ -92,7 +95,7 @@ describe('the render mode of a display object', () => {
         expect(spine.renderMode).toBe('auto');
     });
 
-    it('is the first row of the report, with the reason for the mode', async () => {
+    it('is a row of the report, with the reason for the mode', async () => {
         const small = await fixtureAsset('4.2/speedy-ess.skel');
         const large = await fixtureAsset('4.2/raptor-pro.skel');
         const clipped = await coverAsset([
@@ -131,7 +134,7 @@ describe('the render mode of a display object', () => {
 
         for (const [spine, value, reason] of cases) {
             spine.update(FRAME);
-            expect((await spine.perf.report())[0]).toEqual({ feature: 'renderMode', value, reason });
+            expect((await spine.perf.report()).find(isModeRow)).toEqual({ feature: 'renderMode', value, reason });
             expect(spine.stats.renderMode).toBe(value);
         }
         // auto says which side of its limit the skeleton is on
@@ -260,5 +263,18 @@ describe('the render mode of a display object', () => {
         stage.render();
         expect(stage.counts.draws).toHaveLength(1);
         expect(spine.stats.drawCalls).toBe(1);
+    });
+
+    it('counts the uploads of the bones of a skeleton whose vertex shader places its vertices', async () => {
+        const spine = create(await fixtureAsset('4.2/speedy-ess.skel'), { renderMode: 'mesh', skinning: 'gpu' });
+
+        spine.play('run', { loop: true });
+        for (let frame = 0; frame < 4; frame++) spine.update(FRAME);
+        expect(spine.stats).toMatchObject({ renderMode: 'mesh', boneUploads: 5, positionUploads: 0 });
+        expect(await row(spine, 'uploads')).toEqual({
+            feature: 'uploads',
+            value: '1 bone, 0 position, 0.2 color, 0 uv per update',
+            reason: '0 position, 1 color and 0 uv uploads in 5 updates that drew, 2 rewrites of the index buffers, 5 uploads of the bones',
+        });
     });
 });
