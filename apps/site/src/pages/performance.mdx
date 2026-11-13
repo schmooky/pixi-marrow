@@ -1,0 +1,58 @@
+---
+layout: ../layouts/Docs.astro
+title: Performance
+description: The presets, the settings that trade exactness for speed, and how to see which are in effect.
+---
+
+import Snippet from '../components/Snippet.astro';
+import source from '../snippets/performance.ts?raw';
+
+Most of the speed of pixi-marrow needs no option. See [what is automatic](/good-to-know/#what-is-automatic). The settings on this page change the timing, the memory or the picture, so each one waits until you ask for it.
+
+## Presets
+
+<Snippet source={source} regions="preset" />
+
+`perf` takes `exact`, `balanced` or `fast`. `exact` is the default and changes nothing. A skeleton then looks and moves as in the official runtime.
+
+| Setting | `exact` | `balanced` | `fast` |
+|---|---|---|---|
+| `tightMesh` | `auto` | `on` | `on` |
+| `bake` | `off` | `auto` | `auto` |
+| `idleCache` | `off` | `auto` | `auto` |
+| `offscreen` | `update` | `throttle` | `pause` |
+| `updateRate` | `display` | `display` | 30 for batched skeletons |
+| `lod` | `off` | `off` | `auto` |
+| `skinning` | `auto` | `auto` | `auto` |
+
+## Change one setting
+
+<Snippet source={source} regions="settings" />
+
+A `perf` object starts from its `preset` and changes the settings it names. An option given by name wins over both. A value that does not exist throws a `MarrowError` with the closest valid name.
+
+## The settings
+
+- **`offscreen`.** A skeleton is off the screen when its bounds lie outside the screen, or when no render reached it for 2 updates. `throttle` updates it 4 times a second with the time that passed, so events fire late. `pause` stops its time until it is back.
+- **`updateRate`.** A number poses the skeleton at most that many times a second, with the time of the frames in between. Motion steps at low rates. The rate of `fast` applies to batched skeletons only, unless you set it by name.
+- **`lod`.** `auto` leaves physics out while the skeleton is drawn smaller than 96 pixels across. Physics is reset when it grows again, so nothing jumps.
+- **`idleCache`.** `auto` draws a skeleton that rested for 30 updates as one image, until its pose or its place changes. The image takes 4 bytes per pixel of its box on the screen. A slot that multiplies or screens keeps the skeleton live.
+- **`tightMesh`.** `on` draws every region as the polygon around its visible pixels. Some pixels move by 1 of 255 levels.
+- **`bake`.** `auto` plays an animation from frames baked once, while it plays alone on track 0. The engine still runs the tracks and fires the events. Between two frames, 60 a second, the frame before is shown. A skin with physics or a slider is never baked.
+- **`skinning`.** `gpu` places the vertices of the mesh mode in the vertex shader from the bones, so a moving skeleton uploads its bones and not its vertices. On the desktop it measured slower than the CPU, so `auto` stays `cpu`.
+
+## Bake at build time
+
+<Snippet source={source} regions="bake" />
+
+`bakeAnimations` of `pixi-marrow/bake` runs in Node too, so the clips can be baked at build time and shipped as a file. `addBakedClips` hands them to an asset, and its instances play them in place of baking. A clip costs 23 KB to 0.9 MB on the example rigs.
+
+## See which are in effect
+
+<Snippet source={source} regions="report" />
+
+The first two rows of the report are `perf` and `pacing`. `perf` names the preset, the settings, and the ones you gave by name. `pacing` says how often the skeleton updates right now, and why. `pacingStatus()` returns the same as an object.
+
+## Not measured yet
+
+The presets were measured on one desktop machine. There are no numbers for phones yet, so `skinning: 'auto'` stays on the CPU and no preset changes it.

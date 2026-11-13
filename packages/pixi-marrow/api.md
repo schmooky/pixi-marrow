@@ -146,6 +146,7 @@ export declare class MarrowSpine<N extends MarrowNames = MarrowNames> extends Sp
   private readonly pump;
   private ticking;
   private tools;
+  readonly perfSettings: ResolvedPerf;
   private readonly pacer;
   private readonly idle;
   private lodOn;
@@ -174,6 +175,7 @@ export declare class MarrowSpine<N extends MarrowNames = MarrowNames> extends Sp
   override destroy(options?: DestroyOptions): void;
   private measure;
   private pose;
+  pacingStatus(): PacingStatus;
   private draw;
   private onTick;
   private animationIndex;
@@ -210,14 +212,13 @@ export interface PageRect {
   width: number;
   height: number;
 }
-export declare const PERF_PRESETS: Readonly<Record<PerfPreset, Readonly<PerfSettings>>>;
 export interface PerfEntry {
   feature: PerfFeature;
   value: string;
   reason: string;
   animation?: string;
 }
-export type PerfFeature = "renderMode" | "motion" | "links" | "drawCalls" | "blend" | "pages" | "clipping" | "tightMesh" | "occlusion" | "outlines" | "darkTint" | "physics" | "bake" | "constraints" | "bones" | "slots" | "vertices" | "uploads" | "layout";
+export type PerfFeature = "perf" | "pacing" | "renderMode" | "motion" | "links" | "drawCalls" | "blend" | "pages" | "clipping" | "tightMesh" | "occlusion" | "outlines" | "darkTint" | "physics" | "bake" | "constraints" | "bones" | "slots" | "vertices" | "uploads" | "layout";
 export interface PerfMemory {
   shared: number;
   instance: number;
@@ -317,6 +318,16 @@ export declare abstract class SpineLinks<N extends MarrowNames = MarrowNames> ex
   private parts;
   private linked;
 }
+export declare abstract class SpinePhysics<N extends MarrowNames = MarrowNames> extends SpineLinks<N> {
+  abstract readonly engine: PoseEngine;
+  private afterReset;
+  get physics(): PhysicsMode;
+  set physics(mode: PhysicsMode);
+  resetPhysics(): void;
+  physicsTranslate(x: number, y: number): void;
+  physicsRotate(x: number, y: number, degrees: number): void;
+  protected settleReset(): void;
+}
 export interface StopOptions {
   track?: number;
   mix?: number;
@@ -347,6 +358,7 @@ export interface ViewStats {
   indexRebuilds: number;
   positionUploads: number;
   colorUploads: number;
+  boneUploads: number;
   uvUploads: number;
   indices: number;
   bufferBytes: number;

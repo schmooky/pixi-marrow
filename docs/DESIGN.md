@@ -339,7 +339,7 @@ Both are built, the batched mode in M5.
 | Mode | For | Draw calls | Vertices are placed |
 |---|---|---|---|
 | batched | Skeletons of up to 1024 batch vertices | Shared with the other pixi-marrow skeletons of the render group | On the CPU, into the buffer of the batch |
-| mesh | Larger skeletons | One per draw range of every instance | In the vertex shader |
+| mesh | Larger skeletons | One per draw range of every instance | In skeleton space on the CPU and moved by the vertex shader, or from the bones in the vertex shader with `skinning: 'gpu'` |
 
 `renderMode: 'auto'` is the default. It picks the batched mode when the skeleton needs at most 1024 vertices in a batch and the renderer can sample the pages of a run. `mesh` and `batched` force one side. The property can change at run time. `await spine.perf.report()` names the mode and the reason: `small`, `large`, `limit` or `option`.
 
@@ -361,6 +361,10 @@ Limits, stated:
 - A skeleton can grow its room, which rebuilds the instructions once. A clipped animation settles within its first turn.
 
 The batched mode relies on these parts inside Pixi, checked against the source of 8.16.0 and 8.23.0. The `Batcher` base class and the fields of a batch element. `renderPipes.batch` and the protocol of a render pipe. `Container.onRender` and `ViewContainer`. The bind layout of the batch adaptors and `renderer.limits.maxBatchableTextures`. The official runtime builds on the same parts.
+
+GPU skinning, built in M7. With `skinning: 'gpu'` the vertex shader of the mesh mode places the vertices from the bone matrices. A layout holds an influence texture of 16 bytes per influence for all of its instances, and weighted meshes are covered with any number of bones a vertex. An instance holds a bone texture of 24 bytes a bone and a palette of 8 bytes a slot. A moving skeleton uploads the bones whose stamp moved, and a color key writes the palette of its slot. The CPU still places a mesh with a deform and a region with a sequence, in the same draw call. Code that reads positions, such as the bounds, the debug overlays and the search for covered slots, gets them placed on the CPU on demand. The skinning is fixed when the display object is made. The code is in the chunk of the mesh mode, which grew from 5.7 to 8.9 kB gzip.
+
+Measured on the bench machine with 200 instances, `skinning: 'gpu'` cut the uploads of raptor-pro by 61 to 64 percent. The frame took 16 percent longer on WebGL2, and on WebGPU it was equal within the spread. Most of the extra time is the upload of one bone texture and one palette per instance, 200 to 400 texture uploads a frame. One shared bone texture per renderer is the next thing to try. `auto` stays `cpu` until the A/B on phones.
 
 Both modes rely on two more parts for a lost context, see 8.7. The `prerender` runner of a renderer. `Container.isRenderable`, which Pixi's mesh pipe asks right before it draws a mesh.
 
@@ -479,12 +483,13 @@ Each item is held by a check. Pose parity is exact, with the stamp check after e
 | `renderMode` | `auto`, `mesh`, `batched` | Batch vertices of the skeleton: up to 1024 is batched | Within the pixel check. The modes differ in rare pixels, see 7.2. |
 | `tightMesh` | `auto`, `on`, `off` | `auto` drops regions without a visible pixel. `on` is opt-in, see 8.3. | Yes for `auto` |
 | `occlusion` | `auto`, `off` | Opaque rectangles present, the 4 largest occluders, world area of at least 1024 | Yes |
+| `skinning` | `auto`, `cpu`, `gpu` | `auto` is `cpu` until phones are measured. `gpu` works in the mesh mode, see 7.2. | Within the pixel check |
 
-Planned and not built yet: `skinning` (`auto`, `cpu`, `gpu`) comes with GPU skinning in M7, and `instancing` with baked clips in M8. `sharedPose` was measured in M6 and not built, see section 2.
+Not built: `instancing`, which needs GPU skinning that pays first. `sharedPose` was measured in M6 and not built, see section 2.
 
 ### 8.3 Opt-in (changes timing, memory or look)
 
-Only `tightMesh: 'on'` is built. `bake` and `offscreen` come with M8 and the `balanced` preset. `idleCache`, `updateRate` and `lod` come with M9 and the `fast` preset.
+All six are built, `idleCache`, `offscreen`, `updateRate` and `lod` in M9. Each is an option of its own and a setting of `perf`.
 
 | Option | Values | Trade |
 |---|---|---|
@@ -493,17 +498,23 @@ Only `tightMesh: 'on'` is built. `bake` and `offscreen` come with M8 and the `ba
 | `idleCache` | `off`, `auto` | Idle skeleton drawn as one quad. Uses texture memory. |
 | `offscreen` | `update`, `throttle`, `pause` | Less work off screen. Events fire late or not at all while paused. |
 | `updateRate` | `display` or a number of Hz | Fewer pose updates. Motion steps at low rates. |
-| `lod` | `off`, `auto` | Drops physics and deform below an on-screen size. Visible on close inspection. |
+| `lod` | `off`, `auto` | Drops physics below 96 pixels on the screen. Deform stays. Visible on close inspection. |
+
+`bake`, built in M8. An update of one entry alone on track 0 at alpha 1 writes a frame baked at 60 frames per second, with no timeline and no constraint. The engine still runs the tracks and fires every event. At a sample time the pose equals the played one rounded to 32 bits. Between samples the frame before is shown. A skin with a physics constraint or a slider bakes nothing. The local pose of a bone lags while frames play. A clip holds 62 percent of the bones of the fixtures and costs 23 KB to 0.9 MB per animation, shared per asset and skin. `auto` bakes an animation the first time it can play baked. `pixi-marrow/bake` bakes at build time, and `addBakedClips` hands the clips to an asset.
+
+`idleCache: 'auto'` waits 30 updates in which the pose version, the layout and the render mode did not change, then two renders at the same place. It then draws the skeleton once into a render texture on the pixel grid of its target, and a sprite shows it in place of the view. The image is exact for its place and for moves by whole pixels. Any other move, a scale change, an ancestor alpha or blend mode, an attached container, another renderer or a restored context draws the skeleton live again in the same frame. A visible multiply or screen slot, an image over 2048 pixels or a multisampled target keeps it live. An image costs 4 bytes per pixel of its box on the target, and a dropped one lets go of its pixels. With 200 resting instances on the bench machine a frame takes 0.50 to 0.67 of the live time, and 0.93 for the small rig speedy-ess.
+
+`offscreen` counts a skeleton as off the screen when its bounds lie outside the screen of the renderer, or when no render reached it in 2 updates. `throttle` updates it 4 times a second with the time that passed. `pause` loses the time. `updateRate` gathers the time of the updates it leaves out. `lod: 'auto'` runs the engine with physics `none` below 96 pixels across, and resets physics when the skeleton grows again so that nothing jumps.
 
 ### 8.4 One knob
 
-`perf: 'exact' | 'balanced' | 'fast'`, or a `PerfOptions` object that starts from a preset. Not built yet. `balanced` comes with M8 and `fast` with M9. A skeleton today does what `exact` describes.
+`perf: 'exact' | 'balanced' | 'fast'`, or a `PerfOptions` object that starts from a preset. Built in M9. An option given by name wins, then a setting of the `perf` object, then its preset, then `exact`. A preset or a value that does not exist throws a `MarrowError` with the closest name. `perfSettings` on the display object holds the result, and the first two rows of the report name it.
 
 | Preset | Sets |
 |---|---|
 | `exact` (default) | Everything in 8.1 and 8.2. Nothing from 8.3. |
 | `balanced` | `exact` plus `tightMesh: 'on'`, `bake: 'auto'`, `idleCache: 'auto'`, `offscreen: 'throttle'` |
-| `fast` | `balanced` plus `lod: 'auto'`, `offscreen: 'pause'`, `updateRate: 30` for small skeletons |
+| `fast` | `balanced` plus `lod: 'auto'`, `offscreen: 'pause'`, `updateRate: 30` for batched skeletons |
 
 ### 8.5 The report
 
@@ -519,7 +530,7 @@ Only `tightMesh: 'on'` is built. `bake` and `offscreen` come with M8 and the `ba
 ]
 ```
 
-Built in M4 with 15 rows: draw calls, blend ranges, pages, clipping, tight meshes, covered slots, outlines, dark tint, physics, constraints by kind, bones, slots, vertices, uploads and the layout. Every reason is read from the state of the instance when the call resolves. The rows about skinning mode, active bones and baking wait for the milestones that build those.
+Built in M4 with 15 rows: draw calls, blend ranges, pages, clipping, tight meshes, covered slots, outlines, dark tint, physics, constraints by kind, bones, slots, vertices, uploads and the layout. Every reason is read from the state of the instance when the call resolves. M7 to M9 added rows. `perf` and `pacing` come first and name the settings in effect and how often the skeleton updates now. `bake` counts the updates that played baked and says why the last one did or did not. `uploads` counts the uploads of the bones under `skinning: 'gpu'`, and `renderMode` names who places the vertices. A row about active bones is not built.
 
 The report and `spine.perf.memory()` are asynchronous. Their code is 4.4 kB gzipped and most games never call it, so it loads at the first call and not with the root import.
 
@@ -648,7 +659,7 @@ Peer: `pixi.js`. Dev dependencies only: the three official cores and `spine-pixi
 
 Importers are separate modules loaded by version, so a game that ships 4.3 binary files does not carry the JSON or 4.1 readers. Since the bone handles the root import is 28.9 kB gzipped: handles and `follow` must work at once and weigh 2 kB. In M6 it was 26.9 kB, from 31.1 kB in M5. The limit the bench checks went from 27 to 29 kB for that.
 
-The support for Pixi `Assets` came with the first pre-release. `registerMarrowAssets` adds the parsers, because nothing is registered at import. The code that reads `Assets` hangs off that call, so a game that never makes it carries 0.2 kB of the support. A game that imports `MarrowSpine` alone has a root import of 29.2 kB, one that also registers the parsers 30.3 kB. The limit the bench checks was 30 kB then, for the first of the two. The slot handle, several skins, the setup pose and the point conversion of a bone came after it. They must work at once, so they are in the root import: 1.2 kB, to 30.4 kB. The code that combines skins, counts who shows them and frees the unused ones loads with the pose engines. The limit is now 31 kB. Three parts load on demand. The mesh mode (5.2 kB) loads with an asset that `auto` draws with meshes or that asks for them. The clip code (7.3 kB) loads with an asset that has a clipping attachment. The cuts of overdraw (2.6 kB) load with the outlines. An instance that asks for the mesh mode before its chunk is there draws batched until it arrives. The two pose engines grew with the skipping, from 47.8 to 58.4 kB on demand for both together. A game loads one of them. Size budget for the root import with one importer: 60 KB gzipped. It is a target to confirm at M2, checked in CI after that.
+The support for Pixi `Assets` came with the first pre-release. `registerMarrowAssets` adds the parsers, because nothing is registered at import. The code that reads `Assets` hangs off that call, so a game that never makes it carries 0.2 kB of the support. A game that imports `MarrowSpine` alone has a root import of 29.2 kB, one that also registers the parsers 30.3 kB. The limit the bench checks was 30 kB then, for the first of the two. The slot handle, several skins, the setup pose and the point conversion of a bone came after it. They must work at once, so they are in the root import: 1.2 kB, to 30.4 kB. The code that combines skins, counts who shows them and frees the unused ones loads with the pose engines. The limit was 31 kB then. M7 to M9 added 1.3 kB. The presets, their checks and the pacing must work at once and weigh 1.1 kB. The hooks that load the idle cache and the baked playback weigh 0.2 kB, and the code they load is on demand. GPU skinning is in the chunk of the mesh mode. The root import is 31.7 kB, so the limit is now 32 kB. Three parts load on demand. The mesh mode (5.2 kB) loads with an asset that `auto` draws with meshes or that asks for them. The clip code (7.3 kB) loads with an asset that has a clipping attachment. The cuts of overdraw (2.6 kB) load with the outlines. An instance that asks for the mesh mode before its chunk is there draws batched until it arrives. The two pose engines grew with the skipping, from 47.8 to 58.4 kB on demand for both together. A game loads one of them. Size budget for the root import with one importer: 60 KB gzipped. It is a target to confirm at M2, checked in CI after that.
 
 ## 12. Repo setup, compared with pixi-silk
 
@@ -778,9 +789,9 @@ One finding from building the suite: the official binary readers ignore the offs
 | Handles and site, after M6 | `bone`, `follow`, `attach`. A first docs site. Real rigs as fixtures. | Built 2026-11-12. The three calls work in both render modes and are compared with the official `addSlotObject` in the pixel check. The site shows the bee of the slot game Bzzz. Found and fixed on the way: the mesh mode in a tree-shaken game, and a bone write lost after `setSkin` in the 4.1 and 4.2 engine. |
 | Slots and skins, after the first pre-release | Several skins at once, a slot handle, the setup pose and point conversion on the display object | Built 2026-11-13. `skins` combines skins as the official `Skin.addSkin` does, and the lookup of a model shares each combined skin between its instances. A combined skin stays while an engine shows it, the last 8 that none shows wait, and older ones are freed with the caches the engines keep for them. `slot` writes the attachment, the color and the dark color through new engine calls. They write `slotPose`, the animated pose of a 4.3 slot that a slider poses, and a write of the value there changes nothing. A parity family "slots and skins" runs every call against the official cores of 4.1, 4.2 and 4.3. Planted bugs fail it: the first skin winning fails 19 rigs, a missing clamp 140. A review of the first draft found two defects the family could not see. A tint write took the alpha a slider drew into the pose. `worldToLocal` used the 4.2 formula in 4.3, off in the last bit. Both are fixed and tested. |
 | Debug overlays, after slots and skins | `pixi-marrow/debug` with the overlays the official debug renderer has, and overdraw | Built 2026-11-13. `MarrowDebug` draws with `SilkGraphics` and `SilkText` of pixi-silk, an optional peer that the source check allows in `src/debug` only. Its shapes come from the geometry functions of the core and equal the official `computeWorldVertices` to the bit on four rigs in every version. It draws again only when the pose or a setting changed, unlike the official renderer, which makes a new object per bone every frame. The overdraw layer fills the triangles the view draws, after the cuts. The entry is 4.9 kB gzip without pixi-silk. Not checked: a WebGPU renderer, which `enableWebGPU` of pixi-silk covers. |
-| M7 GPU | GPU skinning, slot palette | Zero vertex upload for rigid rigs. A/B on low-end and mid devices. |
-| M8 Baked | Baker at build time and run time, baked playback, instancing, `balanced` preset | Eligible fixtures play baked with pixel parity at sample points |
-| M9 Release 1.0 | `fast` preset, idle cache, level of detail, docs within budget, migration guide | Docs budget and all gates pass |
+| M7 GPU | GPU skinning, slot palette | Built 2026-11-13. `skinning: 'gpu'` places the vertices of the mesh mode in the vertex shader from a bone texture, with a palette of slot colors. The pixel check passes in the mesh mode with GPU skinning on pixi.js 8.16.0 and 8.23.0, on WebGL2 and WebGPU. A rigid rig uploads no positions. On the bench machine it cut uploads by 61 to 64 percent for raptor-pro, and frames took 16 percent longer on WebGL2, see 7.2. So `auto` stays `cpu`. Not done: the A/B on phones. |
+| M8 Baked | Baker at build time and run time, baked playback, instancing, `balanced` preset | Built 2026-11-13, without instancing. `pixi-marrow/bake` bakes an animation in Node or in a game: one playback on track 0 from the setup pose, 60 frames per second, 32-bit numbers. A clip keeps the world transforms of the bones that move and the slot values that change. `bake: 'auto'`, `balanced` and `fast` bake an animation the first time it plays alone, per asset and skin, in a chunk of 5.2 kB that loads on demand. The engines gained `solo`, `advance` and `holdsSetup`, so a baked update still runs the tracks and fires every event. At every sample time the baked pose equals the played one rounded to 32 bits, on every fixture animation that can be baked in 4.1, 4.2 and 4.3. The events are equal to the bit in all 22 script families. The pixel check passes 453 baked frames per render mode and renderer on pixi.js 8.16.0 and 8.23.0, worst 4 of 255. With 200 instances the CPU time per frame falls to 50 to 82 percent on five rigs. Not done: instancing, which waits for GPU skinning that pays. |
+| M9 Release 1.0 | `fast` preset, idle cache, level of detail, docs within budget, migration guide | Partly built 2026-11-13. Built: the presets, `offscreen`, `updateRate`, `lod` for physics, and the idle cache. With 200 resting instances the idle cache cuts a frame to 0.50 to 0.67 of the live time, see 8.3. The pixel check holds the idle images to the live skeleton and the official runtime in both modes, on WebGL2 and WebGPU, on pixi.js 8.16.0 and 8.23.0. Not done: `lod` for deform, a docs site within the budget of section 13, the migration guide and numbers for phones. |
 | Later | Worker, WASM kernel, opaque pass | Only with benchmark evidence |
 
 ### 16.1 Measured in M4

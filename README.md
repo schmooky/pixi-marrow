@@ -108,6 +108,15 @@ console.log(boss.stats.renderMode);
 
 A skeleton whose animation ended, or that never played one, costs close to nothing: no timeline runs, no vertex is placed, nothing is uploaded. It wakes with the next `play`. Physics is the exception: a skeleton with physics constraints keeps simulating, as in the official runtime.
 
+## Trade exactness for speed
+
+```ts
+const coin = await MarrowSpine.load({ skeleton: 'coin.skel', atlas: 'coin.atlas', perf: 'balanced' });
+const fan = await MarrowSpine.load({ skeleton: 'fan.skel', atlas: 'fan.atlas', perf: 'fast', updateRate: 24 });
+```
+
+`perf` is `exact` by default, which changes nothing. `balanced` plays an animation from baked frames where it can, draws a skeleton at rest as one image, and updates a skeleton off the screen 4 times a second. `fast` also pauses a skeleton off the screen, poses batched skeletons 30 times a second and leaves physics out below 96 pixels. Each setting is an option of its own too: `bake`, `idleCache`, `offscreen`, `updateRate`, `lod`, `tightMesh` and `skinning`. `skinning: 'gpu'` places the vertices of the mesh mode in the vertex shader. It is opt-in, because on the desktop it measured slower than the CPU. `bakeAnimations` of `pixi-marrow/bake` bakes at build time. The first two rows of `perf.report()` say which settings are in effect and how often the skeleton updates.
+
 ## Why is it slow
 
 ```ts
