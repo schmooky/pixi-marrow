@@ -895,6 +895,7 @@ Settled:
 3. Own pose core. No `spine-core` at run time.
 4. Must-haves: less overdraw, fewer batch breaks, premultiplied pipeline with additive in the batch.
 5. Licence: the Spine Runtimes License, chosen on 2026-11-12. The pose core is ported from the official source, so it is a derivative work of the Spine Runtimes.
+6. Scope of 1.0, confirmed on 2026-11-13: M7 GPU skinning and M8 baking stay in it, before M9. The phone A/B of M7 comes first, because it decides the defaults of GPU skinning.
 
 Open, each with a recommendation the design assumes:
 
