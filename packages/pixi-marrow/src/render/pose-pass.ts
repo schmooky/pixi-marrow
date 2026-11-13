@@ -274,5 +274,6 @@ export function notePass(stats: ViewStats, pass: PosePass): void {
     stats.coloredSlots = pass.colored;
     if (pass.placed > 0) stats.positionUploads++;
     if (pass.colored > 0) stats.colorUploads++;
+    if (pass.skinned > 0) stats.boneUploads++;
     if (pass.framed > 0) stats.uvUploads++;
 }

@@ -420,7 +420,13 @@ async function runCase({ Application, Graphics, MarrowSpine, pixi }, id, mode, l
 
             frames(app, spines, 1);
             work.skipped.push(hero.stats.skips - before.skips);
-            work.placed.push(hero.stats.positionUploads - before.positionUploads);
+            // with skinning on the GPU a skeleton that moves uploads its bones, and positions only where it deforms
+            work.placed.push(
+                hero.stats.positionUploads -
+                    before.positionUploads +
+                    (hero.stats.boneUploads ?? 0) -
+                    (before.boneUploads ?? 0),
+            );
             if (RESTORE_FRAMES.includes(frame)) report.frames.push({ frame, ...picture(app, copy) });
         }
         Object.assign(report, work, {

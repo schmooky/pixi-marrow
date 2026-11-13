@@ -112,7 +112,7 @@ describe('skinning on the GPU', () => {
         step(rig, 0);
         const positions = watchUpdates(meshes(rig.view)[0]?.geometry.getBuffer('aPosition') ?? { update: () => {} });
         const bones = watchUpdates(skinData(rig).sources.bones);
-        const before = stats.positionUploads;
+        const before = { ...stats };
 
         for (let frame = 0; frame < 20; frame++) {
             step(rig);
@@ -121,7 +121,8 @@ describe('skinning on the GPU', () => {
         expectSkinned(rig);
         expect(positions).toEqual([]);
         expect(bones.length).toBeGreaterThan(10);
-        expect(stats.positionUploads).toBe(before);
+        expect(stats.boneUploads - before.boneUploads).toBe(bones.length);
+        expect(stats.positionUploads).toBe(before.positionUploads);
     });
 
     it('writes a color key to the palette of its slot, and nothing else', async () => {

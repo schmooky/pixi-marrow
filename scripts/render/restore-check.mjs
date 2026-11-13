@@ -207,10 +207,10 @@ function judgeRun(plan, mode, name, side, lose) {
         reasons.push(`${name} did not rest: the updates that returned at once per frame are ${report.skipped}`);
     }
     if (plan.rests && !all(report.placed, (count) => count === 0)) {
-        reasons.push(`${name} did not rest: the position uploads per frame are ${report.placed}`);
+        reasons.push(`${name} did not rest: the position and bone uploads per frame are ${report.placed}`);
     }
     if (plan.moves && !all(report.placed, (count) => count > 0)) {
-        reasons.push(`${name} did not move: the position uploads per frame are ${report.placed}`);
+        reasons.push(`${name} did not move: the position and bone uploads per frame are ${report.placed}`);
     }
     if (lose) {
         const { lost, restored, wasLost, back } = report.context ?? {};

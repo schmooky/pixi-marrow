@@ -338,16 +338,20 @@ function verticesRow({ stats, view }: ReportSource): PerfEntry {
 }
 
 function uploadsRow({ stats }: ReportSource): PerfEntry {
-    const updates = stats.positionUploads;
+    const { boneUploads } = stats;
+    // the vertex shader of `skinning: 'gpu'` places what hangs on bones: an update that moves uploads the bones
+    const updates = Math.max(stats.positionUploads, boneUploads);
     const rate = (uploads: number): number => Math.round((uploads / updates) * 100) / 100;
 
     if (updates === 0) return { feature: 'uploads', value: 'none', reason: 'no update has drawn a slot' };
     const masks = stats.maskUploads > 0 ? `, ${plural(stats.maskUploads, 'mask upload')}` : '';
+    const bones = boneUploads > 0 ? `, ${plural(boneUploads, 'upload')} of the bones` : '';
+    const first = boneUploads > 0 ? `1 bone, ${rate(stats.positionUploads)} position` : '1 position';
 
     return {
         feature: 'uploads',
-        value: `1 position, ${rate(stats.colorUploads)} color, ${rate(stats.uvUploads)} uv per update`,
-        reason: `${stats.positionUploads} position, ${stats.colorUploads} color and ${stats.uvUploads} uv uploads in ${plural(updates, 'update')} that drew, ${plural(stats.indexRebuilds, 'rewrite')} of the index buffers${masks}`,
+        value: `${first}, ${rate(stats.colorUploads)} color, ${rate(stats.uvUploads)} uv per update`,
+        reason: `${stats.positionUploads} position, ${stats.colorUploads} color and ${stats.uvUploads} uv uploads in ${plural(updates, 'update')} that drew, ${plural(stats.indexRebuilds, 'rewrite')} of the index buffers${masks}${bones}`,
     };
 }
 

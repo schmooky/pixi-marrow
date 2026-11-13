@@ -65,7 +65,12 @@ const EVENTS = 6;
 
 /** The uploads a view has made so far. */
 const uploadsOf = (stats: ViewStats): number =>
-    stats.positionUploads + stats.colorUploads + stats.uvUploads + stats.maskUploads + stats.maskRebuilds;
+    stats.positionUploads +
+    stats.colorUploads +
+    stats.boneUploads +
+    stats.uvUploads +
+    stats.maskUploads +
+    stats.maskRebuilds;
 
 /**
  * Measures every update of one display object while it is attached: the time of the pose
