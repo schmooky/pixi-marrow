@@ -1,4 +1,4 @@
-import { GlProgram, GpuProgram, Shader, type TextureSource, type TextureStyle } from 'pixi.js';
+import { GlProgram, GpuProgram, Shader, ShaderStage, type TextureSource, type TextureStyle } from 'pixi.js';
 import { GL_ROUND, glFragment, wgslFragment, wgslHead } from './shader';
 
 /*
@@ -216,9 +216,13 @@ ${wgslFragment(dark, pages)}`;
 }
 
 /**
- * The WebGPU program of a tint mode and a page count. Float textures of 32 bits cannot be
- * filtered without a feature that Pixi does not ask for, so the bones and the influences are
- * bound as unfilterable. Pixi takes every texture of a WGSL source as filterable.
+ * The WebGPU program of a tint mode and a page count, with the layout of its data textures set
+ * right. Pixi derives the layout from the WGSL source, and two things of it do not fit.
+ *
+ * - Float textures of 32 bits cannot be filtered without a feature that Pixi does not ask for,
+ *   so the bones and the influences are bound as unfilterable. Pixi takes every texture as filterable.
+ * - The vertex stage reads the data textures. pixi.js 8.16 shows a texture to the fragment stage
+ *   alone, and WebGPU then refuses the pipeline. pixi.js 8.21 shows it to both stages.
  */
 function gpuProgram(name: string, dark: boolean, pages: number): GpuProgram {
     const source = wgsl(dark, pages);
@@ -229,9 +233,9 @@ function gpuProgram(name: string, dark: boolean, pages: number): GpuProgram {
     });
 
     for (const entry of program.gpuLayout[2] ?? []) {
-        if (entry.texture !== undefined && (entry.binding === BONES || entry.binding === INFLUENCES)) {
-            entry.texture.sampleType = 'unfilterable-float';
-        }
+        if (entry.texture === undefined || entry.binding < BONES) continue;
+        entry.visibility = ShaderStage.VERTEX | ShaderStage.FRAGMENT;
+        if (entry.binding !== PALETTE) entry.texture.sampleType = 'unfilterable-float';
     }
 
     return program;

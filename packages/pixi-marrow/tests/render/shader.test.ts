@@ -1,4 +1,4 @@
-import { Shader, Texture, TextureSource } from 'pixi.js';
+import { Shader, ShaderStage, Texture, TextureSource } from 'pixi.js';
 import { describe, expect, it } from 'vitest';
 import { createViewShader } from '../../src/render/shader';
 import { createSkinShader } from '../../src/render/skin-shader';
@@ -118,6 +118,12 @@ describe('createSkinShader', () => {
             'float',
         ]);
         expect(sampleType(0)).toBe('float');
+        // the vertex stage reads the data textures, which pixi.js 8.16 shows to the fragment stage alone
+        for (const binding of [16, 17, 18]) {
+            expect(group.find((entry) => entry.binding === binding)?.visibility).toBe(
+                ShaderStage.VERTEX | ShaderStage.FRAGMENT,
+            );
+        }
         expect(Object.keys(gpuProgram.attributeData).sort()).toEqual(['aFlags', 'aPosition', 'aSkin', 'aUV']);
         expect(gpuProgram.attributeData.aSkin?.format).toBe('uint32x2');
         expect(glProgram.vertex).toContain('in uvec2 aSkin;');
