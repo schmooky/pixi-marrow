@@ -182,6 +182,7 @@ export declare class MarrowSpine<N extends MarrowNames = MarrowNames> extends Sp
   private mixOut;
   private adopt;
   private absorb;
+  private catchUp;
 }
 export interface MarrowSpineEvents<N extends MarrowNames = MarrowNames> {
   start: [track: Track<N>];
