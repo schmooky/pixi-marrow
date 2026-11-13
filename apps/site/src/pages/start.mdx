@@ -10,10 +10,10 @@ import source from '../snippets/start.ts?raw';
 ## Install
 
 ```bash
-npm install pixi-marrow pixi.js
+npm install pixi-marrow@next pixi.js
 ```
 
-`pixi.js` is the one peer dependency, from version 8.16. The package is a pre-release and is not on npm yet.
+`pixi.js` is the one peer dependency, from version 8.16. The package is a pre-release, on the `next` tag of npm.
 
 ## Load
 
@@ -22,6 +22,14 @@ npm install pixi-marrow pixi.js
 `skeleton` is a `.skel` or `.json` export of Spine 4.1, 4.2 or 4.3. The page images load from next to the atlas.
 
 `hero` is a Pixi `Container`. Move it, scale it and add it to the stage like any other. A second load of the same files shares one asset with the first.
+
+## Through Pixi Assets
+
+<Snippet source={source} regions="assets" />
+
+`registerMarrowAssets` teaches Pixi `Assets` the Spine files: `.skel`, Spine `.json` and `.atlas`. Call it once, before the first load. Aliases, manifests and bundles then load them, also as AssetPack writes them. `MarrowSpine.from` takes the aliases and returns at once.
+
+An atlas named like `hero@0.5x.webp.atlas` counts as resolution 0.5 in WebP, so `texturePreference` picks among its variants. Unloading an atlas destroys the assets made from it: destroy their display objects first.
 
 ## Play
 

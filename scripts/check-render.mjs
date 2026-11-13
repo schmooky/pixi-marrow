@@ -123,12 +123,18 @@
  * made as a game makes one: it imports `Application` and `MarrowSpine` by name, with the tree
  * shaken. Pixi registers pipes when their modules load, so a chunk that arrives after the
  * renderer exists can miss one. Each case equals the same case from a bundle with all of Pixi.
- * A lost context. Last, `render/restore-check.mjs` takes the WebGL context of a running game
+ * A lost context. Then `render/restore-check.mjs` takes the WebGL context of a running game
  * away with the `WEBGL_lose_context` extension and gives it back, in both render modes: with
  * skeletons at rest and playing, with a clip, with several instances of one asset, with attached
  * containers, and with skeletons that are first drawn while the context is away. The frames
  * after the restore equal the frames of a run that kept its context. It runs on WebGL alone:
  * the loss of a WebGPU device is another event, and nothing checks it.
+ * AssetPack. Last, `render/assets-check.mjs` builds three rigs with AssetPack, at the resolutions
+ * 1 and 0.5 in png and webp, with cache busting and a Pixi manifest. Each rig is loaded through
+ * the manifest with `Assets.loadBundle`, at resolution 1 in png and at 0.5 in webp. Ours draws it
+ * with `MarrowSpine.from` and the official runtime with `Spine.from`, on pages of their own. The
+ * frames are held to `TOLERANCE.match`. Both runtimes must load the same files, of the variant
+ * the preference asks for. It runs on WebGL alone.
  * The lazy mesh mode. The code of the mesh mode is a chunk that loads on demand. The scenes
  * whose name starts with `lazy` draw the default options alone, each on a page of its own:
  *
@@ -198,6 +204,7 @@
 import { rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { checkAssets } from './render/assets-check.mjs';
 import { findMeshChunk, meshChunkCase } from './render/chunks.mjs';
 import { checkGame } from './render/game-check.mjs';
 import { planRigs } from './render/plan.mjs';
@@ -502,6 +509,16 @@ async function main() {
             modes: pageOptions.renderMode === 'both' ? ['batched', 'mesh'] : [pageOptions.renderMode],
             outDir: join(outDir, 'restore'),
             only: args.only ?? null,
+        });
+    // the files of AssetPack through a Pixi manifest, drawn on WebGL
+    if (!selfTest && wanted.includes('webgl'))
+        failed += await checkAssets({
+            root,
+            pkg,
+            pixi,
+            outDir: join(outDir, 'assets'),
+            only: args.only ?? null,
+            tolerance: TOLERANCE.match,
         });
     if (ran === 0) {
         console.log('check-render: no renderer came up, so nothing was checked');

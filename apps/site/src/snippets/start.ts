@@ -13,6 +13,19 @@ document.body.append(app.canvas);
 const hero = await MarrowSpine.load({ skeleton: 'hero.skel', atlas: 'hero.atlas' });
 
 app.stage.addChild(hero);
+
+// #endregion
+
+// #region assets
+import { Assets } from 'pixi.js';
+import { registerMarrowAssets } from 'pixi-marrow';
+
+registerMarrowAssets();
+await Assets.load(['hero.skel', 'hero.atlas']);
+
+const fromAssets = MarrowSpine.from({ skeleton: 'hero.skel', atlas: 'hero.atlas' });
+
+app.stage.addChild(fromAssets);
 // #endregion
 
 // #region play

@@ -1,6 +1,7 @@
 import { MarrowError } from '../base/errors';
 import { closestName } from '../base/names';
 import type { SpineVersion } from '../base/version';
+import type { SkeletonModel } from '../model/model';
 import type { TrackField, TrackFields } from '../pose/engine';
 import type { PlayOptions, QueueOptions } from './options';
 
@@ -46,6 +47,30 @@ export interface PlayPlan {
     fields: TrackFields | undefined;
     /** The fields of the option `entry`, which are set last, or undefined. */
     extra: TrackFields | undefined;
+}
+
+/**
+ * The duration of an animation of a skeleton, in seconds, or 0 for an index it has not, such as
+ * the empty animation.
+ *
+ * @example
+ * const seconds = animationDuration(asset.model, 0);
+ */
+export function animationDuration(model: SkeletonModel, animation: number): number {
+    return model.animations[animation]?.duration ?? 0;
+}
+
+/**
+ * Sets what play or queue options ask on a new entry: the named options, then the fields of
+ * `entry`. The handle is known by then: a field the engine refuses throws, and the animation
+ * still plays.
+ *
+ * @example
+ * applyPlan(handle, planPlay(options, 'play', '4.2'));
+ */
+export function applyPlan(handle: { configure(fields: TrackFields): void }, plan: PlayPlan): void {
+    if (plan.fields !== undefined) handle.configure(plan.fields);
+    if (plan.extra !== undefined) handle.configure(plan.extra);
 }
 
 function wrongValue(option: string, value: unknown, expected: string): MarrowError {

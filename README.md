@@ -3,10 +3,18 @@
 A Spine runtime for PixiJS v8 with its own pose core. It plays Spine 4.1, 4.2 and 4.3 skeletons.
 
 <!-- facts:status -->
-Pre-release, milestone M6. Skeletons of Spine 4.1, 4.2 and 4.3 load, play and draw in PixiJS v8 with every constraint solved: IK, transform, path, physics and sliders. The poses equal the official cores to the bit, and the picture matches the official Pixi runtime. Small skeletons share draw calls, and a skeleton at rest costs close to nothing.
+Pre-release, published as `pixi-marrow@next`. Skeletons of Spine 4.1, 4.2 and 4.3 load, play and draw in PixiJS v8 with every constraint solved: IK, transform, path, physics and sliders. The poses equal the official cores to the bit, and the picture matches the official Pixi runtime. Small skeletons share draw calls, and a skeleton at rest costs close to nothing.
 <!-- /facts:status -->
 
 The plan is in [docs/DESIGN.md](docs/DESIGN.md).
+
+## Install
+
+```bash
+npm install pixi-marrow@next pixi.js
+```
+
+It needs pixi.js 8.16 or later. Docs and live previews are at [pixi-marrow.schmooky.dev](https://pixi-marrow.schmooky.dev).
 
 ## Use
 
@@ -20,6 +28,24 @@ hero.play('run', { loop: true });
 ```
 
 Every constraint is solved: IK, transform, path, physics and sliders. Clipping works.
+
+## Pixi Assets and AssetPack
+
+```ts
+import { Assets } from 'pixi.js';
+import { MarrowSpine, registerMarrowAssets } from 'pixi-marrow';
+
+registerMarrowAssets();
+await Assets.load(['hero.skel', 'hero.atlas']);
+
+const hero = MarrowSpine.from({ skeleton: 'hero.skel', atlas: 'hero.atlas' });
+```
+
+`registerMarrowAssets` teaches Pixi `Assets` to load `.skel` files, Spine `.json` files and `.atlas` files. Call it once, before the first load. Then aliases, manifests and bundles load them too, as AssetPack writes them. `MarrowSpine.from` takes the aliases and returns at once.
+
+An atlas named like `hero@0.5x.webp.atlas` counts as resolution 0.5 in WebP, so `texturePreference` picks among its variants. The `data` of an atlas takes `images` and `imageMetadata`, as in the official runtime.
+
+Unloading an atlas destroys the assets made from it, so destroy their display objects first. Do not register another Spine runtime in the same game: both claim the same file extensions.
 
 ## Tracks and physics
 
@@ -91,7 +117,7 @@ const hero = await MarrowSpine.load({ skeleton: 'hero.skel', atlas: 'hero.atlas'
 pnpm site:dev
 ```
 
-A small site in `apps/site` with two live previews. It shows the bee of the slot game Bzzz, whose symbol rigs are in `fixtures/bzzz`.
+The site in `apps/site`, served at [pixi-marrow.schmooky.dev](https://pixi-marrow.schmooky.dev), has two live previews. It shows the bee of the slot game Bzzz, whose symbol rigs are in `fixtures/bzzz`.
 
 ## Goals
 
@@ -131,6 +157,8 @@ Your own rigs go into `fixtures/local/`: a `.json` or `.skel` file with its `.at
 
 ## Licence
 
-Not chosen yet. The package is marked private until it is.
+The Spine Runtimes License, in [LICENSE](LICENSE). The pose core of pixi-marrow is ported from the official Spine Runtimes, so pixi-marrow is a derivative work of them.
 
-A runtime ported from the official Spine Runtimes falls under the Spine Runtimes License, and its users need a Spine licence.
+Each user of pixi-marrow needs their own Spine Editor licence, as for the official runtimes. A copy of pixi-marrow in any form must include the licence and its copyright notice.
+
+The rigs in `fixtures/bzzz` are not covered by it, see [their notes](fixtures/bzzz/README.md).

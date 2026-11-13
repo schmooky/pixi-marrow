@@ -7,7 +7,7 @@ Instructions for AI coding agents and for people working in this repo. Read it b
 pixi-marrow is a Spine runtime for PixiJS v8. It has its own pose core and its own render path, and it plays Spine 4.1, 4.2 and 4.3 skeletons. The plan, the classes and the milestones are in `docs/DESIGN.md`.
 
 <!-- facts:status -->
-Pre-release, milestone M6. Skeletons of Spine 4.1, 4.2 and 4.3 load, play and draw in PixiJS v8 with every constraint solved: IK, transform, path, physics and sliders. The poses equal the official cores to the bit, and the picture matches the official Pixi runtime. Small skeletons share draw calls, and a skeleton at rest costs close to nothing.
+Pre-release, published as `pixi-marrow@next`. Skeletons of Spine 4.1, 4.2 and 4.3 load, play and draw in PixiJS v8 with every constraint solved: IK, transform, path, physics and sliders. The poses equal the official cores to the bit, and the picture matches the official Pixi runtime. Small skeletons share draw calls, and a skeleton at rest costs close to nothing.
 <!-- /facts:status -->
 
 ```
@@ -125,7 +125,9 @@ A change to the render path also runs on the lowest pixi.js the package allows: 
 
 The pixel check ends with a game check: cases from a bundle made as a game makes one, with named imports and the tree shaken. Pixi registers pipes when modules load, so code that loads on demand must not count on a pipe the game never imported.
 
-Its last step takes the WebGL context of a running game away and gives it back, in both render modes. The frames after the restore must equal the frames of a run that kept its context. `node scripts/render/restore-check.mjs` runs that step alone.
+Then it takes the WebGL context of a running game away and gives it back, in both render modes. The frames after the restore must equal the frames of a run that kept its context. `node scripts/render/restore-check.mjs` runs that step alone.
+
+Its last step builds three rigs with AssetPack and loads them through a Pixi manifest, at resolutions 1 and 0.5. Ours with `MarrowSpine.from` and the official runtime with `Spine.from` must load the same files and draw the same frames. `node scripts/render/assets-check.mjs` runs that step alone.
 
 `apps/site` is the docs site: `pnpm site:dev`, `pnpm site:build`. It is the one real bundle in the repo. Build it after a change to what loads on demand. `fixtures/bzzz` holds the symbol rigs of a real slot game: they run in the parity suite like the official examples.
 

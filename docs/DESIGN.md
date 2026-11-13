@@ -176,7 +176,7 @@ Layers and the rule between them. A layer imports only from layers above it in t
 | `SlotHandle` | class | Attachment, color, visibility of one slot. |
 | `MarrowError` | class | `code`, message with cause and fix, `validNames` when a name was wrong. |
 | `MarrowOptions`, `PlayOptions`, `PerfOptions`, `PerfReport`, `SkeletonInfo`, `MarrowNames` | types | Options and results. Literal unions, no numeric enums. |
-| `registerMarrowAssets` | function | Optional: adds parsers to Pixi `Assets` for manifests and bundles. |
+| `registerMarrowAssets` | function | Optional: adds parsers to Pixi `Assets` for aliases, manifests, bundles and the output of AssetPack. `MarrowSpine.from` then takes the aliases and returns at once. |
 
 Target: at most 20 exported symbols from the root.
 
@@ -644,7 +644,9 @@ One package. Few entry points. No runtime dependencies.
 
 Peer: `pixi.js`. Dev dependencies only: the three official cores and `spine-pixi-v8`, under npm aliases.
 
-Importers are separate modules loaded by version, so a game that ships 4.3 binary files does not carry the JSON or 4.1 readers. Since the bone handles the root import is 28.9 kB gzipped: handles and `follow` must work at once and weigh 2 kB. In M6 it was 26.9 kB, from 31.1 kB in M5. The limit the bench checks went from 27 to 29 kB for that. Three parts load on demand. The mesh mode (5.2 kB) loads with an asset that `auto` draws with meshes or that asks for them. The clip code (7.3 kB) loads with an asset that has a clipping attachment. The cuts of overdraw (2.6 kB) load with the outlines. An instance that asks for the mesh mode before its chunk is there draws batched until it arrives. The two pose engines grew with the skipping, from 47.8 to 58.4 kB on demand for both together. A game loads one of them. Size budget for the root import with one importer: 60 KB gzipped. It is a target to confirm at M2, checked in CI after that.
+Importers are separate modules loaded by version, so a game that ships 4.3 binary files does not carry the JSON or 4.1 readers. Since the bone handles the root import is 28.9 kB gzipped: handles and `follow` must work at once and weigh 2 kB. In M6 it was 26.9 kB, from 31.1 kB in M5. The limit the bench checks went from 27 to 29 kB for that.
+
+The support for Pixi `Assets` came with the first pre-release. `registerMarrowAssets` adds the parsers, because nothing is registered at import. The code that reads `Assets` hangs off that call, so a game that never makes it carries 0.2 kB of the support. A game that imports `MarrowSpine` alone has a root import of 29.2 kB, one that also registers the parsers 30.3 kB. The limit the bench checks is now 30 kB, for the first of the two. Three parts load on demand. The mesh mode (5.2 kB) loads with an asset that `auto` draws with meshes or that asks for them. The clip code (7.3 kB) loads with an asset that has a clipping attachment. The cuts of overdraw (2.6 kB) load with the outlines. An instance that asks for the mesh mode before its chunk is there draws batched until it arrives. The two pose engines grew with the skipping, from 47.8 to 58.4 kB on demand for both together. A game loads one of them. Size budget for the root import with one importer: 60 KB gzipped. It is a target to confirm at M2, checked in CI after that.
 
 ## 12. Repo setup, compared with pixi-silk
 
@@ -880,7 +882,7 @@ Your three must-haves: fewer batch breaks and the premultiplied pipeline land in
 | More than 65,535 vertices in one template | 32-bit indices when needed |
 | The needed set changes often and recompiling costs more than it saves | The set covers everything an animation can show, so it changes at animation start and end only |
 | npm rejects the name as too similar to another package | Reserve it early with a placeholder publish |
-| Licence | A core ported from the official source is a derivative work under the Spine Runtimes License. Read it before the first publish. Ship its text and notice. |
+| Licence | Settled before the first publish: the Spine Runtimes License ships in `LICENSE` with its notice, as the official runtimes do. Each user needs their own Spine Editor licence, and the README says so. |
 
 ## 18. Decisions
 
@@ -890,6 +892,7 @@ Settled:
 2. Scope: Spine 4.1, 4.2, 4.3.
 3. Own pose core. No `spine-core` at run time.
 4. Must-haves: less overdraw, fewer batch breaks, premultiplied pipeline with additive in the batch.
+5. Licence: the Spine Runtimes License, chosen on 2026-11-12. The pose core is ported from the official source, so it is a derivative work of the Spine Runtimes.
 
 Open, each with a recommendation the design assumes:
 

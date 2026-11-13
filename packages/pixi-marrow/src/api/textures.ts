@@ -10,12 +10,27 @@ type PageAlphaMode = 'premultiplied-alpha' | 'premultiply-alpha-on-upload';
 export interface LoadedPages {
     /** One texture per atlas page, in page order. */
     textures: Texture[];
-    /** The URLs loaded through Pixi `Assets`. {@link releasePage} gives each one back. */
+    /** The URLs the page source loaded. {@link releasePage} gives each one back. */
     loaded: string[];
 }
 
-/** How many loaded assets hold each image URL. The image is unloaded when the last one lets go. */
-const holders = new Map<string, number>();
+/**
+ * What loads page images: Pixi `Assets` for `MarrowAsset.load`, or the loader of Pixi that
+ * loads an `.atlas` asset. Each counts how many atlases hold each image URL, and unloads the
+ * image when the last one lets go.
+ */
+export interface PageSource {
+    load(url: string, data: Readonly<Record<string, unknown>>): Promise<unknown>;
+    unload(url: string): void;
+    readonly holders: Map<string, number>;
+}
+
+/** Page images through Pixi `Assets`. */
+export const assetsPages: PageSource = {
+    load: (url, data) => Assets.load({ src: url, data }),
+    unload: (url) => void Assets.unload(url),
+    holders: new Map(),
+};
 
 /** The filter inside one mip level. The first word of an atlas mip filter names it. */
 const texelFilter = (filter: AtlasFilter): 'nearest' | 'linear' =>
@@ -82,44 +97,49 @@ function pageUrl(atlasUrl: string, pageName: string): string {
 }
 
 /** Counts one holder of an image URL less. Returns true when none is left. */
-function letGo(url: string): boolean {
-    const count = (holders.get(url) ?? 0) - 1;
+function letGo(url: string, source: PageSource): boolean {
+    const count = (source.holders.get(url) ?? 0) - 1;
 
     if (count > 0) {
-        holders.set(url, count);
+        source.holders.set(url, count);
 
         return false;
     }
-    holders.delete(url);
+    source.holders.delete(url);
 
     return true;
 }
 
 /**
- * Gives back an image URL that {@link loadPages} loaded. The image is unloaded from Pixi
- * `Assets` when no other loaded asset holds it.
+ * Gives back an image URL that {@link loadPages} loaded. The image is unloaded when no other
+ * atlas holds it.
  *
  * @example
  * for (const url of pages.loaded) releasePage(url);
  */
-export function releasePage(url: string): void {
-    if (letGo(url)) void Assets.unload(url);
+export function releasePage(url: string, source: PageSource = assetsPages): void {
+    if (letGo(url, source)) source.unload(url);
 }
 
-async function loadPage(url: string, page: AtlasPage): Promise<Texture> {
+async function loadPage(
+    url: string,
+    page: AtlasPage,
+    source: PageSource,
+    metadata: Readonly<Record<string, unknown>>,
+): Promise<Texture> {
     let texture: unknown;
 
-    holders.set(url, (holders.get(url) ?? 0) + 1);
+    source.holders.set(url, (source.holders.get(url) ?? 0) + 1);
     try {
-        texture = await Assets.load({ src: url, data: { alphaMode: alphaModeOf(page) } });
+        texture = await source.load(url, { ...metadata, alphaMode: alphaModeOf(page) });
     } catch (error) {
-        letGo(url);
+        letGo(url, source);
         throw new MarrowError('invalid-data', `The page image "${page.name}" did not load: ${reasonOf(error)}`, {
             fix: `Put the image at ${url}, or pass it in "textures" under the page name.`,
         });
     }
     if (!(texture instanceof Texture)) {
-        releasePage(url);
+        releasePage(url, source);
         throw new MarrowError('invalid-data', `Pixi loaded "${page.name}" from ${url}, but not as a texture.`, {
             fix: 'Use an image format that Pixi loads as a texture, such as PNG or WebP.',
         });
@@ -147,7 +167,8 @@ function checkPageNames(atlas: AtlasModel, given: Readonly<Record<string, Textur
 
 /**
  * Gets one texture per atlas page. A page named in `given` uses that texture, or the image at
- * that URL. Every other page is loaded from next to the atlas, through Pixi `Assets`.
+ * that URL. Every other page is loaded from next to the atlas, through Pixi `Assets` unless
+ * `source` says otherwise. `metadata` goes to the load of every image, next to its alpha mode.
  *
  * Throws for a name in `given` that is no page of the atlas. When one image fails, the images
  * that did load are given back and the first error is thrown.
@@ -160,18 +181,20 @@ export async function loadPages(
     atlas: AtlasModel,
     atlasUrl: string,
     given: Readonly<Record<string, Texture | string>> = {},
+    source: PageSource = assetsPages,
+    metadata: Readonly<Record<string, unknown>> = {},
 ): Promise<LoadedPages> {
     checkPageNames(atlas, given);
     const urls: (string | undefined)[] = [];
     const results = await Promise.allSettled(
         atlas.pages.map((page) => {
             // own keys only: a page could be named like a member every object has
-            const source =
+            const image =
                 (Object.hasOwn(given, page.name) ? given[page.name] : undefined) ?? pageUrl(atlasUrl, page.name);
 
-            urls.push(typeof source === 'string' ? source : undefined);
+            urls.push(typeof image === 'string' ? image : undefined);
 
-            return typeof source === 'string' ? loadPage(source, page) : source;
+            return typeof image === 'string' ? loadPage(image, page, source, metadata) : image;
         }),
     );
     const loaded: string[] = [];
@@ -190,7 +213,7 @@ export async function loadPages(
         }
     }
     if (failures.length > 0) {
-        for (const url of loaded) releasePage(url);
+        for (const url of loaded) releasePage(url, source);
         throw failures[0];
     }
 
