@@ -21,6 +21,10 @@ export const ENTRY_POINTS = [
         holds: '`generateNames`, `buildAtlasOutlines`, `decodePng` and the `pixi-marrow` command line tool (`info`, `typegen`, `outlines`). Runs in Node.',
     },
     {
+        specifier: 'pixi-marrow/debug',
+        holds: '`MarrowDebug`: overlays of bones, attachment shapes, bounding boxes, clipping, paths, points, events and overdraw over a `MarrowSpine`. Draws with the optional peer `pixi-silk`.',
+    },
+    {
         specifier: 'pixi-marrow/perf',
         holds: '`createProbe`: times the pose, geometry and event work of every update of one `MarrowSpine` and counts what the renderer did. For benchmarks and profiling.',
     },

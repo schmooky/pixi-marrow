@@ -66,6 +66,7 @@ export const definePreview = (preview: Preview): Preview => preview;
 const PREVIEWS: Record<string, Loader> = {
     play: () => import('./play'),
     placeholders: () => import('./placeholders'),
+    debug: () => import('./debug'),
 };
 
 /** A preview whose app exists and whose scene is built. */
