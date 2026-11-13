@@ -152,9 +152,10 @@ function ratioRow(name, a, b, memoryRatio) {
 /**
  * The table of one rig in the A/B mode: per instance count one row for each side, one row with
  * ours divided by official, and one with ours divided by ours in the mesh mode where that ran.
+ * With `--bake` one more row has ours with baked playback divided by ours.
  *
  * @param groups Per instance count: `instances`, and the combined runs of `ours`, `official`
- * and `mesh`. A side that did not run is null.
+ * `mesh` and `baked`. A side that did not run is null.
  */
 export function printAb(groups) {
     const rows = [
@@ -204,7 +205,7 @@ export function printAb(groups) {
         ],
     ];
 
-    for (const { instances, ours, official, mesh } of groups) {
+    for (const { instances, ours, official, mesh, baked } of groups) {
         // a side without a memory reading has none to print: below 20 instances, or with --memory=off
         const memory = (runs) => kilobytes(runs);
         const memoryRatio = (a, b) => ratio(a, b);
@@ -213,6 +214,7 @@ export function printAb(groups) {
             ['ours', ours],
             ['official', official],
             ['mesh', mesh],
+            ['baked', baked],
         ]) {
             if (!side) continue;
             rows.push([
@@ -240,6 +242,7 @@ export function printAb(groups) {
         }
         if (ours && official) rows.push(ratioRow('ours/official', ours, official, memoryRatio));
         if (ours && mesh) rows.push(ratioRow('ours/mesh', ours, mesh, memoryRatio));
+        if (ours && baked) rows.push(ratioRow('baked/ours', baked, ours, memoryRatio));
     }
     print(rows, [1]);
 }

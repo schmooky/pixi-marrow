@@ -23,9 +23,12 @@ const rounded = (values) => values.map((ms) => Math.round(ms * 1e4) / 1e4);
  * with the mesh mode asked for by name. It runs in the scene `play`, where the list of
  * milestone M5 asks for it.
  *
- * @param config `renderMode` is what ours is asked for, `meshSide` the value of `--mesh`.
+ * The side `baked` is ours with `bake: 'auto'`, with `--bake`.
+ *
+ * @param config `renderMode` is what ours is asked for, `meshSide` the value of `--mesh`,
+ * `bakeSide` true with `--bake`.
  */
-export function sidesOf(subject, { renderMode, meshSide }) {
+export function sidesOf(subject, { renderMode, meshSide, bakeSide }) {
     const sides = [
         { side: 'ours', runtime: 'ours', options: modeOptions(renderMode) },
         { side: 'official', runtime: 'official', options: {} },
@@ -35,6 +38,7 @@ export function sidesOf(subject, { renderMode, meshSide }) {
     if (wanted && renderMode !== 'mesh' && subject.scene === 'play') {
         sides.push({ side: 'mesh', runtime: 'ours', options: modeOptions('mesh') });
     }
+    if (bakeSide) sides.push({ side: 'baked', runtime: 'ours', options: { ...modeOptions(renderMode), bake: 'auto' } });
 
     return sides;
 }
