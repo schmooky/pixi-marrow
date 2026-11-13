@@ -61,6 +61,7 @@ const align = (offset: number): number => Math.ceil(offset / 8) * 8;
  * writeFileSync('hero.bake', encodeBakedClips(await bakeAnimations(model)));
  */
 export function encodeBakedClips(clips: readonly BakedClip[]): Uint8Array {
+    checkByteOrder();
     let offset = 0;
     const heads: ClipHead[] = clips.map((clip) => {
         const arrays: Record<string, [number, number]> = {};
@@ -103,6 +104,17 @@ export function encodeBakedClips(clips: readonly BakedClip[]): Uint8Array {
     return bytes;
 }
 
+/** True on a host that keeps numbers little-endian, as the arrays of the bytes are. */
+const LITTLE_ENDIAN = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
+
+/** Throws on a big-endian host, whose arrays would read the bytes of every number in the wrong order. */
+function checkByteOrder(): void {
+    if (LITTLE_ENDIAN) return;
+    throw new MarrowError('unsupported-feature', 'Baked clips are little-endian, and this host is big-endian.', {
+        fix: 'Bake the clips on this host, with bakeAnimations, in place of reading bytes.',
+    });
+}
+
 const broken = (why: string): MarrowError =>
     new MarrowError('invalid-data', `The bytes are no baked clips: ${why}.`, {
         fix: 'Pass the bytes that encodeBakedClips wrote, unchanged.',
@@ -141,6 +153,7 @@ function readHeads(bytes: Uint8Array): { heads: ClipHead[]; start: number } {
  * addBakedClips(asset, clips);
  */
 export function decodeBakedClips(bytes: Uint8Array): BakedClip[] {
+    checkByteOrder();
     const { heads, start } = readHeads(bytes);
 
     try {
@@ -159,7 +172,9 @@ function clipOf(bytes: Uint8Array, start: number, head: ClipHead): BakedClip {
         const [at, length] = place ?? [-1, -1];
         const from = bytes.byteOffset + start + at;
 
-        if (!(at >= 0 && length >= 0 && start + at + length * size <= bytes.length)) {
+        const whole = Number.isInteger(at) && Number.isInteger(length);
+
+        if (!(whole && at >= 0 && length >= 0 && start + at + length * size <= bytes.length)) {
             throw broken(`the array ${name} is missing or runs past the end`);
         }
 

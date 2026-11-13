@@ -1,6 +1,7 @@
 import { MarrowError } from '../base/errors';
 import type { AttachmentData } from '../model/attachments';
 import type { SkeletonModel } from '../model/model';
+import { onSkinFreed } from '../pose/shared/combine-skins';
 import { createAttachmentLookup } from '../pose/shared/lookup';
 import { type BakedClip, bakedBytes, frameCount } from './clip';
 import { animationIndex, bakeBlocker, skinIndices } from './eligible';
@@ -85,6 +86,11 @@ export class ModelBakes {
 
     constructor(model: SkeletonModel) {
         this.model = model;
+        // the index of a freed combined skin goes to the next one, which has clips of its own
+        onSkinFreed(createAttachmentLookup(model), (index) => {
+            this.bySkin.delete(index);
+            this.reasons.delete(index);
+        });
     }
 
     /** The bytes of every clip held, prepared or handed over. Each clip counts once. */
@@ -213,6 +219,42 @@ function checkFits(model: SkeletonModel, clip: BakedClip): void {
     if (sizes.some(([array, perFrame]) => array.length !== frames * perFrame)) fail('has arrays of the wrong length');
     if (clip.drawOrderFrames.length !== 0 && clip.drawOrderFrames.length !== frames)
         fail('has a draw order per frame of the wrong length');
+    const reason = misfit(clip);
+
+    if (reason !== null) fail(reason);
+}
+
+/** True when every value is a whole number from `low` to below `high`. */
+const within = (values: ArrayLike<number>, low: number, high: number): boolean =>
+    Array.prototype.every.call(values, (value: number) => Number.isInteger(value) && value >= low && value < high);
+
+/** Why the arrays of a clip do not fit together, or null when they do. */
+function misfit(clip: BakedClip): string | null {
+    const { boneCount, slotCount, deformStarts, deformLengths, deforms, drawOrders } = clip;
+    const slotLists = [clip.colorSlots, clip.darkSlots, clip.attachmentSlots, clip.sequenceSlots, clip.deformSlots];
+
+    if (clip.placement.length !== 4) return 'has no placement of 4 numbers';
+    if (!within(clip.bones, 0, boneCount) || !slotLists.every((slots) => within(slots, 0, slotCount))) {
+        return 'names a bone or a slot the skeleton lacks';
+    }
+    if (clip.colorMasks.length !== clip.colorSlots.length || clip.darkMasks.length !== clip.darkSlots.length) {
+        return 'has masks of the wrong length';
+    }
+    if (!within(clip.attachments, 0, clip.attachmentNames.length)) return 'shows an attachment it does not name';
+    if (!within(clip.sequences, -1, 2 ** 31 - 1)) return 'has a sequence index below -1';
+    for (let i = 0; i < deformStarts.length; i++) {
+        const start = Number(deformStarts[i]);
+        const length = Number(deformLengths[i]);
+
+        if (start < 0 || length < 0 || start + length > deforms.length) return 'has a deform past its numbers';
+    }
+    if (slotCount > 0 && drawOrders.length % slotCount !== 0) return 'has draw orders of the wrong length';
+    if (!within(drawOrders, 0, slotCount)) return 'has a draw order with a slot the skeleton lacks';
+    if (!within(clip.drawOrderFrames, 0, slotCount > 0 ? drawOrders.length / slotCount : 0)) {
+        return 'shows a draw order it does not hold';
+    }
+
+    return null;
 }
 
 /** The baked clips of each model that has some. */

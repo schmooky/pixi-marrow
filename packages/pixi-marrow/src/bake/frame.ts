@@ -1,3 +1,6 @@
+import type { AttachmentData } from '../model/attachments';
+import type { SkeletonModel } from '../model/model';
+import { createAttachmentLookup } from '../pose/shared/lookup';
 import { nextVersion, type PoseState } from '../pose/state';
 import type { BakedClip } from './clip';
 import type { PreparedClip } from './store';
@@ -71,7 +74,37 @@ function writeColors(
     return changed;
 }
 
-/** The attachments and sequence indices of a frame. Returns true when one changed. */
+/** What the deform of an attachment belongs to, as the engines tell it, once per attachment. */
+const DEFORM_KEYS = new WeakMap<AttachmentData, AttachmentData | null>();
+
+/**
+ * The attachment whose deform timelines move an attachment: itself, the mesh a linked mesh names,
+ * or null for one without vertices. Two attachments with the same key share a deform.
+ */
+function deformKey(model: SkeletonModel, attachment: AttachmentData | null): AttachmentData | null {
+    if (attachment === null) return null;
+    let key = DEFORM_KEYS.get(attachment);
+
+    if (key === undefined) {
+        if (attachment.type === 'region' || attachment.type === 'point') key = null;
+        else if (attachment.type !== 'mesh' || attachment.timelineAttachment === null) key = attachment;
+        else {
+            const { skin, slot, name } = attachment.timelineAttachment;
+
+            key = createAttachmentLookup(model).find(skin, slot, name) ?? attachment;
+        }
+        DEFORM_KEYS.set(attachment, key);
+    }
+
+    return key;
+}
+
+/**
+ * The attachments and sequence indices of a frame. Returns true when one changed. A changed
+ * attachment does what the official `Slot.setAttachment` does: it resets the sequence index,
+ * and the deform unless both attachments share it. The deforms and sequences of the frame
+ * are written after it.
+ */
 function writeShown(state: PoseState, prepared: PreparedClip, frame: number, version: number): boolean {
     const { clip, attachments: found } = prepared;
     const { attachmentSlots, attachments, attachmentNames, sequenceSlots, sequences } = clip;
@@ -81,8 +114,14 @@ function writeShown(state: PoseState, prepared: PreparedClip, frame: number, ver
         const slot = Number(attachmentSlots[j]);
         const attachment = found[j * attachmentNames.length + Number(attachments[frame * attachmentSlots.length + j])];
 
-        if (attachment === undefined || state.attachments[slot] === attachment) continue;
+        const shown = state.attachments[slot] ?? null;
+
+        if (attachment === undefined || shown === attachment) continue;
+        const key = deformKey(state.model, attachment);
+
+        if (key === null || key !== deformKey(state.model, shown)) state.deformLengths[slot] = 0;
         state.attachments[slot] = attachment;
+        state.sequenceIndices[slot] = -1;
         state.slotStamps[slot] = version;
         changed = true;
     }

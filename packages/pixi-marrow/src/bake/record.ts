@@ -1,7 +1,7 @@
 import { MarrowError } from '../base/errors';
 import type { AttachmentData } from '../model/attachments';
 import type { SkeletonModel } from '../model/model';
-import type { PoseEngineFactory } from '../pose/engine';
+import type { PoseEngine, PoseEngineFactory } from '../pose/engine';
 import { createAttachmentLookup } from '../pose/shared/lookup';
 import { type PoseState, WORLD_STRIDE } from '../pose/state';
 import { type BakedClip, frameCount } from './clip';
@@ -102,6 +102,23 @@ function record(
     options: BakeOptions,
 ): Recording {
     const engine = createEngine();
+
+    try {
+        return recordOn(engine, model, animation, fps, options);
+    } finally {
+        // a combined skin stays while an engine shows it
+        if (engine.skins.length > 1) engine.setSkin(-1);
+    }
+}
+
+/** See {@link record}: the recording on an engine of its own. */
+function recordOn(
+    engine: PoseEngine,
+    model: SkeletonModel,
+    animation: number,
+    fps: number,
+    options: BakeOptions,
+): Recording {
     const { state } = engine;
     const [x, y, scaleX, scaleY] = options.placement ?? DISPLAY_PLACEMENT;
     const skins = skinIndices(model, options.skins ?? []);
