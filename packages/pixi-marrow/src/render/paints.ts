@@ -32,6 +32,8 @@ export interface ViewPaintsOptions {
     readonly stats: ViewStats;
     /** The bounds of what is visible. Pixi asks for them when it culls or measures. */
     readonly measure: () => Bounds;
+    /** Whether the vertex shader of the mesh mode places the vertices from the bones where it can. */
+    readonly gpu: boolean;
 }
 
 /**
@@ -42,7 +44,7 @@ export interface ViewPaintsOptions {
  * `mesh-code.ts`.
  *
  * @example
- * const paints = new ViewPaints({ container, gate: view, pages, texture, dark, model, seen, cover, stats, measure });
+ * const paints = new ViewPaints({ container, gate: view, pages, texture, dark, model, seen, cover, stats, measure, gpu });
  * const mode = paints.pick('auto', slots.plain, false);
  * if (mode !== undefined) paints.enter(mode, template, slots);
  * paints.body?.touch();
@@ -92,6 +94,11 @@ export class ViewPaints {
         return mode !== this.mode || !this.ready ? mode : undefined;
     }
 
+    /** Whether a layout needs a color per vertex: the mesh mode without a palette, which `gpu` has. */
+    get vertexColors(): boolean {
+        return this.mode === 'mesh' && !this.options.gpu;
+    }
+
     /** The batch element of the view while it draws in the batched mode. */
     get element(): BatchElement | undefined {
         return this.mode === 'batched' ? this.body?.element : undefined;
@@ -105,7 +112,7 @@ export class ViewPaints {
      */
     enter(mode: DrawMode, template: Template, slots: SlotLayout): void {
         const { options } = this;
-        const { container, seen, cover, pages, dark, model, measure } = options;
+        const { container, seen, cover, pages, dark, model, measure, gpu } = options;
 
         this.mode = mode;
         this.ready = true;
@@ -132,12 +139,8 @@ export class ViewPaints {
         }
         if (this.body !== undefined) this.body.visible = false;
         if (this.mesh !== undefined) this.mesh.wake(template);
-        else {
-            const { blendModes } = model.slots;
-
-            // the view enters the mesh mode only once its code is loaded
-            this.mesh = meshCode()?.createPaint({ container, template, pages, dark, blendModes, measure });
-        }
+        // the view enters the mesh mode only once its code is loaded
+        else this.mesh = meshCode()?.createPaint({ container, template, pages, dark, model, measure, gpu });
     }
 
     /** Takes the vertex ranges of a new layout: the buffers of the mesh mode and the element of the batched mode. */

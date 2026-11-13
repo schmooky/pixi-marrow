@@ -10,7 +10,6 @@ import type { ViewInserts } from './attach-work';
 import { layoutSlots, type SlotLayout } from './batch-layout';
 import { measureEntries } from './bounds';
 import { clipCode, clipCodeMissing } from './clip-code';
-import { restoreColors } from './colors';
 import { CoverTest } from './cover';
 import { type CutChoice, CutState } from './cut-state';
 import { checkPose } from './entry-pose';
@@ -123,9 +122,8 @@ export class SkeletonView implements DrawGate {
     private refused = false;
 
     /**
-     * Lays out the vertex ranges for the default skin. Throws a `MarrowError` when the atlas
-     * misses a region of an attachment, when a page has no texture, or when a texture is not
-     * premultiplied.
+     * Lays out the vertex ranges for the default skin. Throws a `MarrowError` when the atlas misses a region
+     * of an attachment, when a page has no texture, or when a texture is not premultiplied.
      *
      * @param textures One texture per atlas page, in page order, premultiplied on the GPU.
      * @param options The render mode, the outlines of the atlas, and which cuts to make with them.
@@ -163,6 +161,7 @@ export class SkeletonView implements DrawGate {
             cover: this.cover,
             stats: this.stats,
             measure: () => this.measure(),
+            gpu: options.skinning === 'gpu',
         });
         this.stats.renderMode = this.paints.pick(this.choice, this.slots.plain, false) ?? 'batched';
         // a view that is made for the mesh mode asks for its code, also after a load that failed
@@ -281,9 +280,11 @@ export class SkeletonView implements DrawGate {
         if (this.last !== undefined && !this.destroyed) this.update(this.last);
     }
 
-    /** The state of the view as it is, for `inspectView`, which the perf report loads on demand. */
+    /** The state of the view as it is, for `inspectView` and the debug overlays, which load on demand. */
     get parts(): ViewParts {
         const { template, seen, cover, cutState, paints, choice, refused, pass, last } = this;
+
+        if (last !== undefined) paints.mesh?.settle(template, last, seen);
 
         return { template, seen, cover, cutState, paints, renderMode: choice, refused, pass, pose: last };
     }
@@ -329,7 +330,6 @@ export class SkeletonView implements DrawGate {
 
     /** Starts to draw in a mode. Pixi builds the instructions of the render group again for it. */
     private enter(mode: ViewStats['renderMode']): void {
-        if (mode === 'mesh') restoreColors(this.template);
         this.paints.enter(mode, this.template, this.slots);
         this.stats.renderMode = mode;
         // what draws in the mode holds nothing of the pose yet
@@ -347,7 +347,7 @@ export class SkeletonView implements DrawGate {
 
     /** Lays the vertex ranges out for a skin and for what the slots show, with the cuts that hold now. */
     private layout(skin: number, shown: readonly (AttachmentData | null)[]): void {
-        const template = this.build(skin, shown, this.paints.mode === 'mesh');
+        const template = this.build(skin, shown, this.paints.vertexColors);
 
         releaseTemplate(this.template);
         this.template = template;
@@ -394,10 +394,10 @@ export class SkeletonView implements DrawGate {
         this.choose();
         const { mesh, element } = this.paints;
 
-        poseEntries(pass, template, state, bones, hasDark, seen, element);
-        if (element === undefined) mesh?.upload(pass, template.hasDark ? 8 : 4);
+        if (element === undefined && mesh !== undefined) mesh.pose(pass, template, state, seen);
+        else poseEntries(pass, template, state, bones, hasDark, seen, element);
         notePass(stats, pass);
-        const moved = pass.placed > 0 || listed;
+        const moved = pass.placed > 0 || pass.skinned > 0 || listed;
 
         if (moved) this.boundsDirty = true;
         // a sequence on a page of another group of 8 moves its entry to another draw range
@@ -490,6 +490,7 @@ export class SkeletonView implements DrawGate {
         else {
             const { list, count } = this.seen;
 
+            this.paints.mesh?.settle(this.template, last, this.seen);
             measureEntries(bounds, this.template, list, count, last.world, this.model.slots.bones);
         }
 

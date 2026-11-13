@@ -104,6 +104,11 @@ describe('the render mode of a display object', () => {
         const cases: [MarrowSpine, string, string][] = [
             [create(small, { renderMode: 'batched' }), 'batched', `the option renderMode is "batched". ${shares}`],
             [create(small, { renderMode: 'mesh' }), 'mesh', `the option renderMode is "mesh". ${owns}`],
+            [
+                create(small, { renderMode: 'mesh', skinning: 'gpu' }),
+                'mesh',
+                'the option renderMode is "mesh". It has draw calls of its own, and its vertex shader places the vertices from the bones, except where they deform',
+            ],
             // a clip changes nothing: an asset with a clipping attachment loads the code that clips in a batch
             [create(clipped, { renderMode: 'batched' }), 'batched', `the option renderMode is "batched". ${shares}`],
         ];

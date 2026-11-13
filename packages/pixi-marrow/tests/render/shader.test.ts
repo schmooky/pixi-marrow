@@ -1,6 +1,7 @@
 import { Shader, Texture, TextureSource } from 'pixi.js';
 import { describe, expect, it } from 'vitest';
 import { createViewShader } from '../../src/render/shader';
+import { createSkinShader } from '../../src/render/skin-shader';
 import { MAX_PAGES } from '../../src/render/template';
 
 /*
@@ -88,5 +89,61 @@ describe('createViewShader', () => {
             expect(shader.resources[`uTexture${unit}`]).toBe(page);
             expect(shader.resources[`uSampler${unit}`]).toBe(page.style);
         });
+    });
+});
+
+describe('createSkinShader', () => {
+    const data = { bones: sources(1)[0], influences: sources(1)[0], palette: sources(1)[0] };
+
+    it.each([
+        [false, 1],
+        [true, MAX_PAGES],
+    ])('declares the data textures and the attributes, dark %s with %i pages', (dark, pages) => {
+        const { bones, influences, palette } = data;
+
+        if (bones === undefined || influences === undefined || palette === undefined) throw new Error('no source');
+        const shader = createSkinShader(sources(pages), dark, { bones, influences, palette });
+        const { glProgram, gpuProgram } = shader;
+        const group = gpuProgram.gpuLayout[2] ?? [];
+        const sampleType = (binding: number): string | undefined =>
+            group.find((entry) => entry.binding === binding)?.texture?.sampleType;
+
+        expect(gpuProgram.autoAssignGlobalUniforms).toBe(true);
+        expect(gpuProgram.autoAssignLocalUniforms).toBe(true);
+        expect(gpuProgram.layout[2]).toMatchObject({ uBones: 16, uInfluences: 17, uPalette: 18 });
+        // 32-bit floats cannot be filtered without a feature Pixi does not ask for
+        expect([sampleType(16), sampleType(17), sampleType(18)]).toEqual([
+            'unfilterable-float',
+            'unfilterable-float',
+            'float',
+        ]);
+        expect(sampleType(0)).toBe('float');
+        expect(Object.keys(gpuProgram.attributeData).sort()).toEqual(['aFlags', 'aPosition', 'aSkin', 'aUV']);
+        expect(gpuProgram.attributeData.aSkin?.format).toBe('uint32x2');
+        expect(glProgram.vertex).toContain('in uvec2 aSkin;');
+        for (const name of ['uBones', 'uInfluences', 'uPalette']) {
+            expect(glProgram.vertex).toContain(`uniform highp sampler2D ${name};`);
+            expect(shader.resources[name]).toBe(
+                data[name === 'uBones' ? 'bones' : name === 'uPalette' ? 'palette' : 'influences'],
+            );
+        }
+        // the fragment stage is the one of the view shader, under another name
+        const unnamed = (source: string | undefined): string | undefined =>
+            source?.replace(/#define SHADER_NAME .*\n/, '');
+
+        expect(unnamed(glProgram.fragment)).toBe(unnamed(createViewShader(sources(pages), dark).glProgram.fragment));
+        expect(glProgram.vertex?.includes('vDark')).toBe(dark);
+    });
+
+    it('shares the programs and not the shader', () => {
+        const { bones, influences, palette } = data;
+
+        if (bones === undefined || influences === undefined || palette === undefined) throw new Error('no source');
+        const first = createSkinShader(sources(1), false, { bones, influences, palette });
+        const second = createSkinShader(sources(1), false, { bones, influences, palette });
+
+        expect(second).not.toBe(first);
+        expect(second.glProgram).toBe(first.glProgram);
+        expect(second.gpuProgram).toBe(first.gpuProgram);
     });
 });

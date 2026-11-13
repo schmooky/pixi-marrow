@@ -60,6 +60,8 @@ export interface DrawRangesOptions {
     readonly blendModes: Uint8Array;
     /** The bounds of what is visible. Pixi asks for them when it culls or measures. */
     readonly measure: () => Bounds;
+    /** The shader of a group of 8 pages, asked once per group and destroyed with the ranges. Default: a view shader. */
+    readonly shade?: ((group: number) => Shader) | undefined;
 }
 
 /** The Pixi blend mode of a range for a slot blend mode. Normal and additive inherit from the container. */
@@ -138,7 +140,7 @@ export class DrawRanges {
      * container belongs in front of the child {@link anchor} names for that position.
      */
     readonly cutPositions: number[] = [];
-    /** The bytes of the index data of all ranges and of the data of all masks. */
+    /** The bytes of the index data of all ranges and of the data of all masks, and what the owner adds. */
     bytes = 0;
     private readonly options: DrawRangesOptions;
     /** Per position: the range outside of any clip. A position that was never used has none. */
@@ -289,7 +291,7 @@ export class DrawRanges {
             group.mask.destroy();
             group.container.destroy();
         }
-        // the shaders are shared with other instances: the last one to give one back destroys it
+        // the view shaders are shared with other instances: the last one to give one back destroys it
         for (const shader of this.shaders) if (shader !== undefined) releaseShader(shader);
         if (this.maskShader !== undefined) releaseShader(this.maskShader);
         this.maskShader = undefined;
@@ -420,9 +422,9 @@ export class DrawRanges {
     }
 
     private shader(group: number): Shader {
-        const { pages, dark } = this.options;
-        const shader =
-            this.shaders[group] ?? createViewShader(pages.slice(group * MAX_PAGES, (group + 1) * MAX_PAGES), dark);
+        const { pages, dark, shade } = this.options;
+        const sources = pages.slice(group * MAX_PAGES, (group + 1) * MAX_PAGES);
+        const shader = this.shaders[group] ?? shade?.(group) ?? createViewShader(sources, dark);
 
         this.shaders[group] = shader;
 

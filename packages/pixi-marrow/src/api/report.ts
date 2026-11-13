@@ -71,11 +71,14 @@ function waitingFor({ meshCode, drawn }: ReportSource['view']['mode']): string {
 }
 
 function renderModeRow({ view }: ReportSource): PerfEntry {
-    const { mode, wanted, drawn } = view.mode;
+    const { mode, wanted, drawn, gpu } = view.mode;
+    const owns = gpu
+        ? 'It has draw calls of its own, and its vertex shader places the vertices from the bones, except where they deform'
+        : 'It has draw calls of its own, and the GPU places its vertices';
     const does =
         mode === 'batched'
             ? 'It shares draw calls with the skeletons next to it, and the CPU places its vertices'
-            : 'It has draw calls of its own, and the GPU places its vertices';
+            : owns;
 
     if (wanted !== mode) {
         return {

@@ -36,8 +36,10 @@ export interface PosePass {
     skipped: boolean;
     /** True when every entry is placed and colored, whatever the stamps say: a first pose, a new layout, another mode. */
     all: boolean;
-    /** Entries whose vertices were placed. */
+    /** Entries whose vertices were placed on the CPU and go to the GPU. */
     placed: number;
+    /** Bones whose world transform went to the GPU, for a vertex shader that places vertices. 0 elsewhere. */
+    skinned: number;
     /** The vertices that were placed: the first one and the one behind the last. */
     from: number;
     to: number;
@@ -69,6 +71,7 @@ export function createPosePass(): PosePass {
         skipped: false,
         all: true,
         placed: 0,
+        skinned: 0,
         from: 0,
         to: 0,
         cut: false,
@@ -138,8 +141,11 @@ export function clipsMoved(state: PoseState, visible: VisibleList, bones: Int16A
 /**
  * Shows the region of a sequence the slot of an entry is at, and notes it in the pass. It runs
  * before the vertices of the entry are placed: every region of a sequence has offsets of its own.
+ *
+ * @example
+ * if (newer) frameEntry(pass, template, state, entry, slot, undefined);
  */
-function frameEntry(
+export function frameEntry(
     pass: PosePass,
     template: Template,
     state: PoseState,
@@ -155,8 +161,13 @@ function frameEntry(
     if (shown > 1) pass.regrouped = true;
 }
 
-/** Writes the colors of an entry when they are other ones than its vertices hold, and notes it in the pass. */
-function colorEntry(
+/**
+ * Writes the colors of an entry when they are other ones than its vertices hold, and notes it in the pass.
+ *
+ * @example
+ * if (newer) colorEntry(pass, template, state, model.slots.hasDark, entry, slot, undefined);
+ */
+export function colorEntry(
     pass: PosePass,
     template: Template,
     state: PoseState,
@@ -222,6 +233,7 @@ export function poseEntries(
     pass.colorFrom = template.vertexCount;
     pass.colorTo = 0;
     pass.framed = 0;
+    pass.skinned = 0;
     pass.regrouped = false;
     pass.recolored = false;
     for (let i = 0; i < count; i++) {
