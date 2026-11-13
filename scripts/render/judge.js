@@ -80,6 +80,9 @@ export const PAIRS = [
         group: 'auto',
         auto: 'batched',
     },
+    // baked playback, at the sample times of a clip, under the rules of each mode
+    { label: 'ours baked', a: 'ours-baked', b: 'official', kind: 'match', group: 'matchBaked' },
+    { label: 'ours batched baked', a: 'ours-batched-baked', b: 'official', kind: 'match', group: 'matchBakedBatched' },
     { label: 'proof, shifted 1 px', a: 'shift', b: 'official', kind: 'proof', rejectedBy: ['match'] },
     { label: 'proof, shifted 0.25 px', a: 'nudge', b: 'official', kind: 'proof', rejectedBy: ['match'] },
     // a displacement is what `formats` allows, so only the changed slots are a proof for it

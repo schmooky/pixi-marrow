@@ -67,6 +67,7 @@ export type {
     PoseEngineFactory,
     PoseEvent,
     PoseEventType,
+    PoseSource,
     SlotPose,
     TrackEntry,
     TrackField,

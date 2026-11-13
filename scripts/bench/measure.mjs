@@ -24,10 +24,13 @@ const rounded = (values) => values.map((ms) => Math.round(ms * 1e4) / 1e4);
  * milestone M5 asks for it. The side `gpu` is ours in the mesh mode with `skinning: 'gpu'`, where
  * `--skinning=gpu` asks for it. It runs in every scene.
  *
+ * The side `baked` is ours with `bake: 'auto'`, with `--bake`.
+ *
  * @param config `renderMode` is what ours is asked for, `meshSide` the value of `--mesh`, `skinning`
- * the value of `--skinning`, and `idleSide` adds ours with the idle cache on as the side `idle`.
+ * the value of `--skinning`, `idleSide` adds ours with the idle cache on as the side `idle`, and
+ * `bakeSide` is true with `--bake`.
  */
-export function sidesOf(subject, { renderMode, meshSide, skinning, idleSide }) {
+export function sidesOf(subject, { renderMode, meshSide, skinning, idleSide, bakeSide }) {
     const sides = [
         { side: 'ours', runtime: 'ours', options: modeOptions(renderMode) },
         { side: 'official', runtime: 'official', options: {} },
@@ -41,6 +44,7 @@ export function sidesOf(subject, { renderMode, meshSide, skinning, idleSide }) {
         sides.push({ side: 'idle', runtime: 'ours', options: { ...modeOptions(renderMode), idleCache: 'auto' } });
     if (skinning === 'gpu')
         sides.push({ side: 'gpu', runtime: 'ours', options: { renderMode: 'mesh', skinning: 'gpu' } });
+    if (bakeSide) sides.push({ side: 'baked', runtime: 'ours', options: { ...modeOptions(renderMode), bake: 'auto' } });
 
     return sides;
 }

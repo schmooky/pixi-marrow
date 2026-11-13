@@ -9,7 +9,7 @@
  *                      [--rigs=4.2/tank-pro,raptor] [--instances=1,50,200] [--renderer=webgl|webgpu|both]
  *                      [--runs=3] [--frames=200] [--warmup=40] [--size=1280x720] [--out=.bench]
  *                      [--memory=all|off] [--dist=<folder>] [--pixi=8.16] [--baseline=<file>]
- *                      [--write-baseline] [--check] [--idle-cache=off|compare] [--skinning=gpu]
+ *                      [--write-baseline] [--check] [--idle-cache=off|compare] [--skinning=gpu] [--bake]
  *
  * The values above are the defaults of the A/B mode. The overdraw mode has its own: 24 instances,
  * 5 runs of 100 frames per setting after 30, on a canvas of 1920x1080.
@@ -19,6 +19,11 @@
  * `mesh` and `batched` ask for a mode by name. The page reads back the mode the runtime drew in,
  * see scripts/render/mode.js, and the table of a rig says so. A runtime that reports no mode has
  * one render path and ignores the option.
+ *
+ * --bake adds a side to the A/B mode: `baked`, pixi-marrow with `bake: 'auto'`. Its instances
+ * play from frames baked at load time where they can, in the render mode of `ours`. The table
+ * of a rig then has a row with baked divided by ours: what baking saves on this machine. The
+ * code of baked playback loads on demand, during the warm-up.
  *
  * --scene says what the instances of the A/B mode do while they are timed, see
  * scripts/bench/scene.js: `play` (the default) loops an animation, `rest` stands past the end of
@@ -209,6 +214,8 @@ const settings = {
     idleSide: args['idle-cache'] === 'compare',
     // whether ours in the mesh mode with the vertex shader that places from the bones is one more side
     skinning: args.skinning === 'gpu' ? 'gpu' : null,
+    // ours once more with baked playback, see the usage text
+    bakeSide: args.bake !== undefined,
     runs: Number(args.runs ?? DEFAULTS[mode].runs),
     frames: Number(args.frames ?? DEFAULTS[mode].frames),
     warmup: Number(args.warmup ?? DEFAULTS[mode].warmup),

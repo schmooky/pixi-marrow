@@ -5,6 +5,8 @@
  * - Layers. A file imports only from its own layer or the layers below it:
  *   base, model, formats, pose, geometry, render, api, then the feature folders.
  * - The headless core (base, model, formats, pose, geometry and src/core.ts) never imports pixi.js.
+ *   Neither does src/bake: the baker runs in Node. It imports the headless core only.
+ * - The display object in src/api loads src/bake on demand: a dynamic import() is the one way in.
  * - No runtime dependencies. The source imports nothing from npm except pixi.js. The official
  *   Spine cores are for tests. Node built-ins are allowed in src/optimize only. pixi-silk, an
  *   optional peer, is allowed in src/debug only: the debug overlays draw with it.
@@ -23,6 +25,8 @@ const srcDir = join(pkgDir, 'src');
 const LAYERS = ['base', 'model', 'formats', 'pose', 'geometry', 'render', 'api'];
 const FEATURES = ['bake', 'debug', 'perf', 'optimize'];
 const HEADLESS = ['base', 'model', 'formats', 'pose', 'geometry'];
+/** Features that run without Pixi: they import the headless core and themselves only. */
+const HEADLESS_FEATURES = ['bake'];
 const MAX_LINES = 500;
 const CASTS = [
     [/\bas any\b/, '`as any`'],
@@ -53,6 +57,7 @@ const areaOf = (file) => relative(srcDir, file).split(sep)[0];
 /** The layers a file may import from, or undefined when the file is in no known place. */
 function allowedLayers(area) {
     if (LAYERS.includes(area)) return LAYERS.slice(0, LAYERS.indexOf(area) + 1);
+    if (HEADLESS_FEATURES.includes(area.replace(/\.ts$/, ''))) return [...HEADLESS, area.replace(/\.ts$/, '')];
     if (FEATURES.includes(area)) return [...LAYERS, area];
     if (area === 'index.ts') return LAYERS;
     if (area === 'core.ts') return HEADLESS;
@@ -62,13 +67,16 @@ function allowedLayers(area) {
     return FEATURES.includes(feature) ? [...LAYERS, feature] : undefined;
 }
 
-const isHeadless = (area) => HEADLESS.includes(area) || area === 'core.ts';
+const isHeadless = (area) =>
+    HEADLESS.includes(area) || area === 'core.ts' || HEADLESS_FEATURES.includes(area.replace(/\.ts$/, ''));
 const isOptimize = (area) => area === 'optimize' || area === 'optimize.ts';
 
-function checkImport(file, area, allowed, specifier) {
+function checkImport(file, area, allowed, specifier, dynamic) {
     if (specifier.startsWith('.')) {
         const target = areaOf(resolve(dirname(file), specifier));
 
+        // the display object loads the baked playback when a skeleton asks for it
+        if (dynamic && area === 'api' && target === 'bake') return;
         if (target === '..') fail(file, `imports "${specifier}", which is outside src`);
         else if (!LAYERS.includes(target) && !FEATURES.includes(target))
             fail(file, `imports "${specifier}". Entry files are for consumers, not for the source`);
@@ -104,7 +112,9 @@ for (const file of walk(srcDir)) {
         fail(file, `"${area}" is not a known layer or entry file. Add it to scripts/check-source.mjs`);
         continue;
     }
-    for (const match of text.matchAll(IMPORT)) checkImport(file, area, allowed, match[1] ?? match[2] ?? match[3]);
+    for (const match of text.matchAll(IMPORT)) {
+        checkImport(file, area, allowed, match[1] ?? match[2] ?? match[3], match[2] !== undefined);
+    }
     for (const [pattern, what] of CASTS) {
         if (pattern.test(text)) fail(file, `contains ${what}`);
     }

@@ -300,7 +300,7 @@ function applyMixedOut(
  * times its timelines are applied with at `LAST_TIME` and `TIME`. A reversed entry is applied at
  * the time counted from the end of its animation.
  */
-function setTimes(entry: Entry): void {
+export function setTimes(entry: Entry): void {
     const start = entry.animationStart;
     let time = start;
 
@@ -316,7 +316,7 @@ function setTimes(entry: Entry): void {
 }
 
 /** Notes that an entry was applied at the animation time in `SHARED`, and queues what happened to it. */
-function finish(player: Player43, entry: Entry): void {
+export function finish(player: Player43, entry: Entry): void {
     if (entry.reverse) eventsReverse(player, entry);
     queueEvents(player, entry);
     entry.nextAnimationLast = Number(SHARED[ANIMATION_TIME]);

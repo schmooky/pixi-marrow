@@ -25,6 +25,7 @@ const FEATURES: readonly PerfFeature[] = [
     'outlines',
     'darkTint',
     'physics',
+    'bake',
     'constraints',
     'bones',
     'slots',
@@ -437,6 +438,7 @@ describe('the perf report of a display object', () => {
                 resetPending: false,
                 perf: spine.perfSettings,
                 pacing: spine.pacingStatus(),
+                bake: null,
             });
 
             expect(rows.find((entry) => entry.feature === 'vertices')).toMatchObject({

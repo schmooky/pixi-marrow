@@ -1,10 +1,11 @@
 import { MarrowError } from '../../base/errors';
 import type { AttachmentData } from '../../model/attachments';
 import type { SkeletonModel } from '../../model/model';
-import type { PhysicsMode, PoseEngine, PoseEvent, SlotPose, TrackEntry, TrackFields } from '../engine';
+import type { PhysicsMode, PoseEngine, PoseEvent, PoseSource, SlotPose, TrackEntry, TrackFields } from '../engine';
 import { changeSkin, combineSkins } from '../shared/combine-skins';
 import { checkDark, checkSlot } from '../shared/slot-writes';
 import { nextVersion, type PoseState } from '../state';
+import { advanceTracks, holdsSetup, poseBehind, soloEntry } from './advance';
 import { applyTracks } from './apply';
 import { updateCache } from './cache';
 import {
@@ -17,6 +18,7 @@ import {
     setEmptyAnimation,
 } from './commands';
 import { configureEntry } from './configure';
+import { SHARED, TIME } from './curves';
 import { Entry } from './entry';
 import { physicsRotate, physicsTranslate } from './physics';
 import { createPlayer, type Player43 } from './player';
@@ -56,6 +58,13 @@ function checkTrack(track: number): number {
 /** The pose engine for Spine 4.3: the official `AnimationState` and `Skeleton` of one instance. */
 class Engine43 implements PoseEngine {
     readonly state: PoseState;
+    source: PoseSource | null = null;
+    /**
+     * The animation that {@link advance} left the animated pose of the bones behind, or null.
+     * Its time is in {@link behindTime}.
+     */
+    private behind: Clip43 | null = null;
+    private behindTime = 0;
     /** The animated pose: what the player and the setup pose calls write. */
     private readonly pose: Pose43;
     private readonly player: Player43;
@@ -163,14 +172,19 @@ class Engine43 implements PoseEngine {
         if (!(entry instanceof Entry)) {
             throw invalid('The track entry is not from this pose engine.', 'Pass an entry that this engine returned.');
         }
+        this.catchUp();
         configureEntry(entry, fields);
     }
 
     clearTrack(track: number): void {
-        clearTrack(this.player, checkTrack(track));
+        const index = checkTrack(track);
+
+        this.catchUp();
+        clearTrack(this.player, index);
     }
 
     clearTracks(): void {
+        this.catchUp();
         clearTracks(this.player);
     }
 
@@ -224,6 +238,7 @@ class Engine43 implements PoseEngine {
     }
 
     setupPose(): void {
+        this.behind = null;
         this.open();
         setupPoseBones(this.pose);
         setupPoseSlots(this.pose);
@@ -231,6 +246,7 @@ class Engine43 implements PoseEngine {
     }
 
     setupPoseBones(): void {
+        this.behind = null;
         setupPoseBones(this.pose);
     }
 
@@ -251,6 +267,45 @@ class Engine43 implements PoseEngine {
     }
 
     update(dt: number): void {
+        if (this.source?.update(dt) === true) return;
+        this.updateNow(dt);
+        this.source?.posed();
+    }
+
+    solo(): TrackEntry | null {
+        return soloEntry(this.player);
+    }
+
+    advance(dt: number, time?: Float64Array): void {
+        this.open();
+        this.behind = advanceTracks(this.player, dt);
+        this.behindTime = Number(SHARED[TIME]);
+        if (time !== undefined) time[0] = Number(SHARED[TIME]);
+        // the official Skeleton.update
+        this.state.time += dt;
+        this.close();
+    }
+
+    holdsSetup(animation: number, bones?: Uint8Array): boolean {
+        return holdsSetup(this.pose, this.clip(animation), bones);
+    }
+
+    /**
+     * Brings the animated pose of the bones and the constraints to the time {@link advance} left
+     * it behind. A baked frame wrote the slots and the world transforms, not these. A command
+     * whose result depends on them calls it first: one that clears a track keeps the pose, and a
+     * change of alpha mixes from it. A track change that mixes does not need it, because the
+     * entry it mixes from writes those values from the setup pose.
+     */
+    private catchUp(): void {
+        if (this.behind === null) return;
+        poseBehind(this.pose, this.behind, this.behindTime);
+        this.behind = null;
+    }
+
+    /** The update without a source: the official `AnimationState.update` and `apply`, then `Skeleton.update` and the world transforms. */
+    private updateNow(dt: number): void {
+        this.behind = null;
         this.open();
         updateTracks(this.player, dt);
         // the official Skeleton.update

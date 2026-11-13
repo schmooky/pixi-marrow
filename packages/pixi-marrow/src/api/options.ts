@@ -83,7 +83,22 @@ export interface MarrowSpineOptions {
     perf?: PerfPreset | PerfOptions;
     /** See {@link PerfSettings.skinning}. */
     skinning?: PerfSettings['skinning'];
-    /** See {@link PerfSettings.bake}. */
+    /**
+     * See {@link PerfSettings.bake}. With `auto` an animation is baked the first time it plays
+     * alone on track 0, at 60 frames per second. A list bakes the animations it names, and a name
+     * the skeleton lacks throws a `MarrowError`. The clips are shared by the instances of the
+     * asset, per skin. Clips from `addBakedClips` of `pixi-marrow/bake` play in place of baking.
+     *
+     * An update plays baked when one entry plays alone on track 0 at alpha 1, with no mix, and
+     * the update before it played that entry too. Nothing may have written the pose since. The
+     * skin, the place of the skeleton and the physics mode must be the same. Any other update is
+     * posed as without baking. A skin that turns on a physics constraint or a slider bakes nothing.
+     *
+     * Events, loops, time scales, reverse and the `start` and `end` options stay as without
+     * baking. At a sample time the pose equals the played one, rounded to 32 bits. Between two
+     * samples the frame before is shown. While baked frames play, `bone(name)` reads the local
+     * values of the last update the engine posed. Its world values are those of the frame.
+     */
     bake?: PerfSettings['bake'];
     /** See {@link PerfSettings.idleCache}. */
     idleCache?: PerfSettings['idleCache'];

@@ -44,7 +44,7 @@ function describeRenderMode(blocks, counts, renderMode) {
  *
  * @param memory The memory readings of the rig, see `measureSides` of scripts/bench/heap.mjs.
  * @param config `counts` are the instance counts of the run and `renderMode` what ours was asked for.
- * @returns Per instance count the combined runs of `ours`, `official` and `mesh`.
+ * @returns Per instance count the combined runs of `ours`, `official`, `mesh` and `baked`.
  */
 export function reportAb(blocks, memory, { counts, renderMode }) {
     const groups = counts.map((instances) => ({
@@ -54,6 +54,7 @@ export function reportAb(blocks, memory, { counts, renderMode }) {
         mesh: combined(blocks, (b) => b.side === 'mesh' && b.instances === instances),
         idle: combined(blocks, (b) => b.side === 'idle' && b.instances === instances),
         gpu: combined(blocks, (b) => b.side === 'gpu' && b.instances === instances),
+        baked: combined(blocks, (b) => b.side === 'baked' && b.instances === instances),
     }));
     const largest = Math.max(...counts);
     const covered = (side, instances) =>

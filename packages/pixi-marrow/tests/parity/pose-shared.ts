@@ -34,7 +34,10 @@ export const BONE_FIELDS = ['x', 'y', 'rotation', 'scaleX', 'scaleY', 'shearX', 
 export type BoneField = (typeof BONE_FIELDS)[number];
 
 /** The calls a script makes. A pose engine and an official driver both take them. */
-export type PoseDriver = Omit<PoseEngine, 'state' | 'bytes' | 'setAttachment' | 'slotPose'>;
+export type PoseDriver = Omit<
+    PoseEngine,
+    'state' | 'bytes' | 'setAttachment' | 'slotPose' | 'source' | 'solo' | 'advance' | 'holdsSetup'
+>;
 
 /** A pose copied out of an official skeleton, in the layout of `PoseState`. */
 export interface OfficialPose {
@@ -273,6 +276,8 @@ interface OfficialEntry {
     mixDuration: number;
     reverse: boolean;
     shortestRotation: boolean;
+    animationStart: number;
+    animationEnd: number;
 }
 
 /** A read-only entry of the engine interface that reads an official track entry. */
@@ -295,6 +300,12 @@ function viewOf(entry: OfficialEntry, animationIndex: (animation: object | null)
         },
         get trackEnd() {
             return entry.trackEnd;
+        },
+        get animationStart() {
+            return entry.animationStart;
+        },
+        get animationEnd() {
+            return entry.animationEnd;
         },
         get timeScale() {
             return entry.timeScale;

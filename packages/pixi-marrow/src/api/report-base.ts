@@ -28,6 +28,7 @@ export type PerfFeature =
     | 'outlines'
     | 'darkTint'
     | 'physics'
+    | 'bake'
     | 'constraints'
     | 'bones'
     | 'slots'
@@ -71,6 +72,19 @@ export interface ReportSource {
     perf: ResolvedPerf;
     /** Where the pacing of updates stands. */
     pacing: PacingStatus;
+    /** What baked playback did so far, or null without it. */
+    bake: BakeReading | null;
+}
+
+/** What the baked playback of an instance did so far, as the perf report reads it. */
+export interface BakeReading {
+    /** Updates that played a baked frame, and updates that the pose engine posed. */
+    baked: number;
+    unbaked: number;
+    /** The animation of the last update and whether it was baked, or why not. */
+    last: string;
+    /** The bytes of the clips that every instance of the asset shares. */
+    bytes: number;
 }
 
 /** How many names a reason spells out before it counts the rest. */

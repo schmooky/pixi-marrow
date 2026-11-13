@@ -209,11 +209,14 @@ function loadAttachCode(PIXI, lib, asset, slot) {
  * chunk arrives. `preload: false` leaves that load out, for a scene about that path.
  *
  * `skinning` is the `skinning` option of every instance, `gpu` for example, or null for none.
+ *
+ * `bake: 'auto'` plays from baked frames where it can. The code of baked playback is a chunk
+ * too, and the instance plays without it until it is there, so `create` waits for it.
  */
 export function oursSide(PIXI, lib, skinning = null) {
     return {
         name: 'ours',
-        async create({ skeleton, atlas, cuts = 'default', mode, preload = true, idle = false }) {
+        async create({ skeleton, atlas, cuts = 'default', mode, preload = true, idle = false, bake }) {
             const asset = await lib.MarrowAsset.load({
                 skeleton,
                 atlas,
@@ -232,7 +235,13 @@ export function oursSide(PIXI, lib, skinning = null) {
                 ...modeOptions(mode),
                 ...(idle ? { idleCache: 'auto' } : {}),
                 ...(skinning ? { skinning } : {}),
+                ...(bake ? { bake } : {}),
             });
+
+            for (let tries = 0; bake && spine.engine.source === null; tries++) {
+                if (tries > 1000) throw new Error('the code of baked playback did not load');
+                await new Promise((next) => setTimeout(next, 10));
+            }
             const root = new PIXI.Container();
             const held = new Map();
 
@@ -281,6 +290,12 @@ export function oursSide(PIXI, lib, skinning = null) {
                 },
                 update: (seconds) => spine.update(seconds),
                 stats: () => (spine.stats ? { ...spine.stats } : null),
+                /** The updates that played baked, those the engine posed, and why the last one did. Null without `bake`. */
+                baked: () => {
+                    const source = spine.engine.source;
+
+                    return source ? { baked: source.baked, unbaked: source.unbaked, last: source.last } : null;
+                },
                 info: () => spine.info ?? null,
                 /** How many regions of the atlas have a polygon, an opaque rectangle or no outline at all. */
                 outlines() {

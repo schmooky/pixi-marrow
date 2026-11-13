@@ -40,6 +40,25 @@ export interface TrackEntry {
     readonly mixDuration: number;
     readonly reverse: boolean;
     readonly shortestRotation: boolean;
+    /** The time in the animation where the entry starts, in seconds: the `start` play option. */
+    readonly animationStart: number;
+    /** The time in the animation where the entry ends or loops, in seconds: the `end` play option. */
+    readonly animationEnd: number;
+}
+
+/**
+ * What can pose an update of an engine in place of its timelines and constraints. Baked playback
+ * of `pixi-marrow/bake` is one. See {@link PoseEngine.source}.
+ */
+export interface PoseSource {
+    /**
+     * Called at the start of every update of the engine. Returns true when it posed the update
+     * itself, with {@link PoseEngine.advance} and writes to the pose state. Returns false to let
+     * the engine pose it as it does without a source.
+     */
+    update(dt: number): boolean;
+    /** Called at the end of every update that the engine posed itself. */
+    posed(): void;
 }
 
 /**
@@ -179,9 +198,42 @@ export interface PoseEngine {
     physicsRotate(x: number, y: number, degrees: number): void;
     /**
      * Advances every track and the skeleton time by `dt` seconds, applies the animations to the
-     * pose, then solves the constraints and computes the world transforms.
+     * pose, then solves the constraints and computes the world transforms. With a {@link source}
+     * the source is asked first.
      */
     update(dt: number): void;
+    /**
+     * What poses an update in place of the timelines when it can, or null. Default null. Baked
+     * playback sets it, and the engine asks it at the start of every update.
+     */
+    source: PoseSource | null;
+    /**
+     * The entry that alone poses the skeleton in the next update, or null. That is an entry of an
+     * animation on track 0 with nothing on another track. It mixes from nothing, has nothing
+     * queued, no delay and no track end, and plays at alpha 1. Such an update applies every
+     * timeline of the animation over the setup pose.
+     */
+    solo(): TrackEntry | null;
+    /**
+     * Does what {@link update} does to the tracks, the events and the skeleton time. It leaves the
+     * pose as it is: no timeline but the event timelines runs, and no constraint is solved.
+     * Only for an engine whose {@link solo} is an entry. Otherwise it throws a `MarrowError`.
+     *
+     * The animated pose is then behind the tracks. The next update applies and solves everything,
+     * and a command that reads the animated pose first poses the skeleton at the current times.
+     * Those commands are `configure`, `clearTrack` and `clearTracks`.
+     *
+     * @param time Where to write the time the timelines of the entry would apply at, at index 0:
+     * the official `getAnimationTime`, counted from the end for a reversed entry.
+     */
+    advance(dt: number, time?: Float64Array): void;
+    /**
+     * True when the animated pose holds the setup pose in every value that animation `animation`
+     * does not key. That is the local pose and the inherit mode of every bone that `bones` marks
+     * with 1, every bone without `bones`, and every value of every constraint. Then the animation
+     * poses the skeleton as it would from the setup pose. Values it keys are not looked at.
+     */
+    holdsSetup(animation: number, bones?: Uint8Array): boolean;
     /** What happened since the last call, in the order the official listener is called. */
     takeEvents(): PoseEvent[];
 }

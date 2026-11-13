@@ -207,5 +207,12 @@ export function mirrorEngine(model: SkeletonModel, driver: OfficialDriver, tampe
         physicsRotate: (x, y, degrees) => driver.physicsRotate(x, y, degrees),
         update: (dt) => posing('update', () => driver.update(dt)),
         takeEvents: () => driver.takeEvents(),
+        // the official runtime has no baked playback: the mirror plays every update
+        source: null,
+        solo: () => null,
+        advance() {
+            throw new Error('The mirror has no update without a pose');
+        },
+        holdsSetup: () => false,
     };
 }

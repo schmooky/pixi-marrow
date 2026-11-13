@@ -31,7 +31,7 @@ const percent = (share) => `${(100 * share).toFixed(3)}%`;
  * The instances of the mesh mode are the ones this check had before there were modes. They ask
  * for the mode by name, so they stay what they were when `auto` picks another mode.
  */
-function roles(plan, official, ours, proof, run, officialHere = null) {
+function roles(plan, official, ours, proof, run, officialHere = null, baked = false) {
     const { skel, json, atlas, pma } = plan.files;
     const { placement } = plan;
     const list = [];
@@ -39,6 +39,14 @@ function roles(plan, official, ours, proof, run, officialHere = null) {
         list.push({ key, side, skeleton, atlas: atlasFile, cuts: 'default', ...more });
     const shifted = (it) => it.place({ ...placement, x: placement.x + 1 });
 
+    // baked playback in both modes, against the official runtime at the sample times of a clip
+    if (baked) {
+        if (official) add('official', official, skel, atlas);
+        if (ours && run.mesh) add('ours-baked', ours, skel, atlas, { mode: 'mesh', bake: 'auto' });
+        if (ours && run.batched) add('ours-batched-baked', ours, skel, atlas, { mode: 'batched', bake: 'auto' });
+
+        return list;
+    }
     if (official) {
         add('official', official, skel, atlas);
         add('twin', official, skel, atlas);
@@ -144,8 +152,11 @@ function measureOverdraw(ctx, live, frames) {
     }
 }
 
-/** Plays one skin and animation on every instance and compares the frames at the capture steps. */
-async function runSequence(ctx, sequence, withProof) {
+/**
+ * Plays one skin and animation on every instance and compares the frames at the capture steps.
+ * With `baked` the instances are the official one and ours with baked playback in both modes.
+ */
+async function runSequence(ctx, sequence, withProof, baked = false) {
     const { plan, studio, report } = ctx;
     const live = new Map();
     const where = { skin: sequence.skin, animation: sequence.animation };
@@ -161,7 +172,7 @@ async function runSequence(ctx, sequence, withProof) {
 
     const proof = withProof ? plan.proof : null;
 
-    for (const role of roles(plan, ctx.official, ctx.ours, proof, ctx.run, ctx.officialHere)) {
+    for (const role of roles(plan, ctx.official, ctx.ours, proof, ctx.run, ctx.officialHere, baked)) {
         // the twin loads its own copies. Every other instance shares the files of its side
         const tag = role.key === 'twin' ? 'twin' : role.side.name;
         const url = (file) => `/fixtures/${tag}/${plan.version}/${file}`;
@@ -172,6 +183,7 @@ async function runSequence(ctx, sequence, withProof) {
                 atlas: url(role.atlas),
                 cuts: role.cuts,
                 mode: role.mode,
+                bake: role.bake,
             });
 
             const place = instance.place;
@@ -249,6 +261,11 @@ async function runSequence(ctx, sequence, withProof) {
             info: { covered: drawn },
         });
     }
+    for (const key of ['ours-baked', 'ours-batched-baked']) {
+        const tally = live.get(key)?.baked?.();
+
+        if (tally) ctx.baked.push({ ...where, key, ...tally });
+    }
     for (const instance of live.values()) {
         try {
             instance.destroy();
@@ -302,12 +319,16 @@ async function runRig(env, plan, options) {
         outlines: null,
         shotsLeft: options.shots,
         sampled: false,
+        // what the instances with baked playback did: updates baked and posed, per sequence
+        baked: [],
     };
 
     if (ctx.ours) ctx.run = await askModes(ctx);
     ctx.sampleLabel = sampleLabel(ctx);
     for (const [index, sequence] of plan.sequences.entries()) await runSequence(ctx, sequence, index === 0);
     if (ctx.ours) {
+        for (const sequence of plan.sequences) await runSequence(ctx, bakedSequence(sequence), false, true);
+        report.cases.push(bakedCase(ctx));
         if (ctx.modeEntry) ctx.modeEntry.info.drew = [...ctx.autoModes];
         if (ctx.draws.ours.length || ctx.draws.batched.length) report.cases.push(drawCallCase(ctx));
         if (ctx.overdraw.on.length) report.cases.push(overdrawCase(ctx));
@@ -320,6 +341,31 @@ async function runRig(env, plan, options) {
     }
 
     return report;
+}
+
+/**
+ * A sequence once more for baked playback: one update of 1 / 60 seconds per step, the rate the
+ * clips are baked at, so that every capture is at a sample time. The captures stay in the first
+ * loop: after the loop point the time of a looped entry falls between two samples.
+ */
+function bakedSequence(sequence) {
+    const last = Math.max(0, Math.ceil(sequence.duration * 60) - 1);
+    const captures = [...new Set([0, 7, 15, 26, last])].filter((step) => step <= last).sort((a, b) => a - b);
+
+    return { ...sequence, dt: 1 / 60, captures };
+}
+
+/**
+ * What baked playback did on a rig. A rig whose skins turn on no physics constraint and no
+ * slider must play baked, else the comparisons of baked playback prove nothing.
+ */
+function bakedCase(ctx) {
+    const baked = ctx.baked.reduce((sum, each) => sum + each.baked, 0);
+    const unbaked = ctx.baked.reduce((sum, each) => sum + each.unbaked, 0);
+    const blocked = ctx.baked.find((each) => /physics constraint|slider/.test(each.last));
+    const reasons = baked === 0 && !blocked && ctx.baked.length > 0 ? ['no update played baked'] : [];
+
+    return { label: 'baked updates', kind: 'baked', reasons, info: { baked, unbaked, blocked: blocked?.last ?? null } };
 }
 
 /** The comparison whose first passing frame gets its images saved, as a sample of the rig. */
