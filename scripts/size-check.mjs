@@ -42,7 +42,13 @@ const IMPORTS = {
     // and the markers are the name of one and a message of the code that reads Assets
     'root (MarrowSpine)': [
         'MarrowSpine',
-        ['has a probe that measures its updates', 'marrow-range', 'marrowAtlasLoader', 'Pixi Assets holds no'],
+        [
+            'has a probe that measures its updates',
+            'marrow-range',
+            'marrowAtlasLoader',
+            'Pixi Assets holds no',
+            'marrow-debug',
+        ],
     ],
     // the headless core has no Pixi in it. pixi.js is external, so an import of it stays visible
     'core (everything)': ['*', ['pixi.js'], '/core'],
@@ -56,6 +62,8 @@ const IMPORTS = {
     'optimize (generateNames)': ['generateNames', ['pixi.js'], '/optimize'],
     // a probe holds its display object by shape, so the entry needs no Pixi and no code of the root import
     'perf (createProbe)': ['createProbe', ['pixi.js', 'marrow-skeleton'], '/perf'],
+    // the overlays draw with pixi-silk, an optional peer that stays outside the bundle like pixi.js
+    'debug (MarrowDebug)': ['MarrowDebug', [], '/debug'],
 };
 
 // a scratch project that depends on the built package, so resolution goes through its package.json
@@ -87,7 +95,7 @@ for (const [name, [specifiers, forbidden, subpath = '']] of Object.entries(IMPOR
             ? `export * from 'pixi-marrow${subpath}';\n`
             : `export { ${specifiers} } from 'pixi-marrow${subpath}';\n`,
     );
-    const bundle = await rolldown({ input: entry, external: [/^pixi\.js/], logLevel: 'silent' });
+    const bundle = await rolldown({ input: entry, external: [/^pixi\.js/, /^pixi-silk/], logLevel: 'silent' });
     const { output } = await bundle.generate({ format: 'esm', minify: true });
     // the entry and its static imports. Dynamic chunks load on demand
     const chunks = new Map(output.filter((c) => c.type === 'chunk').map((c) => [c.fileName, c]));

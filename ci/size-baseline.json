@@ -1,9 +1,9 @@
 {
   "everything": {
-    "gzip": 32313
+    "gzip": 32333
   },
   "root (MarrowSpine)": {
-    "gzip": 31108
+    "gzip": 31135
   },
   "core (everything)": {
     "gzip": 6138
@@ -25,5 +25,8 @@
   },
   "perf (createProbe)": {
     "gzip": 1051
+  },
+  "debug (MarrowDebug)": {
+    "gzip": 5003
   }
 }

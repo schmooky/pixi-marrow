@@ -129,6 +129,17 @@ const hero = await MarrowSpine.load({ skeleton: 'hero.skel', atlas: 'hero.atlas'
 
 `pixi-marrow outlines hero.atlas` writes the outlines to `hero.outlines.json` at build time. Pass that URL as `outlines` in the load options and nothing is read at load time.
 
+## Debug overlays
+
+```ts
+import { MarrowDebug } from 'pixi-marrow/debug';
+
+const debug = new MarrowDebug(hero, { layers: { meshTriangles: true, overdraw: true } });
+debug.layers.bones = false;
+```
+
+`MarrowDebug` draws over a skeleton: bones, region and mesh shapes, bounding boxes, clipping, paths, point attachments, event names and overdraw. The shapes are the ones the official runtime computes, to the bit. The `overdraw` layer fills every triangle the skeleton draws with a color that adds up, so the bright parts are where the GPU paints a pixel many times. The overlays draw with [pixi-silk](https://pixi-silk.schmooky.dev), an optional peer: `npm install pixi-silk` to use them.
+
 ## Docs site
 
 ```bash
@@ -153,6 +164,7 @@ The site in `apps/site`, served at [pixi-marrow.schmooky.dev](https://pixi-marro
 | `pixi-marrow` | `MarrowSpine`, the display object, with `MarrowAsset`, `Track` and `MarrowError`. Needs `pixi.js`. |
 | `pixi-marrow/core` | `importSkeleton`, `importAtlas`, `createPoseEngine`, the geometry functions, `describeSkeleton` and the model types. No Pixi. Runs in Node. |
 | `pixi-marrow/optimize` | `generateNames`, `buildAtlasOutlines`, `decodePng` and the `pixi-marrow` command line tool (`info`, `typegen`, `outlines`). Runs in Node. |
+| `pixi-marrow/debug` | `MarrowDebug`: overlays of bones, attachment shapes, bounding boxes, clipping, paths, points, events and overdraw over a `MarrowSpine`. Draws with the optional peer `pixi-silk`. |
 | `pixi-marrow/perf` | `createProbe`: times the pose, geometry and event work of every update of one `MarrowSpine` and counts what the renderer did. For benchmarks and profiling. |
 <!-- /facts:entry-points -->
 

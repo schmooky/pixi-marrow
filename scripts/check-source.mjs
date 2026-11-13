@@ -6,7 +6,8 @@
  *   base, model, formats, pose, geometry, render, api, then the feature folders.
  * - The headless core (base, model, formats, pose, geometry and src/core.ts) never imports pixi.js.
  * - No runtime dependencies. The source imports nothing from npm except pixi.js. The official
- *   Spine cores are for tests. Node built-ins are allowed in src/optimize only.
+ *   Spine cores are for tests. Node built-ins are allowed in src/optimize only. pixi-silk, an
+ *   optional peer, is allowed in src/debug only: the debug overlays draw with it.
  * - Size. No source or test file is longer than 500 lines.
  * - Casts. No `as any`, no double cast through unknown, no TypeScript suppression comments.
  *
@@ -83,6 +84,11 @@ function checkImport(file, area, allowed, specifier) {
     }
     if (specifier.startsWith('node:')) {
         if (!isOptimize(area)) fail(file, `imports "${specifier}". Node built-ins are for src/optimize only`);
+
+        return;
+    }
+    if (specifier === 'pixi-silk' || specifier.startsWith('pixi-silk/')) {
+        if (area !== 'debug') fail(file, `imports "${specifier}". pixi-silk is an optional peer of src/debug only`);
 
         return;
     }

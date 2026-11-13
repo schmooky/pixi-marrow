@@ -29,6 +29,11 @@ export const PAGES: readonly DocsPage[] = [
         description: 'Several skins at once, slot attachments and colors, and the setup pose.',
     },
     {
+        href: '/debug/',
+        title: 'Debug overlays',
+        description: 'Bones, shapes, clipping and overdraw drawn over a skeleton.',
+    },
+    {
         href: '/good-to-know/',
         title: 'Good to know',
         description: 'What is automatic, the options, the versions and the limits.',

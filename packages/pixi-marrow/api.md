@@ -963,3 +963,61 @@ export interface ProbeTarget {
 }
 ```
 
+## pixi-marrow/debug
+
+```ts
+export declare function collectShapes(state: PoseState, lookup: AttachmentLookup, atlas: AtlasModel, cache: RegionOffsets): DebugShapes;
+export declare const DEBUG_COLORS: Readonly<Record<DebugLayer, number>>;
+export declare const DEBUG_LAYERS: Readonly<Record<DebugLayer, boolean>>;
+export type DebugLayer = "bones" | "origin" | "regions" | "meshHulls" | "meshTriangles" | "boundingBoxes" | "clipping" | "paths" | "points" | "events" | "overdraw";
+export interface DebugOptions {
+  layers?: Partial<Record<DebugLayer, boolean>>;
+  colors?: Partial<Record<DebugLayer, number>>;
+  lineWidth?: number;
+}
+export interface DebugShapes {
+  readonly bones: number[];
+  readonly regions: Float64Array[];
+  readonly hulls: Float64Array[];
+  readonly triangles: number[];
+  readonly boxes: Float64Array[];
+  readonly clips: Float64Array[];
+  readonly paths: PathShape[];
+  readonly points: number[];
+}
+export declare class MarrowDebug extends Container {
+  readonly layers: Record<DebugLayer, boolean>;
+  readonly colors: Record<DebugLayer, number>;
+  lineWidth: number;
+  private readonly spine;
+  private readonly lines;
+  private readonly dots;
+  private readonly heat;
+  private readonly labels;
+  private readonly offsets;
+  private drawnFor;
+  private readonly born;
+  private readonly onEvent;
+  constructor(spine: MarrowSpine, options?: DebugOptions);
+  refresh(): void;
+  override destroy(options?: Parameters<Container["destroy"]>[0]): void;
+  private settings;
+  private draw;
+  private stroke;
+  private polygons;
+  private triangles;
+  private boxes;
+  private paths;
+  private points;
+  private bones;
+  private drawOrigin;
+  private drawHeat;
+  private addLabel;
+  private age;
+}
+export interface PathShape {
+  readonly points: Float64Array;
+  readonly closed: boolean;
+}
+```
+

@@ -1,0 +1,40 @@
+---
+layout: ../layouts/Docs.astro
+title: Debug overlays
+description: See the bones, the shapes, the clipping and the overdraw of a skeleton.
+---
+
+import Preview from '../components/Preview.astro';
+import Snippet from '../components/Snippet.astro';
+import source from '../previews/debug.ts?raw';
+import more from '../snippets/debug.ts?raw';
+
+<Preview name="debug" height={430} caption="The bee of the slot game Bzzz with its debug overlays. Turn on overdraw to see where the GPU paints a pixel more than once." />
+
+## Install
+
+The overlays draw with [pixi-silk](https://pixi-silk.schmooky.dev), an optional peer. Install it next to `pixi.js` to use `pixi-marrow/debug`. A game that does not import the entry needs neither.
+
+```bash
+npm install pixi-silk
+```
+
+## Turn layers on and off
+
+<Snippet source={source} regions="overlay" />
+
+`MarrowDebug` adds itself to the skeleton, on top of what it draws, in its space. Lines keep their width on the screen whatever the scale.
+
+<Snippet source={more} regions="layers" />
+
+The layers are `bones`, `origin`, `regions`, `meshHulls`, `meshTriangles`, `boundingBoxes`, `clipping`, `paths`, `points`, `events` and `overdraw`. All but `meshTriangles`, `events` and `overdraw` start on. A change to `layers`, `colors` or `lineWidth` shows with the next render.
+
+The shapes are the ones the official runtime computes, to the bit. The overlay draws again only when the pose or a setting changed, so a skeleton at rest costs one check per frame.
+
+## Overdraw
+
+The `overdraw` layer fills every triangle the skeleton draws with a color that adds up. Where it is bright, the GPU paints a pixel many times. It shows the triangles after the cuts of overdraw: hidden and covered slots are gone, and tight meshes show their polygons. Clipping is not applied there.
+
+## Remove it
+
+<Snippet source={more} regions="destroy" />

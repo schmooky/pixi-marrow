@@ -15,6 +15,7 @@ import { SpineLinks } from './spine-links';
 import { MarrowPerf } from './spine-perf';
 import { EMPTY_ANIMATION, type Track, TrackHandle } from './track';
 import { TrackBook } from './track-book';
+import { registerView } from './view-of';
 
 /**
  * A Spine skeleton as a Pixi display object. It plays animations on tracks, mixes between them
@@ -78,6 +79,7 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpineLinks
         });
         this.addChild(this.skeletonView.container);
         this.linkTo({ engine: this.engine, state: this.engine.state, model: asset.model, view: this.skeletonView });
+        registerView(this, this.skeletonView);
         // The setup pose, so that the object draws before its first update. Physics is left out:
         // it starts from the pose of the first real update, as in the official Pixi runtime
         this.engine.physics = 'none';

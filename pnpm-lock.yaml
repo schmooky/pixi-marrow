@@ -78,6 +78,9 @@ importers:
       pixi-8.21:
         specifier: npm:pixi.js@8.21.0
         version: pixi.js@8.21.0
+      pixi-silk:
+        specifier: ^1.0.1
+        version: 1.0.1(pixi.js@8.23.0)
       pixi.js:
         specifier: ^8.22.0
         version: 8.23.0
