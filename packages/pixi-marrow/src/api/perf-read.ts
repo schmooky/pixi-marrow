@@ -20,7 +20,7 @@ const NO_PACING = {
     offscreen: 'update',
     hidden: false,
     size: Number.POSITIVE_INFINITY,
-    physicsOff: false,
+    reduced: false,
 } as const;
 /** What the source of baked playback says of itself, read by shape: its code is a chunk of its own. */
 function readBake(source: PoseSource | null): BakeReading | null {

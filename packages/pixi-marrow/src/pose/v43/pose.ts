@@ -95,6 +95,7 @@ function createSolve(rig: Rig43, state: PoseState): Solve43 {
         probing: false,
         physics: createPhysicsState(solver.physics),
         physicsMode: PHYSICS_UPDATE,
+        deformOff: false,
         split: null,
     };
 }

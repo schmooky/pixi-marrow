@@ -36,7 +36,7 @@ export type BoneField = (typeof BONE_FIELDS)[number];
 /** The calls a script makes. A pose engine and an official driver both take them. */
 export type PoseDriver = Omit<
     PoseEngine,
-    'state' | 'bytes' | 'setAttachment' | 'slotPose' | 'source' | 'solo' | 'advance' | 'holdsSetup'
+    'state' | 'bytes' | 'setAttachment' | 'slotPose' | 'source' | 'solo' | 'advance' | 'holdsSetup' | 'deform'
 >;
 
 /** A pose copied out of an official skeleton, in the layout of `PoseState`. */

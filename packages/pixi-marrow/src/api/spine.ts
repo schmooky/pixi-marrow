@@ -60,7 +60,7 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
     /** When an update poses the skeleton, and with how much time. */
     private readonly pacer: Pacer;
     private readonly idle: IdleCache | undefined;
-    /** True while `lod` leaves physics out of the updates. */
+    /** True while `lod` leaves physics and deform out of the updates. */
     private lodOn = false;
     /** What {@link updateProbe} holds. An update without a probe pays one check of this field. */
     private probe: UpdateProbe | null = null;
@@ -414,24 +414,21 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
     }
 
     /**
-     * Poses the skeleton. While `lod` leaves physics out, the engine updates in mode `none`, and
-     * the first update after that resets the physics, so that it does not swing from an old pose.
+     * Poses the skeleton. While `lod` leaves physics and deform out, the engine updates in physics
+     * mode `none` with its deform timelines off. Back at full size the physics is reset, so that
+     * it does not swing from an old pose, and the deform timelines apply again.
      */
     private pose(seconds: number): void {
         const { engine } = this;
+        const { small } = this.pacer;
+        const mode = engine.physics;
 
-        if (this.pacer.small && engine.physics !== 'none') {
-            const mode = engine.physics;
-
-            engine.physics = 'none';
-            engine.update(seconds);
-            engine.physics = mode;
-            this.lodOn = true;
-        } else {
-            if (this.lodOn) this.resetPhysics();
-            this.lodOn = false;
-            engine.update(seconds);
-        }
+        if (small !== this.lodOn) engine.deform = !small;
+        if (!small && this.lodOn && mode !== 'none') this.resetPhysics();
+        this.lodOn = small;
+        if (small) engine.physics = 'none';
+        engine.update(seconds);
+        if (small) engine.physics = mode;
         this.settleReset();
     }
 

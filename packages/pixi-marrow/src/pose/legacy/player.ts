@@ -29,6 +29,8 @@ export class LegacyPlayer {
      * pose, or an update started, ended or advanced an entry. See rest.ts.
      */
     stirred = true;
+    /** False while deform timelines are left out, see `PoseEngine.deform`. */
+    deforms = true;
     /** True when the last apply left every number of the pose as it was. Then the same apply need not run again. */
     settled = false;
     /** How many applies to wait before the next one is checked for leaving the pose as it is. */

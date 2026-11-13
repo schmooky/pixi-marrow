@@ -124,7 +124,7 @@ function applySlotTimeline(player: LegacyPlayer, timeline: LegacyTimeline, blend
             applyAttachment(rig, pose, timeline, blend, direction);
             break;
         case K_DEFORM:
-            applyDeform(rig, pose, timeline, blend, values);
+            if (player.deforms) applyDeform(rig, pose, timeline, blend, values);
             break;
         case K_SEQUENCE:
             applySequence(rig, pose, timeline, blend, direction);

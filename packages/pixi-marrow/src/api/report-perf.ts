@@ -31,7 +31,7 @@ export function perfRow(perf: ResolvedPerf): PerfEntry {
  */
 export function pacingRow(status: PacingStatus): PerfEntry {
     const size = Number.isFinite(status.size) ? `${Math.round(status.size)} pixels across` : 'not rendered yet';
-    const physics = status.physicsOff ? ', physics left out while it is drawn this small' : '';
+    const physics = status.reduced ? ', physics and deform left out while it is drawn this small' : '';
 
     if (status.hidden && status.offscreen === 'pause') {
         return {

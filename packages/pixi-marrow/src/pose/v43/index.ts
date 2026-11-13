@@ -26,6 +26,7 @@ import { createPose, poseBytes } from './pose';
 import { distrust, solvePose } from './rest';
 import { prepareRig } from './rig';
 import {
+    clearDeforms,
     setSkin,
     setupPoseBones,
     setupPoseSlots,
@@ -113,6 +114,23 @@ class Engine43 implements PoseEngine {
         }
         if (number !== this.pose.solve.physicsMode) this.pose.solve.dirty = true;
         this.pose.solve.physicsMode = number;
+    }
+
+    get deform(): boolean {
+        return !this.pose.solve.deformOff;
+    }
+
+    set deform(value: boolean) {
+        const { solve } = this.pose;
+
+        if (value !== solve.deformOff) return;
+        solve.deformOff = !value;
+        // the deform timelines apply in the next update, whatever the pose did before
+        solve.dirty = true;
+        if (value) return;
+        this.open();
+        clearDeforms(this.pose);
+        this.close();
     }
 
     get timeScale(): number {

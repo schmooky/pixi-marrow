@@ -122,3 +122,24 @@ export function writeSlotColor(pose: Pose43, slot: number, r: number, g: number,
 export function writeSlotDark(pose: Pose43, slot: number, r: number, g: number, b: number): void {
     if (writeColor(pose.darkColors, slot * 3, r, g, b)) wroteSlot(pose, slot);
 }
+
+/**
+ * Clears the deform of every slot in the animated pose and in the applied pose, from outside an
+ * update, for `PoseEngine.deform`. The applied pose of a slot that a slider poses is cleared
+ * too, so that the drawn pose shows the setup vertices at once.
+ */
+export function clearDeforms(pose: Pose43): void {
+    const { state, solve } = pose;
+
+    for (let slot = 0; slot < state.deformLengths.length; slot++) {
+        if (pose.deformLengths[slot] !== 0) {
+            pose.deformLengths[slot] = 0;
+            stampSlot(pose, slot);
+        }
+        if (state.deformLengths[slot] === 0) continue;
+        state.deformLengths[slot] = 0;
+        state.version = solve.pending;
+        state.slotStamps[slot] = solve.pending;
+    }
+    solve.dirty = true;
+}

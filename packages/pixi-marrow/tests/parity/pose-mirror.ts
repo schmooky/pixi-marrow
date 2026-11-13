@@ -161,6 +161,8 @@ export function mirrorEngine(model: SkeletonModel, driver: OfficialDriver, tampe
         bytes: 0,
         // the mirror keeps one pose of the slots: what the official skeleton draws
         slotPose: state,
+        // the official runtime has no switch for deform: it always applies the deform timelines
+        deform: true,
         get timeScale() {
             return driver.timeScale;
         },

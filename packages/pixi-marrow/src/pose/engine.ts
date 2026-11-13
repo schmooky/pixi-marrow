@@ -197,6 +197,13 @@ export interface PoseEngine {
      */
     physicsRotate(x: number, y: number, degrees: number): void;
     /**
+     * Whether deform timelines apply. Default true. Set to false, it clears every deform at once
+     * and leaves the deform timelines out of the updates, so every mesh shows its setup vertices.
+     * The pose then differs from the official one. Set back to true, the next update applies
+     * the deform timelines again. The `lod` of the display object sets it for a small skeleton.
+     */
+    deform: boolean;
+    /**
      * Advances every track and the skeleton time by `dt` seconds, applies the animations to the
      * pose, then solves the constraints and computes the world transforms. With a {@link source}
      * the source is asked first.

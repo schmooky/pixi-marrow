@@ -156,12 +156,12 @@ describe('a display object with pacing', () => {
         spine.destroy();
     });
 
-    it('leaves physics out while drawn small, and resets it after', async () => {
+    it('leaves physics and deform out while drawn small, and brings them back after', async () => {
         const spine = new MarrowSpine(await fixtureAsset('4.2/cloud-pot.skel'), { autoUpdate: false, lod: 'auto' });
         const modes: string[] = [];
 
         vi.spyOn(spine.engine, 'update').mockImplementation(() => {
-            modes.push(spine.engine.physics);
+            modes.push(`${spine.engine.physics} ${spine.engine.deform ? 'deform' : 'flat'}`);
         });
         rendered(spine);
         // a render of the real object: its bounds decide
@@ -169,12 +169,44 @@ describe('a display object with pacing', () => {
         vi.spyOn(spine, 'getBounds').mockReturnValue({ x: 0, y: 0, width: 40, height: 40 } as never);
         rendered(spine);
         spine.update(1 / 60);
+        spine.update(1 / 60);
         vi.spyOn(spine, 'getBounds').mockReturnValue({ x: 0, y: 0, width: 400, height: 400 } as never);
         rendered(spine);
         spine.update(1 / 60);
         spine.update(1 / 60);
-        expect(modes).toEqual(['update', 'none', 'reset', 'update']);
+        expect(modes).toEqual(['update deform', 'none flat', 'none flat', 'reset deform', 'update deform']);
         expect(spine.physics).toBe('update');
+        expect(spine.pacingStatus().reduced).toBe(false);
+        spine.destroy();
+    });
+
+    it('leaves a deform switch the game set alone without lod', async () => {
+        const spine = new MarrowSpine(await fixtureAsset('4.2/cloud-pot.skel'), { autoUpdate: false });
+
+        spine.engine.deform = false;
+        for (let i = 0; i < 3; i++) spine.update(1 / 60);
+        expect(spine.engine.deform).toBe(false);
+        spine.destroy();
+    });
+
+    it('keeps physics off that the game turned off, when lod gives it back', async () => {
+        const spine = new MarrowSpine(await fixtureAsset('4.2/cloud-pot.skel'), { autoUpdate: false, lod: 'auto' });
+
+        const modes: string[] = [];
+
+        spine.physics = 'none';
+        vi.spyOn(spine.engine, 'update').mockImplementation(() => {
+            modes.push(spine.engine.physics);
+        });
+        vi.spyOn(spine, 'getBounds').mockReturnValue({ x: 0, y: 0, width: 40, height: 40 } as never);
+        rendered(spine);
+        spine.update(1 / 60);
+        vi.spyOn(spine, 'getBounds').mockReturnValue({ x: 0, y: 0, width: 400, height: 400 } as never);
+        rendered(spine);
+        spine.update(1 / 60);
+        // no reset runs the physics the game turned off
+        expect(modes).toEqual(['none', 'none']);
+        expect(spine.engine.deform).toBe(true);
         spine.destroy();
     });
 });

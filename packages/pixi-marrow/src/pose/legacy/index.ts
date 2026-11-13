@@ -131,6 +131,32 @@ class LegacyEngine implements PoseEngine {
         stirPhysics(this.solver);
     }
 
+    get deform(): boolean {
+        return this.player.deforms;
+    }
+
+    set deform(value: boolean) {
+        const { player, state } = this;
+
+        if (value === player.deforms) return;
+        player.deforms = value;
+        // the deform timelines apply in the next update, whatever the pose did before
+        if (value) {
+            player.stirred = true;
+
+            return;
+        }
+        this.begin();
+        for (let slot = 0; slot < state.deformLengths.length; slot++) {
+            if (state.deformLengths[slot] === 0) continue;
+            state.deformLengths[slot] = 0;
+            stampSlot(state, slot);
+        }
+        // a path constraint reads the deform of its slot
+        this.solver.all = true;
+        this.changed();
+    }
+
     get timeScale(): number {
         return this.player.timeScale;
     }

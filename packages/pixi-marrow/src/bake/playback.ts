@@ -167,7 +167,7 @@ class BakedPlayback implements PoseSource, BakeTally {
         if (entry !== this.primed || entry.animation !== this.animation) return this.drop(TRACKS);
         if (!placed(state, prepared.clip)) return this.drop(ELSEWHERE);
         engine.advance(dt, TIME);
-        writeFrame(state, prepared, frameOf(prepared));
+        writeFrame(state, prepared, frameOf(prepared), engine.deform);
         this.seen = state.version;
         this.reason = BAKED;
         this.baked++;

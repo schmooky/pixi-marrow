@@ -35,7 +35,7 @@ A `perf` object starts from its `preset` and changes the settings it names. An o
 
 - **`offscreen`.** A skeleton is off the screen when its bounds lie outside the screen, or when no render reached it for a tenth of a second. `throttle` updates it 4 times a second with the time that passed, so events fire late. `pause` stops its time until it is back.
 - **`updateRate`.** A number poses the skeleton at most that many times a second, with the time of the frames in between. Motion steps at low rates. The rate of `fast` applies to batched skeletons only, unless you set it by name.
-- **`lod`.** `auto` leaves physics out while the skeleton is drawn smaller than 96 pixels across. Physics comes back at 120 pixels with a reset, so nothing jumps.
+- **`lod`.** `auto` leaves physics and deform out while the skeleton is drawn smaller than 96 pixels across. Meshes then show their setup shape. Both come back at 120 pixels, physics with a reset, so nothing jumps.
 - **`idleCache`.** `auto` draws a skeleton that rested for 30 updates as one image, until its pose or its place changes. The image takes 4 bytes per pixel of its box on the screen. A slot that multiplies or screens keeps the skeleton live.
 - **`tightMesh`.** `on` draws every region as the polygon around its visible pixels. Some pixels move by 1 of 255 levels.
 - **`bake`.** `auto` plays an animation from frames baked once, while it plays alone on track 0. The engine still runs the tracks and fires the events. Between two frames, 60 a second, the frame before is shown. A skin with physics or a slider is never baked.

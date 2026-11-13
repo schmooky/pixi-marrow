@@ -637,6 +637,7 @@ export interface PoseEngine {
   physics: PhysicsMode;
   physicsTranslate(x: number, y: number): void;
   physicsRotate(x: number, y: number, degrees: number): void;
+  deform: boolean;
   update(dt: number): void;
   source: PoseSource | null;
   solo(): TrackEntry | null;
