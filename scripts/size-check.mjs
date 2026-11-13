@@ -39,7 +39,8 @@ const IMPORTS = {
         ],
     ],
     // a game that loads its files by URL does not carry the parsers for Pixi Assets or the code that reads them,
-    // and the markers are the name of one and a message of the code that reads Assets
+    // and the markers are the name of one and a message of the code that reads Assets. The idle cache
+    // loads on demand, and its marker is the label of the sprite of an image
     'root (MarrowSpine)': [
         'MarrowSpine',
         [
@@ -48,6 +49,7 @@ const IMPORTS = {
             'marrowAtlasLoader',
             'Pixi Assets holds no',
             'marrow-debug',
+            'marrow-idle',
         ],
     ],
     // the headless core has no Pixi in it. pixi.js is external, so an import of it stays visible
@@ -74,12 +76,14 @@ symlinkSync(pkgDir, join(work, 'node_modules/pixi-marrow'), 'dir');
 /**
  * Chunks of the root import that load on demand and are listed by name, each found by a text
  * only its code holds: the mesh mode by the label of its meshes, the code for clips by a message
- * of the clip kernel, the cuts of overdraw by a field of the search for covered slots.
+ * of the clip kernel, the cuts of overdraw by a field of the search for covered slots, the idle
+ * cache by the label of the sprite of an image.
  */
 const NAMED_CHUNKS = {
     'the mesh mode': 'marrow-range',
     'the code for clips': 'A clip polygon without a vertex cannot clip',
     'the cuts of overdraw': 'coveredBy',
+    'the idle cache': 'marrow-idle',
 };
 
 const kb = (n) => `${(n / 1024).toFixed(2)} kB`;
