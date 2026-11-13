@@ -399,6 +399,12 @@ describe('MarrowAsset.load', () => {
         expect(unloadImage).toHaveBeenCalledExactlyOnceWith('art/spineboy.png');
     });
 
+    it('says that the parsers for Pixi Assets are not registered, before registerMarrowAssets ran', () => {
+        expect(() => MarrowAsset.get({ skeleton: 'hero.skel', atlas: 'hero.atlas' })).toThrow(
+            /Call registerMarrowAssets\(\) before the first load/,
+        );
+    });
+
     it('loads a skeleton with physics constraints like any other', async () => {
         const asset = await load({ skeleton: 'sack.skel', atlas: 'sack.atlas' });
 

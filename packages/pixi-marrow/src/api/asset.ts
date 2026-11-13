@@ -11,6 +11,8 @@ import { loadClipCode } from '../render/clip-code';
 import { loadCutCode } from '../render/cut-code';
 import { loadMeshCode } from '../render/mesh-code';
 import { hasClip, type RenderMode, startsWithMeshes } from '../render/mode';
+import type { MarrowAssetsOptions } from './assets';
+import { cacheReader } from './cache-hook';
 import { renderMode } from './checks';
 import { configureTexture, isStillImage, loadPages, releasePage } from './textures';
 
@@ -358,6 +360,32 @@ export class MarrowAsset {
         const createEngine = await loadCode(model, atlas, renderMode(data.renderMode ?? 'auto'));
 
         return new MarrowAsset({ model, atlas, textures, outlines }, createEngine, []);
+    }
+
+    /**
+     * Gets the asset of a skeleton and an atlas that Pixi `Assets` loaded, by their aliases.
+     * Synchronous: the pose code loaded with the skeleton. Calls with the same aliases and
+     * outlines share one asset. Unloading the atlas from `Assets` destroys the asset.
+     *
+     * The code of the mesh mode starts to load here when the instances need it. They draw in a
+     * batch until it is there. Throws a `MarrowError` for an alias that holds nothing pixi-marrow
+     * loaded.
+     *
+     * @example
+     * await Assets.load(['hero.skel', 'hero.atlas']);
+     * const asset = MarrowAsset.get({ skeleton: 'hero.skel', atlas: 'hero.atlas' });
+     */
+    static get(options: MarrowAssetsOptions): MarrowAsset {
+        const read = cacheReader();
+
+        if (read === undefined) {
+            throw new MarrowError('invalid-data', 'Pixi Assets has no parsers of pixi-marrow yet.', {
+                fix: 'Call registerMarrowAssets() before the first load of a Spine file through Assets.',
+            });
+        }
+
+        // the textures belong to the atlas in Assets: the asset unloads no image
+        return read(options, (parts, createEngine) => new MarrowAsset(parts, createEngine, []));
     }
 
     private static async fetch(options: MarrowLoadOptions, key: string | undefined): Promise<MarrowAsset> {

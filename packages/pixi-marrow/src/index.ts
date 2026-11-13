@@ -3,6 +3,8 @@
  */
 export type { MarrowAssetData, MarrowLoadOptions, OutlinesState } from './api/asset';
 export { MarrowAsset } from './api/asset';
+export type { AtlasAssetData, LoadedAtlas, MarrowAssetsOptions } from './api/assets';
+export { registerMarrowAssets } from './api/assets';
 export type { Bone } from './api/bone';
 export type { MarrowSpineEvents } from './api/events';
 export type {

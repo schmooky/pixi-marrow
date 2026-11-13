@@ -6,6 +6,10 @@ A change in this file is a change to the public surface.
 ## pixi-marrow
 
 ```ts
+export interface AtlasAssetData {
+  images?: Texture | TextureSource | string | Readonly<Record<string, Texture | TextureSource | string>>;
+  imageMetadata?: Readonly<Record<string, unknown>>;
+}
 export interface AtlasOutlines {
   version: 1;
   margin: number;
@@ -41,6 +45,10 @@ export declare class Bone<N extends MarrowNames = MarrowNames> {
   private read;
   private write;
 }
+export interface LoadedAtlas {
+  readonly atlas: AtlasModel;
+  readonly textures: readonly Texture[];
+}
 export declare class MarrowAsset {
   readonly model: SkeletonModel;
   readonly atlas: AtlasModel;
@@ -62,6 +70,7 @@ export declare class MarrowAsset {
   get optimized(): Promise<void>;
   static load(options: MarrowLoadOptions): Promise<MarrowAsset>;
   static from(data: MarrowAssetData): Promise<MarrowAsset>;
+  static get(options: MarrowAssetsOptions): MarrowAsset;
   private static fetch;
   destroy(): void;
   private startScan;
@@ -72,6 +81,12 @@ export interface MarrowAssetData {
   atlas: AtlasModel;
   textures: readonly Texture[];
   outlines?: "auto" | "off" | AtlasOutlines;
+  renderMode?: "auto" | "mesh" | "batched";
+}
+export interface MarrowAssetsOptions {
+  skeleton: string;
+  atlas: string;
+  outlines?: "auto" | "off";
   renderMode?: "auto" | "mesh" | "batched";
 }
 export declare class MarrowError extends Error {
@@ -132,6 +147,7 @@ export declare class MarrowSpine<N extends MarrowNames = MarrowNames> extends Sp
   private probe;
   constructor(asset: MarrowAsset, options?: MarrowSpineOptions);
   static load<N extends MarrowNames = MarrowNames>(options: MarrowLoadOptions & MarrowSpineOptions): Promise<MarrowSpine<N>>;
+  static from<N extends MarrowNames = MarrowNames>(options: MarrowAssetsOptions & MarrowSpineOptions): MarrowSpine<N>;
   get info(): SkeletonInfo;
   get stats(): ViewStats;
   get perf(): MarrowPerf;
@@ -160,11 +176,9 @@ export declare class MarrowSpine<N extends MarrowNames = MarrowNames> extends Sp
   override destroy(options?: DestroyOptions): void;
   private measure;
   private endReset;
-  private configure;
   private draw;
   private onTick;
   private animationIndex;
-  private durationOf;
   private mixOut;
   private adopt;
   private absorb;
@@ -230,6 +244,7 @@ export interface RegionOutline {
   coverage: number;
   opaque: PageRect | null;
 }
+export declare function registerMarrowAssets(): void;
 export interface SkeletonInfo {
   version: SpineVersion;
   editorVersion: string;

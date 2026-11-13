@@ -38,6 +38,12 @@ const IMPORTS = {
             'coveredBy',
         ],
     ],
+    // a game that loads its files by URL does not carry the parsers for Pixi Assets or the code that reads them,
+    // and the markers are the name of one and a message of the code that reads Assets
+    'root (MarrowSpine)': [
+        'MarrowSpine',
+        ['has a probe that measures its updates', 'marrow-range', 'marrowAtlasLoader', 'Pixi Assets holds no'],
+    ],
     // the headless core has no Pixi in it. pixi.js is external, so an import of it stays visible
     'core (everything)': ['*', ['pixi.js'], '/core'],
     'core (sniffSkeleton)': ['sniffSkeleton', ['pixi.js'], '/core'],

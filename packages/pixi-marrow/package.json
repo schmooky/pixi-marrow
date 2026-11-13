@@ -1,8 +1,8 @@
 {
   "name": "pixi-marrow",
-  "version": "0.0.0",
-  "private": true,
-  "description": "A Spine runtime for PixiJS v8 with its own pose core. Plays Spine 4.1, 4.2 and 4.3 skeletons. Pre-release: nothing to render yet.",
+  "version": "0.1.0-next.0",
+  "description": "A Spine runtime for PixiJS v8 with its own pose core. Plays Spine 4.1, 4.2 and 4.3 skeletons.",
+  "license": "LicenseRef-LICENSE",
   "type": "module",
   "sideEffects": false,
   "main": "./dist/index.js",
@@ -68,7 +68,7 @@
     "vitest": "^5.1.0"
   },
   "author": "schmooky",
-  "homepage": "https://github.com/schmooky/pixi-marrow",
+  "homepage": "https://pixi-marrow.schmooky.dev",
   "bugs": {
     "url": "https://github.com/schmooky/pixi-marrow/issues"
   },

@@ -6,10 +6,11 @@ import type { PhysicsMode, PoseEngine } from '../pose/engine';
 import { SkeletonView } from '../render/skeleton-view';
 import type { ViewStats } from '../render/stats';
 import { MarrowAsset, type MarrowLoadOptions } from './asset';
+import type { MarrowAssetsOptions } from './assets';
 import { finiteArgument, namedIndex, physicsMode, renderMode } from './checks';
 import { EventPump } from './events';
 import type { MarrowNames, MarrowSpineOptions, PlayOptions, QueueOptions, StopOptions, UpdateProbe } from './options';
-import { type PlayPlan, planPlay } from './play-fields';
+import { animationDuration, applyPlan, planPlay } from './play-fields';
 import { SpineLinks } from './spine-links';
 import { MarrowPerf } from './spine-perf';
 import { EMPTY_ANIMATION, type Track, TrackHandle } from './track';
@@ -98,6 +99,19 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpineLinks
         options: MarrowLoadOptions & MarrowSpineOptions,
     ): Promise<MarrowSpine<N>> {
         return new MarrowSpine<N>(await MarrowAsset.load(options), options);
+    }
+
+    /**
+     * Creates a display object from a skeleton and an atlas that Pixi `Assets` loaded, by their
+     * aliases. Synchronous: `MarrowAsset.get`, then `new MarrowSpine`.
+     *
+     * @example
+     * const hero = MarrowSpine.from({ skeleton: 'hero.skel', atlas: 'hero.atlas' });
+     */
+    static from<N extends MarrowNames = MarrowNames>(
+        options: MarrowAssetsOptions & MarrowSpineOptions,
+    ): MarrowSpine<N> {
+        return new MarrowSpine<N>(MarrowAsset.get(options), options);
     }
 
     /** The names, counts and features of the skeleton, as plain data. */
@@ -257,9 +271,9 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpineLinks
 
         this.absorb();
         const entry = this.engine.setAnimation(plan.track, index, plan.loop);
-        const handle = this.adopt(new TrackHandle<N>(this, entry, name, this.durationOf(index)));
+        const handle = this.adopt(new TrackHandle<N>(this, entry, name, animationDuration(this.asset.model, index)));
 
-        this.configure(handle, plan);
+        applyPlan(handle, plan);
 
         return handle;
     }
@@ -280,7 +294,7 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpineLinks
         this.absorb();
         const before = this.book.last(track);
         const entry = this.engine.addAnimation(track, index, plan.loop, delay);
-        const handle = this.adopt(new TrackHandle<N>(this, entry, name, this.durationOf(index)));
+        const handle = this.adopt(new TrackHandle<N>(this, entry, name, animationDuration(this.asset.model, index)));
 
         // the engine timed the entry with the mix it knew. The official setMixDuration times it again
         if (fields !== undefined && options.mix !== undefined && before !== undefined && delay <= 0) {
@@ -291,7 +305,7 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpineLinks
 
             fields.delay = start;
         }
-        this.configure(handle, plan);
+        applyPlan(handle, plan);
 
         return handle;
     }
@@ -439,16 +453,6 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpineLinks
         this.afterReset = null;
     }
 
-    /**
-     * Sets what play or queue options ask on a new entry: the named options, then the fields of
-     * `entry`. The handle is known by then: a field the engine refuses throws, and the animation
-     * still plays.
-     */
-    private configure(handle: TrackHandle, plan: PlayPlan): void {
-        if (plan.fields !== undefined) handle.configure(plan.fields);
-        if (plan.extra !== undefined) handle.configure(plan.extra);
-    }
-
     /** Brings the drawn skeleton in line with the pose, with the outlines the asset has now. */
     private draw(): void {
         const { outlines } = this.asset;
@@ -467,10 +471,6 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpineLinks
 
     private animationIndex(name: string): number {
         return namedIndex('animation', this.asset.model.animations, String(name));
-    }
-
-    private durationOf(animation: number): number {
-        return this.asset.model.animations[animation]?.duration ?? 0;
     }
 
     /** Mixes a track out through the empty animation. Its entry gets a handle that emits nothing. */
