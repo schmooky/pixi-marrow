@@ -9,9 +9,13 @@ import type { Link } from '../render/attach-work';
 import type { ViewReport } from '../render/inspect';
 import type { ViewStats } from '../render/stats';
 import type { OutlinesState } from './asset';
+import type { PacingStatus } from './pacing';
+import type { ResolvedPerf } from './presets';
 
 /** What a row of the perf report is about. */
 export type PerfFeature =
+    | 'perf'
+    | 'pacing'
     | 'renderMode'
     | 'motion'
     | 'links'
@@ -63,6 +67,10 @@ export interface ReportSource {
     physics: PhysicsMode;
     /** Whether the next update resets the physics before that mode returns. */
     resetPending: boolean;
+    /** The `perf` settings in effect. */
+    perf: ResolvedPerf;
+    /** Where the pacing of updates stands. */
+    pacing: PacingStatus;
 }
 
 /** How many names a reason spells out before it counts the rest. */

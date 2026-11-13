@@ -3,6 +3,8 @@ import type { Link } from '../render/attach-work';
 import type { SkeletonView } from '../render/skeleton-view';
 import type { ViewStats } from '../render/stats';
 import type { MarrowAsset } from './asset';
+import type { PacingStatus } from './pacing';
+import type { ResolvedPerf } from './presets';
 import type { PerfEntry } from './report-base';
 
 /**
@@ -52,6 +54,9 @@ export interface PerfOwner {
     readonly engine: PoseEngine;
     readonly stats: ViewStats;
     readonly physics: PhysicsMode;
+    readonly perfSettings: ResolvedPerf;
+    /** Where the pacing of updates stands. A test owner may leave it out. */
+    pacingStatus?(): PacingStatus;
 }
 
 /**

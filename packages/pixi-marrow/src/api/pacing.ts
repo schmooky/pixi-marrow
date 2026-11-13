@@ -10,6 +10,19 @@ const EPSILON = 1e-9;
 /** A skeleton that no render reached in this many updates counts as off the screen. */
 const UNSEEN = 2;
 
+/** Where the pacing of one display object stands. See {@link Pacer.status}. */
+export interface PacingStatus {
+    /** Updates a second, or `display` for every frame. */
+    rate: number | 'display';
+    offscreen: ResolvedPerf['offscreen'];
+    /** True when the last renders found the skeleton off the screen, or no render reached it. */
+    hidden: boolean;
+    /** The size on the screen at the last render, in pixels across. Infinite before a render. */
+    size: number;
+    /** True while `lod` leaves physics out. */
+    physicsOff: boolean;
+}
+
 /** What the pacing reads of a display object when it is rendered. */
 export interface Seen {
     /** The box the skeleton covers, in the coordinates of the screen. */
@@ -82,6 +95,26 @@ export class Pacer {
             box.y < screen.y + screen.height &&
             box.x + box.width > screen.x &&
             box.y + box.height > screen.y;
+    }
+
+    /**
+     * Where the pacing stands, for the perf report: the rate in effect, whether the skeleton
+     * counts as off the screen, and its size on the screen at the last render.
+     *
+     * @param small True when the skeleton draws in the batched mode.
+     */
+    status(small: boolean): PacingStatus {
+        const { settings } = this;
+        const rate = settings.updateRate;
+        const applies = typeof rate === 'number' && (small || settings.given.has('updateRate'));
+
+        return {
+            rate: applies ? rate : 'display',
+            offscreen: settings.offscreen,
+            hidden: this.watching && (!this.onScreen || this.updates - this.seenAt > UNSEEN),
+            size: this.size,
+            physicsOff: this.small,
+        };
     }
 
     /** True while `lod: 'auto'` leaves physics out: the skeleton is drawn smaller than the limit. */

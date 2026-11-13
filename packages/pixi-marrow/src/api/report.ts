@@ -3,6 +3,7 @@ import type { ConstraintData } from '../model/constraints';
 import type { PhysicsMode } from '../pose/engine';
 import { type PerfEntry, plural, type ReportSource, slotNames } from './report-base';
 import { cutRows } from './report-cuts';
+import { pacingRow, perfRow } from './report-perf';
 
 /*
  * The rows of `perf.report()`. Every row is read from the state of the instance when the report
@@ -364,6 +365,8 @@ function layoutRow({ stats }: ReportSource): PerfEntry {
  */
 export function buildReport(source: ReportSource): PerfEntry[] {
     return [
+        perfRow(source.perf),
+        pacingRow(source.pacing),
         renderModeRow(source),
         motionRow(source),
         linksRow(source),

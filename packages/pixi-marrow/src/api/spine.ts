@@ -12,9 +12,9 @@ import { namedIndex, renderMode } from './checks';
 import { EventPump } from './events';
 import { createIdleCache, type IdleCache } from './idle-cache';
 import type { MarrowNames, MarrowSpineOptions, PlayOptions, QueueOptions, StopOptions, UpdateProbe } from './options';
-import { Pacer } from './pacing';
+import { Pacer, type PacingStatus } from './pacing';
 import { animationDuration, applyPlan, planPlay } from './play-fields';
-import { resolvePerf } from './presets';
+import { type ResolvedPerf, resolvePerf } from './presets';
 import { MarrowPerf } from './spine-perf';
 import { SpinePhysics } from './spine-physics';
 import { EMPTY_ANIMATION, type Track, TrackHandle } from './track';
@@ -52,6 +52,11 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
     private readonly pump = new EventPump();
     private ticking = false;
     private tools: MarrowPerf | undefined;
+    /**
+     * The `perf` settings in effect: the preset, every setting, and which were given by name.
+     * `perf.report()` lists them too.
+     */
+    readonly perfSettings: ResolvedPerf;
     /** When an update poses the skeleton, and with how much time. */
     private readonly pacer: Pacer;
     private readonly idle: IdleCache | undefined;
@@ -82,6 +87,7 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
             lod: options.lod,
         });
 
+        this.perfSettings = settings;
         this.engine = bakingEngine(asset, asset.createEngine(), settings.bake);
         // Spine's y axis points up and Pixi's points down. The official Pixi runtime flips the pose too:
         // the scale flips it, and the flag tells physics constraints which way gravity points
@@ -418,6 +424,11 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
             engine.update(seconds);
         }
         this.settleReset();
+    }
+
+    /** Where the pacing of updates stands, for `perf.report()`. */
+    pacingStatus(): PacingStatus {
+        return this.pacer.status(this.skeletonView.stats.renderMode === 'batched');
     }
 
     /** Brings the drawn skeleton in line with the pose, with the outlines the asset has now. */

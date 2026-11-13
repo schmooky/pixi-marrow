@@ -11,6 +11,8 @@ import { FRAME, fixtureAsset } from './helpers';
 
 /** The features of a report, in the order of its rows. */
 const FEATURES: readonly PerfFeature[] = [
+    'perf',
+    'pacing',
     'renderMode',
     'motion',
     'links',
@@ -433,6 +435,8 @@ describe('the perf report of a display object', () => {
                 attachCode: 'idle',
                 physics: 'update',
                 resetPending: false,
+                perf: spine.perfSettings,
+                pacing: spine.pacingStatus(),
             });
 
             expect(rows.find((entry) => entry.feature === 'vertices')).toMatchObject({

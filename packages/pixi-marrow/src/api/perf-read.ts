@@ -13,6 +13,15 @@ import type { PerfMemory, PerfOwner } from './spine-perf';
  * counts and the code that describes a view. An app that never asks does not load them.
  */
 
+/** The pacing of an owner that has none: every frame, on the screen. */
+const NO_PACING = {
+    rate: 'display',
+    offscreen: 'update',
+    hidden: false,
+    size: Number.POSITIVE_INFINITY,
+    physicsOff: false,
+} as const;
+
 /**
  * The rows of the perf report of a display object, read from it as it is now.
  *
@@ -37,6 +46,8 @@ export function readReport(owner: PerfOwner, view: SkeletonView, links: readonly
         physics,
         // the engine runs one update in mode reset, then the mode of the display object returns
         resetPending: engine.physics !== physics,
+        perf: owner.perfSettings,
+        pacing: owner.pacingStatus?.() ?? NO_PACING,
     });
 }
 

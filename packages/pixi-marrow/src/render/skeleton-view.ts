@@ -39,10 +39,7 @@ export interface SkeletonViewOptions extends CutChoice {
      * (the default) batches a small skeleton. A view draws in a batch until the mesh code is loaded.
      */
     renderMode?: RenderMode | undefined;
-    /**
-     * `gpu` places the vertices of the mesh mode in the vertex shader from the bone matrices,
-     * where an attachment allows it. `cpu` and `auto` place them on the CPU.
-     */
+    /** `gpu` places the mesh-mode vertices in the vertex shader where it can. `cpu` and `auto` use the CPU. */
     skinning?: 'auto' | 'cpu' | 'gpu' | undefined;
 }
 

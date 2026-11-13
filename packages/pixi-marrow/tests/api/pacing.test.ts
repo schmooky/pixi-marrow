@@ -144,3 +144,24 @@ describe('a display object with pacing', () => {
         spine.destroy();
     });
 });
+
+describe('the perf report of the settings', () => {
+    it('names the preset, the settings and the pacing in effect', async () => {
+        const spine = new MarrowSpine(await fixtureAsset('4.2/coin-pro.skel'), {
+            autoUpdate: false,
+            perf: 'balanced',
+            updateRate: 20,
+        });
+        const rows = await spine.perf.report();
+        const perf = rows.find((row) => row.feature === 'perf');
+        const pacing = rows.find((row) => row.feature === 'pacing');
+
+        expect(rows[0]?.feature).toBe('perf');
+        expect(perf?.value).toBe('balanced');
+        expect(perf?.reason).toMatch(/offscreen throttle, updateRate 20 a second/);
+        expect(perf?.reason).toMatch(/Given by name: updateRate$/);
+        expect(pacing?.value).toBe('20 a second');
+        expect(spine.perfSettings.preset).toBe('balanced');
+        spine.destroy();
+    });
+});

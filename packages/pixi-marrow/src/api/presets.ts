@@ -135,8 +135,9 @@ function check<K extends keyof PerfSettings>(setting: K, value: PerfSettings[K])
     return value;
 }
 
-/** The settings in effect, and which of them were given rather than taken from the preset. */
+/** The settings in effect, the preset they start from, and which of them were given rather than taken from it. */
 export interface ResolvedPerf extends PerfSettings {
+    readonly preset: PerfPreset;
     readonly given: ReadonlySet<keyof PerfSettings>;
 }
 
@@ -167,5 +168,5 @@ export function resolvePerf(
         given.add(key);
     }
 
-    return { ...settings, given };
+    return { ...settings, preset, given };
 }
