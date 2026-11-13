@@ -1,4 +1,4 @@
-import { type Application, Graphics, Ticker, UPDATE_PRIORITY } from 'pixi.js';
+import { type Application, Ticker, UPDATE_PRIORITY } from 'pixi.js';
 import { MarrowAsset, type MarrowSpineOptions } from 'pixi-marrow';
 import { type ReelSet, ReelSetBuilder, SpeedPresets, WinPresenter } from 'pixi-reels';
 import { type LineWin, lineWins, nextGrid, REELS, ROWS, SYMBOL_IDS, SYMBOLS } from './reel-round';
@@ -86,7 +86,6 @@ export default definePreview({
 
         reelTicker.autoStart = false;
         app.ticker.add(() => reelTicker.update(performance.now()));
-        const lines = new Graphics();
         let preset: Preset = 'balanced';
         let skinning: Skinning = 'cpu';
         let speed: Speed = 'normal';
@@ -95,7 +94,8 @@ export default definePreview({
         let generation = 0;
         let reelSet: ReelSet | null = null;
         let presenter: WinPresenter | null = null;
-        let looping = false;
+        /** The generation whose loop of rounds runs, or -1. */
+        let running = -1;
         let showWin: (text: string) => void = () => {};
 
         /** The symbol of a cell, as the reel set shows it. */
@@ -104,21 +104,8 @@ export default definePreview({
 
             return symbol instanceof MarrowReelSymbol ? symbol : null;
         };
-        /** Draws the payline of a win through the centres of its cells, and of the reels after them. */
-        const drawLine = (set: ReelSet, win: LineWin): void => {
-            const centres = Array.from({ length: REELS }, (_, reel) => {
-                const row = win.cells[Math.min(reel, win.cells.length - 1)]?.cellIndex ?? 1;
-                const cell = win.cells[reel] ?? null;
-                const bounds = set.getCellBounds(reel, cell === null ? row : cell.cellIndex);
-
-                return [MARGIN + bounds.x + bounds.width / 2, MARGIN + bounds.y + bounds.height / 2] as const;
-            }).slice(0, win.count);
-
-            lines.clear();
-            centres.forEach(([x, y], i) => (i === 0 ? lines.moveTo(x, y) : lines.lineTo(x, y)));
-            lines.stroke({ width: 6, color: 0xffd34d, alpha: 0.85, cap: 'round', join: 'round' });
-            showWin(`line ${Number(win.id) + 1}: ${win.count}x ${win.symbol}`);
-        };
+        /** Names the win that shows. */
+        const nameWin = (win: LineWin): void => showWin(`line ${Number(win.id) + 1}: ${win.count}x ${win.symbol}`);
 
         const build = (): ReelSet => {
             const spine: MarrowSpineOptions =
@@ -138,18 +125,18 @@ export default definePreview({
             const shown = new WinPresenter(set, { dimLosers: false, cycleGap: 350 });
 
             set.position.set(MARGIN, MARGIN);
-            set.events.on('win:start', (wins) => {
-                const winners = new Set(wins.flatMap((win) => win.cells.map((c) => `${c.reelIndex}:${c.cellIndex}`)));
+            // the wins show one after another: each lights up its own line and dims every other symbol
+            set.events.on('win:group', (win) => {
+                const line = new Set(win.cells.map((cell) => `${cell.reelIndex}:${cell.cellIndex}`));
 
+                nameWin(win as LineWin);
                 for (let reel = 0; reel < REELS; reel++) {
                     for (let row = 0; row < ROWS; row++) {
-                        if (!winners.has(`${reel}:${row}`)) symbolAt(set, reel, row)?.disable();
+                        if (!line.has(`${reel}:${row}`)) symbolAt(set, reel, row)?.disable();
                     }
                 }
             });
-            set.events.on('win:group', (win) => drawLine(set, win as LineWin));
             set.events.on('win:end', () => {
-                lines.clear();
                 for (let reel = 0; reel < REELS; reel++) {
                     for (let row = 0; row < ROWS; row++) symbolAt(set, reel, row)?.stopAnimation();
                 }
@@ -186,14 +173,18 @@ export default definePreview({
             await presenter?.show(wins);
         };
 
-        /** Spins round after round while the auto spin is on and the reel set is this generation's. */
+        /**
+         * Spins round after round while the auto spin is on, on the reel set of the generation it
+         * started in. A rebuild starts a loop of its own: a spin of a destroyed reel set never
+         * ends, so the loop of the old one stays where it was and is let go.
+         */
         const loop = async (): Promise<void> => {
-            if (looping) return;
-            looping = true;
-            try {
-                while (auto && reelSet !== null && !reelSet.destroyed) {
-                    const mine = generation;
+            const mine = generation;
 
+            if (running === mine) return;
+            running = mine;
+            try {
+                while (auto && mine === generation && reelSet !== null && !reelSet.destroyed) {
                     try {
                         await round(reelSet, mine);
                     } catch (error) {
@@ -201,18 +192,14 @@ export default definePreview({
                         if (mine === generation) throw error;
                     }
                     await wait(PAUSE);
-                    if (mine !== generation) break;
                 }
             } finally {
-                looping = false;
+                if (running === mine) running = -1;
             }
-            // a rebuild ended the old loop: the new reel set gets one
-            if (auto && reelSet !== null && !reelSet.destroyed) void loop();
         };
 
         const rebuild = (): void => {
             generation++;
-            lines.clear();
             presenter?.abort();
             presenter?.destroy();
             reelSet?.destroy();
@@ -220,7 +207,6 @@ export default definePreview({
             void loop();
         };
 
-        app.stage.addChild(lines);
         reelSet = build();
         const draws = drawCounter(app);
         const showDraws = readout('Draw calls', 6);

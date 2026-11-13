@@ -34,6 +34,8 @@ export class MarrowReelSymbol extends ReelSymbol {
     private current: MarrowSpine | null = null;
     /** True while the reel of this symbol spins. */
     private spinning = false;
+    /** True while the symbol shows its `disable` pose. */
+    private dimmed = false;
     /** The size of the cell, which the skeletons are centred in and scaled to. */
     private width = DESIGN_CELL;
     private height = DESIGN_CELL;
@@ -76,6 +78,7 @@ export class MarrowReelSymbol extends ReelSymbol {
         if (spine === null) return;
         spine.autoUpdate = false;
         spine.stop();
+        this.dimmed = false;
         this.view.removeChild(spine);
         this.current = null;
     }
@@ -90,7 +93,10 @@ export class MarrowReelSymbol extends ReelSymbol {
 
     /** Dims the symbol: the `disable` pose of a symbol that did not win. */
     disable(): void {
-        if (this.has('disable')) this.current?.play('disable', { mix: 0.15 });
+        // a symbol that is dimmed already rests, and may show as an image of the idle cache
+        if (this.dimmed || !this.has('disable')) return;
+        this.dimmed = true;
+        this.current?.play('disable', { mix: 0.15 });
     }
 
     stopAnimation(): void {
@@ -146,6 +152,7 @@ export class MarrowReelSymbol extends ReelSymbol {
     private rest(): void {
         const spine = this.current;
 
+        this.dimmed = false;
         if (spine === null) return;
         if (this.has('idle')) spine.play('idle', { loop: true, mix: 0.1 });
         else spine.stop();
@@ -158,6 +165,7 @@ export class MarrowReelSymbol extends ReelSymbol {
 
     /** The blurred frame of a spinning reel: the end of `blur_in`. */
     private blurred(): void {
+        this.dimmed = false;
         if (this.has('blur_in')) this.current?.play('blur_in');
     }
 
@@ -165,6 +173,7 @@ export class MarrowReelSymbol extends ReelSymbol {
     private async oneShot(name: string): Promise<void> {
         const spine = this.current;
 
+        this.dimmed = false;
         if (spine === null || !this.has(name)) return;
         const track = spine.play(name, { mix: 0.1 });
 

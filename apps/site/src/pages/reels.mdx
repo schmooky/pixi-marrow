@@ -15,7 +15,7 @@ import symbol from '../previews/reel-symbol.ts?raw';
 The grid is five reels of three rows, with ten paylines. Each symbol is a skeleton of the game Bzzz. A round spins, lands and shows its line wins one after another.
 
 - A reel that starts plays `blur_in`, which holds the blurred frame while it spins. A reel that stops plays `blur_out`, then `landing`, then the `idle` loop.
-- A win plays `win` on the symbols of its line. Every other symbol plays `disable`, a still and dimmed pose.
+- A win plays `win` on the symbols of its line. Every other symbol plays `disable`, a still and dimmed pose. Several wins show one after another, each with its own line lit.
 
 `Perf` switches the preset of every skeleton. With `balanced` an animation that plays alone plays from baked frames, and a skeleton at rest is drawn once as an image. The dimmed symbols of a win rest, so they become images. `Skinning` puts the vertices into the vertex shader of the mesh mode. `Draw calls` counts the calls of the last frame.
 
