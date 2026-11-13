@@ -106,6 +106,8 @@ function wroteSlot(pose: Pose43, slot: number): void {
 
 /** The official `slot.pose.setAttachment` of 4.3, from outside an update. */
 export function writeSlotAttachment(pose: Pose43, slot: number, attachment: AttachmentData | null): void {
+    // the official call changes nothing then either
+    if (pose.attachments[slot] === attachment) return;
     setSlotAttachment(pose, slot, attachment);
     showUnposed(pose);
     pose.solve.dirty = true;
@@ -113,12 +115,10 @@ export function writeSlotAttachment(pose: Pose43, slot: number, attachment: Atta
 
 /** The official `slot.pose.color.set` of 4.3, from outside an update. */
 export function writeSlotColor(pose: Pose43, slot: number, r: number, g: number, b: number, a: number): void {
-    writeColor(pose.colors, slot * 4, r, g, b, a);
-    wroteSlot(pose, slot);
+    if (writeColor(pose.colors, slot * 4, r, g, b, a)) wroteSlot(pose, slot);
 }
 
 /** The official `slot.pose.darkColor.set` of 4.3, from outside an update. */
 export function writeSlotDark(pose: Pose43, slot: number, r: number, g: number, b: number): void {
-    writeColor(pose.darkColors, slot * 3, r, g, b);
-    wroteSlot(pose, slot);
+    if (writeColor(pose.darkColors, slot * 3, r, g, b)) wroteSlot(pose, slot);
 }

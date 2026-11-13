@@ -148,9 +148,9 @@ export class Bone<N extends MarrowNames = MarrowNames> {
 
     /**
      * Takes a point in the space of the display object to the coordinates of the bone: the
-     * official `Bone.worldToLocal`, with the pose of the last update. Pixi's `toLocal` of the
-     * display object brings a point from the stage first. A bone scaled to 0 has no inverse, and
-     * the result is not finite then, as in the official runtime.
+     * official `Bone.worldToLocal` of the skeleton's Spine version, with the pose of the last
+     * update. Pixi's `toLocal` of the display object brings a point from the stage first. A bone
+     * scaled to 0 has no inverse, and the result is not finite then, as in the official runtime.
      *
      * @param out The point to write. A new one when left out.
      *
@@ -164,9 +164,13 @@ export class Bone<N extends MarrowNames = MarrowNames> {
         const b = Number(world[at + 1]);
         const c = Number(world[at + 2]);
         const d = Number(world[at + 3]);
-        const inverse = 1 / (a * d - b * c);
+        const det = a * d - b * c;
         const x = point.x - Number(world[at + 4]);
         const y = point.y - Number(world[at + 5]);
+
+        // the two official formulas differ in their last bits: 4.3 divides once, 4.1 and 4.2 multiply by the inverse
+        if (this.state.model.version === '4.3') return out.set((x * d - y * b) / det, (y * a - x * c) / det);
+        const inverse = 1 / det;
 
         return out.set(x * d * inverse - y * b * inverse, y * a * inverse - x * c * inverse);
     }

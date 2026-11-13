@@ -13,7 +13,7 @@ import source from '../snippets/skins.ts?raw';
 
 A list of skins is active as one skin. Each skin adds its attachments, bones and constraints, in the order of the list. Where two skins store an attachment under one slot and name, the later one wins.
 
-That is what the official runtime does with a skin that `Skin.addSkin` fills, so a rig from the mix-and-match example works as it does there. All instances of an asset share the combined skin of a list. Setting `skins` puts the slots into their setup pose, as setting `skin` does.
+That is what the official runtime does with a skin that `Skin.addSkin` fills, so a rig from the mix-and-match example works as it does there. All instances of an asset share the combined skin of a list. One that no instance shows any more is freed after a while. Setting `skins` puts the slots into their setup pose, as setting `skin` does.
 
 ## Change what a slot shows
 

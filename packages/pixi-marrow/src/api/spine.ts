@@ -405,6 +405,8 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpineLinks
         if (this.destroyed) return;
         this.autoUpdate = false;
         this.engine.clearTracks();
+        // a combined skin stays while an engine shows it
+        if (this.engine.skins.length > 1) this.engine.setSkin(-1);
         this.absorb();
         this.pump.pending.clear();
         this.links?.clear();

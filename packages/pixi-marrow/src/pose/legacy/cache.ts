@@ -1,4 +1,13 @@
-import { C_IK, C_PATH, C_PHYSICS, C_TRANSFORM, type ConstraintPlan, type LegacyConstraint } from './constraints';
+import type { SkinData } from '../../model/model';
+import {
+    C_IK,
+    C_PATH,
+    C_PHYSICS,
+    C_TRANSFORM,
+    type ConstraintPlan,
+    type LegacyConstraint,
+    pathBonesOfSkin,
+} from './constraints';
 import { buildGroups, type Groups } from './groups';
 import type { Rig } from './rig';
 
@@ -31,6 +40,8 @@ interface Sort {
     /** The skin the cache is sorted for, and the default skin. -1 is none. */
     readonly skin: number;
     readonly defaultSkin: number;
+    /** The skin the cache is sorted for when `combineSkins` made it: the model has no path bones for it. */
+    readonly combined: SkinData | undefined;
     readonly parents: Int16Array;
     readonly sorted: Uint8Array;
     readonly active: Uint8Array;
@@ -119,7 +130,15 @@ function sortPathBones(sort: Sort, bones: Int16Array | undefined): void {
 function sortPath(sort: Sort, constraint: LegacyConstraint): void {
     const { bones, pathBones } = constraint;
 
-    if (sort.skin >= 0) sortPathBones(sort, pathBones[sort.skin]);
+    if (sort.skin >= 0) {
+        const { combined } = sort;
+        const own =
+            combined === undefined
+                ? pathBones[sort.skin]
+                : pathBonesOfSkin(combined, constraint.target, constraint.targetBone, sort.parents.length);
+
+        sortPathBones(sort, own);
+    }
     if (sort.defaultSkin >= 0 && sort.defaultSkin !== sort.skin) sortPathBones(sort, pathBones[sort.defaultSkin]);
     for (const each of pathBones) sortPathBones(sort, each);
     for (let i = 0; i < bones.length; i++) sortBone(sort, bones[i] ?? -1);
@@ -176,6 +195,7 @@ function buildCache(rig: Rig, skinIndex: number): UpdateCache {
         plan,
         skin: skin === undefined ? -1 : skinIndex,
         defaultSkin: rig.lookup.defaultSkin,
+        combined: skinIndex >= rig.model.skins.length ? skin : undefined,
         parents,
         sorted: new Uint8Array(count),
         active: new Uint8Array(count),

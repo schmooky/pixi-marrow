@@ -159,6 +159,8 @@ export function mirrorEngine(model: SkeletonModel, driver: OfficialDriver, tampe
     return {
         state,
         bytes: 0,
+        // the mirror keeps one pose of the slots: what the official skeleton draws
+        slotPose: state,
         get timeScale() {
             return driver.timeScale;
         },

@@ -1,8 +1,8 @@
 import { MarrowError } from '../../base/errors';
 import type { AttachmentData } from '../../model/attachments';
 import type { SkeletonModel } from '../../model/model';
-import type { PhysicsMode, PoseEngine, PoseEvent, TrackEntry, TrackFields } from '../engine';
-import { combineSkins } from '../shared/combine-skins';
+import type { PhysicsMode, PoseEngine, PoseEvent, SlotPose, TrackEntry, TrackFields } from '../engine';
+import { changeSkin, combineSkins } from '../shared/combine-skins';
 import { checkDark, checkSlot, writeColor } from '../shared/slot-writes';
 import { createPoseState, type PoseState, poseStateBytes } from '../state';
 import { applyTracks } from './apply';
@@ -176,9 +176,12 @@ class LegacyEngine implements PoseEngine {
     }
 
     setSkin(skin: number): void {
+        const before = this.state.skin;
+
         this.begin();
         setSkin(this.rig, this.state, this.solver, skin);
         this.changed();
+        changeSkin(this.rig.lookup, this.rig.model, before, this.state.skin);
     }
 
     setSkins(skins: readonly number[]): void {
@@ -189,8 +192,14 @@ class LegacyEngine implements PoseEngine {
         return this.rig.lookup.parts(this.state.skin);
     }
 
+    get slotPose(): SlotPose {
+        return this.state;
+    }
+
     setAttachment(slot: number, attachment: AttachmentData | null): void {
         checkSlot(this.rig.model, slot);
+        // the official call changes nothing then either
+        if (this.state.attachments[slot] === attachment) return;
         this.begin();
         setSlotAttachment(this.rig, this.state, slot, attachment);
         // a path constraint reads the attachment of its slot
@@ -201,7 +210,7 @@ class LegacyEngine implements PoseEngine {
     setColor(slot: number, r: number, g: number, b: number, a: number): void {
         checkSlot(this.rig.model, slot);
         this.begin();
-        writeColor(this.state.colors, slot * 4, r, g, b, a);
+        if (!writeColor(this.state.colors, slot * 4, r, g, b, a)) return;
         stampSlot(this.state, slot);
         this.changed();
     }
@@ -210,7 +219,7 @@ class LegacyEngine implements PoseEngine {
         checkSlot(this.rig.model, slot);
         checkDark(this.rig.model, slot);
         this.begin();
-        writeColor(this.state.darkColors, slot * 3, r, g, b);
+        if (!writeColor(this.state.darkColors, slot * 3, r, g, b)) return;
         stampSlot(this.state, slot);
         this.changed();
     }

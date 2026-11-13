@@ -2,6 +2,7 @@ import { MarrowError } from '../../base/errors';
 import type { AttachmentData, AttachmentRef, VertexData } from '../../model/attachments';
 import type { AnimationData, SkeletonModel } from '../../model/model';
 import type { TimelineData, TimelineKind } from '../../model/timelines';
+import { onSkinFreed } from '../shared/combine-skins';
 import { type AttachmentLookup, createAttachmentLookup, meshSource } from '../shared/lookup';
 import type { UpdateCache } from './cache';
 import { type ConstraintPlan, createConstraintPlan } from './constraints';
@@ -173,6 +174,17 @@ export function rigOf(model: SkeletonModel): Rig {
             caches: new Map(),
             skips: true,
         };
+        const shared = rig;
+
+        // a combined skin that is freed takes its update cache and its attachment rows along
+        onSkinFreed(rig.lookup, (index) => {
+            shared.caches.delete(index);
+            for (const clip of shared.clips) {
+                for (const timeline of clip?.timelines ?? []) {
+                    if (timeline.shown.length > index + 1) timeline.shown[index + 1] = undefined;
+                }
+            }
+        });
         rigs.set(model, rig);
     }
 

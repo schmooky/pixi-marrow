@@ -34,7 +34,7 @@ export const BONE_FIELDS = ['x', 'y', 'rotation', 'scaleX', 'scaleY', 'shearX', 
 export type BoneField = (typeof BONE_FIELDS)[number];
 
 /** The calls a script makes. A pose engine and an official driver both take them. */
-export type PoseDriver = Omit<PoseEngine, 'state' | 'bytes' | 'setAttachment'>;
+export type PoseDriver = Omit<PoseEngine, 'state' | 'bytes' | 'setAttachment' | 'slotPose'>;
 
 /** A pose copied out of an official skeleton, in the layout of `PoseState`. */
 export interface OfficialPose {

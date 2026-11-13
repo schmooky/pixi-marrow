@@ -3,6 +3,7 @@ import type { AttachmentData, AttachmentRef } from '../../model/attachments';
 import type { ConstraintData } from '../../model/constraints';
 import type { AnimationData, SkeletonModel } from '../../model/model';
 import type { TimelineData, TimelineKind } from '../../model/timelines';
+import { onSkinFreed } from '../shared/combine-skins';
 import { type AttachmentLookup, createAttachmentLookup, meshSource } from '../shared/lookup';
 import { prepareSolver } from './solver';
 import {
@@ -452,6 +453,14 @@ export function prepareRig(model: SkeletonModel): Rig43 {
         },
     };
 
+    // a combined skin that is freed takes its attachment rows along
+    onSkinFreed(lookup, (index) => {
+        for (const clip of clips) {
+            for (const timeline of clip.timelines) {
+                if (timeline.shown.length > index + 1) timeline.shown[index + 1] = undefined;
+            }
+        }
+    });
     rigs.set(model, rig);
 
     return rig;

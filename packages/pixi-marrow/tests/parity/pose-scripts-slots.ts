@@ -65,6 +65,38 @@ function combined(rig: PoseRigInfo): PoseScript[] {
     ];
 }
 
+/**
+ * More lists of skins than the engines keep while no instance shows them, then the first list
+ * again. Our side frees the oldest combined skins and builds the first one anew. The official
+ * side builds a new skin every time.
+ */
+function manyLists(rig: PoseRigInfo): PoseScript[] {
+    const named = Array.from({ length: rig.skins - 1 }, (_, i) => i + 1);
+
+    if (named.length < 5) return [];
+    const { a } = pick(rig, 3);
+    const lists: number[][] = [];
+
+    for (let i = 0; i < named.length && lists.length < 12; i++) {
+        for (let j = i + 1; j < named.length && lists.length < 12; j++) {
+            lists.push([named[i] ?? 1, named[j] ?? 2]);
+        }
+    }
+
+    return [
+        script('many lists of skins', (s) => {
+            s.set(0, a, true);
+            for (const list of lists) {
+                s.skins(list);
+                s.update(DT, 1);
+            }
+            s.skins(lists[0] ?? []);
+            s.setupPoseSlots();
+            s.update(ODD, 3);
+        }),
+    ];
+}
+
 /** The slots a script writes, picked for the animation it plays. */
 function slotsFor(rig: PoseRigInfo, animation: number) {
     const keyed = new Set(rig.animations[animation]?.keyedSlots ?? []);
@@ -115,8 +147,13 @@ function writes(rig: PoseRigInfo): PoseScript[] {
             s.update(DT, 2);
             s.slotColor(slots.free, 0.3, 0.6, 0.9, 0.5);
             s.update(DT, 3);
-            // outside 0 and 1 is clamped on both sides
-            s.slotColor(slots.keyed, 1.4, -0.2, 0.5, 2);
+            // outside 0 and 1 is clamped on both sides, on a slot no key overwrites before the comparison
+            s.slotColor(slots.free, 1.4, -0.2, 0.5, 2);
+            s.update(ODD, 2);
+            // the same color again changes nothing
+            s.slotColor(slots.free, 1.4, -0.2, 0.5, 2);
+            s.update(DT, 1);
+            s.slotColor(slots.keyed, 0.9, 0.8, 0.7, 0.6);
             s.update(ODD, 2);
             // a track below 1 mixes the key with the written color
             s.configure(entry, { alpha: 0.5 });
@@ -126,15 +163,45 @@ function writes(rig: PoseRigInfo): PoseScript[] {
             s.update(DT, 2);
         }),
         script('slot writes at rest', (s) => {
+            // the slots of the animation that rests: one it keys and one it does not
+            const resting = slotsFor(rig, b);
+            const [first, second] = resting.refs(resting.swap ?? resting.free);
+
             s.set(0, b, false);
             s.update(Math.max(DT, duration(b) * 0.6), 3);
-            s.slotColor(slots.free, 0.5, 0.25, 0.75, 1);
+            s.slotColor(resting.free, 0.5, 0.25, 0.75, 1);
             s.update(DT, 2);
-            s.slotAttachment(swap, two ?? null);
+            s.slotColor(resting.keyed, 0.25, 0.5, 0.75, 0.5);
             s.update(DT, 2);
-            s.slotAttachment(swap, two ?? null);
+            s.slotAttachment(resting.swap ?? resting.free, second ?? null);
+            s.update(DT, 2);
+            s.slotAttachment(resting.swap ?? resting.free, second ?? null);
+            s.update(DT, 1);
+            s.slotAttachment(resting.keyed, first ?? null);
             s.update(DT, 1);
             s.skins(skinsToCombine(rig).slice(0, 2));
+            s.update(DT, 2);
+        }),
+        script('every slot written', (s) => {
+            // every slot, so that a slot a 4.3 slider poses, a linked mesh and a sequence get a write too
+            const all = Array.from({ length: Math.min(rig.slots, 80) }, (_, slot) => slot);
+            const write = (n: number): void => {
+                for (const slot of all) {
+                    const refs = slots.refs(slot);
+
+                    s.slotColor(slot, ((slot + n) % 5) / 4, ((slot + 2 * n) % 3) / 2, 0.5, ((slot + n) % 4) / 3);
+                    if (refs.length > 0) s.slotAttachment(slot, refs[(slot + n) % refs.length] ?? null);
+                }
+            };
+
+            s.set(0, a, true);
+            s.update(DT, 1);
+            write(1);
+            s.update(DT, 2);
+            write(2);
+            s.update(ODD, 2);
+            s.clearTracks();
+            write(3);
             s.update(DT, 2);
         }),
     ];
@@ -147,6 +214,8 @@ function writes(rig: PoseRigInfo): PoseScript[] {
                 s.update(DT, 2);
                 s.slotDark(dark, 0.2, 0.1, 0.4);
                 s.update(DT, 3);
+                // with no track nothing keys the slot before the comparison: the clamp shows
+                s.clearTracks();
                 s.slotDark(dark, -1, 0.5, 3);
                 s.update(ODD, 2);
                 s.setupPoseSlots();
@@ -162,5 +231,5 @@ function writes(rig: PoseRigInfo): PoseScript[] {
 export function slotScripts(rig: PoseRigInfo): PoseScript[] {
     if (rig.animations.length === 0) return [];
 
-    return [...combined(rig), ...writes(rig)];
+    return [...combined(rig), ...manyLists(rig), ...writes(rig)];
 }

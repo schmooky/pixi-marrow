@@ -134,15 +134,23 @@ export interface PoseEngine {
     /** The skins of the model that are active, in the order they were given. Empty for none. */
     readonly skins: readonly number[];
     /**
+     * The pose of the slots that {@link setAttachment}, {@link setColor} and {@link setDarkColor}
+     * write. It holds the arrays of {@link state}, except in 4.3 for an engine whose sliders pose
+     * slots. There it is the animated pose, and the pose state holds what the sliders make of it.
+     */
+    readonly slotPose: SlotPose;
+    /**
      * Shows an attachment in a slot, or nothing: the official `Slot.setAttachment`. A changed
      * attachment resets the sequence index. The deform stays only when the old and the new
      * attachment share their timeline attachment. The attachment stays until an attachment
-     * timeline keys the slot, or the setup pose of the slots is set.
+     * timeline keys the slot, or the setup pose of the slots is set. The attachment the slot
+     * shows already changes nothing, so a write in every frame lets the skeleton rest.
      */
     setAttachment(slot: number, attachment: AttachmentData | null): void;
     /**
      * Sets the color of a slot, each part from 0 to 1: the official `slot.color.set`. In 4.3 it
-     * is the color of the slot's pose. It stays until a color timeline keys the slot.
+     * is the color of the slot's pose. It stays until a color timeline keys the slot. The color
+     * the slot has already changes nothing, so a write in every frame lets the skeleton rest.
      */
     setColor(slot: number, r: number, g: number, b: number, a: number): void;
     /**
@@ -176,6 +184,18 @@ export interface PoseEngine {
     update(dt: number): void;
     /** What happened since the last call, in the order the official listener is called. */
     takeEvents(): PoseEvent[];
+}
+
+/**
+ * The slots as a write reaches them: the official `slot.pose` in 4.3, the slots themselves
+ * before. Read it to change one part of a value, such as the alpha of a color.
+ */
+export interface SlotPose {
+    /** r, g, b, a per slot. */
+    readonly colors: Float64Array;
+    /** r, g, b per slot. Meaningful where the model's `hasDark` is 1. */
+    readonly darkColors: Float64Array;
+    readonly attachments: readonly (AttachmentData | null)[];
 }
 
 /** Creates one more pose engine for the model it was loaded for. Synchronous. */

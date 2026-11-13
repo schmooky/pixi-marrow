@@ -12,7 +12,7 @@ export interface AttachmentLookup {
     readonly defaultSkin: number;
     /** How many skins an index can point at: those of the model, then those that {@link add} added. */
     readonly skinCount: number;
-    /** The skin at an index, or undefined for -1 and for an index past {@link skinCount}. */
+    /** The skin at an index, or undefined for -1, for an index past {@link skinCount} and for one that {@link drop} freed. */
     skin(index: number): SkinData | undefined;
     /** The skins of the model that a skin is made of, in order: itself for a skin of the model, none for -1. */
     parts(index: number): readonly number[];
@@ -21,8 +21,19 @@ export interface AttachmentLookup {
      * gives the index it got then, and `make` is not called. `combineSkins` is what calls it.
      */
     add(key: string, parts: readonly number[], make: () => SkinData): number;
+    /**
+     * Frees a skin that {@link add} added: its tables go, and its index stays unused. The next
+     * {@link add} of its key makes a new skin with a new index. Does nothing for a skin of the
+     * model. `combineSkins` decides when, see `releaseSkin`.
+     */
+    drop(index: number): void;
     /** The attachment a skin stores under a slot and a name. */
     get(skin: number, slot: number, name: string): AttachmentData | undefined;
+    /**
+     * The name a skin stores an attachment under for a slot, or undefined. The first in name
+     * order when it stores the attachment under several names. Built once per skin and slot.
+     */
+    nameOf(skin: number, slot: number, attachment: AttachmentData): string | undefined;
     /**
      * The attachment a slot shows for a name, as the official `Skeleton.getAttachment` finds it:
      * in the active skin first, then in the default skin.
@@ -57,6 +68,22 @@ export function createAttachmentLookup(model: SkeletonModel): AttachmentLookup {
 /** Per slot of one skin: name to attachment. */
 type SkinTable = (Map<string, AttachmentData> | undefined)[];
 
+/** Per table of a slot: attachment to the first name it is stored under. */
+const NAMES = new WeakMap<Map<string, AttachmentData>, Map<AttachmentData, string>>();
+
+function namesOf(names: Map<string, AttachmentData>): Map<AttachmentData, string> {
+    let back = NAMES.get(names);
+
+    if (back === undefined) {
+        back = new Map();
+        // a table holds its names in name order, as the skin does
+        for (const [name, attachment] of names) if (!back.has(attachment)) back.set(attachment, name);
+        NAMES.set(names, back);
+    }
+
+    return back;
+}
+
 function tableOf(skin: SkinData): SkinTable {
     const slots: SkinTable = [];
 
@@ -76,9 +103,10 @@ function tableOf(skin: SkinData): SkinTable {
 function buildLookup(model: SkeletonModel): AttachmentLookup {
     const own = model.skins.length;
     const tables = model.skins.map(tableOf);
-    // the skins that `add` added, after those of the model, with what each is made of
-    const made: SkinData[] = [];
-    const madeParts: (readonly number[])[] = [];
+    // the skins that `add` added, after those of the model, with what each is made of and its key
+    const made: (SkinData | undefined)[] = [];
+    const madeParts: (readonly number[] | undefined)[] = [];
+    const keys: string[] = [];
     const byKey = new Map<string, number>();
     const defaultSkin = model.skins.findLastIndex((skin) => skin.name === 'default');
     const get = (skin: number, slot: number, name: string): AttachmentData | undefined =>
@@ -100,13 +128,28 @@ function buildLookup(model: SkeletonModel): AttachmentLookup {
                 index = own + made.length;
                 made.push(skin);
                 madeParts.push(Object.freeze([...parts]));
+                keys.push(key);
                 tables.push(tableOf(skin));
                 byKey.set(key, index);
             }
 
             return index;
         },
+        drop(index) {
+            const at = index - own;
+
+            if (at < 0 || made[at] === undefined) return;
+            byKey.delete(keys[at] ?? '');
+            made[at] = undefined;
+            madeParts[at] = undefined;
+            tables[index] = [];
+        },
         get,
+        nameOf(skin, slot, attachment) {
+            const names = tables[skin]?.[slot];
+
+            return names === undefined ? undefined : namesOf(names).get(attachment);
+        },
         find: (activeSkin, slot, name) => get(activeSkin, slot, name) ?? get(defaultSkin, slot, name),
         resolve: (ref) => get(ref.skin, ref.slot, ref.name),
     };

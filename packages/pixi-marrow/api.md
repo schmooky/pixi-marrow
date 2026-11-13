@@ -274,7 +274,7 @@ export declare class Slot<N extends MarrowNames = MarrowNames> {
   get alpha(): number;
   set alpha(value: number);
   get darkTint(): number | null;
-  set darkTint(value: number);
+  set darkTint(value: number | null);
 }
 export declare abstract class SpineLinks<N extends MarrowNames = MarrowNames> extends Container {
   protected links: Links | undefined;
@@ -404,7 +404,9 @@ export interface AttachmentLookup {
   skin(index: number): SkinData | undefined;
   parts(index: number): readonly number[];
   add(key: string, parts: readonly number[], make: () => SkinData): number;
+  drop(index: number): void;
   get(skin: number, slot: number, name: string): AttachmentData | undefined;
+  nameOf(skin: number, slot: number, attachment: AttachmentData): string | undefined;
   find(activeSkin: number, slot: number, name: string): AttachmentData | undefined;
   resolve(ref: AttachmentRef): AttachmentData | undefined;
 }
@@ -590,6 +592,7 @@ export interface PoseEngine {
   setSkin(skin: number): void;
   setSkins(skins: readonly number[]): void;
   readonly skins: readonly number[];
+  readonly slotPose: SlotPose;
   setAttachment(slot: number, attachment: AttachmentData | null): void;
   setColor(slot: number, r: number, g: number, b: number, a: number): void;
   setDarkColor(slot: number, r: number, g: number, b: number): void;
@@ -740,6 +743,11 @@ export interface SliderConstraintData extends ConstraintBase {
   scale: number;
   max: number;
   local: boolean;
+}
+export interface SlotPose {
+  readonly colors: Float64Array;
+  readonly darkColors: Float64Array;
+  readonly attachments: readonly (AttachmentData | null)[];
 }
 export interface SlotTable {
   count: number;

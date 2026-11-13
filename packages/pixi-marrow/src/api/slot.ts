@@ -11,10 +11,14 @@ const byte = (part: number): number => Math.round(part * 255);
  * One slot of a display object: the attachment it shows, its color and its dark color, to read
  * and to write. `MarrowSpine.slot` hands it out, one object per slot.
  *
- * A write goes to the pose, as code with the official runtime writes a slot between two updates.
- * The next render shows it. A slot that a 4.3 slider poses shows it after the next update. It
- * stays until an animation that keys the slot writes it again, or until the setup pose of the
- * slots is set, which the `skin` and `skins` setters do.
+ * A write goes to the pose of the slot, as code with the official runtime writes a slot between
+ * two updates. The next update of the display object draws it, which its ticker makes every
+ * frame unless `autoUpdate` is off. It stays until an animation that keys the slot writes it
+ * again, or until the setup pose of the slots is set, which the `skin` and `skins` setters do.
+ * The values read are those of the same pose. In 4.3 a slider can change what is drawn from them.
+ *
+ * A write of the value that is there changes nothing, so a game can write in every frame and the
+ * skeleton still rests.
  *
  * @example
  * const glow = hero.slot('glow');
@@ -47,31 +51,27 @@ export class Slot<N extends MarrowNames = MarrowNames> {
      * stores the attachment for the slot.
      */
     get attachment(): string | null {
-        const { state } = this.engine;
-        const shown = state.attachments[this.index] ?? null;
+        const { engine, index } = this;
+        const shown = engine.slotPose.attachments[index] ?? null;
 
         if (shown === null) return null;
+        const { state } = engine;
         const lookup = createAttachmentLookup(state.model);
 
-        for (const skin of [state.skin, lookup.defaultSkin]) {
-            for (const entry of lookup.skin(skin)?.attachments ?? []) {
-                if (entry.slot === this.index && entry.attachment === shown) return entry.name;
-            }
-        }
-
-        return shown.name;
+        return lookup.nameOf(state.skin, index, shown) ?? lookup.nameOf(lookup.defaultSkin, index, shown) ?? shown.name;
     }
 
     /**
      * Shows the attachment that the active skins store under this name for the slot, or else the
-     * default skin, as the official `Skeleton.setAttachment` finds it. Null shows nothing.
+     * default skin, as the official `Skeleton.setAttachment` finds it. Null or an empty name shows
+     * nothing, as there.
      *
      * Throws a `MarrowError` that lists the names the skins have for the slot.
      */
     set attachment(name: string | null) {
         const { engine, index } = this;
 
-        if (name === null) {
+        if (name === null || name === undefined || name === '') {
             engine.setAttachment(index, null);
 
             return;
@@ -92,12 +92,10 @@ export class Slot<N extends MarrowNames = MarrowNames> {
 
     /** The color of the slot as a Pixi tint: `0xRRGGBB`. */
     get tint(): number {
-        const { colors } = this.engine.state;
-        const at = this.index * 4;
-
-        return (byte(Number(colors[at])) << 16) | (byte(Number(colors[at + 1])) << 8) | byte(Number(colors[at + 2]));
+        return tintOf(this.engine.slotPose.colors, this.index * 4);
     }
 
+    /** Sets the color of the slot and keeps its alpha. */
     set tint(value: number) {
         // the text that names the slot is built for the error only: a write in every frame allocates nothing
         if (!Number.isFinite(value)) finiteArgument(`slot("${this.name}")`, 'tint', value);
@@ -114,35 +112,47 @@ export class Slot<N extends MarrowNames = MarrowNames> {
 
     /** The alpha of the slot, from 0 to 1. A slot at 0 is not drawn. */
     get alpha(): number {
-        return Number(this.engine.state.colors[this.index * 4 + 3]);
+        return Number(this.engine.slotPose.colors[this.index * 4 + 3]);
     }
 
+    /** Sets the alpha of the slot and keeps its color. Clamped to 0 and 1. */
     set alpha(value: number) {
-        const { colors } = this.engine.state;
+        const { colors } = this.engine.slotPose;
         const at = this.index * 4;
+
         if (!Number.isFinite(value)) finiteArgument(`slot("${this.name}")`, 'alpha', value);
         this.engine.setColor(this.index, Number(colors[at]), Number(colors[at + 1]), Number(colors[at + 2]), value);
     }
 
     /**
      * The dark color of the slot as `0xRRGGBB`, or null for a slot without one. A slot has a dark
-     * color when it has tint black in the Spine editor. Setting it on a slot without one throws a
-     * `MarrowError`.
+     * color when it has tint black in the Spine editor.
      */
     get darkTint(): number | null {
-        const { state } = this.engine;
+        const { engine, index } = this;
 
-        if (state.model.slots.hasDark[this.index] !== 1) return null;
-        const at = this.index * 3;
-        const dark = state.darkColors;
+        if (engine.state.model.slots.hasDark[index] !== 1) return null;
 
-        return (byte(Number(dark[at])) << 16) | (byte(Number(dark[at + 1])) << 8) | byte(Number(dark[at + 2]));
+        return tintOf(engine.slotPose.darkColors, index * 3);
     }
 
-    set darkTint(value: number) {
-        if (!Number.isFinite(value)) finiteArgument(`slot("${this.name}")`, 'darkTint', value);
-        const color = value & 0xffffff;
+    /**
+     * Sets the dark color. Null changes nothing on a slot without a dark color, so a value that was
+     * read can be written back. A number for such a slot, or null for a slot with one, throws a
+     * `MarrowError`: the editor decides whether a slot has a dark color.
+     */
+    set darkTint(value: number | null) {
+        const { engine, index } = this;
 
-        this.engine.setDarkColor(this.index, (color >> 16) / 255, ((color >> 8) & 255) / 255, (color & 255) / 255);
+        if (value === null && engine.state.model.slots.hasDark[index] !== 1) return;
+        if (value === null || !Number.isFinite(value)) finiteArgument(`slot("${this.name}")`, 'darkTint', value);
+        const color = (value ?? 0) & 0xffffff;
+
+        engine.setDarkColor(index, (color >> 16) / 255, ((color >> 8) & 255) / 255, (color & 255) / 255);
     }
+}
+
+/** The color at `at` of a color array as a Pixi tint. */
+function tintOf(colors: Float64Array, at: number): number {
+    return (byte(Number(colors[at])) << 16) | (byte(Number(colors[at + 1])) << 8) | byte(Number(colors[at + 2]));
 }

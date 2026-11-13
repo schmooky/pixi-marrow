@@ -1,8 +1,8 @@
 import { MarrowError } from '../../base/errors';
 import type { AttachmentData } from '../../model/attachments';
 import type { SkeletonModel } from '../../model/model';
-import type { PhysicsMode, PoseEngine, PoseEvent, TrackEntry, TrackFields } from '../engine';
-import { combineSkins } from '../shared/combine-skins';
+import type { PhysicsMode, PoseEngine, PoseEvent, SlotPose, TrackEntry, TrackFields } from '../engine';
+import { changeSkin, combineSkins } from '../shared/combine-skins';
 import { checkDark, checkSlot } from '../shared/slot-writes';
 import { nextVersion, type PoseState } from '../state';
 import { applyTracks } from './apply';
@@ -175,14 +175,18 @@ class Engine43 implements PoseEngine {
     }
 
     setSkin(skin: number): void {
-        const count = this.pose.rig.lookup.skinCount;
+        const { lookup } = this.pose.rig;
+        const count = lookup.skinCount;
 
-        if (!Number.isInteger(skin) || skin < -1 || skin >= count) {
+        if (!Number.isInteger(skin) || skin < -1 || skin >= count || (skin >= 0 && lookup.skin(skin) === undefined)) {
             throw invalid(`The skeleton has no skin ${skin}.`, `Pass an index below ${count}, or -1 for no skin.`);
         }
+        const before = this.state.skin;
+
         this.open();
         setSkin(this.pose, skin);
         this.close();
+        changeSkin(this.pose.rig.lookup, this.state.model, before, this.state.skin);
     }
 
     setSkins(skins: readonly number[]): void {
@@ -191,6 +195,10 @@ class Engine43 implements PoseEngine {
 
     get skins(): readonly number[] {
         return this.pose.rig.lookup.parts(this.state.skin);
+    }
+
+    get slotPose(): SlotPose {
+        return this.pose;
     }
 
     setAttachment(slot: number, attachment: AttachmentData | null): void {
