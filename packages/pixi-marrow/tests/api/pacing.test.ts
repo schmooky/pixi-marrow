@@ -14,6 +14,14 @@ const SCREEN = { screen: { x: 0, y: 0, width: 800, height: 600 } } as unknown as
 /** Something rendered with the box it covers on the screen. */
 const at = (x: number, y: number, width: number, height = width) => ({ getBounds: () => ({ x, y, width, height }) });
 
+/** Tells a display object that a render reached it, as Pixi does through the child that watches. */
+function rendered(spine: MarrowSpine): void {
+    const watch = spine.children.find((child) => child.label === 'marrow-pacing');
+
+    if (watch?.onRender == null) throw new Error('no child watches the renders');
+    watch.onRender(SCREEN);
+}
+
 function thrownBy(run: () => unknown): MarrowError {
     try {
         run();
@@ -81,11 +89,32 @@ describe('the pacing of updates', () => {
         expect(pacer.take(1 / 60, false)).toBe(1 / 60);
     });
 
-    it('counts a skeleton that no render reaches as off the screen', () => {
+    it('counts a skeleton that no render reaches for a while as off the screen', () => {
         const pacer = new Pacer(resolvePerf(undefined, { offscreen: 'pause' }));
-        const steps = Array.from({ length: 5 }, () => pacer.take(1 / 60, false));
+        const steps = Array.from({ length: 5 }, () => pacer.take(1 / 20, false));
 
         expect(steps.map((seconds) => seconds > 0)).toEqual([true, true, false, false, false]);
+    });
+
+    it('keeps a skeleton on the screen that updates several times a render', () => {
+        const pacer = new Pacer(resolvePerf(undefined, { offscreen: 'pause' }));
+        let posed = 0;
+
+        for (let render = 0; render < 20; render++) {
+            for (let i = 0; i < 3; i++) posed += Math.max(pacer.take(1 / 180, false), 0);
+            pacer.seen(at(100, 100, 50), SCREEN);
+        }
+        expect(posed).toBeCloseTo(20 / 60, 10);
+    });
+
+    it('counts a skeleton that shows nothing as on the screen, so that it shows again', () => {
+        const pacer = new Pacer(resolvePerf(undefined, { offscreen: 'pause', lod: 'auto' }));
+
+        pacer.seen(at(100, 100, 200), SCREEN);
+        pacer.seen(at(0, 0, 0), SCREEN);
+        expect(pacer.take(1 / 60, false)).toBe(1 / 60);
+        // the size it had stays: an empty box does not leave physics out
+        expect(pacer.small).toBe(false);
     });
 
     it('throttles a skeleton off the screen to four updates a second with the time that passed', () => {
@@ -103,7 +132,12 @@ describe('the pacing of updates', () => {
         expect(pacer.small).toBe(false);
         pacer.seen(at(10, 10, 60), SCREEN);
         expect(pacer.small).toBe(true);
+        // physics comes back above 120 pixels, so a skeleton at the limit does not flip each frame
+        pacer.seen(at(10, 10, 110), SCREEN);
+        expect(pacer.small).toBe(true);
         pacer.seen(at(10, 10, 200, 50), SCREEN);
+        expect(pacer.small).toBe(false);
+        pacer.seen(at(10, 10, 110), SCREEN);
         expect(pacer.small).toBe(false);
         expect(new Pacer(resolvePerf(undefined)).small).toBe(false);
     });
@@ -129,19 +163,63 @@ describe('a display object with pacing', () => {
         vi.spyOn(spine.engine, 'update').mockImplementation(() => {
             modes.push(spine.engine.physics);
         });
-        spine.onRender?.call(spine, SCREEN);
+        rendered(spine);
         // a render of the real object: its bounds decide
         spine.update(1 / 60);
         vi.spyOn(spine, 'getBounds').mockReturnValue({ x: 0, y: 0, width: 40, height: 40 } as never);
-        spine.onRender?.call(spine, SCREEN);
+        rendered(spine);
         spine.update(1 / 60);
         vi.spyOn(spine, 'getBounds').mockReturnValue({ x: 0, y: 0, width: 400, height: 400 } as never);
-        spine.onRender?.call(spine, SCREEN);
+        rendered(spine);
         spine.update(1 / 60);
         spine.update(1 / 60);
         expect(modes).toEqual(['update', 'none', 'reset', 'update']);
         expect(spine.physics).toBe('update');
         spine.destroy();
+    });
+});
+
+describe('pacing and the game', () => {
+    it('leaves onRender of the display object to the game', async () => {
+        const spine = new MarrowSpine(await fixtureAsset('4.2/spineboy-pro.skel'), {
+            autoUpdate: false,
+            offscreen: 'pause',
+        });
+        const update = vi.spyOn(spine.engine, 'update');
+        const own = vi.fn();
+
+        spine.onRender = own;
+        for (let i = 0; i < 10; i++) {
+            spine.update(1 / 60);
+            rendered(spine);
+        }
+        expect(update).toHaveBeenCalledTimes(10);
+        expect(spine.onRender).toBe(own);
+        spine.destroy();
+    });
+
+    it('poses the time it gathered before a command changes the tracks, with its events', async () => {
+        async function heard(options: { updateRate?: number }): Promise<string[]> {
+            const spine = new MarrowSpine(await fixtureAsset('4.2/spineboy-pro.skel'), {
+                autoUpdate: false,
+                ...options,
+            });
+            const names: string[] = [];
+
+            spine.on('event', (event) => names.push(`${event.name}@${event.time}`));
+            spine.play('walk');
+            // the walk until a moment after a footstep, then another animation without a mix
+            for (let i = 0; i < 32; i++) spine.update(1 / 60);
+            spine.play('idle');
+            for (let i = 0; i < 30; i++) spine.update(1 / 60);
+            spine.destroy();
+
+            return names;
+        }
+        const exact = await heard({});
+
+        expect(exact.length).toBeGreaterThan(0);
+        expect(await heard({ updateRate: 10 })).toEqual(exact);
     });
 });
 

@@ -32,7 +32,7 @@ vi.mock('../../src/render/mesh-paint', async (original) => {
 });
 
 const SHARES = 'It shares draw calls with the skeletons next to it, and the CPU places its vertices';
-const OWNS = 'It has draw calls of its own, and the GPU places its vertices';
+const OWNS = 'It has draw calls of its own, and the CPU places its vertices in the space of the skeleton';
 
 /** Enough quads for `auto` to pick the mesh mode. */
 const MANY = Array.from({ length: AUTO_BATCH_VERTICES / 4 + 1 }, (_, i) => ({

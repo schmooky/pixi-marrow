@@ -130,6 +130,8 @@ class IdleImage implements IdleCache {
     private readonly owner: Container;
     private readonly view: SkeletonView;
     private readonly state: PoseState;
+    /** True when a slot of the skeleton has a dark color. */
+    private readonly dark: boolean;
     /** Updates in a row in which nothing changed that the picture depends on. */
     private rest = 0;
     /** What the picture depends on, as the last update saw it. Nothing yet: the first update counts as a change. */
@@ -155,6 +157,7 @@ class IdleImage implements IdleCache {
         this.owner = owner;
         this.view = view;
         this.state = state;
+        this.dark = state.model.slots.hasDark.includes(1);
     }
 
     update(): void {
@@ -250,6 +253,7 @@ class IdleImage implements IdleCache {
                 restoresOf(renderer) === image.restores &&
                 !multisampled &&
                 drawsPlain(owner) &&
+                this.untinted() &&
                 wholeMove(now, image.place);
 
             // the view shows again in this render: Pixi builds the instructions after the callbacks
@@ -266,7 +270,20 @@ class IdleImage implements IdleCache {
         last.set(now);
         this.lastBy = renderer;
         // an alpha or a blend mode above the skeleton blends each slot, which an image cannot
-        this.ready = still && !lost && !multisampled && drawsPlain(owner) ? renderer : null;
+        this.ready = still && !lost && !multisampled && drawsPlain(owner) && this.untinted() ? renderer : null;
+    }
+
+    /**
+     * True unless a tint above the skeleton meets a dark color. The shaders tint the light color
+     * of a slot alone, and the sprite would tint the dark color in the image too.
+     */
+    private untinted(): boolean {
+        if (!this.dark) return true;
+        for (let node: Container | null = this.owner; node !== null; node = node.parent) {
+            if (node.tint !== 0xffffff) return false;
+        }
+
+        return true;
     }
 
     /** Draws the view into a texture at the place of the last render, and shows it in place of the view. */

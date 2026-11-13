@@ -1,4 +1,4 @@
-import { type DestroyOptions, Ticker } from 'pixi.js';
+import { Container, type DestroyOptions, Ticker } from 'pixi.js';
 import { MarrowError } from '../base/errors';
 import type { SkeletonInfo } from '../model/info';
 import type { AtlasOutlines } from '../model/outlines';
@@ -111,8 +111,14 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
         this.engine.physics = 'update';
         this.draw();
         this.pacer = new Pacer(settings);
-        // a render tells the pacing where the skeleton is, for `offscreen` and `lod`
-        if (this.pacer.watching) this.onRender = (renderer) => this.pacer.seen(this, renderer);
+        // a render tells the pacing where the skeleton is, for `offscreen` and `lod`. An empty
+        // child hears it, so that `onRender` of this object stays the game's
+        if (this.pacer.watching) {
+            const watch = new Container({ label: 'marrow-pacing' });
+
+            watch.onRender = (renderer) => this.pacer.seen(this, renderer);
+            this.addChild(watch);
+        }
         this.idle = createIdleCache(this, this.skeletonView, this.engine.state, settings.idleCache);
         this.autoUpdate = options.autoUpdate ?? true;
     }
@@ -262,6 +268,7 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
         const index = this.animationIndex(name);
         const plan = planPlay(options, 'play', this.asset.model.version);
 
+        this.catchUp();
         this.absorb();
         const entry = this.engine.setAnimation(plan.track, index, plan.loop);
         const handle = this.adopt(new TrackHandle<N>(this, entry, name, animationDuration(this.asset.model, index)));
@@ -284,6 +291,7 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
         const plan = planPlay(options, 'queue', this.asset.model.version);
         const { track, delay, fields } = plan;
 
+        this.catchUp();
         this.absorb();
         const before = this.book.last(track);
         const entry = this.engine.addAnimation(track, index, plan.loop, delay);
@@ -315,6 +323,7 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
         const mix = options.mix ?? 0;
         const { track } = options;
 
+        this.catchUp();
         if (mix > 0) {
             this.absorb();
             if (track !== undefined) this.mixOut(track, mix);
@@ -473,5 +482,18 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
      */
     private absorb(): void {
         this.book.absorb(this.engine.takeEvents(), this.pump.pending);
+    }
+
+    /**
+     * Poses the time that `updateRate` or `offscreen` gathered, before a command changes the
+     * tracks: that time plays what the tracks held. Its events fire with the next update.
+     */
+    private catchUp(): void {
+        const carried = this.pacer.drain();
+
+        if (carried > 0) {
+            this.pose(carried);
+            this.absorb();
+        }
     }
 }

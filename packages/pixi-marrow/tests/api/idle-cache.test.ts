@@ -192,6 +192,26 @@ describe('the idle cache', () => {
         spine.destroy();
     });
 
+    it('draws no image under a tint when a slot has a dark color, which the shaders leave untinted', async () => {
+        const spine = new MarrowSpine(await fixtureAsset('4.2/alien-pro.skel'), {
+            autoUpdate: false,
+            idleCache: 'auto',
+        });
+        const fake = fakeRenderer(spine);
+
+        stageOf(spine);
+        spine.position.set(300, 400);
+        spine.scale.set(0.25);
+        expect(framesUntilCached(spine, fake)).toBeGreaterThan(0);
+        spine.tint = 0x808080;
+        render(spine, fake);
+        expect(cached(spine)).toBe(false);
+        expect(framesUntilCached(spine, fake)).toBe(-1);
+        spine.tint = 0xffffff;
+        expect(framesUntilCached(spine, fake)).toBeGreaterThan(0);
+        spine.destroy();
+    });
+
     it('draws no image while the context is lost, and drops one drawn by another renderer', async () => {
         const spine = await resting();
         const fake = fakeRenderer(spine);

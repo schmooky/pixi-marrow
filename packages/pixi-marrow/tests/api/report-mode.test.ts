@@ -100,7 +100,7 @@ describe('the render mode of a display object', () => {
             { name: 'small', shows: 'small' },
         ]);
         const shares = 'It shares draw calls with the skeletons next to it, and the CPU places its vertices';
-        const owns = 'It has draw calls of its own, and the GPU places its vertices';
+        const owns = 'It has draw calls of its own, and the CPU places its vertices in the space of the skeleton';
         const cases: [MarrowSpine, string, string][] = [
             [create(small, { renderMode: 'batched' }), 'batched', `the option renderMode is "batched". ${shares}`],
             [create(small, { renderMode: 'mesh' }), 'mesh', `the option renderMode is "mesh". ${owns}`],
@@ -236,7 +236,7 @@ describe('the render mode of a display object', () => {
         expect(await row(dragon, 'renderMode')).toEqual({
             feature: 'renderMode',
             value: 'mesh',
-            reason: 'the option renderMode is "batched", and a batch of the renderer samples fewer textures than the skeleton has atlas pages. It has draw calls of its own, and the GPU places its vertices',
+            reason: 'the option renderMode is "batched", and a batch of the renderer samples fewer textures than the skeleton has atlas pages. It has draw calls of its own, and the CPU places its vertices in the space of the skeleton',
         });
         expect((await row(dragon, 'pages')).reason).toBe(
             `the atlas has ${dragon.asset.atlas.pages.length} pages and a draw range samples up to 8`,
