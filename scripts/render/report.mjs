@@ -11,7 +11,7 @@ import {
     describeSceneMode,
     describeSceneRows,
 } from './report-modes.mjs';
-import { describeChunk, describeLazy } from './report-sleep.mjs';
+import { describeChunk, describeIdle, describeLazy } from './report-sleep.mjs';
 
 /** Failing frames per comparison that get a line of their own, unless every frame is listed. */
 const LINES_PER_LABEL = 3;
@@ -43,6 +43,8 @@ const SUMMARY_NAMES = {
     sceneModes: 'scenes, batched and mesh',
     sceneOwn: 'scenes, batched to mesh',
     sceneAuto: 'scenes, default options',
+    sceneIdleOfficial: 'scenes, idle and official',
+    sceneIdle: 'scenes, idle and live',
     // a page on another pixi.js: the official runtime there against the reference
     pixi: 'official, this pixi.js',
     scenePixi: 'scenes, official here',
@@ -67,6 +69,8 @@ const LATER_LINES = [
     'sceneModes',
     'sceneOwn',
     'sceneAuto',
+    'sceneIdleOfficial',
+    'sceneIdle',
 ];
 /** The kinds that compare ours with polygons to a picture of quads. */
 const POLYGON_KINDS = ['polygons', 'polygonsOfficial'];
@@ -241,6 +245,7 @@ function describe(entries, frames) {
     if (kind === 'sceneDraws') return describeSceneDraws(info);
     if (kind === 'sceneBuilds') return describeSceneBuilds(info);
     if (kind === 'lazy') return describeLazy(info);
+    if (kind === 'idleCache') return describeIdle(info);
     if (kind === 'chunk') return first.finding ?? describeChunk(info);
     if (kind === 'steady') return describeBuffers(entries);
     if (kind === 'overdraw') return describeOverdraw(info);

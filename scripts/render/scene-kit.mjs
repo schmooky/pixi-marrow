@@ -8,7 +8,8 @@
  *             place it, `time` is where in its animation it starts. It plays the animation of
  *             its rig in a loop, once with `loop: false`, and not at all with `play: false`.
  *             `visible` and `renderable` set those flags. `mode` asks for a render mode on the
- *             batched side. `holds` lists Pixi objects the instance holds, see `held`
+ *             batched side. `holds` lists Pixi objects the instance holds, see `held`. `idle`
+ *             turns the idle cache of ours on, see scripts/render/scene-plan-idle.mjs
  *   group     a container with `children`, and any of `alpha`, `tint`, `mask`, `filter`,
  *             `renderGroup` and a transform. With a `name` an event can move it
  *   graphics  a rectangle of one color
@@ -103,7 +104,10 @@ export function spine(name, key, rig, { cx, cy, size, rotation = 0, at = 0, ...f
  */
 export const held = (key, on, shape) => ({ key, ...on, shape });
 
-/** A scene with the defaults: 16 frames, three of them captured, judged against the official runtime. */
+/**
+ * A scene with the defaults: 16 frames, three of them captured, judged against the official
+ * runtime, on a target that is not multisampled. `antialias: true` in `more` makes it one.
+ */
 export function scene(id, title, official, rigs, nodes, more = {}) {
     return {
         id: `scene/${id}`,

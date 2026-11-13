@@ -1,5 +1,5 @@
 /**
- * The lines of the render check about the mesh mode that loads on demand.
+ * The lines of the render check about the mesh mode that loads on demand, and about the idle cache.
  */
 
 /** Some frame numbers as text: `3`, or `3 to 7`. */
@@ -41,4 +41,18 @@ export function describeLazy(info) {
 /** Where the mesh mode is in the bundle of the page, and whether the page asked for its chunk. */
 export function describeChunk(info) {
     return `the mesh mode loads on demand from ${info.chunk}, and the page ${info.asked ? 'asked' : 'did not ask'} for it`;
+}
+
+/** Per side of ours with the idle cache, the steps at which each instance showed its image. */
+export function describeIdle(info) {
+    const sides = Object.entries(info.sides).map(([side, runs]) => {
+        const names = Object.entries(runs).map(
+            ([name, list]) =>
+                `${name} ${list.map(([from, to]) => (from === to ? from : `${from} to ${to}`)).join(', ')}`,
+        );
+
+        return `${side}: ${names.join('; ') || 'no image'}`;
+    });
+
+    return `images at steps, ${sides.join('. ')}`;
 }

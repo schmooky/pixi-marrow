@@ -25,6 +25,10 @@
  * after the restore. pixi-marrow now draws no skeleton while the context is lost. The two cases
  * with a skeleton that appears late fail on a build without that.
  *
+ * The case with the idle cache shows a rig at rest as an image before the loss. The image lived
+ * in the old context, so the rig must be drawn live after the restore. Without that it shows the
+ * empty texture that Pixi made again.
+ *
  * The proof of the tooling is a run that never gets its context back. Its pictures must be
  * rejected, which shows that the pictures are those of the canvas a player sees.
  *
@@ -143,8 +147,8 @@ async function runPage(browser, origin, id, mode, lose) {
 
 /**
  * Compares two pictures of the canvas. `covered` is the share of the second that is not the
- * background, `differing` the number of pixels with another byte, `largest` the largest
- * difference of a byte.
+ * background, `differing` the number of pixels with another byte, `over1` of those the ones
+ * that differ by more than 1, and `largest` the largest difference of a byte.
  */
 function comparePictures(first, second) {
     const a = Buffer.from(first, 'base64');
@@ -152,9 +156,12 @@ function comparePictures(first, second) {
     const pixels = RESTORE_SIZE * RESTORE_SIZE;
     let covered = 0;
     let differing = 0;
+    let over1 = 0;
     let largest = 0;
 
-    if (a.length !== pixels * 4 || b.length !== pixels * 4) return { covered: 0, differing: pixels, largest: 255 };
+    if (a.length !== pixels * 4 || b.length !== pixels * 4) {
+        return { covered: 0, differing: pixels, over1: pixels, largest: 255 };
+    }
     for (let at = 0; at < a.length; at += 4) {
         let apart = 0;
         let drawn = false;
@@ -165,10 +172,11 @@ function comparePictures(first, second) {
         }
         if (drawn) covered++;
         if (apart > 0) differing++;
+        if (apart > 1) over1++;
         largest = Math.max(largest, apart);
     }
 
-    return { covered: covered / pixels, differing, largest };
+    return { covered: covered / pixels, differing, over1, largest };
 }
 
 /** The frames after the restore whose pictures differ between two runs, with how much. */
@@ -212,6 +220,11 @@ function judgeRun(plan, mode, name, side, lose) {
     if (plan.moves && !all(report.placed, (count) => count > 0)) {
         reasons.push(`${name} did not move: the position uploads per frame are ${report.placed}`);
     }
+    if (plan.idle && report.imageBefore !== true) reasons.push(`${name} showed no image of its idle cache before`);
+    if (plan.idle && lose && report.imageAfter !== false) {
+        reasons.push(`${name} still showed the image it drew with the context it lost`);
+    }
+    if (plan.idle && !lose && report.imageAfter !== true) reasons.push(`${name} did not show its image to the end`);
     if (lose) {
         const { lost, restored, wasLost, back } = report.context ?? {};
 
@@ -236,14 +249,14 @@ function judgeCase(plan, mode, lost, kept) {
     if (lost.report.error || kept.report.error) return reasons;
     for (const entry of differingFrames(lost, kept)) {
         if (entry.missing) reasons.push(`frame ${entry.frame} after the restore has no picture`);
-        else if (entry.differing > 0) {
+        else if (plan.idle ? entry.over1 > plan.ties : entry.differing > 0) {
             const share = ((entry.differing / (RESTORE_SIZE * RESTORE_SIZE)) * 100).toFixed(2);
 
             reasons.push(
                 `frame ${entry.frame} after the restore: ${entry.differing} pixels (${share} percent) differ from the run ` +
-                    `that kept its context, by up to ${entry.largest} of 255`,
+                    `that kept its context, ${entry.over1} of them by more than 1, by up to ${entry.largest} of 255`,
             );
-        } else {
+        } else if (entry.covered < LEAST_COVER) {
             reasons.push(
                 `frame ${entry.frame}: the picture is empty, ${(entry.covered * 100).toFixed(1)} percent of it is not the background`,
             );

@@ -331,8 +331,9 @@ function sampleLabel(ctx) {
 }
 
 /**
- * Gives a side what it draws with: its pixi.js, and `studio(size)`, a render texture of that size
- * on its own renderer. Sides that share a renderer share the textures.
+ * Gives a side what it draws with: its pixi.js, and `studio(size, antialias)`, a render texture of
+ * that size on its own renderer, multisampled with `antialias`. Sides that share a renderer share
+ * the textures.
  *
  * @param stage `PIXI`, `renderer` and `builds` of the renderer the side draws with. The studios
  * of the renderer are kept on it.
@@ -343,12 +344,14 @@ function withStudio(side, stage, draws) {
     return {
         ...side,
         PIXI: stage.PIXI,
-        studio(size) {
-            if (!stage.studios.has(size)) {
-                stage.studios.set(size, createStudio(stage.PIXI, stage.renderer, size, draws, false, stage.builds));
+        studio(size, antialias = false) {
+            const key = `${size}${antialias ? ' multisampled' : ''}`;
+
+            if (!stage.studios.has(key)) {
+                stage.studios.set(key, createStudio(stage.PIXI, stage.renderer, size, draws, antialias, stage.builds));
             }
 
-            return stage.studios.get(size);
+            return stage.studios.get(key);
         },
     };
 }

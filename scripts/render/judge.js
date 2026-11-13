@@ -109,7 +109,7 @@ export const PAIRS = [
 export const SECOND_PLACEMENT = { x: 0.37 / 8, y: 0.61 / 8 };
 
 /** The kinds whose pictures are ours against the official runtime. */
-const AGAINST_OFFICIAL = ['match', 'polygonsOfficial'];
+const AGAINST_OFFICIAL = ['match', 'polygonsOfficial', 'idleOfficial'];
 /**
  * The kinds that get a second look. `own` is ours in the batched mode judged against ours in the
  * mesh mode, in a scene the official runtime cannot draw. `modes` is the same pair for a rig, once

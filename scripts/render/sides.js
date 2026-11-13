@@ -199,6 +199,9 @@ function loadAttachCode(PIXI, lib, asset, slot) {
  * `mode` asks for a render mode by name: `mesh` or `batched`. Without it the instance is created
  * with the default, which is `auto`. `instance.mode()` reads back what the runtime drew in.
  *
+ * `idle: true` creates it with `idleCache: 'auto'`: at rest it draws itself into an image and
+ * shows that. `instance.cached()` says whether it shows the image now.
+ *
  * The code of the mesh mode is a chunk that loads on demand. An asset loads it when `auto` draws
  * its skeleton with meshes, and when the load asks for the mesh mode. So an instance that asks
  * for the mesh mode by name gets an asset that was loaded for it: the same shared asset, once
@@ -208,7 +211,7 @@ function loadAttachCode(PIXI, lib, asset, slot) {
 export function oursSide(PIXI, lib) {
     return {
         name: 'ours',
-        async create({ skeleton, atlas, cuts = 'default', mode, preload = true }) {
+        async create({ skeleton, atlas, cuts = 'default', mode, preload = true, idle = false }) {
             const asset = await lib.MarrowAsset.load({
                 skeleton,
                 atlas,
@@ -225,6 +228,7 @@ export function oursSide(PIXI, lib) {
                 autoUpdate: false,
                 ...CUT_OPTIONS[cuts],
                 ...modeOptions(mode),
+                ...(idle ? { idleCache: 'auto' } : {}),
             });
             const root = new PIXI.Container();
             const held = new Map();
@@ -260,6 +264,8 @@ export function oursSide(PIXI, lib) {
                 },
                 /** The render mode the runtime reports for this instance, see scripts/render/mode.js. */
                 mode: () => readMode(spine),
+                /** Whether the instance shows the image of its idle cache: its sprite of that label shows. */
+                cached: () => spine.children.some((child) => child.label === 'marrow-idle' && child.visible),
                 place: (placement) => place(spine, placement),
                 setSkin(name) {
                     if (Array.isArray(name)) spine.skins = name;

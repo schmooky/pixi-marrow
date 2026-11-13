@@ -113,6 +113,15 @@
  *   proof, a frame held back   one side leaves the update of one frame out, as a view would that
  *                              skips work it had to do. Its stale picture must be rejected
  *
+ * The idle cache. The scenes whose name starts with `idle` let ours rest with `idleCache: 'auto'`
+ * until the skeletons are drawn as images, then wake, fade, move and scale them, see
+ * scripts/render/scene-plan-idle.mjs. Every frame is held to `match` against the official
+ * runtime, and to `idle` against ours drawing the same scene live:
+ *
+ *   idle, mesh / batched       ours with the cache against ours without it, in that mode
+ *   idle cache                 the steps at which each instance showed its image. Some must, so
+ *                              that the comparisons above look at images, and some must not
+ *
  * Containers in a skeleton. The scenes `links-play` and `links-rest` attach a Pixi `Graphics` to
  * a slot and let another follow a bone, ours with `attach` and `follow`, the official runtime
  * with `addSlotObject`, while an animation with draw order keys plays and at rest.
@@ -276,6 +285,19 @@ const TOLERANCE = {
     // the only reference there is. The limit is the one of `match`: both modes pass that against
     // the official runtime wherever it can draw.
     own: { max: 4, over1: 0.0005, over8: 0 },
+    // Ours with the idle cache against ours drawing live, in one render mode, and against the
+    // official runtime. The image is drawn on the pixel grid of the target and sampled at the
+    // centers of its texels, so the triangles land on the same pixels. Two things are left. The
+    // image holds every layer of a pixel at 8 bits and is blended over the background once. And it
+    // computes its vertices at other magnitudes, so a pixel whose center lies on the edge of a
+    // triangle within the rounding of 32-bit floats can fall to the other side. On the outline of
+    // a skeleton such a pixel differs by all it shows. The second look cannot help: it moves the
+    // sides by a part of a pixel, which drops the images. So the number of pixels is limited and
+    // the largest difference is not. Measured over 392 frames per Pixi version and renderer: at
+    // most 5 pixels over 1 and 1 pixel over 8 in a frame, the largest 25 against live and 13
+    // against official. The frames before the images show are judged the same way.
+    idle: { max: 255, over1: 0.0001, over8: 0, few1: 8, few8: 2 },
+    idleOfficial: { max: 255, over1: 0.0001, over8: 0, few1: 8, few8: 2 },
     // On a page that runs on another pixi.js: the official runtime on that pixi.js against the
     // official runtime on the pixi.js the package is developed with, the reference. The same
     // code draws both, so the limits are those of `match`. A frame outside of them says that
