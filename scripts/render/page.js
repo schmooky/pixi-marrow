@@ -31,7 +31,7 @@ const percent = (share) => `${(100 * share).toFixed(3)}%`;
  * The instances of the mesh mode are the ones this check had before there were modes. They ask
  * for the mode by name, so they stay what they were when `auto` picks another mode.
  */
-function roles(plan, official, ours, proof, run, officialHere = null, baked = false) {
+function roles(plan, official, ours, proof, run, officialHere = null, baked = false, gpu = false) {
     const { skel, json, atlas, pma } = plan.files;
     const { placement } = plan;
     const list = [];
@@ -73,6 +73,8 @@ function roles(plan, official, ours, proof, run, officialHere = null, baked = fa
         if (pma) add('ours-pma', ours, skel, pma, { mode });
         if (pma) add('ours-pma-plain', ours, skel, pma, { mode, cuts: 'off' });
         if (pma) add('ours-pma-polygons', ours, skel, pma, { mode, cuts: 'polygons' });
+        // with skinning on the GPU an instance draws instanced: alone it must draw the same bits
+        if (gpu) add('ours-alone', ours, skel, atlas, { mode, instancing: 'off' });
         // a difference that is real on our side: it must fail at both placements
         if (proof && official) add('ours-shift', ours, skel, atlas, { mode, setup: shifted });
     }
@@ -171,8 +173,9 @@ async function runSequence(ctx, sequence, withProof, baked = false) {
     const forced = new Map();
 
     const proof = withProof ? plan.proof : null;
+    const gpu = ctx.skinning === 'gpu';
 
-    for (const role of roles(plan, ctx.official, ctx.ours, proof, ctx.run, ctx.officialHere, baked)) {
+    for (const role of roles(plan, ctx.official, ctx.ours, proof, ctx.run, ctx.officialHere, baked, gpu)) {
         // the twin loads its own copies. Every other instance shares the files of its side
         const tag = role.key === 'twin' ? 'twin' : role.side.name;
         const url = (file) => `/fixtures/${tag}/${plan.version}/${file}`;
@@ -184,6 +187,7 @@ async function runSequence(ctx, sequence, withProof, baked = false) {
                 cuts: role.cuts,
                 mode: role.mode,
                 bake: role.bake,
+                instancing: role.instancing,
             });
 
             const place = instance.place;
@@ -310,6 +314,8 @@ async function runRig(env, plan, options) {
         officialHere: env.officialHere,
         ours: env.ours,
         PIXI: env.PIXI,
+        // the `skinning` option of every instance of ours: with `gpu` the mesh mode draws instanced
+        skinning: env.skinning,
         // which modes of ours are drawn. Without ours the tooling proof runs alone
         run: { mesh: false, batched: false, auto: false },
         // the modes the instance with the default options drew in, over the captured frames

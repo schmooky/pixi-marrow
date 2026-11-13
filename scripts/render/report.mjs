@@ -48,6 +48,8 @@ const SUMMARY_NAMES = {
     sceneAuto: 'scenes, default options',
     sceneIdleOfficial: 'scenes, idle and official',
     sceneIdle: 'scenes, idle and live',
+    instancing: 'instancing on and off',
+    sceneInstancing: 'scenes, instancing on, off',
     // a page on another pixi.js: the official runtime there against the reference
     pixi: 'official, this pixi.js',
     scenePixi: 'scenes, official here',
@@ -76,6 +78,7 @@ const LATER_LINES = [
     'sceneAuto',
     'sceneIdleOfficial',
     'sceneIdle',
+    'sceneInstancing',
 ];
 /** The kinds that compare ours with polygons to a picture of quads. */
 const POLYGON_KINDS = ['polygons', 'polygonsOfficial'];

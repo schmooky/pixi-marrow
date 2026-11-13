@@ -54,6 +54,7 @@ export function reportAb(blocks, memory, { counts, renderMode }) {
         mesh: combined(blocks, (b) => b.side === 'mesh' && b.instances === instances),
         idle: combined(blocks, (b) => b.side === 'idle' && b.instances === instances),
         gpu: combined(blocks, (b) => b.side === 'gpu' && b.instances === instances),
+        alone: combined(blocks, (b) => b.side === 'alone' && b.instances === instances),
         baked: combined(blocks, (b) => b.side === 'baked' && b.instances === instances),
     }));
     const largest = Math.max(...counts);

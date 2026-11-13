@@ -153,10 +153,11 @@ function ratioRow(name, a, b, memoryRatio) {
  * The table of one rig in the A/B mode: per instance count one row for each side, one row with
  * ours divided by official, one with ours divided by ours in the mesh mode, and one with the
  * skinning on the GPU divided by ours, where those ran. With `--bake` one more row has ours
- * with baked playback divided by ours.
+ * with baked playback divided by ours. With `--instancing=compare` the row `gpu/alone` divides
+ * the instanced draws by the same instances drawn alone.
  *
  * @param groups Per instance count: `instances`, and the combined runs of `ours`, `official`,
- * `mesh`, `idle`, `gpu` and `baked`. A side that did not run is null.
+ * `mesh`, `idle`, `gpu`, `alone` and `baked`. A side that did not run is null.
  */
 export function printAb(groups) {
     const rows = [
@@ -206,7 +207,7 @@ export function printAb(groups) {
         ],
     ];
 
-    for (const { instances, ours, official, mesh, idle, gpu, baked } of groups) {
+    for (const { instances, ours, official, mesh, idle, gpu, alone, baked } of groups) {
         // a side without a memory reading has none to print: below 20 instances, or with --memory=off
         const memory = (runs) => kilobytes(runs);
         const memoryRatio = (a, b) => ratio(a, b);
@@ -217,6 +218,7 @@ export function printAb(groups) {
             ['mesh', mesh],
             ['idle', idle],
             ['gpu', gpu],
+            ['alone', alone],
             ['baked', baked],
         ]) {
             if (!side) continue;
@@ -247,6 +249,7 @@ export function printAb(groups) {
         if (ours && mesh) rows.push(ratioRow('ours/mesh', ours, mesh, memoryRatio));
         if (idle && ours) rows.push(ratioRow('idle/ours', idle, ours, memoryRatio));
         if (gpu && ours) rows.push(ratioRow('gpu/ours', gpu, ours, memoryRatio));
+        if (gpu && alone) rows.push(ratioRow('gpu/alone', gpu, alone, memoryRatio));
         if (ours && baked) rows.push(ratioRow('baked/ours', baked, ours, memoryRatio));
     }
     print(rows, [1]);
