@@ -222,6 +222,27 @@ describe('skinning on the GPU', () => {
         expect(bones.destroyed).toBe(true);
     });
 
+    it('takes the skin data of the new layout when a skin change lays the view out again', async () => {
+        const rig = await loadSkinned('4.2/goblins-pro.skel');
+
+        step(rig, 0);
+        const before = skinData(rig).sources.influences;
+        const builds = rig.view.stats.templateBuilds;
+
+        rig.engine.setSkin(rig.model.skins.findIndex((skin) => skin.name === 'goblingirl'));
+        rig.engine.setupPoseSlots();
+        play(rig, 'walk');
+        step(rig, 0.2);
+        expect(rig.view.stats.templateBuilds).toBe(builds + 1);
+        const after = skinData(rig).sources.influences;
+
+        expect(after).not.toBe(before);
+        // no other view held the layout before, so its data is freed
+        expect(before.destroyed).toBe(true);
+        for (const mesh of meshes(rig.view)) expect(mesh.shader?.resources.uInfluences).toBe(after);
+        expect(expectSkinned(rig).some((item) => !item.cpu)).toBe(true);
+    });
+
     it('draws in a batch and with meshes again when the render mode changes at run time', async () => {
         const rig = await loadSkinned('4.2/tank-pro.skel');
 
