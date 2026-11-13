@@ -60,8 +60,6 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
     /** When an update poses the skeleton, and with how much time. */
     private readonly pacer: Pacer;
     private readonly idle: IdleCache | undefined;
-    /** True while `lod` leaves physics and deform out of the updates. */
-    private lodOn = false;
     /** What {@link updateProbe} holds. An update without a probe pays one check of this field. */
     private probe: UpdateProbe | null = null;
 
@@ -413,23 +411,9 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
         probe.record(posed - start, drawn - absorbed, absorbed - posed + (performance.now() - drawn));
     }
 
-    /**
-     * Poses the skeleton. While `lod` leaves physics and deform out, the engine updates in physics
-     * mode `none` with its deform timelines off. Back at full size the physics is reset, so that
-     * it does not swing from an old pose, and the deform timelines apply again.
-     */
+    /** Poses the skeleton, with the level of detail the last render asked for. */
     private pose(seconds: number): void {
-        const { engine } = this;
-        const { small } = this.pacer;
-        const mode = engine.physics;
-
-        if (small !== this.lodOn) engine.deform = !small;
-        if (!small && this.lodOn && mode !== 'none') this.resetPhysics();
-        this.lodOn = small;
-        if (small) engine.physics = 'none';
-        engine.update(seconds);
-        if (small) engine.physics = mode;
-        this.settleReset();
+        this.poseAt(seconds, this.pacer.small);
     }
 
     /** Where the pacing of updates stands, for `perf.report()`. */

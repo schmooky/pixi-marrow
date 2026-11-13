@@ -3,6 +3,7 @@ import type { AttachmentData } from '../../model/attachments';
 import type { SkeletonModel } from '../../model/model';
 import type { PhysicsMode, PoseEngine, PoseEvent, PoseSource, SlotPose, TrackEntry, TrackFields } from '../engine';
 import { changeSkin, combineSkins } from '../shared/combine-skins';
+import { hideDeforms, showDeforms } from '../shared/deform-switch';
 import { checkDark, checkSlot, writeColor } from '../shared/slot-writes';
 import { createPoseState, type PoseState, poseStateBytes } from '../state';
 import { advanceTracks, holdsSetup, poseBehind, soloEntry } from './advance';
@@ -137,23 +138,16 @@ class LegacyEngine implements PoseEngine {
 
     set deform(value: boolean) {
         const { player, state } = this;
+        const stamp = (slot: number): void => stampSlot(state, slot);
 
         if (value === player.deforms) return;
         player.deforms = value;
-        // the deform timelines apply in the next update, whatever the pose did before
-        if (value) {
-            player.stirred = true;
-
-            return;
-        }
         this.begin();
-        for (let slot = 0; slot < state.deformLengths.length; slot++) {
-            if (state.deformLengths[slot] === 0) continue;
-            state.deformLengths[slot] = 0;
-            stampSlot(state, slot);
-        }
+        if (value) showDeforms(state.deformLengths, stamp);
+        else hideDeforms(state.deformLengths, stamp);
         // a path constraint reads the deform of its slot
         this.solver.all = true;
+        // the deform timelines apply in the next update, whatever the pose did before
         this.changed();
     }
 

@@ -116,4 +116,55 @@ describe.each(VERSIONS)('the deform switch of the %s engine', (version) => {
         expect(deformed(engine).length).toBeGreaterThan(0);
         expectSamePose(engine, reference);
     });
+    it.each(RIGS)('keeps the deform of a pose that no track writes any more: $file', async (rig) => {
+        const { model } = await importRig(`${version}/${rig.file}.skel`);
+        const engine = await playing(model, rig);
+        const reference = await playing(model, rig);
+        const both = (times: number): void => {
+            for (let i = 0; i < times; i++) {
+                engine.update(FRAME);
+                reference.update(FRAME);
+            }
+        };
+
+        both(12);
+        // the official skeleton keeps every deform when its tracks are cleared
+        engine.clearTracks();
+        reference.clearTracks();
+        both(3);
+        expect(deformed(reference).length).toBeGreaterThan(0);
+        engine.deform = false;
+        both(3);
+        expect(deformed(engine)).toEqual([]);
+        engine.deform = true;
+        expect(deformed(engine)).toEqual(deformed(reference));
+        both(3);
+        expectSamePose(engine, reference);
+    });
+
+    it('forgets the deform of a slot that showed another attachment meanwhile', async () => {
+        const rig = RIGS[0];
+        const { model } = await importRig(`${version}/${rig.file}.skel`);
+        const engine = await playing(model, rig);
+        const reference = await playing(model, rig);
+        const both = (call: (pose: PoseEngine) => void): void => {
+            call(engine);
+            call(reference);
+        };
+
+        for (let i = 0; i < 12; i++) both((pose) => pose.update(FRAME));
+        both((pose) => pose.clearTracks());
+        const slot = deformed(reference)[0] ?? -1;
+        const shown = reference.state.attachments[slot] ?? null;
+
+        expect(shown).not.toBeNull();
+        engine.deform = false;
+        // away and back: the official runtime clears the deform of the slot on the way
+        both((pose) => pose.setAttachment(slot, null));
+        both((pose) => pose.setAttachment(slot, shown));
+        engine.deform = true;
+        both((pose) => pose.update(FRAME));
+        expect(deformed(reference)).not.toContain(slot);
+        expectSamePose(engine, reference);
+    });
 });

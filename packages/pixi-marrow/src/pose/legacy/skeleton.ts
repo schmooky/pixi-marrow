@@ -1,5 +1,6 @@
 import { MarrowError } from '../../base/errors';
 import type { AttachmentData } from '../../model/attachments';
+import { forgetDeform } from '../shared/deform-switch';
 import type { PoseState } from '../state';
 import { factsOf, type Rig } from './rig';
 import { type Solver, setConstraintsToSetupPose, useSkin } from './solver';
@@ -17,7 +18,10 @@ export function setSlotAttachment(rig: Rig, pose: PoseState, slot: number, attac
     const next = attachment === null ? null : factsOf(rig, attachment).timeline;
     const last = current === null ? null : factsOf(rig, current).timeline;
 
-    if (next === null || last === null || next !== last) pose.deformLengths[slot] = 0;
+    if (next === null || last === null || next !== last) {
+        pose.deformLengths[slot] = 0;
+        forgetDeform(pose.deformLengths, slot);
+    }
     pose.attachments[slot] = attachment;
     pose.sequenceIndices[slot] = -1;
     stampSlot(pose, slot);

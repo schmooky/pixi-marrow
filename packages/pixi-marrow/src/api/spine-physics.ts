@@ -16,6 +16,10 @@ export abstract class SpinePhysics<N extends MarrowNames = MarrowNames> extends 
     abstract readonly engine: PoseEngine;
     /** The mode to return to after the one update that resets the physics, or null without one. */
     private afterReset: PhysicsMode | null = null;
+    /** True while `lod` leaves physics and deform out of the updates. */
+    private reduced = false;
+    /** True when `lod` turned the deform off, so that it turns it on again. */
+    private hidDeform = false;
 
     /**
      * How physics constraints run in an update. Default `update`. The mode stays until it is set
@@ -90,8 +94,32 @@ export abstract class SpinePhysics<N extends MarrowNames = MarrowNames> extends 
         );
     }
 
-    /** Ends the one update that resets the physics: the mode that was set before it returns. An update calls it. */
-    protected settleReset(): void {
+    /**
+     * Updates the engine by `seconds`. While `small`, which `lod` asks for, the engine updates in
+     * physics mode `none` with its deform off. Back at full size the physics is reset, so that
+     * it does not swing from an old pose, and the deform comes back. A physics mode `none` or a
+     * deform switch that the game set stays as the game set it.
+     */
+    protected poseAt(seconds: number, small: boolean): void {
+        const { engine } = this;
+        const mode = engine.physics;
+
+        if (small && !this.reduced) {
+            this.hidDeform = engine.deform;
+            engine.deform = false;
+        } else if (!small && this.reduced) {
+            if (this.hidDeform) engine.deform = true;
+            if (mode !== 'none') this.resetPhysics();
+        }
+        this.reduced = small;
+        if (small) engine.physics = 'none';
+        engine.update(seconds);
+        if (small) engine.physics = mode;
+        this.settleReset();
+    }
+
+    /** Ends the one update that resets the physics: the mode that was set before it returns. */
+    private settleReset(): void {
         if (this.afterReset === null) return;
         this.engine.physics = this.afterReset;
         this.afterReset = null;

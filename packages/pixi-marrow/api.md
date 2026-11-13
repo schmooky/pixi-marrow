@@ -149,7 +149,6 @@ export declare class MarrowSpine<N extends MarrowNames = MarrowNames> extends Sp
   readonly perfSettings: ResolvedPerf;
   private readonly pacer;
   private readonly idle;
-  private lodOn;
   private probe;
   constructor(asset: MarrowAsset, options?: MarrowSpineOptions);
   static load<N extends MarrowNames = MarrowNames>(options: MarrowLoadOptions & MarrowSpineOptions): Promise<MarrowSpine<N>>;
@@ -322,12 +321,15 @@ export declare abstract class SpineLinks<N extends MarrowNames = MarrowNames> ex
 export declare abstract class SpinePhysics<N extends MarrowNames = MarrowNames> extends SpineLinks<N> {
   abstract readonly engine: PoseEngine;
   private afterReset;
+  private reduced;
+  private hidDeform;
   get physics(): PhysicsMode;
   set physics(mode: PhysicsMode);
   resetPhysics(): void;
   physicsTranslate(x: number, y: number): void;
   physicsRotate(x: number, y: number, degrees: number): void;
-  protected settleReset(): void;
+  protected poseAt(seconds: number, small: boolean): void;
+  private settleReset;
 }
 export interface StopOptions {
   track?: number;

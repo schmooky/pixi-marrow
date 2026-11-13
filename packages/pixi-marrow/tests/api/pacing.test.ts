@@ -180,6 +180,43 @@ describe('a display object with pacing', () => {
         spine.destroy();
     });
 
+    it('leaves a deform switch the game turned off as it is, with lod', async () => {
+        const spine = new MarrowSpine(await fixtureAsset('4.2/alien-pro.skel'), { autoUpdate: false, lod: 'auto' });
+
+        spine.engine.deform = false;
+        vi.spyOn(spine, 'getBounds').mockReturnValue({ x: 0, y: 0, width: 40, height: 40 } as never);
+        rendered(spine);
+        spine.update(1 / 60);
+        vi.spyOn(spine, 'getBounds').mockReturnValue({ x: 0, y: 0, width: 400, height: 400 } as never);
+        rendered(spine);
+        spine.update(1 / 60);
+        expect(spine.engine.deform).toBe(false);
+        spine.destroy();
+    });
+
+    it('keeps the deform of a stopped skeleton through a spell at a small size', async () => {
+        const spine = new MarrowSpine(await fixtureAsset('4.2/alien-pro.skel'), { autoUpdate: false, lod: 'auto' });
+        const deformed = (): number => [...spine.engine.state.deformLengths].filter((length) => length > 0).length;
+
+        spine.play('death');
+        for (let i = 0; i < 12; i++) spine.update(1 / 60);
+        // without a mix the track is cleared at once and the pose stays as it is
+        spine.stop();
+        spine.update(1 / 60);
+        const held = deformed();
+
+        expect(held).toBeGreaterThan(0);
+        vi.spyOn(spine, 'getBounds').mockReturnValue({ x: 0, y: 0, width: 40, height: 40 } as never);
+        rendered(spine);
+        spine.update(1 / 60);
+        expect(deformed()).toBe(0);
+        vi.spyOn(spine, 'getBounds').mockReturnValue({ x: 0, y: 0, width: 400, height: 400 } as never);
+        rendered(spine);
+        for (let i = 0; i < 5; i++) spine.update(1 / 60);
+        expect(deformed()).toBe(held);
+        spine.destroy();
+    });
+
     it('leaves a deform switch the game set alone without lod', async () => {
         const spine = new MarrowSpine(await fixtureAsset('4.2/cloud-pot.skel'), { autoUpdate: false });
 

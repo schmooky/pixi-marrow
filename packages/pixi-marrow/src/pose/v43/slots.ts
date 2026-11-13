@@ -1,5 +1,6 @@
 import { MarrowError } from '../../base/errors';
 import type { AttachmentData } from '../../model/attachments';
+import { forgetDeform } from '../shared/deform-switch';
 import type { AttachmentInfo, Pose43, Rig43, Timeline43 } from './types';
 
 /** What the engine knows about an attachment. Throws for an attachment that is not from the model. */
@@ -86,6 +87,7 @@ export function setSlotAttachment(pose: Pose43, slot: number, attachment: Attach
     if (current === attachment) return;
     if (attachment === null || current === null || !sharesDeform(pose.rig, attachment, current)) {
         pose.deformLengths[slot] = 0;
+        forgetDeform(pose.deformLengths, slot);
     }
     pose.attachments[slot] = attachment;
     pose.sequenceIndices[slot] = -1;

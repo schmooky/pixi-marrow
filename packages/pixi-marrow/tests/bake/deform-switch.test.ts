@@ -60,4 +60,29 @@ describe.each(VERSIONS)('baked playback and the deform switch in %s', (version) 
         expect(tally.last).toContain('baked');
         expect(deformed(baked)).toEqual(deformed(live));
     });
+    it('poses live while the deform is off and a path follows a deform of the clip', async () => {
+        const model = await modelOf(`${version}/stretchyman-pro.skel`);
+        const host = await hostOf(model);
+        const live = displayEngine(host);
+        const baked = displayEngine(host);
+        const tally = playBaked(host, baked, null);
+        const sneak = animationIndex(model, 'sneak');
+
+        live.setAnimation(0, sneak, true);
+        baked.setAnimation(0, sneak, true);
+        for (let i = 0; i < 20; i++) {
+            live.update(DT);
+            baked.update(DT);
+        }
+        expect(tally.baked).toBeGreaterThan(0);
+        live.deform = false;
+        baked.deform = false;
+        for (let i = 0; i < 30; i++) {
+            live.update(DT);
+            baked.update(DT);
+            // the bones on the path follow the setup path, as in a live update
+            expect(poseDifference(live.state, baked.state, false)).toBeNull();
+        }
+        expect(tally.last).toContain('a path the clip deforms');
+    });
 });

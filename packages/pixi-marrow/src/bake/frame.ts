@@ -1,5 +1,6 @@
 import type { AttachmentData } from '../model/attachments';
 import type { SkeletonModel } from '../model/model';
+import { forgetDeform } from '../pose/shared/deform-switch';
 import { createAttachmentLookup } from '../pose/shared/lookup';
 import { nextVersion, type PoseState } from '../pose/state';
 import type { BakedClip } from './clip';
@@ -119,7 +120,10 @@ function writeShown(state: PoseState, prepared: PreparedClip, frame: number, ver
         if (attachment === undefined || shown === attachment) continue;
         const key = deformKey(state.model, attachment);
 
-        if (key === null || key !== deformKey(state.model, shown)) state.deformLengths[slot] = 0;
+        if (key === null || key !== deformKey(state.model, shown)) {
+            state.deformLengths[slot] = 0;
+            forgetDeform(state.deformLengths, slot);
+        }
         state.attachments[slot] = attachment;
         state.sequenceIndices[slot] = -1;
         state.slotStamps[slot] = version;

@@ -1,4 +1,5 @@
 import type { AttachmentData } from '../../model/attachments';
+import { hideDeforms, showDeforms } from '../shared/deform-switch';
 import { writeColor } from '../shared/slot-writes';
 import { updateCache } from './cache';
 import { setSlotAttachment, setupAttachment, stampDrawOrder, stampSlot } from './slots';
@@ -124,22 +125,20 @@ export function writeSlotDark(pose: Pose43, slot: number, r: number, g: number, 
 }
 
 /**
- * Clears the deform of every slot in the animated pose and in the applied pose, from outside an
- * update, for `PoseEngine.deform`. The applied pose of a slot that a slider poses is cleared
- * too, so that the drawn pose shows the setup vertices at once.
+ * Hides or shows the deforms of the animated pose and of the applied pose, from outside an
+ * update, for `PoseEngine.deform`. See `shared/deform-switch.ts`. The applied pose of a slot
+ * that a slider poses follows at once, so that the drawn pose shows the change.
  */
-export function clearDeforms(pose: Pose43): void {
+export function switchDeforms(pose: Pose43, on: boolean): void {
     const { state, solve } = pose;
+    const toggle = on ? showDeforms : hideDeforms;
 
-    for (let slot = 0; slot < state.deformLengths.length; slot++) {
-        if (pose.deformLengths[slot] !== 0) {
-            pose.deformLengths[slot] = 0;
-            stampSlot(pose, slot);
-        }
-        if (state.deformLengths[slot] === 0) continue;
-        state.deformLengths[slot] = 0;
-        state.version = solve.pending;
-        state.slotStamps[slot] = solve.pending;
+    toggle(pose.deformLengths, (slot) => stampSlot(pose, slot));
+    if (state.deformLengths !== pose.deformLengths) {
+        toggle(state.deformLengths, (slot) => {
+            state.version = solve.pending;
+            state.slotStamps[slot] = solve.pending;
+        });
     }
     solve.dirty = true;
 }
