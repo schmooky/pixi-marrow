@@ -367,7 +367,10 @@ export function inspectView(view: SkeletonView): ViewReport {
             vertices: layout.plain,
             limit: AUTO_BATCH_VERTICES,
             batches: element?.placed ? element.runs : 0,
-            sharedBy: element?.placed ? (element.batches[0]?.elements.length ?? 0) : 0,
+            // the images of the idle cache share batches too, and are no skeletons
+            sharedBy: element?.placed
+                ? (element.batches[0]?.elements.filter((other) => !('quad' in other)).length ?? 0)
+                : 0,
             batchBytes,
             clipVertices: element?.clipVertices ?? 0,
             clipIndices: element?.clipIndices ?? 0,

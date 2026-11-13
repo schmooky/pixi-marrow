@@ -83,7 +83,7 @@ describe('a pool of instanced views', () => {
         expect(layout.pools[0]?.used).toBe(2);
     });
 
-    it('points every shader of a pool that grew at its new textures before it destroys the old ones', async () => {
+    it('points every shader of a pool that grew at its new textures, and destroys the old ones after the render', async () => {
         const rig = await loadInstanced('4.3/raptor-pro.skel');
 
         step(rig, 0);
@@ -108,8 +108,11 @@ describe('a pool of instanced views', () => {
         // the shader the draw did not ask for lets go of the old texture too
         expect(two.resources.uPose).toBe(pool.pose);
         expect(one.resources.uPose).toBe(pool.pose);
-        expect(old.destroyed).toBe(true);
         expect(pool.retired).toHaveLength(0);
+        // a pool can grow inside a render: draws before it bound the old texture, and WebGPU submits them at the end
+        expect(old.destroyed).toBe(false);
+        await Promise.resolve();
+        expect(old.destroyed).toBe(true);
         for (const slot of more) if (slot !== undefined) pool.release(slot);
     });
 });

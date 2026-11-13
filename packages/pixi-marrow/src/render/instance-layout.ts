@@ -170,7 +170,9 @@ export class InstanceLayout {
 
     /** The bytes the views of the layout share: the buffers, the index buffers and the room of the pools no view takes. */
     get bytes(): number {
-        let bytes = this.skin.data.byteLength + this.statics.data.byteLength + this.entries.data.byteLength;
+        // the statics of the template are counted with the template, unless the layout holds a copy
+        const own = this.statics.data === this.template.statics ? 0 : this.statics.data.byteLength;
+        let bytes = this.skin.data.byteLength + own + this.entries.data.byteLength;
 
         for (const union of this.unions) bytes += union.buffer.data.byteLength;
         for (const pool of this.pools) bytes += pool.bytes - pool.used * pool.slotBytes;
@@ -254,8 +256,10 @@ export class InstanceLayout {
     }
 
     /**
-     * Points every shader of a pool that grew at its new textures, then destroys the old ones. The
-     * frames that drew with them are behind: a pool grows in an update, before the draws.
+     * Points every shader of a pool that grew at its new textures, then destroys the old ones once
+     * the render that runs now is over. A pool can grow inside a render, when a view lays itself out
+     * again right before its draw. Draws earlier in that render bound the old textures, and WebGPU
+     * submits them at its end.
      */
     private repoint(pool: InstancePool): void {
         for (const [shader, owner] of this.users) {
@@ -264,8 +268,11 @@ export class InstanceLayout {
             shader.resources.uPose = pool.pose;
             shader.resources.uPalette = pool.palette;
         }
-        for (const texture of pool.retired) texture.destroy();
-        pool.retired.length = 0;
+        const retired = pool.retired.splice(0);
+
+        queueMicrotask(() => {
+            for (const texture of retired) if (!texture.destroyed) texture.destroy();
+        });
     }
 
     /** Frees the buffers, the pools and the shaders. The skin data belongs to the layout. */
@@ -333,9 +340,36 @@ export class InstanceLayout {
     }
 }
 
+/** Why the views of a layout draw alone, by the skin data of the layout. A layout that draws alone gets no instanced draw. */
+const blocks = new WeakMap<SkinLayout, LayoutBlock | null>();
+
+/**
+ * Why the views of the layout of a template must draw alone, or null when they can draw
+ * instanced. It makes no instanced draw for the layout.
+ *
+ * @example
+ * if (instanceBlock(template, model, skinLayout, pages.length) === null) shared = instanceLayout(template, model, skinLayout, pages.length);
+ */
+export function instanceBlock(
+    template: Template,
+    model: SkeletonModel,
+    skin: SkinLayout,
+    pages: number,
+): LayoutBlock | null {
+    const known = blocks.get(skin);
+
+    if (known !== undefined) return known;
+    const block = skin.instances instanceof InstanceLayout ? skin.instances.block : blockOf(template, model, pages);
+
+    blocks.set(skin, block);
+
+    return block;
+}
+
 /**
  * The instanced draw of the layout of a template, made with the first view that asks. It lives
- * as long as the skin data of the layout.
+ * as long as the skin data of the layout. Ask {@link instanceBlock} first: a layout that never
+ * draws instanced needs none.
  *
  * @example
  * const shared = instanceLayout(template, model, skinLayout, pages.length);

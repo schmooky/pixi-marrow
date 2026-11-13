@@ -68,14 +68,17 @@ export class ImageElement implements BatchableElement {
     declare _batch: Batch;
     /** The texture source the batch binds for the quad, as the last build of the instructions saw it. */
     bound: TextureSource | null = null;
-    private readonly place: ImagePlace;
+    /** The display object of the image. Not named `owner`: the batcher knows a part of a skeleton by that name. */
+    private readonly display: ImagePlace;
+    /** The build of the batcher that gave the quad its room. */
+    private serial = -1;
     private round = false;
     private staticWords = STATIC_WORDS;
     /** The batcher the quad was written into, or null before the first build. */
     private home: BatchHome | null = null;
 
     constructor(place: ImagePlace) {
-        this.place = place;
+        this.display = place;
     }
 
     /** Readies the element for a build of the instructions: rounding, the batcher and the blend mode. */
@@ -83,7 +86,7 @@ export class ImageElement implements BatchableElement {
         this.round = round;
         this.batcherName = dark ? DARK_BATCHER : BATCHER;
         this.staticWords = dark ? STATIC_WORDS + 1 : STATIC_WORDS;
-        this.blendMode = this.place.groupBlendMode;
+        this.blendMode = this.display.groupBlendMode;
     }
 
     /** Whether the quad can join a batch: the same blend mode, and its texture or room for it. */
@@ -115,9 +118,13 @@ export class ImageElement implements BatchableElement {
         this.write(home, id);
     }
 
-    /** Writes the quad into its room, with its texture at number `texture` of the batch. */
+    /**
+     * Writes the quad into its room, with its texture at number `texture` of the batch. Pixi
+     * uploads the buffers whole after a build, so nothing is marked for upload here.
+     */
     private write(home: BatchHome, texture: number): void {
         this.home = home;
+        this.serial = home.serial;
         this._textureId = texture;
         this.bound = this.texture.source;
         const vertex = this._attributeStart / POSITION_WORDS;
@@ -130,49 +137,68 @@ export class ImageElement implements BatchableElement {
         indices[at + 3] = vertex;
         indices[at + 4] = vertex + 2;
         indices[at + 5] = vertex + 3;
-        this.sync();
+        this.place(home, false);
     }
 
     /**
      * Writes the positions, the texture coordinates, the tint and the flags of the quad again, and
      * tells the batcher what to upload. A move or another tint of the display object calls it.
+     * Does nothing for a quad that the last build of its batcher left out.
      */
     sync(): void {
-        const { home, texture } = this;
+        const { home } = this;
 
-        if (home === null) return;
-        const { a, b, c, d, tx, ty } = this.place.groupTransform;
-        const { width, height } = texture.frame;
-        const positions = home.attributeBuffer.float32View;
-        const vertex = this._attributeStart / POSITION_WORDS;
-        const words = this.staticWords;
-        const base = vertex * words;
-        const flags = this._textureId | (this.round ? ROUND_FLAG : 0);
-        const { uvs } = texture;
-        const corners = [0, 0, width, 0, width, height, 0, height];
-        const coords = [uvs.x0, uvs.y0, uvs.x1, uvs.y1, uvs.x2, uvs.y2, uvs.x3, uvs.y3];
-
-        for (let i = 0; i < VERTICES; i++) {
-            const x = Number(corners[i * 2]);
-            const y = Number(corners[i * 2 + 1]);
-            const to = this._attributeStart + i * POSITION_WORDS;
-            const from = base + i * words;
-
-            // the arithmetic of Pixi for the quad of a sprite
-            positions[to] = a * x + c * y + tx;
-            positions[to + 1] = d * y + b * x + ty;
-            home.statics[from] = Number(coords[i * 2]);
-            home.statics[from + 1] = Number(coords[i * 2 + 1]);
-            home.staticBytes[from + 2] = WHITE;
-            home.staticBytes[from + 3] = this.place.groupColorAlpha;
-            home.staticBytes[from + 4] = flags;
-            // black with an alpha of 1 tints nothing, see `batch-pack.ts`
-            if (words > STATIC_WORDS) home.staticBytes[from + 5] = NO_DARK;
-        }
-        home.touchPositions(this._attributeStart, VERTICES * POSITION_WORDS);
-        home.touchStatics(base, VERTICES * words);
-        home.touchIndices(this._indexStart, INDICES);
+        if (home !== null && home.serial === this.serial) this.place(home, true);
     }
+
+    /** Writes the four vertices. The texture is untrimmed, as every image of the idle cache is. */
+    private place(home: BatchHome, mark: boolean): void {
+        const { a, b, c, d, tx, ty } = this.display.groupTransform;
+        const { width, height } = this.texture.frame;
+        const { uvs } = this.texture;
+        const positions = home.attributeBuffer.float32View;
+        const words = this.staticWords;
+        const base = (this._attributeStart / POSITION_WORDS) * words;
+        const at = this._attributeStart;
+        const flags = this._textureId | (this.round ? ROUND_FLAG : 0);
+        const tint = this.display.groupColorAlpha;
+
+        // the arithmetic of Pixi for the quad of a sprite, corner by corner
+        positions[at] = tx;
+        positions[at + 1] = ty;
+        positions[at + 2] = a * width + tx;
+        positions[at + 3] = b * width + ty;
+        positions[at + 4] = a * width + c * height + tx;
+        positions[at + 5] = d * height + b * width + ty;
+        positions[at + 6] = c * height + tx;
+        positions[at + 7] = d * height + ty;
+        writeCorner(home, base, uvs.x0, uvs.y0, tint, flags, words);
+        writeCorner(home, base + words, uvs.x1, uvs.y1, tint, flags, words);
+        writeCorner(home, base + words * 2, uvs.x2, uvs.y2, tint, flags, words);
+        writeCorner(home, base + words * 3, uvs.x3, uvs.y3, tint, flags, words);
+        if (!mark) return;
+        home.touchPositions(at, VERTICES * POSITION_WORDS);
+        home.touchStatics(base, VERTICES * words);
+    }
+}
+
+/** Writes what a pose does not move of one corner: texture coordinates, colors and flags. */
+function writeCorner(
+    home: BatchHome,
+    at: number,
+    u: number,
+    v: number,
+    tint: number,
+    flags: number,
+    words: number,
+): void {
+    home.statics[at] = u;
+    home.statics[at + 1] = v;
+    home.staticBytes[at + 2] = WHITE;
+    home.staticBytes[at + 3] = tint;
+    home.staticBytes[at + 4] = flags;
+    // black with an alpha of 1 tints nothing, see `batch-pack.ts`
+    if (words > STATIC_WORDS) home.staticBytes[at + 5] = NO_DARK;
 }
 
 /**

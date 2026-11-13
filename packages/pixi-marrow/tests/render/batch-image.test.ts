@@ -5,9 +5,10 @@ import { NO_DARK } from '../../src/render/batch-pack';
 import { linkRenderer } from '../../src/render/batch-pipe';
 import { MarrowBatcher } from '../../src/render/batcher';
 import { MarrowDarkBatcher } from '../../src/render/dark-batcher';
+import { inspectView } from '../../src/render/inspect';
 import { loadMeshCode } from '../../src/render/mesh-code';
 import { expectBatch, loadFamily, populate } from './batch-check';
-import { createStage, type Stage } from './batch-stage';
+import { createStage, type Stage, watchUploads } from './batch-stage';
 
 /*
  * An image in a batch of the batched mode: the idle cache shows a skeleton at rest as one. It
@@ -161,5 +162,102 @@ describe('an image in a batch of skeletons', () => {
         await populate(stage, speedy, 1);
         stage.render();
         expect(stage.counts.draws.map((draw) => draw.blendMode)).toEqual(['normal', 'add', 'normal']);
+    });
+    it('places a turned image as Pixi places a turned sprite, rounded where the renderer rounds', async () => {
+        const stage = createStage({ roundPixels: true });
+        const speedy = await loadFamily('4.2/speedy-ess.skel');
+
+        linkRenderer(stage.renderer);
+        await populate(stage, speedy, 1);
+        // a quarter turn and a shear: b and c are not zero, and not equal
+        const image = addImage(stage, imageTexture(10, 20), new Matrix(0, 2, -3, 0, 100, 50));
+
+        stage.render();
+        expect(quadOf(image).map(({ x, y }) => [x, y])).toEqual([
+            [100, 50],
+            [100, 70],
+            [40, 70],
+            [40, 50],
+        ]);
+        // the flag of a vertex that is rounded to pixels
+        for (const corner of quadOf(image)) expect((corner.flags >> 16) & 0xff).toBe(0xff);
+    });
+
+    it('uploads nothing of its own after a build, and its positions after a move', async () => {
+        const stage = createStage();
+        const speedy = await loadFamily('4.2/speedy-ess.skel');
+
+        linkRenderer(stage.renderer);
+        await populate(stage, speedy, 1);
+        const image = addImage(stage, imageTexture(10, 10));
+
+        stage.render();
+        const batcher = image.element._batcher;
+
+        if (!(batcher instanceof MarrowBatcher)) throw new Error('the image is in no batch of ours');
+        const uploads = watchUploads(batcher);
+
+        // a build: the batcher uploads the part of its buffers in use once, and the image adds nothing to it
+        image.visible = false;
+        stage.render();
+        const hidden = { ...uploads };
+
+        image.visible = true;
+        stage.render();
+        expect(uploads.positionBytes - hidden.positionBytes).toBe(batcher.attributeSize * 4);
+        expect(uploads.indices).toBe(0);
+        const shown = { ...uploads };
+
+        image.x += 2;
+        stage.render();
+        // a move uploads the positions: the stretch of the quad, or the part in use where one call is cheaper
+        expect(uploads.positions - shown.positions).toBe(1);
+    });
+
+    it('writes nothing where a build left it out', async () => {
+        const stage = createStage();
+        const speedy = await loadFamily('4.2/speedy-ess.skel');
+
+        linkRenderer(stage.renderer);
+        const image = addImage(stage, imageTexture(10, 10), new Matrix(1, 0, 0, 1, 500, 500));
+        const [rig] = await populate(stage, speedy, 1);
+
+        stage.render();
+        image.visible = false;
+        stage.render();
+        if (rig === undefined) throw new Error('a rig');
+        const batcher = image.element._batcher;
+
+        if (!(batcher instanceof MarrowBatcher)) throw new Error('the image is in no batch of ours');
+        const before = Array.from(batcher.attributeBuffer.float32View.subarray(0, 8));
+
+        // the room of the image belongs to the skeleton now
+        image.element.sync();
+        expect(Array.from(batcher.attributeBuffer.float32View.subarray(0, 8))).toEqual(before);
+    });
+
+    it('starts a batch of its own before a skeleton with dark colors', async () => {
+        const stage = createStage();
+        const alien = await loadFamily('4.2/alien-pro.skel');
+
+        linkRenderer(stage.renderer);
+        addImage(stage, imageTexture(10, 10));
+        await populate(stage, alien, 1);
+        stage.render();
+        expect(stage.counts.draws.map((draw) => draw.batcher?.dark)).toEqual([false, true]);
+    });
+
+    it('is no skeleton in the count of the report', async () => {
+        const stage = createStage();
+        const speedy = await loadFamily('4.2/speedy-ess.skel');
+
+        linkRenderer(stage.renderer);
+        const [rig] = await populate(stage, speedy, 1);
+
+        for (let i = 0; i < 3; i++) addImage(stage, imageTexture(10, 10));
+        stage.render();
+        if (rig === undefined) throw new Error('a rig');
+        expect(stage.counts.draws).toHaveLength(1);
+        expect(inspectView(rig.view).mode.sharedBy).toBe(1);
     });
 });

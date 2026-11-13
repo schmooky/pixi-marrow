@@ -14,7 +14,7 @@ import { isNewer, type PoseState } from '../pose/state';
 import { uploadStretch, uploadsStretch } from './batch-upload';
 import { clipCode, clipCodeMissing } from './clip-code';
 import { bendsEdges, type DrawGate } from './gate';
-import { instanceLayout } from './instance-layout';
+import { instanceBlock, instanceLayout } from './instance-layout';
 import { InstancePaint, type InstanceWhy } from './instance-paint';
 import type { MeshCode } from './mesh-code';
 import { linkMeshPipe } from './mesh-pipe';
@@ -339,9 +339,11 @@ export class MeshPaint {
 
         if (skin === undefined) return 'cpu';
         if (!this.instancing) return 'off';
+        const block = instanceBlock(template, this.model, skin.skinLayout, this.pages.length);
+
+        if (block !== null) return block;
         const shared = instanceLayout(template, this.model, skin.skinLayout, this.pages.length);
 
-        if (shared.block !== null) return shared.block;
         if (seen.clipped > 0) return 'clip';
         if (seen.cutCount > 0) return 'attached';
         const { cpuAt } = shared.shape;

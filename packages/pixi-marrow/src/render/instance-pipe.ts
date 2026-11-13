@@ -108,6 +108,8 @@ interface RunBook {
     readonly runs: InstanceRun[];
     used: number;
     last: InstanceRun | undefined;
+    /** The instruction set, held weakly: Pixi before 8.21 does not tell when it destroys one. */
+    readonly set: WeakRef<InstructionSet>;
 }
 
 /**
@@ -121,7 +123,8 @@ interface RunBook {
 export class InstancePipe {
     private renderer: Renderer | null;
     private readonly books = new WeakMap<InstructionSet, RunBook>();
-    private readonly all: InstanceRun[] = [];
+    /** Every book, so that the runs of a destroyed instruction set are freed. */
+    private readonly all: RunBook[] = [];
     private readonly state = State.for2d();
     /** What a draw asks a part for its shader: one object for every draw. */
     private want: Shaded | undefined;
@@ -222,20 +225,27 @@ export class InstancePipe {
         const book = this.books.get(set);
 
         if (book === undefined) return;
-        for (const run of book.runs) {
-            const at = this.all.indexOf(run);
-
-            run.destroy();
-            if (at >= 0) this.all.splice(at, 1);
-        }
+        for (const run of book.runs) run.destroy();
+        this.all.splice(this.all.indexOf(book), 1);
         this.books.delete(set);
     }
 
     /** Pixi calls this when the renderer is destroyed. */
     destroy(): void {
-        for (const run of this.all) run.destroy();
+        for (const book of this.all) for (const run of book.runs) run.destroy();
         this.all.length = 0;
         this.renderer = null;
+    }
+
+    /** Frees the runs of the instruction sets that are gone. A new instruction set calls it. */
+    private sweep(): void {
+        for (let i = this.all.length - 1; i >= 0; i--) {
+            const book = this.all[i];
+
+            if (book === undefined || book.set.deref() !== undefined) continue;
+            for (const run of book.runs) run.destroy();
+            this.all.splice(i, 1);
+        }
     }
 
     /** One instanced draw of the members a part holds. */
@@ -281,19 +291,23 @@ export class InstancePipe {
         let book = this.books.get(set);
 
         if (book === undefined) {
-            book = { runs: [], used: 0, last: undefined };
+            this.sweep();
+            book = { runs: [], used: 0, last: undefined, set: new WeakRef(set) };
             this.books.set(set, book);
+            this.all.push(book);
         }
         const { last } = book;
 
-        // a new build: the run added last is no longer where it was put
-        if (last === undefined || last.at >= set.instructionSize || set.instructions[last.at] !== last) book.used = 0;
+        // a new build: the run added last is no longer where it was put. The runs let go of their members
+        if (last === undefined || last.at >= set.instructionSize || set.instructions[last.at] !== last) {
+            book.used = 0;
+            for (const old of book.runs) old.members.length = 0;
+        }
         let run = book.runs[book.used];
 
         if (run === undefined) {
             run = new InstanceRun();
             book.runs.push(run);
-            this.all.push(run);
         }
         book.used++;
         run.members.length = 0;
