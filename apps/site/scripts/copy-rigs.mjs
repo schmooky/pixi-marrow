@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Copies the rigs of the previews into public/rigs, which git ignores: the bee of the slot game
- * Bzzz and the big bee, with their atlas and its page image, from fixtures/bzzz. Those files
+ * Copies the rigs of the previews into public/rigs, which git ignores: the symbols of the slot
+ * game Bzzz that the previews show, with their atlas and its page image, from fixtures/bzzz. Those files
  * are in the repository, so the site builds on any clone. It runs before `dev` and `build`.
  *
  * usage: node scripts/copy-rigs.mjs   (from apps/site)
@@ -15,10 +15,9 @@ const from = join(site, '../../fixtures/bzzz');
 const out = join(site, 'public/rigs');
 
 /** The skeletons a preview loads, with their atlas. The page images are read from the atlas. */
-const RIGS = [
-    { skeleton: 'animation_bee.skel', atlas: 'symbols.atlas' },
-    { skeleton: 'animation_bee_big.skel', atlas: 'symbols.atlas' },
-];
+const RIGS = ['bee', 'bee_big', 'a', 'j', 'k', 'q', 'blue_flower', 'purple_flower', 'rose_flower', 'wild', 'coin'].map(
+    (name) => ({ skeleton: `animation_${name}.skel`, atlas: 'symbols.atlas' }),
+);
 
 /** The page image names of an atlas: the first line, and every first line after an empty one. */
 function pageNames(atlasText) {

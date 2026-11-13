@@ -67,6 +67,7 @@ const PREVIEWS: Record<string, Loader> = {
     play: () => import('./play'),
     placeholders: () => import('./placeholders'),
     debug: () => import('./debug'),
+    reels: () => import('./reels'),
 };
 
 /** A preview whose app exists and whose scene is built. */
