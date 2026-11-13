@@ -22,6 +22,12 @@ export interface PerfSettings {
      */
     skinning: SkinningMode;
     /**
+     * `auto` draws the instances that follow each other in Pixi's render order and share a layout
+     * as one instanced draw, where the vertex shader places their vertices: the mesh mode with
+     * `skinning: 'gpu'`. The picture is the same to the bit. `off` draws each instance alone.
+     */
+    instancing: 'auto' | 'off';
+    /**
      * `auto` plays an animation from frames baked at load time, where it can be: one track, no
      * mix, no physics, no handle that writes a bone. The pose equals the played one at the
      * baked frames. A list bakes the named animations only. `off` (the `exact` default) bakes nothing.
@@ -64,6 +70,7 @@ export const PERF_PRESETS: Readonly<Record<PerfPreset, Readonly<PerfSettings>>> 
     exact: Object.freeze({
         tightMesh: 'auto',
         skinning: 'auto',
+        instancing: 'auto',
         bake: 'off',
         idleCache: 'off',
         offscreen: 'update',
@@ -73,6 +80,7 @@ export const PERF_PRESETS: Readonly<Record<PerfPreset, Readonly<PerfSettings>>> 
     balanced: Object.freeze({
         tightMesh: 'on',
         skinning: 'auto',
+        instancing: 'auto',
         bake: 'auto',
         idleCache: 'auto',
         offscreen: 'throttle',
@@ -82,6 +90,7 @@ export const PERF_PRESETS: Readonly<Record<PerfPreset, Readonly<PerfSettings>>> 
     fast: Object.freeze({
         tightMesh: 'on',
         skinning: 'auto',
+        instancing: 'auto',
         bake: 'auto',
         idleCache: 'auto',
         offscreen: 'pause',
@@ -96,6 +105,7 @@ const PRESETS = Object.keys(PERF_PRESETS) as PerfPreset[];
 const CHOICES: Record<keyof PerfSettings, readonly string[]> = {
     tightMesh: ['auto', 'on', 'off'],
     skinning: ['auto', 'cpu', 'gpu'],
+    instancing: ['auto', 'off'],
     bake: ['off', 'auto'],
     idleCache: ['off', 'auto'],
     offscreen: ['update', 'throttle', 'pause'],

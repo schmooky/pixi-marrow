@@ -3,6 +3,7 @@ import type { ConstraintData } from '../model/constraints';
 import type { PhysicsMode } from '../pose/engine';
 import { type PerfEntry, plural, type ReportSource, slotNames } from './report-base';
 import { cutRows } from './report-cuts';
+import { instancedDrawRow, instancingRow } from './report-instancing';
 import { pacingRow, perfRow } from './report-perf';
 
 /*
@@ -168,6 +169,7 @@ function drawCallRow(source: ReportSource): PerfEntry {
     const { stats } = source;
 
     if (source.view.mode.mode === 'batched') return batchRow(source);
+    if (source.view.instancing.why === null) return instancedDrawRow(source);
     const ranges = stats.drawCalls - stats.maskDraws;
     const masks = stats.maskDraws > 0 ? ` and ${plural(stats.maskDraws, 'mask draw')}` : '';
     let reason = 'no slot is visible';
@@ -393,6 +395,7 @@ export function buildReport(source: ReportSource): PerfEntry[] {
         perfRow(source.perf),
         pacingRow(source.pacing),
         renderModeRow(source),
+        instancingRow(source),
         motionRow(source),
         linksRow(source),
         drawCallRow(source),

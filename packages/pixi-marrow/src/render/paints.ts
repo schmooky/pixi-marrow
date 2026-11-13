@@ -34,6 +34,8 @@ export interface ViewPaintsOptions {
     readonly measure: () => Bounds;
     /** Whether the vertex shader of the mesh mode places the vertices from the bones where it can. */
     readonly gpu: boolean;
+    /** Whether a view of the mesh mode with `gpu` draws instanced where it can. */
+    readonly instancing: boolean;
 }
 
 /**
@@ -112,7 +114,7 @@ export class ViewPaints {
      */
     enter(mode: DrawMode, template: Template, slots: SlotLayout): void {
         const { options } = this;
-        const { container, seen, cover, pages, dark, model, measure, gpu } = options;
+        const { container, seen, cover, pages, dark, model, measure, gpu, instancing, gate } = options;
 
         this.mode = mode;
         this.ready = true;
@@ -140,7 +142,11 @@ export class ViewPaints {
         if (this.body !== undefined) this.body.visible = false;
         if (this.mesh !== undefined) this.mesh.wake(template);
         // the view enters the mesh mode only once its code is loaded
-        else this.mesh = meshCode()?.createPaint({ container, template, pages, dark, model, measure, gpu });
+        else {
+            const paint = { container, template, pages, dark, model, measure, gpu, instancing, gate };
+
+            this.mesh = meshCode()?.createPaint(paint);
+        }
     }
 
     /** Takes the vertex ranges of a new layout: the buffers of the mesh mode and the element of the batched mode. */

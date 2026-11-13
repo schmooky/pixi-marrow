@@ -17,6 +17,7 @@ export type PerfFeature =
     | 'perf'
     | 'pacing'
     | 'renderMode'
+    | 'instancing'
     | 'motion'
     | 'links'
     | 'drawCalls'

@@ -199,6 +199,7 @@ export interface MarrowSpineOptions {
   occlusion?: "auto" | "off";
   perf?: PerfPreset | PerfOptions;
   skinning?: PerfSettings["skinning"];
+  instancing?: PerfSettings["instancing"];
   bake?: PerfSettings["bake"];
   idleCache?: PerfSettings["idleCache"];
   offscreen?: PerfSettings["offscreen"];
@@ -219,7 +220,7 @@ export interface PerfEntry {
   reason: string;
   animation?: string;
 }
-export type PerfFeature = "perf" | "pacing" | "renderMode" | "motion" | "links" | "drawCalls" | "blend" | "pages" | "clipping" | "tightMesh" | "occlusion" | "outlines" | "darkTint" | "physics" | "bake" | "constraints" | "bones" | "slots" | "vertices" | "uploads" | "layout";
+export type PerfFeature = "perf" | "pacing" | "renderMode" | "instancing" | "motion" | "links" | "drawCalls" | "blend" | "pages" | "clipping" | "tightMesh" | "occlusion" | "outlines" | "darkTint" | "physics" | "bake" | "constraints" | "bones" | "slots" | "vertices" | "uploads" | "layout";
 export interface PerfMemory {
   shared: number;
   instance: number;
@@ -234,6 +235,7 @@ export type PerfPreset = "exact" | "balanced" | "fast";
 export interface PerfSettings {
   tightMesh: "auto" | "on" | "off";
   skinning: SkinningMode;
+  instancing: "auto" | "off";
   bake: BakeMode;
   idleCache: "off" | "auto";
   offscreen: OffscreenMode;

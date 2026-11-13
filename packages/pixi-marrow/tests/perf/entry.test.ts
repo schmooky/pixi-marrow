@@ -147,6 +147,7 @@ describe('the code behind perf.report and perf.memory', () => {
         'api/perf-read.ts',
         'api/report-base.ts',
         'api/report-cuts.ts',
+        'api/report-instancing.ts',
         'api/report.ts',
         'render/inspect.ts',
     ];
@@ -199,9 +200,15 @@ describe('the code behind perf.report and perf.memory', () => {
 });
 
 describe('the code of the mesh mode, the code for clips and the code that cuts overdraw', () => {
-    /** The modules of the mesh mode: its draw ranges, its shaders, its paint, the skinning on the GPU and the stencil mask of a clip. */
+    /** The modules of the mesh mode: its draw ranges, its shaders, its paint, the skinning on the GPU, instanced draws and the stencil mask of a clip. */
     const MESH = [
         'render/clip-mask.ts',
+        'render/instance-layout.ts',
+        'render/instance-paint.ts',
+        'render/instance-part.ts',
+        'render/instance-pipe.ts',
+        'render/instance-pool.ts',
+        'render/instance-shader.ts',
         'render/measured-geometry.ts',
         'render/mesh-paint.ts',
         'render/mesh-pipe.ts',
@@ -212,6 +219,7 @@ describe('the code of the mesh mode, the code for clips and the code that cuts o
         'render/skin-paint.ts',
         'render/skin-pose.ts',
         'render/skin-shader.ts',
+        'render/skin-store.ts',
         'render/vertex-colors.ts',
     ];
     /** The modules a clip needs in both render modes: the kernel, the shape of a polygon, the cut triangles of a batch. */

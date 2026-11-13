@@ -1,17 +1,18 @@
-import type { BufferImageSource } from 'pixi.js';
 import { f64, i16, i32 } from '../geometry/read';
 import type { SkeletonModel } from '../model/model';
 import { isNewer, type PoseState, WORLD_STRIDE } from '../pose/state';
 import { placeEntry } from './entry-pose';
 import { bonesMoved, colorEntry, frameEntry, type PosePass } from './pose-pass';
 import { u8 } from './read';
-import { dataRoom, dataTexture, type SkinLayout } from './skin-layout';
+import type { SkinLayout } from './skin-layout';
+import type { SkinStore } from './skin-store';
 import type { Template } from './template';
 import { NO_CLIP, type VisibleList } from './visible';
 
 /*
  * The pose of one instance as the vertex shader of `skinning: 'gpu'` reads it: the world
- * transform of every bone and the colors of every slot, each in a data texture of its own.
+ * transform of every bone and the colors of every slot, in the arrays of a store. A view that
+ * draws alone has data textures of its own, one that draws instanced a slot of shared ones.
  *
  * A pass over the visible entries follows the stamps of the pose, as `poseEntries` does:
  *
@@ -33,21 +34,17 @@ import { NO_CLIP, type VisibleList } from './visible';
 const BY_CPU = 255;
 
 /**
- * The bone and palette textures of one view whose vertex shader places vertices, and the pass
- * that keeps them in line with a pose.
+ * The pass that keeps the bones and the palette of one view whose vertex shader places vertices
+ * in line with a pose. It writes into a store: see `skin-store.ts`.
  *
  * @example
- * const skin = new SkinPose(model);
+ * const skin = new SkinPose(model, new TextureStore(model));
  * skin.pose(pass, template, layout, state, seen, template.opaqueCount > 0);
  * skin.settle(template, layout, state, seen);
  */
 export class SkinPose {
-    /** The world transform of each bone, 6 numbers a bone. See `skin-shader.ts`. */
-    readonly bones: BufferImageSource;
-    /** Two texels a slot: the light color, then the dark color and the flag of the CPU. */
-    readonly palette: BufferImageSource;
-    private readonly boneData: Float32Array;
-    private readonly colors: Uint8Array;
+    /** Where the bones and the colors go. A new store holds nothing of the pose: see {@link use}. */
+    store: SkinStore;
     private readonly model: SkeletonModel;
     /** True when the positions of the vertices the shader places are older than the pose. */
     private stale = true;
@@ -56,19 +53,19 @@ export class SkinPose {
     private low = 0;
     private high = -1;
 
-    constructor(model: SkeletonModel) {
-        const boneTexels = Math.ceil((model.bones.count * WORLD_STRIDE) / 4);
-
+    constructor(model: SkeletonModel, store: SkinStore) {
         this.model = model;
-        this.boneData = new Float32Array(dataRoom(boneTexels));
-        this.bones = dataTexture(this.boneData, boneTexels, 'marrow-bones');
-        this.colors = new Uint8Array(dataRoom(model.slots.count * 2));
-        this.palette = dataTexture(this.colors, model.slots.count * 2, 'marrow-palette');
+        this.store = store;
     }
 
-    /** The bytes of the two textures. */
-    get bytes(): number {
-        return this.boneData.byteLength + this.colors.byteLength;
+    /**
+     * Writes from now on into another store. The next pass must write everything, with
+     * `pass.all`: the store holds nothing of the pose. Its flags of the CPU read as unknown.
+     */
+    use(store: SkinStore): void {
+        this.store = store;
+        // a flag no pass writes: the next pass finds every slot changed
+        for (let at = 7; at < store.colors.length; at += store.stride) store.colors[at] = 1;
     }
 
     /**
@@ -114,6 +111,7 @@ export class SkinPose {
             placeEntry(template, state, bones, entry, slot);
             // placed for the search of covered slots alone: the shader places it from the bones
             if (gpu) continue;
+            this.store.wrote?.(template, entry);
             placed++;
             from = Math.min(from, start);
             to = Math.max(to, start + i32(template.counts, entry));
@@ -143,25 +141,19 @@ export class SkinPose {
         }
     }
 
-    /** Frees the two textures. */
-    destroy(): void {
-        this.bones.destroy();
-        this.palette.destroy();
-    }
-
     /** Uploads the palette and the bones a pass changed, and notes them in the pass. */
     private upload(pass: PosePass, layout: SkinLayout, state: PoseState, place: boolean): void {
         // the palette is what goes to the GPU of the colors
         pass.colored = this.painted;
         pass.skinned = layout.count > 0 ? this.poseBones(state, pass.seen, pass.all) : 0;
         if (!place) this.stale = true;
-        if (this.high >= 0) this.palette.update(this.low * 2, this.high * 2 + 2);
+        if (this.high >= 0) this.store.colorsWritten(this.low, this.high);
     }
 
     /** Writes the newer bones to their texture and uploads them. Returns how many there were. */
     private poseBones(state: PoseState, seen: number, all: boolean): number {
         const { boneStamps, world } = state;
-        const data = this.boneData;
+        const data = this.store.bones;
         const count = this.model.bones.count;
         let low = count;
         let high = -1;
@@ -176,8 +168,7 @@ export class SkinPose {
             high = bone;
             moved++;
         }
-        // 6 numbers a bone are 1.5 texels: the stretch starts and ends at a whole texel
-        if (moved > 0) this.bones.update(Math.floor((low * 3) / 2), Math.ceil(((high + 1) * 3) / 2));
+        if (moved > 0) this.store.bonesWritten(low, high);
 
         return moved;
     }
@@ -194,7 +185,8 @@ export class SkinPose {
         frameEntry(pass, template, state, entry, slot, undefined);
         colorEntry(pass, template, state, this.model.slots.hasDark, entry, slot, undefined);
         // a deform that starts or stops moves the vertices although no bone moved
-        if (u8(this.colors, slot * 8 + 7) !== (gpu ? 0 : BY_CPU)) pass.reshaped = true;
+        if (u8(this.store.colors, slot * this.store.stride + 7) !== (gpu ? 0 : BY_CPU)) pass.reshaped = true;
+        this.store.wrote?.(template, entry);
         if (!this.paint(template, entry, slot, gpu)) return;
         this.painted++;
         this.low = Math.min(this.low, slot);
@@ -206,9 +198,9 @@ export class SkinPose {
      * places its vertices. Returns whether a byte changed.
      */
     private paint(template: Template, entry: number, slot: number, gpu: boolean): boolean {
-        const { colors } = this;
+        const { colors, stride } = this.store;
         const { light, dark } = template;
-        const at = slot * 8;
+        const at = slot * stride;
         const t = entry * 4;
         const flag = gpu ? 0 : BY_CPU;
         let changed = u8(colors, at + 7) !== flag;
