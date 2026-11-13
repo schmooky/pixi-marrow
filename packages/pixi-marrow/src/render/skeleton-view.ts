@@ -34,10 +34,7 @@ export type { ViewStats } from './stats';
  * picture stays the same. Polygons in place of quads are asked for with `tightMesh: 'on'`.
  */
 export interface SkeletonViewOptions extends CutChoice {
-    /**
-     * `mesh` draws with meshes of the view, `batched` in the batches of its render group. `auto`
-     * (the default) batches a small skeleton. A view draws in a batch until the mesh code is loaded.
-     */
+    /** `mesh` draws with meshes, `batched` in batches. `auto` batches a small skeleton. Batched until the mesh code loads. */
     renderMode?: RenderMode | undefined;
     /** `gpu` places the mesh-mode vertices in the vertex shader where it can. `cpu` and `auto` use the CPU. */
     skinning?: 'auto' | 'cpu' | 'gpu' | undefined;
