@@ -459,15 +459,16 @@ Render:
 
 Pose:
 
-- Keyframe cursors
-- Constant timelines folded at load
-- Bones and timelines outside the needed set skipped
-- Path constraint cache
-- Sleep when idle
-- No per-frame allocation
+- An apply that would repeat the one before is left out (M6)
+- A bone is posed again only when its own pose, its parent or the placement of the skeleton changed (M6)
+- A constraint and the bones it writes are left out while nothing it reads changed (M6)
+- Sleep when idle: a view whose pose version did not change places, colors and uploads nothing (M6)
+- No allocation per update after warm-up
 - One model shared by all instances
 
-Each item in this list has a parity test that runs with the item on and off.
+Planned here and not built, each with its measurement in section 2: keyframe cursors, constant timelines folded at load, and leaving out bones or timelines that nobody reads. The pose state is public and must equal the official one in every number.
+
+Each item is held by a check. Pose parity is exact, with the stamp check after every call. A test proves that an update allocates nothing. The pixel check compares both render modes with the official runtime.
 
 ### 8.2 Automatic with override
 
@@ -476,13 +477,14 @@ Each item in this list has a parity test that runs with the item on and off.
 | Option | Values | `auto` decides by | Exact |
 |---|---|---|---|
 | `renderMode` | `auto`, `mesh`, `batched` | Batch vertices of the skeleton: up to 1024 is batched | Within the pixel check. The modes differ in rare pixels, see 7.2. |
-| `skinning` | `auto`, `cpu`, `gpu` | Weighted vertex count, influences per vertex, deform keys | Yes, within float tolerance |
 | `tightMesh` | `auto`, `on`, `off` | `auto` drops regions without a visible pixel. `on` is opt-in, see 8.3. | Yes for `auto` |
 | `occlusion` | `auto`, `off` | Opaque rectangles present, the 4 largest occluders, world area of at least 1024 | Yes |
-| `sharedPose` | `auto`, `off` | Instances of one asset in the same animation phase | Yes |
-| `instancing` | `auto`, `off` | Count of baked instances of one asset | Yes for baked clips |
+
+Planned and not built yet: `skinning` (`auto`, `cpu`, `gpu`) comes with GPU skinning in M7, and `instancing` with baked clips in M8. `sharedPose` was measured in M6 and not built, see section 2.
 
 ### 8.3 Opt-in (changes timing, memory or look)
+
+Only `tightMesh: 'on'` is built. `bake` and `offscreen` come with M8 and the `balanced` preset. `idleCache`, `updateRate` and `lod` come with M9 and the `fast` preset.
 
 | Option | Values | Trade |
 |---|---|---|
@@ -495,7 +497,7 @@ Each item in this list has a parity test that runs with the item on and off.
 
 ### 8.4 One knob
 
-`perf: 'exact' | 'balanced' | 'fast'`, or a `PerfOptions` object that starts from a preset.
+`perf: 'exact' | 'balanced' | 'fast'`, or a `PerfOptions` object that starts from a preset. Not built yet. `balanced` comes with M8 and `fast` with M9. A skeleton today does what `exact` describes.
 
 | Preset | Sets |
 |---|---|
