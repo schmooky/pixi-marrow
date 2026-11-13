@@ -209,7 +209,17 @@
  * --skinning gives every instance of ours that option, the game check and the restore check
  * included: `--render-mode=mesh --skinning=gpu` holds the vertex shader that places vertices
  * from the bones to the rules of the mesh mode. The batched mode ignores the option. The head of
- * a renderer names it.
+ * a renderer names it. With `--skinning=gpu` an instance of the mesh mode draws instanced, so
+ * every rig and scene is drawn once more with `instancing: 'off'`:
+ *
+ *   ours, instancing on and off   the instanced picture against the same drawn alone. No
+ *                              difference is allowed. A scene of the idle cache is held to `idle`
+ *                              there: two sides with the same options differ in the frame that
+ *                              takes the images
+ *
+ * The scenes whose name starts with `instances` put runs of one rig on the stage that differ in
+ * tint and alpha, attachments, draw orders, deforms, sequences, skins and clips, with Pixi
+ * objects between them, see scripts/render/scene-plan-instances.mjs.
  * Without --renderer both run. A renderer the browser does not have is skipped with a line that
  * says so, and fails the check only when it was asked for by name.
  * Runs the installed Google Chrome. CHROME_PATH names another binary and CHROME_ARGS replaces the

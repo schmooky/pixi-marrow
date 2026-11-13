@@ -52,6 +52,8 @@ const IMPORTS = {
             'marrow-idle',
             // the baked playback loads on demand: a reason it gives
             'the next update plays baked',
+            // instanced draws are in the chunk of the mesh mode: the name of their pipe
+            'marrowInstances',
         ],
     ],
     // the headless core has no Pixi in it. pixi.js is external, so an import of it stays visible

@@ -57,6 +57,18 @@ const SCENE_PAIRS = [
         idle: false,
     },
     { label: 'auto', a: 'auto', b: 'official', kind: 'match', group: 'sceneAuto', reference: 'official' },
+    // With skinning on the GPU the mesh side draws instanced: drawn alone it must give the same bits.
+    // A scene of the idle cache is held to `idle`: two sides with the same options already differ
+    // by 1 in a few pixels in the frame that takes the images, measured with both drawing alone
+    {
+        label: 'instancing on and off',
+        a: 'mesh',
+        b: 'mesh-alone',
+        kind: 'exact',
+        group: 'sceneInstancing',
+        idle: false,
+    },
+    { label: 'instancing on and off', a: 'mesh', b: 'mesh-alone', kind: 'idle', group: 'sceneInstancing', idle: true },
     {
         label: 'auto against mesh',
         a: 'auto',
@@ -121,7 +133,7 @@ function countBuild(side, builds) {
  * `auto` picks with this many instances, and that the pick draws. On a page that draws the
  * default options alone it stays for the whole scene.
  */
-function sidesOf(scene, official, ours, run, officialHere = null) {
+function sidesOf(scene, official, ours, run, officialHere = null, gpu = false) {
     const specs = [];
     const add = (key, runtime, mode, more = {}) => specs.push({ key, runtime, mode, ...more });
 
@@ -136,6 +148,7 @@ function sidesOf(scene, official, ours, run, officialHere = null) {
     // the idle cache is on for the sides above, and these draw the same scene live
     if (scene.idle && run.mesh) add('mesh-live', ours, 'mesh', { live: true });
     if (scene.idle && run.batched) add('batched-live', ours, 'batched', { live: true });
+    if (gpu && run.mesh) add('mesh-alone', ours, 'mesh', { alone: true });
     if (run.auto) add('auto', ours, 'auto', { once: run.mesh || run.batched, picks: Boolean(scene.lazy) });
     if (official && scene.proof && run.mesh) add('mesh-wrong', ours, 'mesh', { wrong: true });
     if (official && scene.proof && run.batched) add('batched-wrong', ours, 'batched', { wrong: true });
@@ -419,7 +432,9 @@ export async function runScene(env, scene, options) {
 
     ctx.sampleLabel = env.ours ? (asked.run.mesh ? 'mesh' : 'batched') : 'scene twice';
     try {
-        for (const spec of sidesOf(scene, official, env.ours, asked.run, env.officialHere)) {
+        const gpu = env.skinning === 'gpu';
+
+        for (const spec of sidesOf(scene, official, env.ours, asked.run, env.officialHere, gpu)) {
             try {
                 built.push(await buildSide(env, scene, spec));
             } catch (error) {

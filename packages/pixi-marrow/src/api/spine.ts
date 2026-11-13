@@ -75,15 +75,8 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
             throw new MarrowError('invalid-data', 'The asset was destroyed.', { fix: 'Load the asset again.' });
         }
         this.asset = asset;
-        const settings = resolvePerf(options.perf, {
-            tightMesh: options.tightMesh,
-            skinning: options.skinning,
-            bake: options.bake,
-            idleCache: options.idleCache,
-            offscreen: options.offscreen,
-            updateRate: options.updateRate,
-            lod: options.lod,
-        });
+        // the options name each setting as the settings do
+        const settings = resolvePerf(options.perf, options);
 
         this.perfSettings = settings;
         this.engine = bakingEngine(asset, asset.createEngine(), settings.bake);
@@ -98,6 +91,7 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
             occlusion: options.occlusion,
             renderMode: renderMode(options.renderMode ?? 'auto'),
             skinning: settings.skinning,
+            instancing: settings.instancing,
         });
         this.addChild(this.skeletonView.container);
         this.linkTo({ engine: this.engine, state: this.engine.state, model: asset.model, view: this.skeletonView });

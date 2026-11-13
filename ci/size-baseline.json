@@ -1,9 +1,9 @@
 {
   "everything": {
-    "gzip": 34000
+    "gzip": 33959
   },
   "root (MarrowSpine)": {
-    "gzip": 32739
+    "gzip": 32705
   },
   "core (everything)": {
     "gzip": 6141

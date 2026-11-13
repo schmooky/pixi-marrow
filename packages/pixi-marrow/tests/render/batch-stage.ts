@@ -32,8 +32,8 @@ import type { SkeletonView } from '../../src/render/skeleton-view';
 
 /** One draw call a frame asked for. */
 interface Draw {
-    /** `batch` for a batch of the batch pipe, `mesh` for a mesh of the mesh mode. */
-    kind: 'batch' | 'mesh';
+    /** `batch` for a batch of the batch pipe, `mesh` for a mesh of the mesh mode, `instanced` for an instanced draw. */
+    kind: 'batch' | 'mesh' | 'instanced';
     /** The first index and the index count. 0 for a mesh. */
     start: number;
     size: number;
@@ -44,6 +44,8 @@ interface Draw {
     batcher: MarrowBatcher | null;
     /** Whether the draw bound the geometry and the shader of its batcher first. */
     starts: boolean;
+    /** The instances of an instanced draw, 1 for any other draw. */
+    instances: number;
 }
 
 /** What a stage counted. */
@@ -119,8 +121,26 @@ export function createStage(options: StageOptions = {}): Stage {
             },
         },
         renderTarget: { renderTarget: { colorTextures: [{ antialias: options.antialias ?? false }] } },
-        globalUniforms: { start: () => undefined, push: () => undefined, pop: () => undefined },
+        globalUniforms: { start: () => undefined, push: () => undefined, pop: () => undefined, bindGroup: {} },
+        // where the pipe of instanced draws draws. A renderer of WebGL has `gl`
+        encoder: {
+            draw(call: { state: { blendMode: string }; size: number; instanceCount: number }): void {
+                if (!noting) return;
+                counts.draws.push({
+                    kind: 'instanced',
+                    start: 0,
+                    size: call.size,
+                    blendMode: call.state.blendMode,
+                    textures: [],
+                    batcher: null,
+                    starts: true,
+                    instances: call.instanceCount,
+                });
+            },
+        },
     };
+    // the pipe of instanced draws draws on a renderer of WebGL or of WebGPU
+    if (context === undefined) Reflect.set(fake, 'gl', { isContextLost: (): boolean => false });
     const renderer = fake as unknown as Renderer;
     const adaptor = {
         start(_pipe: BatcherPipe, _geometry: Geometry, _shader: Shader): void {
@@ -136,6 +156,7 @@ export function createStage(options: StageOptions = {}): Stage {
                 textures: batch.textures.textures.slice(0, batch.textures.count),
                 batcher: batch.batcher instanceof MarrowBatcher ? batch.batcher : null,
                 starts: started,
+                instances: 1,
             });
             started = false;
         },
@@ -165,6 +186,7 @@ export function createStage(options: StageOptions = {}): Stage {
                 textures: [],
                 batcher: null,
                 starts: true,
+                instances: 1,
             });
         },
     };
@@ -190,6 +212,7 @@ export function createStage(options: StageOptions = {}): Stage {
                 textures: [],
                 batcher: null,
                 starts: true,
+                instances: 1,
             });
         },
     };

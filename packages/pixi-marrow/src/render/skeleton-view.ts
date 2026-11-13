@@ -37,6 +37,8 @@ export interface SkeletonViewOptions extends CutChoice {
     renderMode?: RenderMode | undefined;
     /** `gpu` places the mesh-mode vertices in the vertex shader where it can. `cpu` and `auto` use the CPU. */
     skinning?: 'auto' | 'cpu' | 'gpu' | undefined;
+    /** `auto` draws views of the mesh mode with `gpu` instanced where it can, see `instance-pipe.ts`. */
+    instancing?: 'auto' | 'off' | undefined;
 }
 
 /** A view looks at its page textures in one update of this many. A power of two. */
@@ -162,6 +164,7 @@ export class SkeletonView implements DrawGate {
             stats: this.stats,
             measure: () => this.measure(),
             gpu: options.skinning === 'gpu',
+            instancing: options.instancing !== 'off',
         });
         this.stats.renderMode = this.paints.pick(this.choice, this.slots.plain, false) ?? 'batched';
         // a view that is made for the mesh mode asks for its code, also after a load that failed
@@ -461,15 +464,7 @@ export class SkeletonView implements DrawGate {
             stats.maskDraws = 0;
             stats.indices = indices;
             stats.bufferBytes = templateBytes(template) + element.bytes;
-        } else if (mesh !== undefined) {
-            const { ranges } = mesh;
-
-            ranges.build(template, visible, seen.clips, skipped, count, seen);
-            stats.maskDraws = ranges.masks * 2;
-            stats.drawCalls = ranges.active + stats.maskDraws;
-            stats.indices = ranges.indices;
-            stats.bufferBytes = templateBytes(template) + ranges.bytes;
-        }
+        } else mesh?.reindex(template, seen, skipped, indices, stats);
         seen.dirty = false;
         this.inserts?.place(this.paints, this.container);
         stats.indexRebuilds++;

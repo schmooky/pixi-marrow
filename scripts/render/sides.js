@@ -210,13 +210,16 @@ function loadAttachCode(PIXI, lib, asset, slot) {
  *
  * `skinning` is the `skinning` option of every instance, `gpu` for example, or null for none.
  *
+ * `instancing: 'off'` draws a mesh instance alone, where it would draw instanced with
+ * `skinning: 'gpu'`. Without it the instance has the default, which is `auto`.
+ *
  * `bake: 'auto'` plays from baked frames where it can. The code of baked playback is a chunk
  * too, and the instance plays without it until it is there, so `create` waits for it.
  */
 export function oursSide(PIXI, lib, skinning = null) {
     return {
         name: 'ours',
-        async create({ skeleton, atlas, cuts = 'default', mode, preload = true, idle = false, bake }) {
+        async create({ skeleton, atlas, cuts = 'default', mode, preload = true, idle = false, bake, instancing }) {
             const asset = await lib.MarrowAsset.load({
                 skeleton,
                 atlas,
@@ -236,6 +239,7 @@ export function oursSide(PIXI, lib, skinning = null) {
                 ...(idle ? { idleCache: 'auto' } : {}),
                 ...(skinning ? { skinning } : {}),
                 ...(bake ? { bake } : {}),
+                ...(instancing ? { instancing } : {}),
             });
 
             for (let tries = 0; bake && spine.engine.source === null; tries++) {
