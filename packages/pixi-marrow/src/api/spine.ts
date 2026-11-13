@@ -77,7 +77,7 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpineLinks
             renderMode: renderMode(options.renderMode ?? 'auto'),
         });
         this.addChild(this.skeletonView.container);
-        this.linkTo({ state: this.engine.state, model: asset.model, view: this.skeletonView });
+        this.linkTo({ engine: this.engine, state: this.engine.state, model: asset.model, view: this.skeletonView });
         // The setup pose, so that the object draws before its first update. Physics is left out:
         // it starts from the pose of the first real update, as in the official Pixi runtime
         this.engine.physics = 'none';
@@ -174,19 +174,6 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpineLinks
 
     set renderMode(mode: NonNullable<MarrowSpineOptions['renderMode']>) {
         this.skeletonView.renderMode = renderMode(mode);
-    }
-
-    /** The name of the active skin, or null. Setting it also resets the slots to the setup pose. */
-    get skin(): N['skins'] | null {
-        const name: string | null = this.asset.model.skins[this.engine.state.skin]?.name ?? null;
-
-        // the names type lists the skins of this skeleton
-        return name as N['skins'] | null;
-    }
-
-    set skin(name: N['skins'] | null) {
-        this.engine.setSkin(name === null ? -1 : namedIndex('skin', this.asset.model.skins, String(name)));
-        this.engine.setupPoseSlots();
     }
 
     /** Multiplies the time every track advances by. 1 is normal speed. */

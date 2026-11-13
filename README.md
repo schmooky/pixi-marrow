@@ -75,6 +75,24 @@ hero.attach('placeholder', symbol);
 
 `bone` gives a handle: the pose next to the parent bone to read and write, and the place in the skeleton to read. `follow` moves a container with a bone. `attach` draws a container at the place of a slot in the draw order, between the parts of the skeleton, and moves it with the bone of the slot. An attached container costs one draw call.
 
+## Skins and slots
+
+```ts
+hero.skins = ['skin-base', 'hair/pink', 'clothes/hoodie-orange'];
+
+const weapon = hero.slot('weapon');
+weapon.attachment = 'axe';
+weapon.tint = 0xff8080;
+weapon.alpha = 0.5;
+
+const tip = hero.bone('sword').localToWorld({ x: 120, y: 0 });
+
+hero.stop();
+hero.setupPose();
+```
+
+`skins` makes a list of skins active as one, as `Skin.addSkin` does in the official runtime. Where two skins store an attachment under one slot and name, the later one wins. The instances of an asset share the combined skin of a list. `slot` gives a handle to the attachment, the tint, the alpha and the dark tint of one slot. A write stays until an animation keys the slot or the setup pose is set, which a new skin list does. `localToWorld` and `worldToLocal` take points between a bone and the skeleton. `setupPose` takes `'bones'` or `'slots'` for one half.
+
 ## Many skeletons
 
 Skeletons of up to 1024 vertices share draw calls: 200 instances of a small rig draw in one call. Nothing to set up. A Pixi object between two skeletons in draw order ends a batch, so keep skeletons next to each other in the display list where you can.

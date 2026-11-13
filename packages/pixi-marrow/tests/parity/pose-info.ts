@@ -1,3 +1,4 @@
+import type { AttachmentRef } from '../../src/core';
 /*
  * What the scripts know about the animations of a rig: the length, whether events fire, how long
  * the longest timeline is and where some of its keys are, and which bones are keyed. And what they
@@ -16,6 +17,29 @@ export interface AnimationInfo {
     times: number[];
     /** The bones the animation keys, in the order of the rig. */
     keyed: number[];
+    /** The slots the animation keys with any timeline of a slot, in the order of the rig. */
+    keyedSlots: number[];
+}
+
+/** What a script needs to know about the slots of a rig, for writes to slots and for skins. */
+export interface SlotInfo {
+    /** Every attachment a skin stores, by skin, slot and name, sorted by slot. */
+    entries: AttachmentRef[];
+    /** The slots that have a dark color. */
+    darkSlots: number[];
+}
+
+/** Describes the skins and slots of an official skeleton for the scripts. */
+export function describeSlots(
+    skins: readonly (readonly { slot: number; name: string }[])[],
+    slots: readonly { darkColor: unknown }[],
+): SlotInfo {
+    const entries = skins.flatMap((list, skin) => list.map(({ slot, name }) => ({ skin, slot, name })));
+
+    return {
+        entries: entries.sort((a, b) => a.slot - b.slot || a.skin - b.skin),
+        darkSlots: slots.flatMap((slot, index) => (slot.darkColor ? [index] : [])),
+    };
 }
 
 /** What a script needs to know about the bones of a rig. Bones are indices into the bone list. */
@@ -77,11 +101,13 @@ export function describeAnimation(
 ): AnimationInfo {
     const { name, duration, timelines } = animation;
     const keyed = new Set<number>();
+    const keyedSlots = new Set<number>();
     let longest: OfficialTimeline | undefined;
 
     for (const timeline of timelines) {
         if (longest === undefined || timeline.getFrameCount() > longest.getFrameCount()) longest = timeline;
         if ('boneIndex' in timeline && typeof timeline.boneIndex === 'number') keyed.add(timeline.boneIndex);
+        if ('slotIndex' in timeline && typeof timeline.slotIndex === 'number') keyedSlots.add(timeline.slotIndex);
     }
 
     return {
@@ -91,5 +117,6 @@ export function describeAnimation(
         keys: longest?.getFrameCount() ?? 0,
         times: longest ? someKeyTimes(longest) : [],
         keyed: [...keyed].sort((a, b) => a - b),
+        keyedSlots: [...keyedSlots].sort((a, b) => a - b),
     };
 }

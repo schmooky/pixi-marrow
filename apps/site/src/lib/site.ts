@@ -24,6 +24,11 @@ export const PAGES: readonly DocsPage[] = [
         description: 'Read a bone and put your own Pixi objects into a rig.',
     },
     {
+        href: '/skins-and-slots/',
+        title: 'Skins and slots',
+        description: 'Several skins at once, slot attachments and colors, and the setup pose.',
+    },
+    {
         href: '/good-to-know/',
         title: 'Good to know',
         description: 'What is automatic, the options, the versions and the limits.',

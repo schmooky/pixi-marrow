@@ -106,6 +106,7 @@ export function sleeping(subject: Subject, makeUp: boolean): Subject {
         yDown: awake(subject.yDown),
         forces: awake(subject.forces),
         writeBone: awake(subject.writeBone),
+        writeAttachment: awake(subject.writeAttachment),
     };
 }
 

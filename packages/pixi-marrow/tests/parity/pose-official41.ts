@@ -8,6 +8,7 @@ import {
     SkeletonBinary,
     type SkeletonData,
     SkeletonJson,
+    Skin,
     Texture,
     TextureAtlas,
     type TrackEntry,
@@ -15,7 +16,7 @@ import {
 import type { AttachmentRef, TrackField } from '../../src/core';
 import { attachmentRefs, eventKey, indexer, skinEntries, timelineKind } from './model-shared';
 import type { RigFiles } from './official';
-import { describeAnimation, describeBones } from './pose-info';
+import { describeAnimation, describeBones, describeSlots } from './pose-info';
 import {
     animationIndexer,
     COMMON_FLAGS,
@@ -34,6 +35,7 @@ import {
     writeWorld,
     yDownKeeper,
 } from './pose-shared';
+import { slotWrites } from './pose-slot-writes';
 
 /** Stands in for a GPU texture. Posing needs page sizes only. */
 class FakeTexture extends Texture {
@@ -102,10 +104,8 @@ function createDriver(shared: Shared): OfficialDriver {
 
         return found;
     };
-    const setSkin = (index: number): void => {
-        const skin = data.skins[index];
-
-        if (skin !== undefined) skeleton.setSkin(skin);
+    const setSkin = (skin: Skin | null): void => {
+        if (skin !== null) skeleton.setSkin(skin);
         else if (skeleton.skin !== null) {
             // what setSkin(null) does. The typings do not take null.
             skeleton.skin = null;
@@ -161,7 +161,12 @@ function createDriver(shared: Shared): OfficialDriver {
         },
         clearTrack: (track) => state.clearTrack(track),
         clearTracks: () => state.clearTracks(),
-        setSkin,
+        ...slotWrites({
+            skins: data.skins,
+            makeSkin: (name) => new Skin(name),
+            setSkin,
+            slotPose: (slot) => skeleton.slots[slot],
+        }),
         setupPose: () => skeleton.setToSetupPose(),
         setupPoseBones: () => skeleton.setBonesToSetupPose(),
         setupPoseSlots: () => skeleton.setSlotsToSetupPose(),
@@ -199,11 +204,12 @@ function createDriver(shared: Shared): OfficialDriver {
 /** Loads a 4.1 skeleton for posing with the official 4.1 core. */
 export function loadPose41(files: RigFiles): OfficialPoseRig {
     const data = readData(files);
+    const entries = data.skins.map((skin) => skinEntries(skin.attachments));
     const shared: Shared = {
         data,
         animationIndex: animationIndexer(data.animations),
         eventIndex: indexer(data.events, 'event'),
-        ref: cachedRefs(attachmentRefs(data.skins.map((skin) => skinEntries(skin.attachments)))),
+        ref: cachedRefs(attachmentRefs(entries)),
     };
 
     return {
@@ -214,6 +220,7 @@ export function loadPose41(files: RigFiles): OfficialPoseRig {
             skins: data.skins.length,
             animations: data.animations.map((animation) => describeAnimation(animation, timelineKind)),
             physics: 0,
+            ...describeSlots(entries, data.slots),
             sliders: 0,
             ...describeBones(
                 data.bones,

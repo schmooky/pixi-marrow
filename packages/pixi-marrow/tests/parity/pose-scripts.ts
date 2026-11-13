@@ -5,6 +5,7 @@ import { keyScripts } from './pose-scripts-keys';
 import { physicsScripts } from './pose-scripts-physics';
 import { randomScript } from './pose-scripts-random';
 import { restScripts } from './pose-scripts-rest';
+import { slotScripts } from './pose-scripts-slots';
 import { stillScripts } from './pose-scripts-still';
 import type { PoseRigInfo } from './pose-shared';
 
@@ -434,5 +435,6 @@ export const SCRIPT_FAMILIES: readonly ScriptFamily[] = [
     { name: 'keys', scripts: keyScripts },
     { name: 'still bones', scripts: stillScripts },
     { name: 'bone writes', scripts: boneScripts },
+    { name: 'slots and skins', scripts: slotScripts },
     { name: 'random', scripts: (rig, seed) => [1, 2, 3, 4, 5, 6].map((n) => randomScript(rig, `${seed} ${n}`)) },
 ];

@@ -63,7 +63,7 @@ function collectDrawables(
 
     for (const index of new Set([skin, lookup.defaultSkin])) {
         // a name of the default skin that the active skin also has shows the attachment of the active skin
-        for (const entry of model.skins[index]?.attachments ?? [])
+        for (const entry of lookup.skin(index)?.attachments ?? [])
             add(entry.slot, lookup.find(skin, entry.slot, entry.name));
     }
     // after a skin change a slot can still show an attachment of the skin before

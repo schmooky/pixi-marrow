@@ -1,3 +1,5 @@
+import type { AttachmentData } from '../../model/attachments';
+import { writeColor } from '../shared/slot-writes';
 import { updateCache } from './cache';
 import { setSlotAttachment, setupAttachment, stampDrawOrder, stampSlot } from './slots';
 import { showUnposed } from './split';
@@ -58,7 +60,7 @@ function attachAll(pose: Pose43, newSkin: number, oldSkin: number): void {
     const { rig } = pose;
     let done = -1;
 
-    for (const entry of rig.model.skins[oldSkin]?.attachments ?? []) {
+    for (const entry of rig.lookup.skin(oldSkin)?.attachments ?? []) {
         if (entry.slot === done || pose.attachments[entry.slot] !== entry.attachment) continue;
         const attachment = rig.lookup.get(newSkin, entry.slot, entry.name);
 
@@ -89,4 +91,34 @@ export function setSkin(pose: Pose43, skin: number): void {
     }
     state.skin = skin;
     updateCache(pose);
+}
+
+/**
+ * Ends a write to the animated pose of a slot from outside an update. The pose state follows at
+ * once for a slot with one pose. A slot that a slider gives a pose of its own shows the write
+ * with the next update, as the official applied pose does.
+ */
+function wroteSlot(pose: Pose43, slot: number): void {
+    stampSlot(pose, slot);
+    showUnposed(pose);
+    pose.solve.dirty = true;
+}
+
+/** The official `slot.pose.setAttachment` of 4.3, from outside an update. */
+export function writeSlotAttachment(pose: Pose43, slot: number, attachment: AttachmentData | null): void {
+    setSlotAttachment(pose, slot, attachment);
+    showUnposed(pose);
+    pose.solve.dirty = true;
+}
+
+/** The official `slot.pose.color.set` of 4.3, from outside an update. */
+export function writeSlotColor(pose: Pose43, slot: number, r: number, g: number, b: number, a: number): void {
+    writeColor(pose.colors, slot * 4, r, g, b, a);
+    wroteSlot(pose, slot);
+}
+
+/** The official `slot.pose.darkColor.set` of 4.3, from outside an update. */
+export function writeSlotDark(pose: Pose43, slot: number, r: number, g: number, b: number): void {
+    writeColor(pose.darkColors, slot * 3, r, g, b);
+    wroteSlot(pose, slot);
 }

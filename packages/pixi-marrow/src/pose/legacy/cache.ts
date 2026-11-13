@@ -171,7 +171,7 @@ function appliedReads(plan: ConstraintPlan, entries: readonly number[], boneCoun
 function buildCache(rig: Rig, skinIndex: number): UpdateCache {
     const { count, parents, skinRequired } = rig.model.bones;
     const plan = rig.plan;
-    const skin = rig.model.skins[skinIndex];
+    const skin = rig.lookup.skin(skinIndex);
     const sort: Sort = {
         plan,
         skin: skin === undefined ? -1 : skinIndex,

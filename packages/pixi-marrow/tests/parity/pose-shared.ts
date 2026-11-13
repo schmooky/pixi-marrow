@@ -11,7 +11,7 @@ import {
     type TrackFields,
     WORLD_STRIDE,
 } from '../../src/core';
-import type { AnimationInfo, BoneInfo } from './pose-info';
+import type { AnimationInfo, BoneInfo, SlotInfo } from './pose-info';
 
 /*
  * What the three official pose drivers share. A driver takes the calls of a pose engine and makes
@@ -34,7 +34,7 @@ export const BONE_FIELDS = ['x', 'y', 'rotation', 'scaleX', 'scaleY', 'shearX', 
 export type BoneField = (typeof BONE_FIELDS)[number];
 
 /** The calls a script makes. A pose engine and an official driver both take them. */
-export type PoseDriver = Omit<PoseEngine, 'state' | 'bytes'>;
+export type PoseDriver = Omit<PoseEngine, 'state' | 'bytes' | 'setAttachment'>;
 
 /** A pose copied out of an official skeleton, in the layout of `PoseState`. */
 export interface OfficialPose {
@@ -60,7 +60,7 @@ export interface OfficialPose {
 }
 
 /** What a script needs to know about a rig. */
-export interface PoseRigInfo extends BoneInfo {
+export interface PoseRigInfo extends BoneInfo, SlotInfo {
     version: SpineVersion;
     bones: number;
     slots: number;
@@ -80,6 +80,12 @@ export interface OfficialDriver extends PoseDriver {
      * between two updates: `bone.rotation = value` in 4.1 and 4.2, `bone.pose.rotation = value` in 4.3.
      */
     writeBone(bone: number, field: BoneField, value: number): void;
+    /**
+     * Shows the attachment a skin stores under a slot and a name in a slot, or none, as code
+     * outside the official runtime does between two updates: `slot.setAttachment` in 4.1 and 4.2,
+     * `slot.pose.setAttachment` in 4.3. `PoseEngine.setAttachment` is our counterpart.
+     */
+    writeAttachment(slot: number, ref: AttachmentRef | null): void;
     /**
      * Says whether the y axis of the world points down, as writing `yDown` to the state of a pose
      * engine does. The official flag is the static `Skeleton.yDown`, one for the whole process. A

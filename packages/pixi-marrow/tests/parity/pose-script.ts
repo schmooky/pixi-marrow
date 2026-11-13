@@ -1,4 +1,4 @@
-import type { PhysicsMode, TrackFields } from '../../src/core';
+import type { AttachmentRef, PhysicsMode, TrackFields } from '../../src/core';
 import type { BoneField, PoseRigInfo } from './pose-shared';
 
 /*
@@ -20,6 +20,14 @@ export type ScriptOp =
     | { op: 'clearTrack'; track: number }
     | { op: 'clearTracks' }
     | { op: 'skin'; skin: number }
+    /** Several skins at once, as one skin that `Skin.addSkin` filled with each in order. */
+    | { op: 'skins'; skins: number[] }
+    /** A write to a slot from outside the engine, as a slot handle makes it: the attachment a ref points at, or none. */
+    | { op: 'slotAttachment'; slot: number; ref: AttachmentRef | null }
+    /** The same for the color of a slot, each part from 0 to 1. A value outside that is clamped on both sides. */
+    | { op: 'slotColor'; slot: number; r: number; g: number; b: number; a: number }
+    /** The same for the dark color of a slot that has one. */
+    | { op: 'slotDark'; slot: number; r: number; g: number; b: number }
     | { op: 'setupPose' }
     | { op: 'setupPoseBones' }
     | { op: 'setupPoseSlots' }
@@ -62,6 +70,10 @@ export interface ScriptBuilder {
     clearTrack(track: number): void;
     clearTracks(): void;
     skin(skin: number): void;
+    skins(skins: number[]): void;
+    slotAttachment(slot: number, ref: AttachmentRef | null): void;
+    slotColor(slot: number, r: number, g: number, b: number, a: number): void;
+    slotDark(slot: number, r: number, g: number, b: number): void;
     setupPose(): void;
     setupPoseBones(): void;
     setupPoseSlots(): void;
@@ -100,6 +112,10 @@ export function script(name: string, build: (s: ScriptBuilder) => void): PoseScr
         clearTrack: (track) => push({ op: 'clearTrack', track }),
         clearTracks: () => push({ op: 'clearTracks' }),
         skin: (skin) => push({ op: 'skin', skin }),
+        skins: (skins) => push({ op: 'skins', skins }),
+        slotAttachment: (slot, ref) => push({ op: 'slotAttachment', slot, ref }),
+        slotColor: (slot, r, g, b, a) => push({ op: 'slotColor', slot, r, g, b, a }),
+        slotDark: (slot, r, g, b) => push({ op: 'slotDark', slot, r, g, b }),
         setupPose: () => push({ op: 'setupPose' }),
         setupPoseBones: () => push({ op: 'setupPoseBones' }),
         setupPoseSlots: () => push({ op: 'setupPoseSlots' }),

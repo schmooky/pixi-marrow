@@ -1,6 +1,9 @@
 import { MarrowError } from '../../base/errors';
+import type { AttachmentData } from '../../model/attachments';
 import type { SkeletonModel } from '../../model/model';
 import type { PhysicsMode, PoseEngine, PoseEvent, TrackEntry, TrackFields } from '../engine';
+import { combineSkins } from '../shared/combine-skins';
+import { checkDark, checkSlot } from '../shared/slot-writes';
 import { nextVersion, type PoseState } from '../state';
 import { applyTracks } from './apply';
 import { updateCache } from './cache';
@@ -20,7 +23,14 @@ import { createPlayer, type Player43 } from './player';
 import { createPose, poseBytes } from './pose';
 import { distrust, solvePose } from './rest';
 import { prepareRig } from './rig';
-import { setSkin, setupPoseBones, setupPoseSlots } from './skeleton';
+import {
+    setSkin,
+    setupPoseBones,
+    setupPoseSlots,
+    writeSlotAttachment,
+    writeSlotColor,
+    writeSlotDark,
+} from './skeleton';
 import type { Clip43, Pose43 } from './types';
 import { updateTracks } from './update';
 
@@ -165,13 +175,43 @@ class Engine43 implements PoseEngine {
     }
 
     setSkin(skin: number): void {
-        const count = this.state.model.skins.length;
+        const count = this.pose.rig.lookup.skinCount;
 
         if (!Number.isInteger(skin) || skin < -1 || skin >= count) {
             throw invalid(`The skeleton has no skin ${skin}.`, `Pass an index below ${count}, or -1 for no skin.`);
         }
         this.open();
         setSkin(this.pose, skin);
+        this.close();
+    }
+
+    setSkins(skins: readonly number[]): void {
+        this.setSkin(combineSkins(this.pose.rig.lookup, this.state.model, skins));
+    }
+
+    get skins(): readonly number[] {
+        return this.pose.rig.lookup.parts(this.state.skin);
+    }
+
+    setAttachment(slot: number, attachment: AttachmentData | null): void {
+        checkSlot(this.state.model, slot);
+        this.open();
+        writeSlotAttachment(this.pose, slot, attachment);
+        this.close();
+    }
+
+    setColor(slot: number, r: number, g: number, b: number, a: number): void {
+        checkSlot(this.state.model, slot);
+        this.open();
+        writeSlotColor(this.pose, slot, r, g, b, a);
+        this.close();
+    }
+
+    setDarkColor(slot: number, r: number, g: number, b: number): void {
+        checkSlot(this.state.model, slot);
+        checkDark(this.state.model, slot);
+        this.open();
+        writeSlotDark(this.pose, slot, r, g, b);
         this.close();
     }
 

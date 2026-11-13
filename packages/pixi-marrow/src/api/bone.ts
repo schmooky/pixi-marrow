@@ -1,4 +1,4 @@
-import { Matrix } from 'pixi.js';
+import { Matrix, Point, type PointData } from 'pixi.js';
 import { LOCAL_STRIDE, nextVersion, type PoseState, WORLD_STRIDE } from '../pose/state';
 import { finiteArgument } from './checks';
 import type { MarrowNames } from './options';
@@ -122,6 +122,53 @@ export class Bone<N extends MarrowNames = MarrowNames> {
             Number(world[at + 4]),
             Number(world[at + 5]),
         );
+    }
+
+    /**
+     * Takes a point next to the bone, in Spine's coordinates for that bone, to the space of the
+     * display object: the official `Bone.localToWorld`, with the pose of the last update. Pixi's
+     * `toGlobal` of the display object takes the result on to the stage.
+     *
+     * @param out The point to write. A new one when left out.
+     *
+     * @example
+     * const tip = hero.bone('sword').localToWorld({ x: 120, y: 0 });
+     * spark.position.copyFrom(tip);
+     */
+    localToWorld(point: PointData, out: Point = new Point()): Point {
+        const { world } = this.state;
+        const at = this.world;
+        const { x, y } = point;
+
+        return out.set(
+            x * Number(world[at]) + y * Number(world[at + 1]) + Number(world[at + 4]),
+            x * Number(world[at + 2]) + y * Number(world[at + 3]) + Number(world[at + 5]),
+        );
+    }
+
+    /**
+     * Takes a point in the space of the display object to the coordinates of the bone: the
+     * official `Bone.worldToLocal`, with the pose of the last update. Pixi's `toLocal` of the
+     * display object brings a point from the stage first. A bone scaled to 0 has no inverse, and
+     * the result is not finite then, as in the official runtime.
+     *
+     * @param out The point to write. A new one when left out.
+     *
+     * @example
+     * const grip = hero.bone('hand').worldToLocal(hero.toLocal(event.global));
+     */
+    worldToLocal(point: PointData, out: Point = new Point()): Point {
+        const { world } = this.state;
+        const at = this.world;
+        const a = Number(world[at]);
+        const b = Number(world[at + 1]);
+        const c = Number(world[at + 2]);
+        const d = Number(world[at + 3]);
+        const inverse = 1 / (a * d - b * c);
+        const x = point.x - Number(world[at + 4]);
+        const y = point.y - Number(world[at + 5]);
+
+        return out.set(x * d * inverse - y * b * inverse, y * a * inverse - x * c * inverse);
     }
 
     private read(field: number): number {

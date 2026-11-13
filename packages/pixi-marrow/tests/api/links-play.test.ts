@@ -107,7 +107,7 @@ describe('handles and containers while a skeleton plays', () => {
             if (rig === undefined) throw new Error('no rig');
             const { state } = rig.engine;
             const { names, bones } = rig.model.slots;
-            const links = new Links({ state, model: rig.model, view: rig.view });
+            const links = new Links({ engine: rig.engine, state, model: rig.model, view: rig.view });
             // containers that draw nothing themselves: what a Pixi object costs to draw is its own
             const [label, marker] = [new Container(), new Container()];
             const head = rig.model.bones.names.indexOf('head');
