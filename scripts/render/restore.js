@@ -441,11 +441,22 @@ async function runCase({ Application, Graphics, MarrowSpine, pixi }, id, mode, l
 }
 
 /**
+ * The kit of a page, with a `MarrowSpine.load` that gives every instance the `skinning` of the
+ * address: `?skinning=gpu`. Without one the kit is as it was given.
+ */
+function withSkinning(kit) {
+    const skinning = new URLSearchParams(location.search).get('skinning');
+    const { MarrowSpine } = kit;
+
+    return skinning ? { ...kit, MarrowSpine: { load: (options) => MarrowSpine.load({ skinning, ...options }) } } : kit;
+}
+
+/**
  * The entry of the bundle calls this with the classes a game starts with. The check then asks
  * for a run with `window.restoreCheck.run(id, mode, lose)`.
  *
  * @param kit `Application` and `Graphics` of Pixi, `MarrowSpine`, and `pixi`, the version of Pixi.
  */
 export function startRestore(kit) {
-    window.restoreCheck = { run: (id, mode, lose) => runCase(kit, id, mode, lose) };
+    window.restoreCheck = { run: (id, mode, lose) => runCase(withSkinning(kit), id, mode, lose) };
 }

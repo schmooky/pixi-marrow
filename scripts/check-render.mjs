@@ -8,6 +8,7 @@
  *                          [--render-mode=both|mesh|batched] [--strict-rebuilds] [--trust-mode]
  *                          [--strict-clipping] [--self-test] [--verbose] [--shots=4]
  *                          [--out=.shots/render] [--size=512] [--dist=<folder>] [--pixi=8.16]
+ *                          [--skinning=gpu]
  *
  * The rigs are the entries of fixtures/manifest.json that have page images. For each one a few
  * animations play on both sides with the same time steps. Both sides run as they ship and solve
@@ -196,6 +197,10 @@
  *                              reference. A difference is a finding about the official runtime
  *                              on that pixi.js and fails nothing
  * The head of a renderer names the versions.
+ * --skinning gives every instance of ours that option, the game check and the restore check
+ * included: `--render-mode=mesh --skinning=gpu` holds the vertex shader that places vertices
+ * from the bones to the rules of the mesh mode. The batched mode ignores the option. The head of
+ * a renderer names it.
  * Without --renderer both run. A renderer the browser does not have is skipped with a line that
  * says so, and fails the check only when it was asked for by name.
  * Runs the installed Google Chrome. CHROME_PATH names another binary and CHROME_ARGS replaces the
@@ -291,6 +296,8 @@ const args = parseArgs();
 const wanted = ['webgl', 'webgpu'].includes(args.renderer) ? [args.renderer] : ['webgl', 'webgpu'];
 const outDir = resolve(root, args.out ?? '.shots/render');
 const selfTest = args['self-test'] === 'true';
+/** The `skinning` option of every instance of ours, or null for the default. */
+const skinning = ['cpu', 'gpu', 'auto'].includes(args.skinning) ? args.skinning : null;
 /** What a page draws of ours and how it judges, the same for every rig and scene. */
 const pageOptions = {
     tolerance: TOLERANCE,
@@ -315,7 +322,9 @@ async function runPage(browser, origin, renderer, { official, call, plan, option
     // every address the page asks for: a scene about the lazy mesh mode looks for a chunk among them
     const requested = [];
     // the runtimes load before the renderer is created, so the page is told which ones in its address
-    const query = `renderer=${renderer}&official=${official ?? 'none'}&ours=${selfTest ? 'no' : 'yes'}`;
+    const query =
+        `renderer=${renderer}&official=${official ?? 'none'}&ours=${selfTest ? 'no' : 'yes'}` +
+        (skinning ? `&skinning=${skinning}` : '');
 
     page.on('request', (request) => requested.push(request.url()));
     page.on('pageerror', (error) => errors.push(error.message));
@@ -456,6 +465,8 @@ async function main() {
                     break;
                 }
                 if (!announced) console.log(`check-render: ${describeHead(renderer, state, versions)}`);
+                if (!announced && skinning)
+                    console.log(`check-render: every instance of ours has skinning: '${skinning}'`);
                 // every runtime must run on the pixi.js the head names for it
                 errors.push(...strayPixi(state.pixi, versions));
                 announced = true;
@@ -499,6 +510,7 @@ async function main() {
             renderers: wanted,
             outDir: join(outDir, 'game'),
             only: args.only ?? null,
+            skinning,
         });
     // a context is lost and restored with an extension of WebGL
     if (!selfTest && wanted.includes('webgl'))
@@ -509,6 +521,7 @@ async function main() {
             modes: pageOptions.renderMode === 'both' ? ['batched', 'mesh'] : [pageOptions.renderMode],
             outDir: join(outDir, 'restore'),
             only: args.only ?? null,
+            skinning,
         });
     // the files of AssetPack through a Pixi manifest, drawn on WebGL
     if (!selfTest && wanted.includes('webgl'))

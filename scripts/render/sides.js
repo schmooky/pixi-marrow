@@ -204,8 +204,10 @@ function loadAttachCode(PIXI, lib, asset, slot) {
  * for the mesh mode by name gets an asset that was loaded for it: the same shared asset, once
  * more, which waits for the chunk. Without that the instance would draw in a batch until the
  * chunk arrives. `preload: false` leaves that load out, for a scene about that path.
+ *
+ * `skinning` is the `skinning` option of every instance, `gpu` for example, or null for none.
  */
-export function oursSide(PIXI, lib) {
+export function oursSide(PIXI, lib, skinning = null) {
     return {
         name: 'ours',
         async create({ skeleton, atlas, cuts = 'default', mode, preload = true }) {
@@ -225,6 +227,7 @@ export function oursSide(PIXI, lib) {
                 autoUpdate: false,
                 ...CUT_OPTIONS[cuts],
                 ...modeOptions(mode),
+                ...(skinning ? { skinning } : {}),
             });
             const root = new PIXI.Container();
             const held = new Map();

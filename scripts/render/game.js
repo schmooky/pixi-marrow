@@ -261,11 +261,22 @@ async function runCase({ Application, MarrowSpine, bundle }, id, preference) {
 }
 
 /**
+ * The kit of a page, with a `MarrowSpine.load` that gives every instance the `skinning` of the
+ * address: `?skinning=gpu`. Without one the kit is as it was given.
+ */
+function withSkinning(kit) {
+    const skinning = new URLSearchParams(location.search).get('skinning');
+    const { MarrowSpine } = kit;
+
+    return skinning ? { ...kit, MarrowSpine: { load: (options) => MarrowSpine.load({ skinning, ...options }) } } : kit;
+}
+
+/**
  * The entry of both bundles calls this with the classes a game starts with. The check then asks
  * for a case with `window.gameCheck.run(id, renderer)`.
  *
  * @param kit `Application` of Pixi, `MarrowSpine` and `bundle`, the name of the bundle.
  */
 export function startGame(kit) {
-    window.gameCheck = { bundle: kit.bundle, run: (id, renderer) => runCase(kit, id, renderer) };
+    window.gameCheck = { bundle: kit.bundle, run: (id, renderer) => runCase(withSkinning(kit), id, renderer) };
 }
