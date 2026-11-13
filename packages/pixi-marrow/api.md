@@ -358,6 +358,7 @@ export interface ViewStats {
   indexRebuilds: number;
   positionUploads: number;
   colorUploads: number;
+  boneUploads: number;
   uvUploads: number;
   indices: number;
   bufferBytes: number;

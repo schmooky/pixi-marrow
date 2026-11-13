@@ -115,7 +115,7 @@ async function bundleRestore(root, { pkg, pixi }) {
  *
  * @param lose True to lose the context and get it back, false to keep it, `forever` to lose it for good.
  */
-async function runPage(browser, origin, id, mode, lose) {
+async function runPage(browser, origin, id, mode, lose, skinning) {
     const page = await browser.newPage();
     const errors = [];
 
@@ -130,7 +130,7 @@ async function runPage(browser, origin, id, mode, lose) {
         if (entry.type() === 'error' || /CONTEXT_LOST|GL_INVALID|INVALID_|shader/i.test(text)) errors.push(text);
     });
     try {
-        await page.goto(`${origin}/`);
+        await page.goto(`${origin}/${skinning ? `?skinning=${skinning}` : ''}`);
         await page.waitForFunction(() => window.restoreCheck, null, { timeout: 30_000 });
         const report = await inTime(
             page.evaluate(([name, how, lost]) => window.restoreCheck.run(name, how, lost), [id, mode, lose]),
@@ -215,10 +215,10 @@ function judgeRun(plan, mode, name, side, lose) {
         reasons.push(`${name} did not rest: the updates that returned at once per frame are ${report.skipped}`);
     }
     if (plan.rests && !all(report.placed, (count) => count === 0)) {
-        reasons.push(`${name} did not rest: the position uploads per frame are ${report.placed}`);
+        reasons.push(`${name} did not rest: the position and bone uploads per frame are ${report.placed}`);
     }
     if (plan.moves && !all(report.placed, (count) => count > 0)) {
-        reasons.push(`${name} did not move: the position uploads per frame are ${report.placed}`);
+        reasons.push(`${name} did not move: the position and bone uploads per frame are ${report.placed}`);
     }
     if (plan.idle && report.imageBefore !== true) reasons.push(`${name} showed no image of its idle cache before`);
     if (plan.idle && lose && report.imageAfter !== false) {
@@ -294,10 +294,20 @@ function keepPictures(root, dir, id, frame, lost, kept) {
  * @param options.outDir Where the pictures of a failed case go.
  * @param options.only The text of `--only`, or null. With a text that no case id holds, nothing runs and nothing fails.
  * @param options.keep True to write the pictures of the cases that pass too.
+ * @param options.skinning The `skinning` option every instance gets, or null for none.
  * @example
  * failed += await checkRestore({ root, pkg, pixi, modes: ['mesh', 'batched'], outDir: join(outDir, 'restore') });
  */
-export async function checkRestore({ root, pkg, pixi, modes = RESTORE_MODES, outDir, only = null, keep = false }) {
+export async function checkRestore({
+    root,
+    pkg,
+    pixi,
+    modes = RESTORE_MODES,
+    outDir,
+    only = null,
+    keep = false,
+    skinning = null,
+}) {
     const jobs = modes
         .flatMap((mode) => RESTORE_CASES.map((plan) => ({ plan, mode, id: `restore/${mode}/${plan.id}` })))
         .filter((job) => !only || job.id.includes(only));
@@ -312,7 +322,7 @@ export async function checkRestore({ root, pkg, pixi, modes = RESTORE_MODES, out
     try {
         server = await serve(root, bundle.dir);
         browser = await launchChrome();
-        const run = (job, lose) => runPage(browser, server.origin, job.plan.id, job.mode, lose);
+        const run = (job, lose) => runPage(browser, server.origin, job.plan.id, job.mode, lose, skinning);
         // the tooling proof: a context that stays lost leaves another picture on the canvas
         const [first] = jobs;
         const proof = { lost: await run(first, 'forever'), kept: await run(first, false) };
@@ -328,7 +338,8 @@ export async function checkRestore({ root, pkg, pixi, modes = RESTORE_MODES, out
         console.log(
             `restore-check: webgl, pixi.js ${proof.kept.report.pixi}. A run loses its context for ${RESTORE_AWAY} frames and gets it back. ` +
                 `Compared with a run that kept its context: the frames ${RESTORE_FRAMES.join(', ')} after the restore. ` +
-                `The renderer of the page starts ${proof.kept.report.meshPipeAtInit ? 'with' : 'without'} Pixi's mesh pipe`,
+                `The renderer of the page starts ${proof.kept.report.meshPipeAtInit ? 'with' : 'without'} Pixi's mesh pipe` +
+                (skinning ? `. Every instance has skinning: '${skinning}'` : ''),
         );
         if (proof.kept.report.pixi !== pixi.version) {
             console.log(`  FAIL the page runs on pixi.js ${proof.kept.report.pixi}, not on ${pixi.version}`);
@@ -381,6 +392,7 @@ async function main() {
         outDir: resolve(root, args.out ?? '.shots/restore'),
         only: args.only ?? null,
         keep: args.keep === 'true',
+        skinning: args.skinning ?? null,
     });
 
     console.log(failed ? `restore-check: ${failed} failures` : 'restore-check: ok');

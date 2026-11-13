@@ -4,6 +4,9 @@ import { MarrowAsset, MarrowSpine } from '../../src/index';
 import { loadMeshCode, meshCodeState } from '../../src/render/mesh-code';
 import { blankTexture, FRAME, fixtureFiles } from './helpers';
 
+/** The row of the report about the render mode. The row of the perf settings comes before it. */
+const isModeRow = (entry: { feature: string }): boolean => entry.feature === 'renderMode';
+
 /*
  * The code of the mesh mode is a chunk of its own, and a chunk can fail to load. An asset still
  * loads then, and its display objects draw in a batch. In this file the chunk never loads.
@@ -39,7 +42,7 @@ describe('an asset whose code for the mesh mode does not load', () => {
         spine.play('run', { loop: true });
         for (let frame = 0; frame < 5; frame++) spine.update(FRAME);
         expect(spine.stats).toMatchObject({ renderMode: 'batched', drawCalls: 1 });
-        expect((await spine.perf.report()).find((entry) => entry.feature === 'renderMode')).toEqual({
+        expect((await spine.perf.report()).find(isModeRow)).toEqual({
             feature: 'renderMode',
             value: 'batched',
             reason: 'the option renderMode is "mesh". The code of the mesh mode did not load, so the skeleton stays in a batch',

@@ -104,6 +104,11 @@ describe('the render mode of a display object', () => {
         const cases: [MarrowSpine, string, string][] = [
             [create(small, { renderMode: 'batched' }), 'batched', `the option renderMode is "batched". ${shares}`],
             [create(small, { renderMode: 'mesh' }), 'mesh', `the option renderMode is "mesh". ${owns}`],
+            [
+                create(small, { renderMode: 'mesh', skinning: 'gpu' }),
+                'mesh',
+                'the option renderMode is "mesh". It has draw calls of its own, and its vertex shader places the vertices from the bones, except where they deform',
+            ],
             // a clip changes nothing: an asset with a clipping attachment loads the code that clips in a batch
             [create(clipped, { renderMode: 'batched' }), 'batched', `the option renderMode is "batched". ${shares}`],
         ];
@@ -258,5 +263,18 @@ describe('the render mode of a display object', () => {
         stage.render();
         expect(stage.counts.draws).toHaveLength(1);
         expect(spine.stats.drawCalls).toBe(1);
+    });
+
+    it('counts the uploads of the bones of a skeleton whose vertex shader places its vertices', async () => {
+        const spine = create(await fixtureAsset('4.2/speedy-ess.skel'), { renderMode: 'mesh', skinning: 'gpu' });
+
+        spine.play('run', { loop: true });
+        for (let frame = 0; frame < 4; frame++) spine.update(FRAME);
+        expect(spine.stats).toMatchObject({ renderMode: 'mesh', boneUploads: 5, positionUploads: 0 });
+        expect(await row(spine, 'uploads')).toEqual({
+            feature: 'uploads',
+            value: '1 bone, 0 position, 0.2 color, 0 uv per update',
+            reason: '0 position, 1 color and 0 uv uploads in 5 updates that drew, 2 rewrites of the index buffers, 5 uploads of the bones',
+        });
     });
 });

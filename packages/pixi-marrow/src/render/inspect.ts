@@ -77,6 +77,8 @@ interface ModeReport {
     reason: ModeReason;
     /** Where the code of the mesh mode stands, which loads on demand. */
     meshCode: MeshCodeState;
+    /** Whether the vertex shader of the mesh mode places the vertices from the bone matrices: `skinning: 'gpu'`. */
+    gpu: boolean;
     /** Whether the view draws something. A view that no renderer can batch draws nothing until the code of the mesh mode is loaded. */
     drawn: boolean;
     /** The vertices the skeleton has in a batch when every region is a quad. `auto` decides by this number. */
@@ -313,6 +315,7 @@ export function inspectView(view: SkeletonView): ViewReport {
             wanted: paints.waits ? 'mesh' : paints.mode,
             reason: paints.reason,
             meshCode: meshCodeState(),
+            gpu: (paints.mesh?.skinBytes ?? 0) > 0,
             drawn: !(refused && paints.waits),
             vertices: layout.plain,
             limit: AUTO_BATCH_VERTICES,

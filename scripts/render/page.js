@@ -411,9 +411,11 @@ export async function start({ PIXI, loadOurs, loadOfficial, loadReference, loadC
             official: there ? withStudio(officialSide(there.PIXI, reference.lib), there, draws) : officialHere,
             // with a reference: the official runtime on the pixi.js of the page, for information
             officialHere: there ? { ...officialHere, name: 'official-here' } : null,
-            ours: lib?.MarrowSpine ? withStudio(oursSide(PIXI, lib), here, draws) : null,
+            ours: lib?.MarrowSpine ? withStudio(oursSide(PIXI, lib, params.get('skinning')), here, draws) : null,
             lib,
             loadCore,
+            // the `skinning` option of every instance of ours, or null
+            skinning: params.get('skinning'),
             // the package is built but has no display object yet
             missing: lib !== null && !lib.MarrowSpine,
         };
@@ -423,6 +425,7 @@ export async function start({ PIXI, loadOurs, loadOfficial, loadReference, loadC
 
         window.renderCheck = {
             renderer: renderer.name,
+            skinning: params.get('skinning'),
             gpu: describe(PIXI, renderer),
             // The pixi.js of the page, and whether each runtime runs on that copy. Null: not loaded.
             // `reference` is the pixi.js of the reference, where the page has one
