@@ -17,11 +17,21 @@ export type {
     StopOptions,
     UpdateProbe,
 } from './api/options';
+export type {
+    BakeMode,
+    OffscreenMode,
+    PerfOptions,
+    PerfPreset,
+    PerfSettings,
+    SkinningMode,
+    UpdateRate,
+} from './api/presets';
 export type { PerfEntry, PerfFeature } from './api/report-base';
 export type { Slot } from './api/slot';
 export { MarrowSpine } from './api/spine';
 export type { SetupPosePart, SpineLinks } from './api/spine-links';
 export type { MarrowPerf, PerfMemory } from './api/spine-perf';
+export type { SpinePhysics } from './api/spine-physics';
 export type { Track } from './api/track';
 export type { MarrowErrorCode, MarrowErrorDetails } from './base/errors';
 export { MarrowError } from './base/errors';

@@ -5,6 +5,8 @@ import type { ResolvedPerf } from './presets';
 const THROTTLE = 0.25;
 /** Below this size on the screen, in pixels across, `lod: 'auto'` leaves physics out. */
 const LOD_SIZE = 96;
+/** How far a sum of seconds may fall short of a step and still count as due. */
+const EPSILON = 1e-9;
 /** A skeleton that no render reached in this many updates counts as off the screen. */
 const UNSEEN = 2;
 
@@ -58,7 +60,8 @@ export class Pacer {
         let step = applies ? 1 / rate : 0;
 
         if (hidden && settings.offscreen === 'throttle') step = Math.max(step, THROTTLE);
-        if (this.carried < step) return -1;
+        // seconds summed frame by frame fall short of a step by a rounding error: that counts as due
+        if (this.carried + EPSILON < step) return -1;
         const due = this.carried;
 
         this.carried = 0;
