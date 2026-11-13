@@ -8,10 +8,12 @@ import {
     VERSION,
 } from 'pixi.js';
 import type { BatchBody } from './batch-body';
-import { BatchElement } from './batch-element';
+import { BatchElement, PIPE_ID } from './batch-element';
+import type { ImageBody } from './batch-image';
 import { uploadsStretch } from './batch-upload';
-import { MarrowBatcher, MarrowDarkBatcher, PIPE_ID } from './batcher';
+import { MarrowBatcher } from './batcher';
 import { contextLost, watchContext } from './context-watch';
+import { MarrowDarkBatcher } from './dark-batcher';
 import { bendsEdges } from './gate';
 
 /*
@@ -30,6 +32,9 @@ export interface BatchTail {
     /** What the batcher gets: it names the skeleton and the container. */
     readonly part: BatchableElement;
 }
+
+/** Whether a body is the one of an image, see `batch-image.ts`. Its class loads with the idle cache. */
+const isImageBody = (body: BatchBody | ImageBody): body is ImageBody => 'quad' in body.element;
 
 /** Whether the buffers of this Pixi upload at once when a batcher tells them what changed. */
 const AT_ONCE = uploadsStretch(Buffer.prototype.update, VERSION);
@@ -62,7 +67,7 @@ export class MarrowPipe {
      * Puts the skeleton into the batch that is being built. The tail behind an attached container
      * adds the runs that follow that container.
      */
-    addRenderable(body: BatchBody | BatchTail, instructionSet: InstructionSet): void {
+    addRenderable(body: BatchBody | BatchTail | ImageBody, instructionSet: InstructionSet): void {
         const { renderer } = this;
 
         if (renderer === null) return;
@@ -72,30 +77,36 @@ export class MarrowPipe {
             return;
         }
         const round = renderer.roundPixels || body.roundPixels;
-
-        // the picture is drawn to this target unless a filter or a cache comes between
-        body.gate.beforeDraw(bendsEdges(renderer));
-        const { element } = body;
-        // a skeleton without dark colors joins the batch of one with them, when that batch is still open
+        // a skeleton without dark colors, or an image, joins the batch of one with them, when that batch is still open
         const joins = this.last?.filling === true && this.last.dark;
-        const dark = element.template.hasDark || joins;
+        const { element } = body;
 
         // Pixi before 8.17 creates a batcher without telling it how many textures a batch has
         MarrowBatcher.textures = renderer.limits.maxBatchableTextures;
-        element.prepare(round, dark);
+        if (isImageBody(body)) {
+            body.element.prepare(round, joins);
+        } else {
+            // the picture is drawn to this target unless a filter or a cache comes between
+            body.gate.beforeDraw(bendsEdges(renderer));
+            body.element.prepare(round, body.element.template.hasDark || joins);
+        }
         renderer.renderPipes.batch.addToBatch(element, instructionSet);
         this.last = element._batcher instanceof MarrowBatcher ? element._batcher : null;
     }
 
-    /** Writes what changed of a skeleton into its batch. */
-    updateRenderable(body: BatchBody | BatchTail): void {
+    /** Writes what changed of a skeleton or an image into its batch. */
+    updateRenderable(body: BatchBody | BatchTail | ImageBody): void {
         // a tail has nothing of its own: the skeleton writes its runs
         if (!('part' in body)) body.element.sync();
     }
 
-    /** Whether the instructions must be built again for a skeleton: its batch has no room for it as it is. */
-    validateRenderable(body: BatchBody | BatchTail): boolean {
+    /**
+     * Whether the instructions must be built again: a skeleton whose batch has no room for it as
+     * it is, or an image with another texture than its batch binds.
+     */
+    validateRenderable(body: BatchBody | BatchTail | ImageBody): boolean {
         if ('part' in body) return false;
+        if (isImageBody(body)) return body.element.bound !== body.texture.source;
         const { element } = body;
 
         return element.resized && element.placed;

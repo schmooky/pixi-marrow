@@ -1,7 +1,9 @@
-import { Bounds, Container, getLocalBounds, Matrix, type Renderer, RenderTexture, Sprite, Texture } from 'pixi.js';
+import { Bounds, Container, getLocalBounds, Matrix, type Renderer, RenderTexture, Texture } from 'pixi.js';
 import { i32 } from '../geometry/read';
 import { BLEND_MODES, type SkeletonModel } from '../model/model';
 import type { PoseState } from '../pose/state';
+import { ImageBody } from '../render/batch-image';
+import { linkRenderer } from '../render/batch-pipe';
 import { drawsPlain } from '../render/gate';
 import { u8 } from '../render/read';
 import type { SkeletonView } from '../render/skeleton-view';
@@ -24,8 +26,9 @@ import {
  * depends on changed: the version of the pose, the layout and the render mode of the view. At
  * IDLE_WAIT such updates in a row it starts to watch its renders. Once two renders in a row put
  * it at the same place, the next update draws the view into a render texture. From then on the
- * view is hidden and a sprite with that texture shows in its place, in the space of the display
- * object. The sprite draws one quad in Pixi's batch.
+ * view is hidden and an image body with that texture shows in its place, in the space of the
+ * display object. The body draws one quad in a batch of the batched mode, see
+ * `render/batch-image.ts`, so that it shares a batch with the skeletons around it.
  *
  * The image is drawn on the pixel grid of the target, see `idle-place.ts`, so it equals the
  * live picture. The view keeps its own state up to date while it is hidden. The image is
@@ -60,7 +63,7 @@ const CLEAR: [number, number, number, number] = [0, 0, 0, 0];
 const MULTIPLY = BLEND_MODES.indexOf('multiply');
 const SCREEN = BLEND_MODES.indexOf('screen');
 
-/** The label of the sprite that shows the image, and that tools look for. */
+/** The label of the body that shows the image, and that tools look for. */
 const IDLE_LABEL = 'marrow-idle';
 
 /** The container every view is drawn through into its image. A render group, made at the first image. */
@@ -140,7 +143,7 @@ class IdleImage implements IdleCache {
     private mode = '';
     private choice = '';
     /** Shows the image and hears about every render while it is set. Made when the first image is due. */
-    private sprite: Sprite | undefined;
+    private body: ImageBody | undefined;
     /** The placement of the render now, and of the one before. */
     private readonly now = createPlacement();
     private readonly last = createPlacement();
@@ -193,9 +196,9 @@ class IdleImage implements IdleCache {
         if (this.destroyed) return;
         this.destroyed = true;
         this.drop();
-        if (this.sprite === undefined) return;
-        this.sprite.onRender = null;
-        this.sprite.destroy();
+        if (this.body === undefined) return;
+        this.body.onRender = null;
+        this.body.destroy();
     }
 
     /** Notes what the picture depends on now. */
@@ -210,29 +213,29 @@ class IdleImage implements IdleCache {
 
     /** Starts or stops hearing about renders. Called in updates only: Pixi walks its list of callbacks during a render. */
     private watch(on: boolean): void {
-        const { sprite } = this;
+        const { body } = this;
 
         if (on) {
-            const shown = this.sprite ?? this.createSprite();
+            const shown = this.body ?? this.createBody();
 
             if (shown.onRender === null) shown.onRender = this.onSeen;
 
             return;
         }
-        if (sprite !== undefined && sprite.onRender !== null && this.image === null) sprite.onRender = null;
+        if (body !== undefined && body.onRender !== null && this.image === null) body.onRender = null;
         this.lastBy = null;
         this.ready = null;
     }
 
-    /** The sprite of the image, hidden, right after the view container. */
-    private createSprite(): Sprite {
+    /** The body of the image, hidden, right after the view container. */
+    private createBody(): ImageBody {
         const { owner } = this;
-        const sprite = new Sprite({ texture: Texture.EMPTY, label: IDLE_LABEL, visible: false });
+        const body = new ImageBody(IDLE_LABEL);
 
-        owner.addChildAt(sprite, owner.getChildIndex(this.view.container) + 1);
-        this.sprite = sprite;
+        owner.addChildAt(body, owner.getChildIndex(this.view.container) + 1);
+        this.body = body;
 
-        return sprite;
+        return body;
     }
 
     /**
@@ -275,7 +278,7 @@ class IdleImage implements IdleCache {
 
     /**
      * True unless a tint above the skeleton meets a dark color. The shaders tint the light color
-     * of a slot alone, and the sprite would tint the dark color in the image too.
+     * of a slot alone, and the image would tint the dark color too.
      */
     private untinted(): boolean {
         if (!this.dark) return true;
@@ -322,30 +325,32 @@ class IdleImage implements IdleCache {
     /** Hides the view and shows an image whose top left corner is at a pixel of the target. */
     private show(texture: RenderTexture, x: number, y: number, renderer: Renderer): void {
         const { owner, last } = this;
-        const sprite = this.sprite ?? this.createSprite();
+        const body = this.body ?? this.createBody();
         const { container } = this.view;
 
+        // the body draws through the pipe of the batched mode, also for a skeleton of the mesh mode
+        linkRenderer(renderer);
         container.visible = false;
-        sprite.texture = texture;
-        sprite.setFromMatrix(matrix.set(...imageToSpace(last, x, y)));
-        sprite.visible = true;
-        // the sprite draws where the view would, also after the children of the display object moved
-        if (owner.children[owner.getChildIndex(container) + 1] !== sprite) {
-            owner.removeChild(sprite);
-            owner.addChildAt(sprite, owner.getChildIndex(container) + 1);
+        body.texture = texture;
+        body.setFromMatrix(matrix.set(...imageToSpace(last, x, y)));
+        body.visible = true;
+        // the body draws where the view would, also after the children of the display object moved
+        if (owner.children[owner.getChildIndex(container) + 1] !== body) {
+            owner.removeChild(body);
+            owner.addChildAt(body, owner.getChildIndex(container) + 1);
         }
         this.image = { texture, place: Float64Array.from(last), renderer, restores: restoresOf(renderer) };
     }
 
     /** Shows the view again and lets go of the pixels of the image. */
     private drop(): void {
-        const { image, sprite } = this;
+        const { image, body } = this;
 
-        if (image === null || sprite === undefined) return;
+        if (image === null || body === undefined) return;
         this.image = null;
         this.view.container.visible = true;
-        sprite.visible = false;
-        sprite.texture = Texture.EMPTY;
+        body.visible = false;
+        body.texture = Texture.EMPTY;
         spareTexture(image.texture);
     }
 }

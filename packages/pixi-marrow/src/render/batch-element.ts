@@ -48,6 +48,9 @@ import type { VisibleList } from './visible';
  * `batch-clip.ts`. The instructions are built again when a pose needs more of it.
  */
 
+/** The name of the render pipe that runs the batches. See `batch-pipe.ts`. */
+export const PIPE_ID = 'marrow';
+
 /** The names the two batchers are registered with. An element asks for one by `batcherName`. */
 export const BATCHER = 'marrow';
 export const DARK_BATCHER = 'marrow-dark';
