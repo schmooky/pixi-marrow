@@ -28,7 +28,7 @@ let state: MeshCodeState = 'idle';
  * The code of the mesh mode, or undefined while it is not loaded.
  *
  * @example
- * const paint = meshCode()?.createPaint({ container, template, pages, dark, blendModes, measure });
+ * const paint = meshCode()?.createPaint({ container, template, pages, dark, model, measure, gpu: false });
  */
 export function meshCode(): MeshCode | undefined {
     return loaded;

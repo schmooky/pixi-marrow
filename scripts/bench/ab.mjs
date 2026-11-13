@@ -9,7 +9,7 @@
  *                      [--rigs=4.2/tank-pro,raptor] [--instances=1,50,200] [--renderer=webgl|webgpu|both]
  *                      [--runs=3] [--frames=200] [--warmup=40] [--size=1280x720] [--out=.bench]
  *                      [--memory=all|off] [--dist=<folder>] [--pixi=8.16] [--baseline=<file>]
- *                      [--write-baseline] [--check]
+ *                      [--write-baseline] [--check] [--idle-cache=off|compare] [--skinning=gpu] [--bake]
  *
  * The values above are the defaults of the A/B mode. The overdraw mode has its own: 24 instances,
  * 5 runs of 100 frames per setting after 30, on a canvas of 1920x1080.
@@ -20,6 +20,11 @@
  * see scripts/render/mode.js, and the table of a rig says so. A runtime that reports no mode has
  * one render path and ignores the option.
  *
+ * --bake adds a side to the A/B mode: `baked`, pixi-marrow with `bake: 'auto'`. Its instances
+ * play from frames baked at load time where they can, in the render mode of `ours`. The table
+ * of a rig then has a row with baked divided by ours: what baking saves on this machine. The
+ * code of baked playback loads on demand, during the warm-up.
+ *
  * --scene says what the instances of the A/B mode do while they are timed, see
  * scripts/bench/scene.js: `play` (the default) loops an animation, `rest` stands past the end of
  * an animation that does not loop, `setup` never played, `moved` rests below a parent that
@@ -27,6 +32,17 @@
  * small rigs of which a few play at a time. Several names with commas between them run one
  * after the other, `all` runs every scene. Every scene but `play` and `mixed` has 200 instances
  * unless --instances names the counts.
+ *
+ * --idle-cache=compare adds the side `idle`: ours with `idleCache: 'auto'`, which draws a
+ * skeleton at rest as one image. Its table rows compare it with `ours`, which has the cache off.
+ * Before its warm-up a block of that side draws frames until every instance shows its image:
+ * the code of the cache loads on demand, and the cache waits 30 updates. The line under the
+ * table of a rig says how many instances showed an image and the bytes of their textures.
+ *
+ * --skinning=gpu adds a side `gpu`: ours in the mesh mode with `skinning: 'gpu'`, so the vertex
+ * shader places what hangs on bones alone. With --render-mode=mesh the side `ours` is the mesh
+ * mode with the CPU placing every vertex, and the row `gpu/ours` divides the two in the same
+ * seconds. The uploads count textures too, which is where the bones and the palette go.
  *
  * --pixi names the version of pixi.js both sides run on, see `pixiPackage` of
  * scripts/render/setup.mjs. The head of a renderer names the version that ran.
@@ -194,6 +210,12 @@ const settings = {
     // the render mode of ours, and for which rigs the A/B mode adds ours in the mesh mode as a third side
     renderMode,
     meshSide: ['all', 'none'].includes(args.mesh) ? args.mesh : 'verdict',
+    // ours with the idle cache as a side of its own
+    idleSide: args['idle-cache'] === 'compare',
+    // whether ours in the mesh mode with the vertex shader that places from the bones is one more side
+    skinning: args.skinning === 'gpu' ? 'gpu' : null,
+    // ours once more with baked playback, see the usage text
+    bakeSide: args.bake !== undefined,
     runs: Number(args.runs ?? DEFAULTS[mode].runs),
     frames: Number(args.frames ?? DEFAULTS[mode].frames),
     warmup: Number(args.warmup ?? DEFAULTS[mode].warmup),

@@ -12,6 +12,9 @@ import { BACKGROUNDS, compare, coverage, createStudio } from './pixels.js';
 
 const message = (error) => (error instanceof Error ? `${error.name}: ${error.message}` : String(error));
 
+/** The `skinning` option the page gives every instance of ours, as options. */
+const skinningOf = (env) => (env.skinning ? { skinning: env.skinning } : {});
+
 /** The CRC of PNG chunks. */
 function crc32(bytes) {
     let crc = 0xffffffff;
@@ -131,7 +134,7 @@ export async function premultipliedReadingCase(env, core) {
         const shots = [];
 
         for (const options of [{}, { tightMesh: 'off', occlusion: 'off' }]) {
-            const spine = new lib.MarrowSpine(asset, { autoUpdate: false, ...options });
+            const spine = new lib.MarrowSpine(asset, { autoUpdate: false, ...options, ...skinningOf(env) });
             const root = new PIXI.Container();
 
             root.addChild(spine);
@@ -190,7 +193,12 @@ export async function multisampledCase(env, plan, mode = 'mesh') {
             ['default', {}],
             ['polygons', { tightMesh: 'on' }],
         ]) {
-            const spine = new lib.MarrowSpine(asset, { autoUpdate: false, ...options, ...modeOptions(mode) });
+            const spine = new lib.MarrowSpine(asset, {
+                autoUpdate: false,
+                ...options,
+                ...modeOptions(mode),
+                ...skinningOf(env),
+            });
             const root = new PIXI.Container();
 
             made.push(spine);

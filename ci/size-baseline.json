@@ -1,12 +1,12 @@
 {
   "everything": {
-    "gzip": 32333
+    "gzip": 33880
   },
   "root (MarrowSpine)": {
-    "gzip": 31135
+    "gzip": 32599
   },
   "core (everything)": {
-    "gzip": 6138
+    "gzip": 6139
   },
   "core (sniffSkeleton)": {
     "gzip": 806
@@ -18,15 +18,18 @@
     "gzip": 1251
   },
   "core (createPoseEngine)": {
-    "gzip": 186
+    "gzip": 185
   },
   "optimize (generateNames)": {
     "gzip": 537
   },
   "perf (createProbe)": {
-    "gzip": 1051
+    "gzip": 1055
   },
   "debug (MarrowDebug)": {
     "gzip": 5003
+  },
+  "bake (bakeAnimation)": {
+    "gzip": 3594
   }
 }

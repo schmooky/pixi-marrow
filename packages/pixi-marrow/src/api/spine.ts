@@ -1,18 +1,22 @@
-import { type DestroyOptions, Ticker } from 'pixi.js';
+import { Container, type DestroyOptions, Ticker } from 'pixi.js';
 import { MarrowError } from '../base/errors';
 import type { SkeletonInfo } from '../model/info';
 import type { AtlasOutlines } from '../model/outlines';
-import type { PhysicsMode, PoseEngine } from '../pose/engine';
+import type { PoseEngine } from '../pose/engine';
 import { SkeletonView } from '../render/skeleton-view';
 import type { ViewStats } from '../render/stats';
 import { MarrowAsset, type MarrowLoadOptions } from './asset';
 import type { MarrowAssetsOptions } from './assets';
-import { finiteArgument, namedIndex, physicsMode, renderMode } from './checks';
+import { bakingEngine } from './baking';
+import { namedIndex, renderMode } from './checks';
 import { EventPump } from './events';
+import { createIdleCache, type IdleCache } from './idle-cache';
 import type { MarrowNames, MarrowSpineOptions, PlayOptions, QueueOptions, StopOptions, UpdateProbe } from './options';
+import { Pacer, type PacingStatus } from './pacing';
 import { animationDuration, applyPlan, planPlay } from './play-fields';
-import { SpineLinks } from './spine-links';
+import { type ResolvedPerf, resolvePerf } from './presets';
 import { MarrowPerf } from './spine-perf';
+import { SpinePhysics } from './spine-physics';
 import { EMPTY_ANIMATION, type Track, TrackHandle } from './track';
 import { TrackBook } from './track-book';
 import { registerView } from './view-of';
@@ -32,7 +36,7 @@ import { registerView } from './view-of';
  * hero.queue('run', { loop: true, mix: 0.2 });
  * hero.on('event', (event: MarrowEvent, track: Track) => console.warn(event.name, track.animation));
  */
-export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpineLinks<N> {
+export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysics<N> {
     /** What this object shares with the other instances of its skeleton. */
     readonly asset: MarrowAsset;
     /**
@@ -47,9 +51,17 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpineLinks
     /** The engine events between the update that caused them and the listeners. */
     private readonly pump = new EventPump();
     private ticking = false;
-    /** The physics mode that returns after the update that resets the physics, or null. */
-    private afterReset: PhysicsMode | null = null;
     private tools: MarrowPerf | undefined;
+    /**
+     * The `perf` settings in effect: the preset, every setting, and which were given by name.
+     * `perf.report()` lists them too.
+     */
+    readonly perfSettings: ResolvedPerf;
+    /** When an update poses the skeleton, and with how much time. */
+    private readonly pacer: Pacer;
+    private readonly idle: IdleCache | undefined;
+    /** True while `lod` leaves physics out of the updates. */
+    private lodOn = false;
     /** What {@link updateProbe} holds. An update without a probe pays one check of this field. */
     private probe: UpdateProbe | null = null;
 
@@ -65,7 +77,18 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpineLinks
             throw new MarrowError('invalid-data', 'The asset was destroyed.', { fix: 'Load the asset again.' });
         }
         this.asset = asset;
-        this.engine = asset.createEngine();
+        const settings = resolvePerf(options.perf, {
+            tightMesh: options.tightMesh,
+            skinning: options.skinning,
+            bake: options.bake,
+            idleCache: options.idleCache,
+            offscreen: options.offscreen,
+            updateRate: options.updateRate,
+            lod: options.lod,
+        });
+
+        this.perfSettings = settings;
+        this.engine = bakingEngine(asset, asset.createEngine(), settings.bake);
         // Spine's y axis points up and Pixi's points down. The official Pixi runtime flips the pose too:
         // the scale flips it, and the flag tells physics constraints which way gravity points
         this.engine.state.scaleY = -1;
@@ -73,9 +96,10 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpineLinks
         this.outlines = asset.outlines;
         this.skeletonView = new SkeletonView(asset.model, asset.atlas, asset.textures, {
             outlines: this.outlines,
-            tightMesh: options.tightMesh,
+            tightMesh: settings.tightMesh,
             occlusion: options.occlusion,
             renderMode: renderMode(options.renderMode ?? 'auto'),
+            skinning: settings.skinning,
         });
         this.addChild(this.skeletonView.container);
         this.linkTo({ engine: this.engine, state: this.engine.state, model: asset.model, view: this.skeletonView });
@@ -86,6 +110,16 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpineLinks
         this.engine.update(0);
         this.engine.physics = 'update';
         this.draw();
+        this.pacer = new Pacer(settings);
+        // a render tells the pacing where the skeleton is, for `offscreen` and `lod`. An empty
+        // child hears it, so that `onRender` of this object stays the game's
+        if (this.pacer.watching) {
+            const watch = new Container({ label: 'marrow-pacing' });
+
+            watch.onRender = (renderer) => this.pacer.seen(this, renderer);
+            this.addChild(watch);
+        }
+        this.idle = createIdleCache(this, this.skeletonView, this.engine.state, settings.idleCache);
         this.autoUpdate = options.autoUpdate ?? true;
     }
 
@@ -197,30 +231,6 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpineLinks
     }
 
     /**
-     * How physics constraints run in an update. Default `update`. The mode stays until it is set
-     * again. A skeleton without physics constraints ignores it, and so does every Spine 4.1 skeleton.
-     *
-     * - `update` advances the physics by the time that passed and moves the bones.
-     * - `none` leaves the physics out: the bones keep the pose of the animations.
-     * - `pose` moves the bones to where the physics is, and does not advance it.
-     * - `reset` starts the physics from the pose of the animations in every update. For one such
-     *   update call {@link resetPhysics}.
-     *
-     * Any other value throws a `MarrowError`.
-     */
-    get physics(): PhysicsMode {
-        return this.afterReset ?? this.engine.physics;
-    }
-
-    set physics(mode: PhysicsMode) {
-        const checked = physicsMode(mode);
-
-        // a reset that waits for its update stays: the new mode returns after it
-        if (this.afterReset === null) this.engine.physics = checked;
-        else this.afterReset = checked;
-    }
-
-    /**
      * True when the object updates itself from Pixi's shared ticker, with the seconds the ticker
      * measured. Set it to false to call {@link update} yourself.
      */
@@ -258,6 +268,7 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpineLinks
         const index = this.animationIndex(name);
         const plan = planPlay(options, 'play', this.asset.model.version);
 
+        this.catchUp();
         this.absorb();
         const entry = this.engine.setAnimation(plan.track, index, plan.loop);
         const handle = this.adopt(new TrackHandle<N>(this, entry, name, animationDuration(this.asset.model, index)));
@@ -280,6 +291,7 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpineLinks
         const plan = planPlay(options, 'queue', this.asset.model.version);
         const { track, delay, fields } = plan;
 
+        this.catchUp();
         this.absorb();
         const before = this.book.last(track);
         const entry = this.engine.addAnimation(track, index, plan.loop, delay);
@@ -311,6 +323,7 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpineLinks
         const mix = options.mix ?? 0;
         const { track } = options;
 
+        this.catchUp();
         if (mix > 0) {
             this.absorb();
             if (track !== undefined) this.mixOut(track, mix);
@@ -331,6 +344,9 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpineLinks
      * then emits the events. Call it once per frame when {@link autoUpdate} is false. Once the
      * asset was destroyed it does nothing, and {@link autoUpdate} turns off.
      *
+     * The `updateRate` and `offscreen` settings apply here: an update that is not due gathers its
+     * seconds for the next one, or loses them in the `pause` mode.
+     *
      * @example
      * hero.autoUpdate = false;
      * app.ticker.add((ticker) => hero.update(ticker.deltaMS / 1000));
@@ -338,65 +354,23 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpineLinks
     update(seconds: number): void {
         if (this.destroyed) return;
         // the page textures went with the asset: nothing of the pose could be drawn
-        if (this.asset.destroyed) this.autoUpdate = false;
-        else if (this.probe !== null) this.measure(seconds, this.probe);
+        if (this.asset.destroyed) {
+            this.autoUpdate = false;
+
+            return;
+        }
+        const due = this.pacer.take(seconds, this.skeletonView.stats.renderMode === 'batched');
+
+        if (due < 0) return;
+        if (this.probe !== null) this.measure(due, this.probe);
         else {
-            this.engine.update(seconds);
-            if (this.afterReset !== null) this.endReset(this.afterReset);
+            this.pose(due);
             this.absorb();
             this.links?.move(this.engine.state);
             this.draw();
+            this.idle?.update();
             this.pump.flush(this, this.asset.model.events);
         }
-    }
-
-    /**
-     * Makes the next update start the physics again from the pose of the animations: that
-     * update runs in mode `reset`, then the mode of {@link physics} returns. Call it after a
-     * jump of the skeleton, so that the physics does not swing from where it was.
-     *
-     * @example
-     * hero.position.set(400, 300);
-     * hero.resetPhysics();
-     */
-    resetPhysics(): void {
-        if (this.afterReset !== null) return;
-        this.afterReset = this.engine.physics;
-        this.engine.physics = 'reset';
-    }
-
-    /**
-     * Tells the physics constraints that the skeleton moved, so that they lag behind: the
-     * official `Skeleton.physicsTranslate`. `x` and `y` are in the space of this object, where y
-     * points down. The object never calls it on its own when its Pixi position changes, and
-     * neither does the official Pixi runtime unless it is asked to.
-     *
-     * @example
-     * hero.x += 12;
-     * hero.physicsTranslate(12, 0);
-     */
-    physicsTranslate(x: number, y: number): void {
-        this.engine.physicsTranslate(
-            finiteArgument('physicsTranslate', 'x', x),
-            finiteArgument('physicsTranslate', 'y', y),
-        );
-    }
-
-    /**
-     * Tells the physics constraints that the skeleton turned by `degrees` around the point `x`,
-     * `y` of this object's space: the official `Skeleton.physicsRotate`. Positive degrees turn
-     * the way Pixi's `rotation` does.
-     *
-     * @example
-     * hero.angle += 5;
-     * hero.physicsRotate(0, 0, 5);
-     */
-    physicsRotate(x: number, y: number, degrees: number): void {
-        this.engine.physicsRotate(
-            finiteArgument('physicsRotate', 'x', x),
-            finiteArgument('physicsRotate', 'y', y),
-            finiteArgument('physicsRotate', 'degrees', degrees),
-        );
     }
 
     /**
@@ -412,6 +386,7 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpineLinks
         this.absorb();
         this.pump.pending.clear();
         this.links?.clear();
+        this.idle?.destroy();
         this.skeletonView.destroy();
         super.destroy(options);
     }
@@ -423,25 +398,46 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpineLinks
     private measure(seconds: number, probe: UpdateProbe): void {
         const start = performance.now();
 
-        this.engine.update(seconds);
+        this.pose(seconds);
         const posed = performance.now();
 
-        if (this.afterReset !== null) this.endReset(this.afterReset);
         this.absorb();
         const absorbed = performance.now();
 
         this.links?.move(this.engine.state);
         this.draw();
+        this.idle?.update();
         const drawn = performance.now();
 
         this.pump.flush(this, this.asset.model.events);
         probe.record(posed - start, drawn - absorbed, absorbed - posed + (performance.now() - drawn));
     }
 
-    /** Ends the one update that resets the physics: the mode that was set before it returns. */
-    private endReset(mode: PhysicsMode): void {
-        this.engine.physics = mode;
-        this.afterReset = null;
+    /**
+     * Poses the skeleton. While `lod` leaves physics out, the engine updates in mode `none`, and
+     * the first update after that resets the physics, so that it does not swing from an old pose.
+     */
+    private pose(seconds: number): void {
+        const { engine } = this;
+
+        if (this.pacer.small && engine.physics !== 'none') {
+            const mode = engine.physics;
+
+            engine.physics = 'none';
+            engine.update(seconds);
+            engine.physics = mode;
+            this.lodOn = true;
+        } else {
+            if (this.lodOn) this.resetPhysics();
+            this.lodOn = false;
+            engine.update(seconds);
+        }
+        this.settleReset();
+    }
+
+    /** Where the pacing of updates stands, for `perf.report()`. */
+    pacingStatus(): PacingStatus {
+        return this.pacer.status(this.skeletonView.stats.renderMode === 'batched');
     }
 
     /** Brings the drawn skeleton in line with the pose, with the outlines the asset has now. */
@@ -486,5 +482,18 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpineLinks
      */
     private absorb(): void {
         this.book.absorb(this.engine.takeEvents(), this.pump.pending);
+    }
+
+    /**
+     * Poses the time that `updateRate` or `offscreen` gathered, before a command changes the
+     * tracks: that time plays what the tracks held. Its events fire with the next update.
+     */
+    private catchUp(): void {
+        const carried = this.pacer.drain();
+
+        if (carried > 0) {
+            this.pose(carried);
+            this.absorb();
+        }
     }
 }

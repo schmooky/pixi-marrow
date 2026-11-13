@@ -5,13 +5,14 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import {
     createModeSummary,
+    describeBaked,
     describeMode,
     describeSceneBuilds,
     describeSceneDraws,
     describeSceneMode,
     describeSceneRows,
 } from './report-modes.mjs';
-import { describeChunk, describeLazy } from './report-sleep.mjs';
+import { describeChunk, describeIdle, describeLazy } from './report-sleep.mjs';
 
 /** Failing frames per comparison that get a line of their own, unless every frame is listed. */
 const LINES_PER_LABEL = 3;
@@ -36,6 +37,8 @@ const SUMMARY_NAMES = {
     cutsBatched: 'batched, cuts on and off',
     polygonsBatched: 'batched, polygons',
     auto: 'auto and its mode',
+    matchBaked: 'baked against official',
+    matchBakedBatched: 'baked batched, official',
     // scenes: several instances in one stage
     sceneTwice: 'scenes, official twice',
     sceneMesh: 'scenes, mesh',
@@ -43,6 +46,8 @@ const SUMMARY_NAMES = {
     sceneModes: 'scenes, batched and mesh',
     sceneOwn: 'scenes, batched to mesh',
     sceneAuto: 'scenes, default options',
+    sceneIdleOfficial: 'scenes, idle and official',
+    sceneIdle: 'scenes, idle and live',
     // a page on another pixi.js: the official runtime there against the reference
     pixi: 'official, this pixi.js',
     scenePixi: 'scenes, official here',
@@ -61,17 +66,21 @@ const LATER_LINES = [
     'cutsBatched',
     'polygonsBatched',
     'auto',
+    'matchBaked',
+    'matchBakedBatched',
     'sceneTwice',
     'sceneMesh',
     'sceneBatched',
     'sceneModes',
     'sceneOwn',
     'sceneAuto',
+    'sceneIdleOfficial',
+    'sceneIdle',
 ];
 /** The kinds that compare ours with polygons to a picture of quads. */
 const POLYGON_KINDS = ['polygons', 'polygonsOfficial'];
 /** The kinds that measure and do not judge, unless a rule was switched on for them. Their line says `info`. */
-const INFO_KINDS = ['mode', 'modes', 'sceneMode', 'sceneRows', 'sceneDraws', 'sceneBuilds'];
+const INFO_KINDS = ['mode', 'modes', 'sceneMode', 'sceneRows', 'sceneDraws', 'sceneBuilds', 'baked'];
 
 const percent = (share) => `${(100 * share).toFixed(3)}%`;
 const slug = (text) => String(text).replace(/[^A-Za-z0-9.]+/g, '-');
@@ -236,11 +245,13 @@ function describe(entries, frames) {
         return `ours ${range(info.ours)}${masks}${batched}, official ${range(info.official)}`;
     }
     if (kind === 'mode') return describeMode(info);
+    if (kind === 'baked') return describeBaked(info);
     if (kind === 'sceneMode') return describeSceneMode(info);
     if (kind === 'sceneRows') return describeSceneRows(info);
     if (kind === 'sceneDraws') return describeSceneDraws(info);
     if (kind === 'sceneBuilds') return describeSceneBuilds(info);
     if (kind === 'lazy') return describeLazy(info);
+    if (kind === 'idleCache') return describeIdle(info);
     if (kind === 'chunk') return first.finding ?? describeChunk(info);
     if (kind === 'steady') return describeBuffers(entries);
     if (kind === 'overdraw') return describeOverdraw(info);

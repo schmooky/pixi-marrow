@@ -48,6 +48,12 @@ export const RESTORE_FRAMES = [0, 1, 2, 5, 11];
  * The cases. `clips` asks for an active clip and `attached` for a container that was placed.
  * `rests` asks that the rig of the report did no work in any frame after the restore: its
  * updates all returned at once. `moves` asks that it placed vertices in every one of them.
+ *
+ * `idle` asks that the rig showed the image of its idle cache before the loss. The image was in
+ * the old context, so the run that lost it must draw the rig live after the restore, and the run
+ * that kept it shows the image still. The two pictures differ by 1 or 2 levels in places: the
+ * image holds the layers of a pixel at 8 bits and blends them over the background once. Only
+ * `ties` pixels may differ by more than 1, see `TOLERANCE.idle` of scripts/check-render.mjs.
  */
 export const RESTORE_CASES = [
     { id: 'rest', title: 'a skeleton at rest', rests: true },
@@ -67,6 +73,13 @@ export const RESTORE_CASES = [
         id: 'late',
         title: 'a skeleton of another asset, first drawn while the context is lost, next to one at rest',
         rests: true,
+    },
+    {
+        id: 'idle-rest',
+        title: 'a skeleton at rest that the idle cache shows as an image, drawn live after the restore',
+        rests: true,
+        idle: true,
+        ties: 4,
     },
 ];
 
@@ -130,9 +143,10 @@ async function until(app, spines, done, what) {
  * another frame than the other one.
  *
  * @param staged False keeps the rig off the stage: it is placed and not drawn.
+ * @param options More options of the display object.
  */
-async function load({ MarrowSpine, app }, files, renderMode, place, staged = true) {
-    const spine = await MarrowSpine.load({ ...files, autoUpdate: false, renderMode });
+async function load({ MarrowSpine, app }, files, renderMode, place, staged = true, options = {}) {
+    const spine = await MarrowSpine.load({ ...files, autoUpdate: false, renderMode, ...options });
 
     await spine.asset.optimized;
     show(app, spine, place);
@@ -147,9 +161,12 @@ function freeze(spine) {
     spine.timeScale = 0;
 }
 
+/** Whether a rig shows the image of its idle cache: its sprite of that label shows. */
+const imaged = (spine) => spine.children.some((child) => child.label === 'marrow-idle' && child.visible);
+
 /** A rig in the middle of its run. */
-async function runner(kit, mode, place = HERO.place) {
-    const hero = await load(kit, HERO.files, mode, place);
+async function runner(kit, mode, place = HERO.place, options = {}) {
+    const hero = await load(kit, HERO.files, mode, place, true, options);
 
     hero.play('run', { loop: true });
     frames(kit.app, [hero], 7);
@@ -265,6 +282,15 @@ const STAGES = {
         hero.play('run', { loop: true });
 
         return { hero, spines: [hero], late: [hero] };
+    },
+    async 'idle-rest'(kit, mode) {
+        const hero = await runner(kit, mode, HERO.place, { idleCache: 'auto' });
+
+        freeze(hero);
+        // the code of the cache loads on demand, then the rig rests for the wait of the cache
+        await until(kit.app, [hero], () => imaged(hero), 'the image of the idle cache');
+
+        return { hero, spines: [hero] };
     },
     async late(kit, mode) {
         const hero = await runner(kit, mode, { x: 0.32, y: 0.94, scale: 0.36 });
@@ -411,6 +437,7 @@ async function runCase({ Application, Graphics, MarrowSpine, pixi }, id, mode, l
         const { hero, spines, late = [], placed = null } = await stage({ MarrowSpine, Graphics, app }, mode);
 
         frames(app, spines, SETTLE);
+        report.imageBefore = imaged(hero);
         report.context = await loseAndRestore(app, spines, late, lose);
         const last = Math.max(...RESTORE_FRAMES);
         const work = { skipped: [], placed: [] };
@@ -420,7 +447,13 @@ async function runCase({ Application, Graphics, MarrowSpine, pixi }, id, mode, l
 
             frames(app, spines, 1);
             work.skipped.push(hero.stats.skips - before.skips);
-            work.placed.push(hero.stats.positionUploads - before.positionUploads);
+            // with skinning on the GPU a skeleton that moves uploads its bones, and positions only where it deforms
+            work.placed.push(
+                hero.stats.positionUploads -
+                    before.positionUploads +
+                    (hero.stats.boneUploads ?? 0) -
+                    (before.boneUploads ?? 0),
+            );
             if (RESTORE_FRAMES.includes(frame)) report.frames.push({ frame, ...picture(app, copy) });
         }
         Object.assign(report, work, {
@@ -429,6 +462,7 @@ async function runCase({ Application, Graphics, MarrowSpine, pixi }, id, mode, l
             maskDraws: hero.stats.maskDraws,
             drawCalls: hero.stats.drawCalls,
             placedContainers: placed ? placed() : null,
+            imageAfter: imaged(hero),
         });
     } catch (error) {
         report.error = String(error?.stack ?? error)
@@ -441,11 +475,22 @@ async function runCase({ Application, Graphics, MarrowSpine, pixi }, id, mode, l
 }
 
 /**
+ * The kit of a page, with a `MarrowSpine.load` that gives every instance the `skinning` of the
+ * address: `?skinning=gpu`. Without one the kit is as it was given.
+ */
+function withSkinning(kit) {
+    const skinning = new URLSearchParams(location.search).get('skinning');
+    const { MarrowSpine } = kit;
+
+    return skinning ? { ...kit, MarrowSpine: { load: (options) => MarrowSpine.load({ skinning, ...options }) } } : kit;
+}
+
+/**
  * The entry of the bundle calls this with the classes a game starts with. The check then asks
  * for a run with `window.restoreCheck.run(id, mode, lose)`.
  *
  * @param kit `Application` and `Graphics` of Pixi, `MarrowSpine`, and `pixi`, the version of Pixi.
  */
 export function startRestore(kit) {
-    window.restoreCheck = { run: (id, mode, lose) => runCase(kit, id, mode, lose) };
+    window.restoreCheck = { run: (id, mode, lose) => runCase(withSkinning(kit), id, mode, lose) };
 }

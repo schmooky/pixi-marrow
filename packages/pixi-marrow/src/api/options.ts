@@ -1,4 +1,5 @@
 import type { TrackFields } from '../pose/engine';
+import type { PerfOptions, PerfPreset, PerfSettings } from './presets';
 
 /**
  * The names of one skeleton as string unions. `pixi-marrow typegen` writes a type of this shape.
@@ -70,6 +71,43 @@ export interface MarrowSpineOptions {
      * the same frame. `off` draws every slot.
      */
     occlusion?: 'auto' | 'off';
+    /**
+     * A preset of the settings below, or a `PerfOptions` object that starts from one. An option
+     * given by its own name wins over the preset.
+     *
+     * - `exact` (the default): nothing that changes timing, memory or the picture to the bit.
+     * - `balanced`: `tightMesh: 'on'`, `bake: 'auto'`, `idleCache: 'auto'`, `offscreen: 'throttle'`.
+     * - `fast`: `balanced` with `lod: 'auto'`, `offscreen: 'pause'`, and `updateRate: 30` for a
+     *   skeleton that the batched mode draws.
+     */
+    perf?: PerfPreset | PerfOptions;
+    /** See {@link PerfSettings.skinning}. */
+    skinning?: PerfSettings['skinning'];
+    /**
+     * See {@link PerfSettings.bake}. With `auto` an animation is baked the first time it plays
+     * alone on track 0, at 60 frames per second. A list bakes the animations it names, and a name
+     * the skeleton lacks throws a `MarrowError`. The clips are shared by the instances of the
+     * asset, per skin. Clips from `addBakedClips` of `pixi-marrow/bake` play in place of baking.
+     *
+     * An update plays baked when one entry plays alone on track 0 at alpha 1, with no mix, and
+     * the update before it played that entry too. Nothing may have written the pose since. The
+     * skin, the place of the skeleton and the physics mode must be the same. Any other update is
+     * posed as without baking. A skin that turns on a physics constraint or a slider bakes nothing.
+     *
+     * Events, loops, time scales, reverse and the `start` and `end` options stay as without
+     * baking. At a sample time the pose equals the played one, rounded to 32 bits. Between two
+     * samples the frame before is shown. While baked frames play, `bone(name)` reads the local
+     * values of the last update the engine posed. Its world values are those of the frame.
+     */
+    bake?: PerfSettings['bake'];
+    /** See {@link PerfSettings.idleCache}. */
+    idleCache?: PerfSettings['idleCache'];
+    /** See {@link PerfSettings.offscreen}. */
+    offscreen?: PerfSettings['offscreen'];
+    /** See {@link PerfSettings.updateRate}. */
+    updateRate?: PerfSettings['updateRate'];
+    /** See {@link PerfSettings.lod}. */
+    lod?: PerfSettings['lod'];
 }
 
 /** Options for playing an animation now. */

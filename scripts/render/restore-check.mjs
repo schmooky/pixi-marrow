@@ -25,6 +25,10 @@
  * after the restore. pixi-marrow now draws no skeleton while the context is lost. The two cases
  * with a skeleton that appears late fail on a build without that.
  *
+ * The case with the idle cache shows a rig at rest as an image before the loss. The image lived
+ * in the old context, so the rig must be drawn live after the restore. Without that it shows the
+ * empty texture that Pixi made again.
+ *
  * The proof of the tooling is a run that never gets its context back. Its pictures must be
  * rejected, which shows that the pictures are those of the canvas a player sees.
  *
@@ -111,7 +115,7 @@ async function bundleRestore(root, { pkg, pixi }) {
  *
  * @param lose True to lose the context and get it back, false to keep it, `forever` to lose it for good.
  */
-async function runPage(browser, origin, id, mode, lose) {
+async function runPage(browser, origin, id, mode, lose, skinning) {
     const page = await browser.newPage();
     const errors = [];
 
@@ -126,7 +130,7 @@ async function runPage(browser, origin, id, mode, lose) {
         if (entry.type() === 'error' || /CONTEXT_LOST|GL_INVALID|INVALID_|shader/i.test(text)) errors.push(text);
     });
     try {
-        await page.goto(`${origin}/`);
+        await page.goto(`${origin}/${skinning ? `?skinning=${skinning}` : ''}`);
         await page.waitForFunction(() => window.restoreCheck, null, { timeout: 30_000 });
         const report = await inTime(
             page.evaluate(([name, how, lost]) => window.restoreCheck.run(name, how, lost), [id, mode, lose]),
@@ -143,8 +147,8 @@ async function runPage(browser, origin, id, mode, lose) {
 
 /**
  * Compares two pictures of the canvas. `covered` is the share of the second that is not the
- * background, `differing` the number of pixels with another byte, `largest` the largest
- * difference of a byte.
+ * background, `differing` the number of pixels with another byte, `over1` of those the ones
+ * that differ by more than 1, and `largest` the largest difference of a byte.
  */
 function comparePictures(first, second) {
     const a = Buffer.from(first, 'base64');
@@ -152,9 +156,12 @@ function comparePictures(first, second) {
     const pixels = RESTORE_SIZE * RESTORE_SIZE;
     let covered = 0;
     let differing = 0;
+    let over1 = 0;
     let largest = 0;
 
-    if (a.length !== pixels * 4 || b.length !== pixels * 4) return { covered: 0, differing: pixels, largest: 255 };
+    if (a.length !== pixels * 4 || b.length !== pixels * 4) {
+        return { covered: 0, differing: pixels, over1: pixels, largest: 255 };
+    }
     for (let at = 0; at < a.length; at += 4) {
         let apart = 0;
         let drawn = false;
@@ -165,10 +172,11 @@ function comparePictures(first, second) {
         }
         if (drawn) covered++;
         if (apart > 0) differing++;
+        if (apart > 1) over1++;
         largest = Math.max(largest, apart);
     }
 
-    return { covered: covered / pixels, differing, largest };
+    return { covered: covered / pixels, differing, over1, largest };
 }
 
 /** The frames after the restore whose pictures differ between two runs, with how much. */
@@ -207,11 +215,16 @@ function judgeRun(plan, mode, name, side, lose) {
         reasons.push(`${name} did not rest: the updates that returned at once per frame are ${report.skipped}`);
     }
     if (plan.rests && !all(report.placed, (count) => count === 0)) {
-        reasons.push(`${name} did not rest: the position uploads per frame are ${report.placed}`);
+        reasons.push(`${name} did not rest: the position and bone uploads per frame are ${report.placed}`);
     }
     if (plan.moves && !all(report.placed, (count) => count > 0)) {
-        reasons.push(`${name} did not move: the position uploads per frame are ${report.placed}`);
+        reasons.push(`${name} did not move: the position and bone uploads per frame are ${report.placed}`);
     }
+    if (plan.idle && report.imageBefore !== true) reasons.push(`${name} showed no image of its idle cache before`);
+    if (plan.idle && lose && report.imageAfter !== false) {
+        reasons.push(`${name} still showed the image it drew with the context it lost`);
+    }
+    if (plan.idle && !lose && report.imageAfter !== true) reasons.push(`${name} did not show its image to the end`);
     if (lose) {
         const { lost, restored, wasLost, back } = report.context ?? {};
 
@@ -236,14 +249,14 @@ function judgeCase(plan, mode, lost, kept) {
     if (lost.report.error || kept.report.error) return reasons;
     for (const entry of differingFrames(lost, kept)) {
         if (entry.missing) reasons.push(`frame ${entry.frame} after the restore has no picture`);
-        else if (entry.differing > 0) {
+        else if (plan.idle ? entry.over1 > plan.ties : entry.differing > 0) {
             const share = ((entry.differing / (RESTORE_SIZE * RESTORE_SIZE)) * 100).toFixed(2);
 
             reasons.push(
                 `frame ${entry.frame} after the restore: ${entry.differing} pixels (${share} percent) differ from the run ` +
-                    `that kept its context, by up to ${entry.largest} of 255`,
+                    `that kept its context, ${entry.over1} of them by more than 1, by up to ${entry.largest} of 255`,
             );
-        } else {
+        } else if (entry.covered < LEAST_COVER) {
             reasons.push(
                 `frame ${entry.frame}: the picture is empty, ${(entry.covered * 100).toFixed(1)} percent of it is not the background`,
             );
@@ -281,10 +294,20 @@ function keepPictures(root, dir, id, frame, lost, kept) {
  * @param options.outDir Where the pictures of a failed case go.
  * @param options.only The text of `--only`, or null. With a text that no case id holds, nothing runs and nothing fails.
  * @param options.keep True to write the pictures of the cases that pass too.
+ * @param options.skinning The `skinning` option every instance gets, or null for none.
  * @example
  * failed += await checkRestore({ root, pkg, pixi, modes: ['mesh', 'batched'], outDir: join(outDir, 'restore') });
  */
-export async function checkRestore({ root, pkg, pixi, modes = RESTORE_MODES, outDir, only = null, keep = false }) {
+export async function checkRestore({
+    root,
+    pkg,
+    pixi,
+    modes = RESTORE_MODES,
+    outDir,
+    only = null,
+    keep = false,
+    skinning = null,
+}) {
     const jobs = modes
         .flatMap((mode) => RESTORE_CASES.map((plan) => ({ plan, mode, id: `restore/${mode}/${plan.id}` })))
         .filter((job) => !only || job.id.includes(only));
@@ -299,7 +322,7 @@ export async function checkRestore({ root, pkg, pixi, modes = RESTORE_MODES, out
     try {
         server = await serve(root, bundle.dir);
         browser = await launchChrome();
-        const run = (job, lose) => runPage(browser, server.origin, job.plan.id, job.mode, lose);
+        const run = (job, lose) => runPage(browser, server.origin, job.plan.id, job.mode, lose, skinning);
         // the tooling proof: a context that stays lost leaves another picture on the canvas
         const [first] = jobs;
         const proof = { lost: await run(first, 'forever'), kept: await run(first, false) };
@@ -315,7 +338,8 @@ export async function checkRestore({ root, pkg, pixi, modes = RESTORE_MODES, out
         console.log(
             `restore-check: webgl, pixi.js ${proof.kept.report.pixi}. A run loses its context for ${RESTORE_AWAY} frames and gets it back. ` +
                 `Compared with a run that kept its context: the frames ${RESTORE_FRAMES.join(', ')} after the restore. ` +
-                `The renderer of the page starts ${proof.kept.report.meshPipeAtInit ? 'with' : 'without'} Pixi's mesh pipe`,
+                `The renderer of the page starts ${proof.kept.report.meshPipeAtInit ? 'with' : 'without'} Pixi's mesh pipe` +
+                (skinning ? `. Every instance has skinning: '${skinning}'` : ''),
         );
         if (proof.kept.report.pixi !== pixi.version) {
             console.log(`  FAIL the page runs on pixi.js ${proof.kept.report.pixi}, not on ${pixi.version}`);
@@ -368,6 +392,7 @@ async function main() {
         outDir: resolve(root, args.out ?? '.shots/restore'),
         only: args.only ?? null,
         keep: args.keep === 'true',
+        skinning: args.skinning ?? null,
     });
 
     console.log(failed ? `restore-check: ${failed} failures` : 'restore-check: ok');

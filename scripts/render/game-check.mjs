@@ -41,7 +41,7 @@ const CASE_TIMEOUT = 60_000;
 const LEAST_COVER = 0.02;
 
 /** Runs one case in a page of one bundle. Returns what the page reported and the errors it logged. */
-async function runCase(browser, origin, renderer, id) {
+async function runCase(browser, origin, renderer, id, skinning) {
     const page = await browser.newPage();
     const errors = [];
 
@@ -53,7 +53,7 @@ async function runCase(browser, origin, renderer, id) {
         if (entry.type() === 'error' && !/Failed to load resource/.test(entry.text())) errors.push(entry.text());
     });
     try {
-        await page.goto(`${origin}/`);
+        await page.goto(`${origin}/${skinning ? `?skinning=${skinning}` : ''}`);
         await page.waitForFunction(() => window.gameCheck, null, { timeout: 30_000 });
         const report = await inTime(
             page.evaluate(([name, wanted]) => window.gameCheck.run(name, wanted), [id, renderer]),
@@ -188,10 +188,11 @@ function describePipes(renderer, version, game, whole) {
  * @param options.outDir Where the pictures of a failed case go.
  * @param options.only The text of `--only`, or null. With a text that no case id holds, nothing runs and nothing fails.
  * @param options.keep True to write the pictures of the cases that pass too.
+ * @param options.skinning The `skinning` option every instance gets, or null for none.
  * @example
  * failed += await checkGame({ root, pkg, pixi, renderers: wanted, outDir: join(outDir, 'game') });
  */
-export async function checkGame({ root, pkg, pixi, renderers, outDir, only = null, keep = false }) {
+export async function checkGame({ root, pkg, pixi, renderers, outDir, only = null, keep = false, skinning = null }) {
     const cases = GAME_CASES.filter((plan) => !only || `game/${plan.id}`.includes(only));
 
     // the text of --only names rigs or scenes of the render check, and none of these cases
@@ -205,7 +206,7 @@ export async function checkGame({ root, pkg, pixi, renderers, outDir, only = nul
     try {
         // the large rig of a case: no example is one
         writeLargeRig(root, bundle.made);
-        console.log(`game-check: ${describeBundles(bundle.meshPipe)}`);
+        console.log(`game-check: ${describeBundles(bundle.meshPipe)}${skinning ? `, skinning: '${skinning}'` : ''}`);
         if (bundle.meshPipe.game === 'start') {
             console.log(
                 "game-check: FAIL the bundle of a game holds Pixi's mesh pipe from its start: its tree was not shaken",
@@ -222,8 +223,8 @@ export async function checkGame({ root, pkg, pixi, renderers, outDir, only = nul
 
             for (const plan of cases) {
                 const sides = [
-                    await runCase(browser, game.origin, renderer, plan.id),
-                    await runCase(browser, whole.origin, renderer, plan.id),
+                    await runCase(browser, game.origin, renderer, plan.id, skinning),
+                    await runCase(browser, whole.origin, renderer, plan.id, skinning),
                 ];
                 const given = sides.map((side) => side.report.renderer).find((name) => name && name !== renderer);
 
@@ -272,6 +273,7 @@ async function main() {
         outDir: resolve(root, args.out ?? '.shots/game'),
         only: args.only ?? null,
         keep: args.keep === 'true',
+        skinning: args.skinning ?? null,
     });
 
     console.log(failed ? `game-check: ${failed} failures` : 'game-check: ok');

@@ -29,6 +29,11 @@ export const PAGES: readonly DocsPage[] = [
         description: 'Several skins at once, slot attachments and colors, and the setup pose.',
     },
     {
+        href: '/performance/',
+        title: 'Performance',
+        description: 'Presets, pacing, the idle cache, baking and GPU skinning, and the report of what is in effect.',
+    },
+    {
         href: '/debug/',
         title: 'Debug overlays',
         description: 'Bones, shapes, clipping and overdraw drawn over a skeleton.',

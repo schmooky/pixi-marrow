@@ -3,6 +3,7 @@ import type { ConstraintData } from '../model/constraints';
 import type { PhysicsMode } from '../pose/engine';
 import { type PerfEntry, plural, type ReportSource, slotNames } from './report-base';
 import { cutRows } from './report-cuts';
+import { pacingRow, perfRow } from './report-perf';
 
 /*
  * The rows of `perf.report()`. Every row is read from the state of the instance when the report
@@ -70,11 +71,14 @@ function waitingFor({ meshCode, drawn }: ReportSource['view']['mode']): string {
 }
 
 function renderModeRow({ view }: ReportSource): PerfEntry {
-    const { mode, wanted, drawn } = view.mode;
+    const { mode, wanted, drawn, gpu } = view.mode;
+    const owns = gpu
+        ? 'It has draw calls of its own, and its vertex shader places the vertices from the bones, except where they deform'
+        : 'It has draw calls of its own, and the CPU places its vertices in the space of the skeleton';
     const does =
         mode === 'batched'
             ? 'It shares draw calls with the skeletons next to it, and the CPU places its vertices'
-            : 'It has draw calls of its own, and the GPU places its vertices';
+            : owns;
 
     if (wanted !== mode) {
         return {
@@ -334,16 +338,20 @@ function verticesRow({ stats, view }: ReportSource): PerfEntry {
 }
 
 function uploadsRow({ stats }: ReportSource): PerfEntry {
-    const updates = stats.positionUploads;
+    const { boneUploads } = stats;
+    // the vertex shader of `skinning: 'gpu'` places what hangs on bones: an update that moves uploads the bones
+    const updates = Math.max(stats.positionUploads, boneUploads);
     const rate = (uploads: number): number => Math.round((uploads / updates) * 100) / 100;
 
     if (updates === 0) return { feature: 'uploads', value: 'none', reason: 'no update has drawn a slot' };
     const masks = stats.maskUploads > 0 ? `, ${plural(stats.maskUploads, 'mask upload')}` : '';
+    const bones = boneUploads > 0 ? `, ${plural(boneUploads, 'upload')} of the bones` : '';
+    const first = boneUploads > 0 ? `1 bone, ${rate(stats.positionUploads)} position` : '1 position';
 
     return {
         feature: 'uploads',
-        value: `1 position, ${rate(stats.colorUploads)} color, ${rate(stats.uvUploads)} uv per update`,
-        reason: `${stats.positionUploads} position, ${stats.colorUploads} color and ${stats.uvUploads} uv uploads in ${plural(updates, 'update')} that drew, ${plural(stats.indexRebuilds, 'rewrite')} of the index buffers${masks}`,
+        value: `${first}, ${rate(stats.colorUploads)} color, ${rate(stats.uvUploads)} uv per update`,
+        reason: `${stats.positionUploads} position, ${stats.colorUploads} color and ${stats.uvUploads} uv uploads in ${plural(updates, 'update')} that drew, ${plural(stats.indexRebuilds, 'rewrite')} of the index buffers${masks}${bones}`,
     };
 }
 
@@ -352,6 +360,24 @@ function layoutRow({ stats }: ReportSource): PerfEntry {
         feature: 'layout',
         value: plural(stats.templateBuilds, 'layout'),
         reason: 'the vertex ranges are laid out once, and again when the skin, the outlines or a page texture changes',
+    };
+}
+
+/** The row about baked playback: how many updates played baked, and why the last one did or did not. */
+function bakeRow({ bake }: ReportSource): PerfEntry {
+    if (bake === null) {
+        return {
+            feature: 'bake',
+            value: 'off',
+            reason: 'the option bake is "off", or the code of baked playback has not loaded yet: the pose engine poses every update',
+        };
+    }
+    const { baked, unbaked, last, bytes } = bake;
+
+    return {
+        feature: 'bake',
+        value: `${baked} of ${baked + unbaked} updates baked`,
+        reason: `last update: ${last}. The baked clips of the asset take ${(bytes / 1024).toFixed(1)} KB`,
     };
 }
 
@@ -364,6 +390,8 @@ function layoutRow({ stats }: ReportSource): PerfEntry {
  */
 export function buildReport(source: ReportSource): PerfEntry[] {
     return [
+        perfRow(source.perf),
+        pacingRow(source.pacing),
         renderModeRow(source),
         motionRow(source),
         linksRow(source),
@@ -374,6 +402,7 @@ export function buildReport(source: ReportSource): PerfEntry[] {
         ...cutRows(source),
         darkTintRow(source),
         physicsRow(source),
+        bakeRow(source),
         constraintsRow(source),
         bonesRow(source),
         slotsRow(source),

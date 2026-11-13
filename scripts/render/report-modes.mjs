@@ -200,3 +200,10 @@ export function strayPixi(pixi, versions) {
 
     return errors;
 }
+
+/** What baked playback did on a rig: the updates it played from frames and those the engine posed. */
+export function describeBaked(info) {
+    const why = info.blocked ? `, not baked: ${info.blocked}` : '';
+
+    return `${info.baked} updates baked, ${info.unbaked} posed by the engine${why}`;
+}

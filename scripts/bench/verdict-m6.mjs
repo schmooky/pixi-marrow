@@ -38,9 +38,10 @@ const UNIFORM_SLACK = 1024;
  * The most bytes the root import may have, gzipped, for a game that imports `MarrowSpine`. The
  * list of M6 said 27 kB. Bone handles and `follow` came after it and must work at once, so they
  * are in the root: 29 kB. The support for Pixi `Assets` added 0.2 kB to a game that does not
- * register it: 30 kB.
+ * register it: 30 kB. The slot handle and several skins: 31 kB. The perf presets and the pacing,
+ * which must work at once, and the hooks of the idle cache and of baked playback: 32 kB.
  */
-const SIZE_LIMIT = 31 * 1024;
+const SIZE_LIMIT = 32 * 1024;
 /** The entry of ci/size-baseline.json that the limit is for. */
 const SIZE_ENTRY = 'root (MarrowSpine)';
 

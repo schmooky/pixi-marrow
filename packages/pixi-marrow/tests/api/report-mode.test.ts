@@ -92,7 +92,7 @@ describe('the render mode of a display object', () => {
         expect(spine.renderMode).toBe('auto');
     });
 
-    it('is the first row of the report, with the reason for the mode', async () => {
+    it('is the first row of the report after the perf settings and the pacing, with the reason for the mode', async () => {
         const small = await fixtureAsset('4.2/speedy-ess.skel');
         const large = await fixtureAsset('4.2/raptor-pro.skel');
         const clipped = await coverAsset([
@@ -100,10 +100,15 @@ describe('the render mode of a display object', () => {
             { name: 'small', shows: 'small' },
         ]);
         const shares = 'It shares draw calls with the skeletons next to it, and the CPU places its vertices';
-        const owns = 'It has draw calls of its own, and the GPU places its vertices';
+        const owns = 'It has draw calls of its own, and the CPU places its vertices in the space of the skeleton';
         const cases: [MarrowSpine, string, string][] = [
             [create(small, { renderMode: 'batched' }), 'batched', `the option renderMode is "batched". ${shares}`],
             [create(small, { renderMode: 'mesh' }), 'mesh', `the option renderMode is "mesh". ${owns}`],
+            [
+                create(small, { renderMode: 'mesh', skinning: 'gpu' }),
+                'mesh',
+                'the option renderMode is "mesh". It has draw calls of its own, and its vertex shader places the vertices from the bones, except where they deform',
+            ],
             // a clip changes nothing: an asset with a clipping attachment loads the code that clips in a batch
             [create(clipped, { renderMode: 'batched' }), 'batched', `the option renderMode is "batched". ${shares}`],
         ];
@@ -126,7 +131,10 @@ describe('the render mode of a display object', () => {
 
         for (const [spine, value, reason] of cases) {
             spine.update(FRAME);
-            expect((await spine.perf.report())[0]).toEqual({ feature: 'renderMode', value, reason });
+            const rows = await spine.perf.report();
+
+            expect(rows.slice(0, 3).map((entry) => entry.feature)).toEqual(['perf', 'pacing', 'renderMode']);
+            expect(rows[2]).toEqual({ feature: 'renderMode', value, reason });
             expect(spine.stats.renderMode).toBe(value);
         }
         // auto says which side of its limit the skeleton is on
@@ -228,7 +236,7 @@ describe('the render mode of a display object', () => {
         expect(await row(dragon, 'renderMode')).toEqual({
             feature: 'renderMode',
             value: 'mesh',
-            reason: 'the option renderMode is "batched", and a batch of the renderer samples fewer textures than the skeleton has atlas pages. It has draw calls of its own, and the GPU places its vertices',
+            reason: 'the option renderMode is "batched", and a batch of the renderer samples fewer textures than the skeleton has atlas pages. It has draw calls of its own, and the CPU places its vertices in the space of the skeleton',
         });
         expect((await row(dragon, 'pages')).reason).toBe(
             `the atlas has ${dragon.asset.atlas.pages.length} pages and a draw range samples up to 8`,
@@ -255,5 +263,18 @@ describe('the render mode of a display object', () => {
         stage.render();
         expect(stage.counts.draws).toHaveLength(1);
         expect(spine.stats.drawCalls).toBe(1);
+    });
+
+    it('counts the uploads of the bones of a skeleton whose vertex shader places its vertices', async () => {
+        const spine = create(await fixtureAsset('4.2/speedy-ess.skel'), { renderMode: 'mesh', skinning: 'gpu' });
+
+        spine.play('run', { loop: true });
+        for (let frame = 0; frame < 4; frame++) spine.update(FRAME);
+        expect(spine.stats).toMatchObject({ renderMode: 'mesh', boneUploads: 5, positionUploads: 0 });
+        expect(await row(spine, 'uploads')).toEqual({
+            feature: 'uploads',
+            value: '1 bone, 0 position, 0.2 color, 0 uv per update',
+            reason: '0 position, 1 color and 0 uv uploads in 5 updates that drew, 2 rewrites of the index buffers, 5 uploads of the bones',
+        });
     });
 });

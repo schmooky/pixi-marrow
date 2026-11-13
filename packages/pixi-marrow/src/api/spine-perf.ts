@@ -3,6 +3,8 @@ import type { Link } from '../render/attach-work';
 import type { SkeletonView } from '../render/skeleton-view';
 import type { ViewStats } from '../render/stats';
 import type { MarrowAsset } from './asset';
+import type { PacingStatus } from './pacing';
+import type { ResolvedPerf } from './presets';
 import type { PerfEntry } from './report-base';
 
 /**
@@ -15,7 +17,7 @@ export interface PerfMemory {
      * What the asset holds once, however many instances exist. These are the typed arrays of
      * the skeleton model and of the atlas, and the triangles that views share for the outlines.
      * The vertex layout of this instance counts here too: all instances that show the same skin
-     * share it.
+     * share it. So do the baked clips of the asset, with the `bake` setting.
      *
      * Not counted: names, the polygons and rectangles of the outlines, which are plain arrays,
      * and what a pose engine derives from the model.
@@ -52,6 +54,9 @@ export interface PerfOwner {
     readonly engine: PoseEngine;
     readonly stats: ViewStats;
     readonly physics: PhysicsMode;
+    readonly perfSettings: ResolvedPerf;
+    /** Where the pacing of updates stands. A test owner may leave it out. */
+    pacingStatus?(): PacingStatus;
 }
 
 /**

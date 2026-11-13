@@ -21,11 +21,16 @@ const rounded = (values) => values.map((ms) => Math.round(ms * 1e4) / 1e4);
  * The sides of a subject in the A/B mode. `runtime` is the runtime of the page that draws a side
  * and `options` what its display objects are created with. The side `mesh` is ours once more,
  * with the mesh mode asked for by name. It runs in the scene `play`, where the list of
- * milestone M5 asks for it.
+ * milestone M5 asks for it. The side `gpu` is ours in the mesh mode with `skinning: 'gpu'`, where
+ * `--skinning=gpu` asks for it. It runs in every scene.
  *
- * @param config `renderMode` is what ours is asked for, `meshSide` the value of `--mesh`.
+ * The side `baked` is ours with `bake: 'auto'`, with `--bake`.
+ *
+ * @param config `renderMode` is what ours is asked for, `meshSide` the value of `--mesh`, `skinning`
+ * the value of `--skinning`, `idleSide` adds ours with the idle cache on as the side `idle`, and
+ * `bakeSide` is true with `--bake`.
  */
-export function sidesOf(subject, { renderMode, meshSide }) {
+export function sidesOf(subject, { renderMode, meshSide, skinning, idleSide, bakeSide }) {
     const sides = [
         { side: 'ours', runtime: 'ours', options: modeOptions(renderMode) },
         { side: 'official', runtime: 'official', options: {} },
@@ -35,6 +40,11 @@ export function sidesOf(subject, { renderMode, meshSide }) {
     if (wanted && renderMode !== 'mesh' && subject.scene === 'play') {
         sides.push({ side: 'mesh', runtime: 'ours', options: modeOptions('mesh') });
     }
+    if (idleSide)
+        sides.push({ side: 'idle', runtime: 'ours', options: { ...modeOptions(renderMode), idleCache: 'auto' } });
+    if (skinning === 'gpu')
+        sides.push({ side: 'gpu', runtime: 'ours', options: { renderMode: 'mesh', skinning: 'gpu' } });
+    if (bakeSide) sides.push({ side: 'baked', runtime: 'ours', options: { ...modeOptions(renderMode), bake: 'auto' } });
 
     return sides;
 }

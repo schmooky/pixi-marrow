@@ -8,6 +8,7 @@
  *                          [--render-mode=both|mesh|batched] [--strict-rebuilds] [--trust-mode]
  *                          [--strict-clipping] [--self-test] [--verbose] [--shots=4]
  *                          [--out=.shots/render] [--size=512] [--dist=<folder>] [--pixi=8.16]
+ *                          [--skinning=gpu]
  *
  * The rigs are the entries of fixtures/manifest.json that have page images. For each one a few
  * animations play on both sides with the same time steps. Both sides run as they ship and solve
@@ -113,6 +114,15 @@
  *   proof, a frame held back   one side leaves the update of one frame out, as a view would that
  *                              skips work it had to do. Its stale picture must be rejected
  *
+ * The idle cache. The scenes whose name starts with `idle` let ours rest with `idleCache: 'auto'`
+ * until the skeletons are drawn as images, then wake, fade, move and scale them, see
+ * scripts/render/scene-plan-idle.mjs. Every frame is held to `match` against the official
+ * runtime, and to `idle` against ours drawing the same scene live:
+ *
+ *   idle, mesh / batched       ours with the cache against ours without it, in that mode
+ *   idle cache                 the steps at which each instance showed its image. Some must, so
+ *                              that the comparisons above look at images, and some must not
+ *
  * Containers in a skeleton. The scenes `links-play` and `links-rest` attach a Pixi `Graphics` to
  * a slot and let another follow a bone, ours with `attach` and `follow`, the official runtime
  * with `addSlotObject`, while an animation with draw order keys plays and at rest.
@@ -196,6 +206,10 @@
  *                              reference. A difference is a finding about the official runtime
  *                              on that pixi.js and fails nothing
  * The head of a renderer names the versions.
+ * --skinning gives every instance of ours that option, the game check and the restore check
+ * included: `--render-mode=mesh --skinning=gpu` holds the vertex shader that places vertices
+ * from the bones to the rules of the mesh mode. The batched mode ignores the option. The head of
+ * a renderer names it.
  * Without --renderer both run. A renderer the browser does not have is skipped with a line that
  * says so, and fails the check only when it was asked for by name.
  * Runs the installed Google Chrome. CHROME_PATH names another binary and CHROME_ARGS replaces the
@@ -276,6 +290,19 @@ const TOLERANCE = {
     // the only reference there is. The limit is the one of `match`: both modes pass that against
     // the official runtime wherever it can draw.
     own: { max: 4, over1: 0.0005, over8: 0 },
+    // Ours with the idle cache against ours drawing live, in one render mode, and against the
+    // official runtime. The image is drawn on the pixel grid of the target and sampled at the
+    // centers of its texels, so the triangles land on the same pixels. Two things are left. The
+    // image holds every layer of a pixel at 8 bits and is blended over the background once. And it
+    // computes its vertices at other magnitudes, so a pixel whose center lies on the edge of a
+    // triangle within the rounding of 32-bit floats can fall to the other side. On the outline of
+    // a skeleton such a pixel differs by all it shows. The second look cannot help: it moves the
+    // sides by a part of a pixel, which drops the images. So the number of pixels is limited and
+    // the largest difference is not. Measured over 392 frames per Pixi version and renderer: at
+    // most 5 pixels over 1 and 1 pixel over 8 in a frame, the largest 25 against live and 13
+    // against official. The frames before the images show are judged the same way.
+    idle: { max: 255, over1: 0.0001, over8: 0, few1: 8, few8: 2 },
+    idleOfficial: { max: 255, over1: 0.0001, over8: 0, few1: 8, few8: 2 },
     // On a page that runs on another pixi.js: the official runtime on that pixi.js against the
     // official runtime on the pixi.js the package is developed with, the reference. The same
     // code draws both, so the limits are those of `match`. A frame outside of them says that
@@ -291,6 +318,8 @@ const args = parseArgs();
 const wanted = ['webgl', 'webgpu'].includes(args.renderer) ? [args.renderer] : ['webgl', 'webgpu'];
 const outDir = resolve(root, args.out ?? '.shots/render');
 const selfTest = args['self-test'] === 'true';
+/** The `skinning` option of every instance of ours, or null for the default. */
+const skinning = ['cpu', 'gpu', 'auto'].includes(args.skinning) ? args.skinning : null;
 /** What a page draws of ours and how it judges, the same for every rig and scene. */
 const pageOptions = {
     tolerance: TOLERANCE,
@@ -315,7 +344,9 @@ async function runPage(browser, origin, renderer, { official, call, plan, option
     // every address the page asks for: a scene about the lazy mesh mode looks for a chunk among them
     const requested = [];
     // the runtimes load before the renderer is created, so the page is told which ones in its address
-    const query = `renderer=${renderer}&official=${official ?? 'none'}&ours=${selfTest ? 'no' : 'yes'}`;
+    const query =
+        `renderer=${renderer}&official=${official ?? 'none'}&ours=${selfTest ? 'no' : 'yes'}` +
+        (skinning ? `&skinning=${skinning}` : '');
 
     page.on('request', (request) => requested.push(request.url()));
     page.on('pageerror', (error) => errors.push(error.message));
@@ -456,6 +487,8 @@ async function main() {
                     break;
                 }
                 if (!announced) console.log(`check-render: ${describeHead(renderer, state, versions)}`);
+                if (!announced && skinning)
+                    console.log(`check-render: every instance of ours has skinning: '${skinning}'`);
                 // every runtime must run on the pixi.js the head names for it
                 errors.push(...strayPixi(state.pixi, versions));
                 announced = true;
@@ -499,6 +532,7 @@ async function main() {
             renderers: wanted,
             outDir: join(outDir, 'game'),
             only: args.only ?? null,
+            skinning,
         });
     // a context is lost and restored with an extension of WebGL
     if (!selfTest && wanted.includes('webgl'))
@@ -509,6 +543,7 @@ async function main() {
             modes: pageOptions.renderMode === 'both' ? ['batched', 'mesh'] : [pageOptions.renderMode],
             outDir: join(outDir, 'restore'),
             only: args.only ?? null,
+            skinning,
         });
     // the files of AssetPack through a Pixi manifest, drawn on WebGL
     if (!selfTest && wanted.includes('webgl'))

@@ -26,7 +26,8 @@ import { GlProgram, GpuProgram, Shader, type TextureSource, type TextureStyle } 
 
 const range = (count: number): number[] => Array.from({ length: count }, (_, i) => i);
 
-const GL_ROUND = `
+/** The GLSL function that rounds a clip position to the pixels of the target, as Pixi's batch shader does. */
+export const GL_ROUND = `
 vec2 roundPixels(vec2 position, vec2 targetSize) {
     return (floor(((position * 0.5 + 0.5) * targetSize) + 0.5) / targetSize) * 2.0 - 1.0;
 }`;
@@ -91,7 +92,14 @@ function glSample(pages: number): string {
     return `vec4 texel;\n    ${lines.join('\n    ')}`;
 }
 
-function glFragment(dark: boolean, pages: number): string {
+/**
+ * The GLSL fragment stage of a draw: the texel times the light color, or the two color tint of
+ * the official runtime. Both ways to place vertices share it.
+ *
+ * @example
+ * const program = GlProgram.from({ name, vertex, fragment: glFragment(false, 1) });
+ */
+export function glFragment(dark: boolean, pages: number): string {
     const color = dark
         ? 'vec4(((texel.a - 1.0) * vDark.a + 1.0 - texel.rgb) * vDark.rgb + texel.rgb * vLight.rgb, texel.a * vLight.a)'
         : 'texel * vLight';
@@ -155,14 +163,14 @@ const WGSL_ROUND = `fn roundPixels(position: vec2<f32>, targetSize: vec2<f32>) -
     return (floor(((position * 0.5 + 0.5) * targetSize) + 0.5) / targetSize) * 2.0 - 1.0;
 }`;
 
-function wgsl(dark: boolean, pages: number): string {
-    const color = dark
-        ? `vec4<f32>(
-        ((texel.a - 1.0) * varyings.dark.a + 1.0 - texel.rgb) * varyings.dark.rgb + texel.rgb * varyings.light.rgb,
-        texel.a * varyings.light.a,
-    )`
-        : 'texel * varyings.light';
-
+/**
+ * The WGSL head of a draw: the uniforms, a texture and a sampler per page in group 2, the
+ * varyings and the rounding to pixels. `more` is put after the pages.
+ *
+ * @example
+ * const source = `${wgslHead(false, 1, '')}\n@vertex fn mainVertex() -> Varyings { ... }`;
+ */
+export function wgslHead(dark: boolean, pages: number, more: string): string {
     return `${WGSL_UNIFORMS}
 ${range(pages)
     .map(
@@ -171,7 +179,7 @@ ${range(pages)
             `@group(2) @binding(${i * 2 + 1}) var uSampler${i}: sampler;`,
     )
     .join('\n')}
-
+${more}
 struct Varyings {
     @builtin(position) position: vec4<f32>,
     @location(0) uv: vec2<f32>,
@@ -180,7 +188,35 @@ struct Varyings {
     ${pages > 1 ? '@location(3) @interpolate(flat) page: u32,' : ''}
 }
 
-${WGSL_ROUND}
+${WGSL_ROUND}`;
+}
+
+/**
+ * The WGSL fragment stage of a draw: the texel times the light color, or the two color tint of
+ * the official runtime.
+ *
+ * @example
+ * const source = `${head}\n${vertex}\n${wgslFragment(true, 2)}`;
+ */
+export function wgslFragment(dark: boolean, pages: number): string {
+    const color = dark
+        ? `vec4<f32>(
+        ((texel.a - 1.0) * varyings.dark.a + 1.0 - texel.rgb) * varyings.dark.rgb + texel.rgb * varyings.light.rgb,
+        texel.a * varyings.light.a,
+    )`
+        : 'texel * varyings.light';
+
+    return `@fragment
+fn mainFragment(varyings: Varyings) -> @location(0) vec4<f32> {
+    ${wgslSample(pages)}
+
+    return ${color};
+}
+`;
+}
+
+function wgsl(dark: boolean, pages: number): string {
+    return `${wgslHead(dark, pages, '')}
 
 @vertex
 fn mainVertex(
@@ -216,13 +252,7 @@ fn mainVertex(
     return varyings;
 }
 
-@fragment
-fn mainFragment(varyings: Varyings) -> @location(0) vec4<f32> {
-    ${wgslSample(pages)}
-
-    return ${color};
-}
-`;
+${wgslFragment(dark, pages)}`;
 }
 
 /** The view shaders that exist, by the first page they sample, then by all pages and the tint mode. */

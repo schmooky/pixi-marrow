@@ -25,6 +25,10 @@ export const ENTRY_POINTS = [
         holds: '`MarrowDebug`: overlays of bones, attachment shapes, bounding boxes, clipping, paths, points, events and overdraw over a `MarrowSpine`. Draws with the optional peer `pixi-silk`.',
     },
     {
+        specifier: 'pixi-marrow/bake',
+        holds: '`bakeAnimation` and `bakeAnimations`: animations sampled at a fixed rate, at build time in Node or in a game. `encodeBakedClips`, `decodeBakedClips` and `addBakedClips` hand the clips to an asset. No Pixi.',
+    },
+    {
         specifier: 'pixi-marrow/perf',
         holds: '`createProbe`: times the pose, geometry and event work of every update of one `MarrowSpine` and counts what the renderer did. For benchmarks and profiling.',
     },

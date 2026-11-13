@@ -6,7 +6,15 @@
       "project": ["scripts/**/*.mjs"]
     },
     "packages/pixi-marrow": {
-      "entry": ["src/index.ts", "src/core.ts", "src/optimize.ts", "src/perf.ts", "src/debug.ts", "tests/**/*.test.ts"],
+      "entry": [
+        "src/index.ts",
+        "src/core.ts",
+        "src/optimize.ts",
+        "src/perf.ts",
+        "src/debug.ts",
+        "src/bake.ts",
+        "tests/**/*.test.ts"
+      ],
       "project": ["src/**/*.ts", "tests/**/*.ts"],
       "ignoreDependencies": ["spine-pixi-4.2", "spine-pixi-4.3", "pixi-8.16", "pixi-8.21"]
     },

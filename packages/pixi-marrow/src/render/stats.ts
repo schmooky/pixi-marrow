@@ -28,8 +28,10 @@ export interface ViewStats {
     indexRebuilds: number;
     /** How often vertex positions were handed on: uploaded in the mesh mode, written to the batch in the batched mode. */
     positionUploads: number;
-    /** How often vertex colors were handed on. */
+    /** How often vertex colors were handed on. With `skinning: 'gpu'` that is the palette of the slots. */
     colorUploads: number;
+    /** How often bone matrices were uploaded, for a vertex shader that places vertices: `skinning: 'gpu'`. */
+    boneUploads: number;
     /** How often texture coordinates were handed on after the build: when a sequence showed another region. */
     uvUploads: number;
     /**
@@ -97,6 +99,7 @@ export function createViewStats(vertices: number, bufferBytes: number, renderMod
         indexRebuilds: 0,
         positionUploads: 0,
         colorUploads: 0,
+        boneUploads: 0,
         uvUploads: 0,
         indices: 0,
         bufferBytes,

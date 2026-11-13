@@ -15,6 +15,7 @@
  * and another slot of the same bone: the side attaches the object there, so it is drawn at the
  * wrong place in the draw order.
  */
+import { idleCase, noteIdleFrame } from './idle.js';
 import { capture, captureSecond, judge } from './judge.js';
 import { countModes, readMode } from './mode.js';
 import { BACKGROUNDS } from './pixels.js';
@@ -35,12 +36,44 @@ const SCENE_PAIRS = [
     { label: 'scene twice', a: 'twin', b: 'official', kind: 'exact', group: 'sceneTwice' },
     // on a page that runs on another pixi.js: the official runtime there against the reference
     { label: 'official, this pixi.js', a: 'official-here', b: 'official', kind: 'pixi', group: 'scenePixi' },
-    { label: 'mesh', a: 'mesh', b: 'official', kind: 'match', group: 'sceneMesh' },
-    { label: 'batched', a: 'batched', b: 'official', kind: 'match', group: 'sceneBatched' },
-    { label: 'batched and mesh', a: 'batched', b: 'mesh', kind: 'modes', group: 'sceneModes', reference: 'official' },
-    { label: 'batched against mesh', a: 'batched', b: 'mesh', kind: 'own', group: 'sceneOwn', reference: 'mesh' },
+    { label: 'mesh', a: 'mesh', b: 'official', kind: 'match', group: 'sceneMesh', idle: false },
+    { label: 'batched', a: 'batched', b: 'official', kind: 'match', group: 'sceneBatched', idle: false },
+    {
+        label: 'batched and mesh',
+        a: 'batched',
+        b: 'mesh',
+        kind: 'modes',
+        group: 'sceneModes',
+        reference: 'official',
+        idle: false,
+    },
+    {
+        label: 'batched against mesh',
+        a: 'batched',
+        b: 'mesh',
+        kind: 'own',
+        group: 'sceneOwn',
+        reference: 'mesh',
+        idle: false,
+    },
     { label: 'auto', a: 'auto', b: 'official', kind: 'match', group: 'sceneAuto', reference: 'official' },
-    { label: 'auto against mesh', a: 'auto', b: 'mesh', kind: 'own', group: 'sceneAuto', reference: 'mesh' },
+    {
+        label: 'auto against mesh',
+        a: 'auto',
+        b: 'mesh',
+        kind: 'own',
+        group: 'sceneAuto',
+        reference: 'mesh',
+        idle: false,
+    },
+    // A scene of the idle cache: ours with it against the official runtime, and against ours that
+    // draws the same scene live. These get no second look: it moves a side by a part of a pixel,
+    // which drops the images. The pairs with `idle: false` are left out of such a scene. There each
+    // mode is held to itself drawn live, and the modes are compared in the other scenes
+    { label: 'mesh', a: 'mesh', b: 'official', kind: 'idleOfficial', group: 'sceneIdleOfficial', idle: true },
+    { label: 'batched', a: 'batched', b: 'official', kind: 'idleOfficial', group: 'sceneIdleOfficial', idle: true },
+    { label: 'idle, mesh', a: 'mesh', b: 'mesh-live', kind: 'idle', group: 'sceneIdle', idle: true },
+    { label: 'idle, batched', a: 'batched', b: 'batched-live', kind: 'idle', group: 'sceneIdle', idle: true },
     { label: 'proof, official', a: 'wrong', b: 'official', kind: 'proof', rejectedBy: ['match'] },
     { label: 'proof, ours', a: 'mesh-wrong', b: 'official', kind: 'proof', rejectedBy: ['match'] },
     { label: 'proof, ours batched', a: 'batched-wrong', b: 'official', kind: 'proof', rejectedBy: ['match'] },
@@ -100,6 +133,9 @@ function sidesOf(scene, official, ours, run, officialHere = null) {
     if (!ours) return specs;
     if (run.mesh || (run.batched && scene.reference === 'mesh')) add('mesh', ours, 'mesh');
     if (run.batched) add('batched', ours, 'batched');
+    // the idle cache is on for the sides above, and these draw the same scene live
+    if (scene.idle && run.mesh) add('mesh-live', ours, 'mesh', { live: true });
+    if (scene.idle && run.batched) add('batched-live', ours, 'batched', { live: true });
     if (run.auto) add('auto', ours, 'auto', { once: run.mesh || run.batched, picks: Boolean(scene.lazy) });
     if (official && scene.proof && run.mesh) add('mesh-wrong', ours, 'mesh', { wrong: true });
     if (official && scene.proof && run.batched) add('batched-wrong', ours, 'batched', { wrong: true });
@@ -256,6 +292,7 @@ async function compareFrame(ctx, scene, sides, at) {
         });
 
         if (pair.reference && pair.reference !== scene.reference) continue;
+        if (pair.idle !== undefined && pair.idle !== Boolean(scene.idle)) continue;
         // a proof that holds a frame back is wrong at that frame alone
         if (pair.kind === 'proof' && scene.proof?.hold && scene.proof.hold.step !== at.step) continue;
         if (a && b) ctx.report.cases.push(await judge(ctx, at, pair, a, b, again));
@@ -355,7 +392,7 @@ async function lazyCase(scene, sides, lazy) {
 export async function runScene(env, scene, options) {
     const report = { cases: [], notes: [], missing: env.missing };
     // the render texture of ours, or of the official runtime where the tooling proof runs alone
-    const studio = (env.ours ?? env.official).studio(scene.size);
+    const studio = (env.ours ?? env.official).studio(scene.size, scene.antialias === true);
     const ctx = {
         plan: { size: scene.size, additive: scene.additive, rig: scene.id },
         options,
@@ -376,6 +413,8 @@ export async function runScene(env, scene, options) {
     // A scene about the lazy mesh mode: per frame how many instances drew in which mode, and what
     // the report said about the ones that ask for the mesh mode
     const lazy = { frames: [], said: [] };
+    // a scene of the idle cache: per side of ours the instances that showed their image, frame by frame
+    const idle = {};
     let sides = [];
 
     ctx.sampleLabel = env.ours ? (asked.run.mesh ? 'mesh' : 'batched') : 'scene twice';
@@ -417,6 +456,7 @@ export async function runScene(env, scene, options) {
             if (scene.captures.includes(step)) {
                 await compareFrame(ctx, scene, sides, at(step));
             }
+            if (scene.idle) noteIdleFrame(sides, idle, step);
             // the side with the default options has said what it picks, and has drawn it once
             for (const side of sides.filter((entry) => entry.once)) destroySide(side);
             sides = sides.filter((entry) => !entry.once);
@@ -425,6 +465,7 @@ export async function runScene(env, scene, options) {
             const rows = await rowsCase(scene, sides);
 
             if (scene.lazy) report.cases.push(await lazyCase(scene, sides, lazy));
+            if (scene.idle) report.cases.push(idleCase(scene, idle));
             if (rows) report.cases.push(rows);
             report.cases.push(...countCases(scene, built, options, studio.countsBuilds));
         }

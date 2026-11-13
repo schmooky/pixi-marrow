@@ -1,10 +1,11 @@
+import type { PoseSource } from '../pose/engine';
 import { attachCodeState } from '../render/attach-code';
 import type { Link } from '../render/attach-work';
 import { inspectView } from '../render/inspect';
 import type { SkeletonView } from '../render/skeleton-view';
 import { sharedBytes, textureBytes } from './memory';
 import { buildReport } from './report';
-import type { PerfEntry } from './report-base';
+import type { BakeReading, PerfEntry } from './report-base';
 import type { PerfMemory, PerfOwner } from './spine-perf';
 
 /*
@@ -12,6 +13,24 @@ import type { PerfMemory, PerfOwner } from './spine-perf';
  * import, and nothing else imports it or the modules it brings: the rows of the report, the byte
  * counts and the code that describes a view. An app that never asks does not load them.
  */
+
+/** The pacing of an owner that has none: every frame, on the screen. */
+const NO_PACING = {
+    rate: 'display',
+    offscreen: 'update',
+    hidden: false,
+    size: Number.POSITIVE_INFINITY,
+    physicsOff: false,
+} as const;
+/** What the source of baked playback says of itself, read by shape: its code is a chunk of its own. */
+function readBake(source: PoseSource | null): BakeReading | null {
+    if (source === null || !('baked' in source && 'unbaked' in source && 'last' in source && 'bytes' in source)) {
+        return null;
+    }
+    const { baked, unbaked, last, bytes } = source;
+
+    return { baked: Number(baked), unbaked: Number(unbaked), last: String(last), bytes: Number(bytes) };
+}
 
 /**
  * The rows of the perf report of a display object, read from it as it is now.
@@ -37,6 +56,9 @@ export function readReport(owner: PerfOwner, view: SkeletonView, links: readonly
         physics,
         // the engine runs one update in mode reset, then the mode of the display object returns
         resetPending: engine.physics !== physics,
+        perf: owner.perfSettings,
+        pacing: owner.pacingStatus?.() ?? NO_PACING,
+        bake: readBake(engine.source),
     });
 }
 
@@ -53,7 +75,9 @@ export function readMemory(owner: PerfOwner, view: SkeletonView): PerfMemory {
     const gpuTextures = textureBytes(asset.textures);
 
     return {
-        shared: sharedBytes(asset.model, asset.atlas, asset.outlines) + layoutBytes,
+        // the baked clips of the asset, which its instances share
+        shared:
+            sharedBytes(asset.model, asset.atlas, asset.outlines) + layoutBytes + (readBake(engine.source)?.bytes ?? 0),
         instance: engine.bytes + arrayBytes,
         gpu: gpuBytes + gpuTextures,
         gpuBuffers: gpuBytes,

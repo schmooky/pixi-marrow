@@ -210,6 +210,45 @@ async function describeOurs(env, objects, scale) {
     };
 }
 
+/** Frames that a block of ours with the idle cache draws at most before its images show. */
+const IMAGE_FRAMES = 300;
+
+/**
+ * Draws frames until every object shows the image of its idle cache, or until `IMAGE_FRAMES`.
+ * The code of the cache is a chunk that loads on demand, and a chunk arrives in a turn of the
+ * event loop. On WebGL a frame of the bench waits for the GPU without one, so each frame here
+ * gives the page a turn, as the frames of a game do.
+ */
+async function untilImages(env, objects) {
+    for (let frame = 0; frame < IMAGE_FRAMES; frame++) {
+        if (describeIdle(objects)?.shown === objects.length) return;
+        for (const object of objects) object.update(DT);
+        env.renderer.render(env.stage);
+        await env.finish();
+        await new Promise((next) => setTimeout(next, 0));
+    }
+}
+
+/**
+ * The images of the idle cache of some objects of ours: how many show one, and the bytes of their
+ * textures, 4 per pixel. Null where no object shows an image.
+ */
+function describeIdle(objects) {
+    let shown = 0;
+    let bytes = 0;
+
+    for (const object of objects) {
+        const sprite = object.children.find((child) => child.label === 'marrow-idle' && child.visible);
+        const source = sprite?.texture.source;
+
+        if (!source) continue;
+        shown++;
+        bytes += source.pixelWidth * source.pixelHeight * 4;
+    }
+
+    return shown > 0 ? { shown, bytes } : null;
+}
+
 /**
  * One block: creates the instances of one side in the scene of the job, warms up, times the
  * frames and destroys the instances. It reads no memory: the stage still holds what the block
@@ -231,18 +270,18 @@ async function runBlock(env, job) {
         scene = buildScene(env, job);
         const { objects, tick } = scene;
 
+        if (job.options?.idleCache === 'auto') await untilImages(env, objects);
         await warmUp(env, objects, job.warmup, tick);
         // the garbage of the warm-up goes before the clock starts. A few frames bring the loop back to its pace
         await settle();
         await warmUp(env, objects, 5, tick);
         const timed = await timeFrames(env, objects, job.frames, job.group ?? 1, tick);
+        // the proof draws the stage smaller, which takes every image of the idle cache away
+        const idle = job.runtime === 'ours' ? describeIdle(objects) : null;
         const covered = await proveDrawn(env);
+        const ours = job.runtime === 'ours' ? await describeOurs(env, objects, scene.scale) : null;
 
-        return {
-            ...timed,
-            covered,
-            ours: job.runtime === 'ours' ? await describeOurs(env, objects, scene.scale) : null,
-        };
+        return { ...timed, covered, ours: ours && { ...ours, idle } };
     } catch (error) {
         return { error: message(error) };
     } finally {

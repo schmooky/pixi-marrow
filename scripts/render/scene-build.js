@@ -72,6 +72,8 @@ async function makeInstance(scene, side, node) {
         mode: modeOf(side, node),
         // a node can ask for the mesh mode without the load that waits for its code
         preload: node.preload,
+        // the idle cache of ours, except on a side that draws the same scene live to compare with
+        idle: node.idle === true && !side.live,
     });
 
     side.instances.push(instance);
@@ -130,7 +132,7 @@ export async function buildSide(env, scene, spec) {
         ...spec,
         PIXI,
         // the render texture the side is drawn into, on the renderer of its runtime
-        studio: spec.runtime.studio(scene.size),
+        studio: spec.runtime.studio(scene.size, scene.antialias === true),
         root: stage,
         stage,
         instances: [],

@@ -9,8 +9,10 @@ export interface VertexBuffers {
     readonly positions: Buffer;
     /** u, v and four flag bytes per vertex. */
     readonly statics: Buffer;
-    /** The light color per vertex, and with dark colors the dark color after it. */
-    readonly colors: Buffer;
+    /** The light color per vertex, and with dark colors the dark color after it. None where a palette holds the colors. */
+    readonly colors?: Buffer | undefined;
+    /** Where the vertex shader finds the influences and the slot of each vertex, see `skin-layout.ts`. */
+    readonly skin?: Buffer | undefined;
 }
 
 /**
@@ -33,7 +35,7 @@ export class RangeMesh extends Mesh<MeasuredGeometry, Shader> {
  * The Pixi mesh of one draw range and its index buffer: a geometry on the vertex buffers of the
  * view, with indices of its own.
  *
- * @param dark Whether the color buffer holds dark colors.
+ * @param dark Whether the color buffer holds dark colors. Without a color buffer it says nothing.
  * @param measure The bounds Pixi gets for the mesh when it culls or measures.
  * @param label The label of the mesh.
  *
@@ -54,6 +56,7 @@ export function createRangeMesh(
         usage: BufferUsage.INDEX | BufferUsage.COPY_DST,
         shrinkToFit: false,
     });
+    const { colors, skin } = buffers;
     const colorStride = dark ? 8 : 4;
     const staticStride = STATIC_STRIDE * 4;
     const geometry = new MeasuredGeometry(
@@ -62,9 +65,12 @@ export function createRangeMesh(
                 aPosition: { buffer: buffers.positions, format: 'float32x2', stride: 8, offset: 0 },
                 aUV: { buffer: buffers.statics, format: 'float32x2', stride: staticStride, offset: 0 },
                 aFlags: { buffer: buffers.statics, format: 'unorm8x4', stride: staticStride, offset: 8 },
-                aColor: { buffer: buffers.colors, format: 'unorm8x4', stride: colorStride, offset: 0 },
-                ...(dark
-                    ? { aDark: { buffer: buffers.colors, format: 'unorm8x4', stride: colorStride, offset: 4 } }
+                ...(skin === undefined ? {} : { aSkin: { buffer: skin, format: 'uint32x2', stride: 8, offset: 0 } }),
+                ...(colors === undefined
+                    ? {}
+                    : { aColor: { buffer: colors, format: 'unorm8x4', stride: colorStride, offset: 0 } }),
+                ...(colors !== undefined && dark
+                    ? { aDark: { buffer: colors, format: 'unorm8x4', stride: colorStride, offset: 4 } }
                     : {}),
             },
             indexBuffer: buffer,

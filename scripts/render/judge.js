@@ -80,6 +80,9 @@ export const PAIRS = [
         group: 'auto',
         auto: 'batched',
     },
+    // baked playback, at the sample times of a clip, under the rules of each mode
+    { label: 'ours baked', a: 'ours-baked', b: 'official', kind: 'match', group: 'matchBaked' },
+    { label: 'ours batched baked', a: 'ours-batched-baked', b: 'official', kind: 'match', group: 'matchBakedBatched' },
     { label: 'proof, shifted 1 px', a: 'shift', b: 'official', kind: 'proof', rejectedBy: ['match'] },
     { label: 'proof, shifted 0.25 px', a: 'nudge', b: 'official', kind: 'proof', rejectedBy: ['match'] },
     // a displacement is what `formats` allows, so only the changed slots are a proof for it
@@ -109,7 +112,7 @@ export const PAIRS = [
 export const SECOND_PLACEMENT = { x: 0.37 / 8, y: 0.61 / 8 };
 
 /** The kinds whose pictures are ours against the official runtime. */
-const AGAINST_OFFICIAL = ['match', 'polygonsOfficial'];
+const AGAINST_OFFICIAL = ['match', 'polygonsOfficial', 'idleOfficial'];
 /**
  * The kinds that get a second look. `own` is ours in the batched mode judged against ours in the
  * mesh mode, in a scene the official runtime cannot draw. `modes` is the same pair for a rig, once
