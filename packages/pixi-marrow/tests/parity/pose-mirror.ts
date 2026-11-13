@@ -1,5 +1,6 @@
 import {
     type AttachmentData,
+    type AttachmentRef,
     LOCAL_STRIDE,
     nextVersion,
     type PoseEngine,
@@ -107,6 +108,14 @@ function mirror(state: PoseState, pose: OfficialPose, resolve: (slot: number) =>
 export function mirrorEngine(model: SkeletonModel, driver: OfficialDriver, tamper: Tamper = () => {}): PoseEngine {
     const state = createPoseState(model);
     const lookup = createAttachmentLookup(model);
+    // the first skin entry of every attachment object, to tell the official side which one to show
+    const refs = new Map<AttachmentData, AttachmentRef>();
+
+    model.skins.forEach((skin, index) => {
+        for (const { slot, name, attachment } of skin.attachments) {
+            if (!refs.has(attachment)) refs.set(attachment, { skin: index, slot, name });
+        }
+    });
     const sync = (call: string): void => {
         const before = {
             boneStamps: state.boneStamps.slice(),
@@ -150,6 +159,8 @@ export function mirrorEngine(model: SkeletonModel, driver: OfficialDriver, tampe
     return {
         state,
         bytes: 0,
+        // the mirror keeps one pose of the slots: what the official skeleton draws
+        slotPose: state,
         get timeScale() {
             return driver.timeScale;
         },
@@ -177,6 +188,18 @@ export function mirrorEngine(model: SkeletonModel, driver: OfficialDriver, tampe
         clearTrack: (track) => driver.clearTrack(track),
         clearTracks: () => driver.clearTracks(),
         setSkin: (skin) => posing('setSkin', () => driver.setSkin(skin)),
+        setSkins: (skins) => posing('setSkins', () => driver.setSkins(skins)),
+        get skins() {
+            return driver.skins;
+        },
+        setAttachment(slot, attachment) {
+            const ref = attachment === null ? null : refs.get(attachment);
+
+            if (ref === undefined) throw new Error('The mirror shows attachments of the model only');
+            posing('setAttachment', () => driver.writeAttachment(slot, ref));
+        },
+        setColor: (slot, r, g, b, a) => posing('setColor', () => driver.setColor(slot, r, g, b, a)),
+        setDarkColor: (slot, r, g, b) => posing('setDarkColor', () => driver.setDarkColor(slot, r, g, b)),
         setupPose: () => posing('setupPose', () => driver.setupPose()),
         setupPoseBones: () => posing('setupPoseBones', () => driver.setupPoseBones()),
         setupPoseSlots: () => posing('setupPoseSlots', () => driver.setupPoseSlots()),

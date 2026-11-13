@@ -42,6 +42,8 @@ export declare class Bone<N extends MarrowNames = MarrowNames> {
   get worldRotation(): number;
   get active(): boolean;
   worldMatrix(out?: Matrix): Matrix;
+  localToWorld(point: PointData, out?: Point): Point;
+  worldToLocal(point: PointData, out?: Point): Point;
   private read;
   private write;
 }
@@ -155,8 +157,6 @@ export declare class MarrowSpine<N extends MarrowNames = MarrowNames> extends Sp
   set updateProbe(probe: UpdateProbe | null);
   get renderMode(): NonNullable<MarrowSpineOptions["renderMode"]>;
   set renderMode(mode: NonNullable<MarrowSpineOptions["renderMode"]>);
-  get skin(): N["skins"] | null;
-  set skin(name: N["skins"] | null);
   get timeScale(): number;
   set timeScale(value: number);
   get defaultMix(): number;
@@ -245,6 +245,7 @@ export interface RegionOutline {
   opaque: PageRect | null;
 }
 export declare function registerMarrowAssets(): void;
+export type SetupPosePart = "all" | "bones" | "slots";
 export interface SkeletonInfo {
   version: SpineVersion;
   editorVersion: string;
@@ -260,11 +261,33 @@ export interface SkeletonInfo {
   counts: SkeletonCounts;
   features: SkeletonFeature[];
 }
+export declare class Slot<N extends MarrowNames = MarrowNames> {
+  readonly name: N["slots"];
+  readonly bone: N["bones"];
+  private readonly engine;
+  private readonly index;
+  constructor(engine: PoseEngine, index: number, name: N["slots"]);
+  get attachment(): string | null;
+  set attachment(name: string | null);
+  get tint(): number;
+  set tint(value: number);
+  get alpha(): number;
+  set alpha(value: number);
+  get darkTint(): number | null;
+  set darkTint(value: number | null);
+}
 export declare abstract class SpineLinks<N extends MarrowNames = MarrowNames> extends Container {
   protected links: Links | undefined;
   private linkParts;
   private readonly handles;
+  private readonly slotHandles;
   bone(name: N["bones"]): Bone<N>;
+  slot(name: N["slots"]): Slot<N>;
+  get skin(): N["skins"] | null;
+  set skin(name: N["skins"] | null);
+  get skins(): N["skins"][];
+  set skins(names: readonly N["skins"][]);
+  setupPose(part?: SetupPosePart): void;
   follow(bone: N["bones"], container: Container): void;
   unfollow(container: Container): void;
   attach(slot: N["slots"], container: Container, options?: AttachOptions): void;
@@ -377,7 +400,13 @@ export interface AtlasRegion {
 export type AttachmentData = RegionAttachmentData | MeshAttachmentData | BoundingBoxAttachmentData | PathAttachmentData | PointAttachmentData | ClippingAttachmentData;
 export interface AttachmentLookup {
   readonly defaultSkin: number;
+  readonly skinCount: number;
+  skin(index: number): SkinData | undefined;
+  parts(index: number): readonly number[];
+  add(key: string, parts: readonly number[], make: () => SkinData): number;
+  drop(index: number): void;
   get(skin: number, slot: number, name: string): AttachmentData | undefined;
+  nameOf(skin: number, slot: number, attachment: AttachmentData): string | undefined;
   find(activeSkin: number, slot: number, name: string): AttachmentData | undefined;
   resolve(ref: AttachmentRef): AttachmentData | undefined;
 }
@@ -561,6 +590,12 @@ export interface PoseEngine {
   clearTrack(track: number): void;
   clearTracks(): void;
   setSkin(skin: number): void;
+  setSkins(skins: readonly number[]): void;
+  readonly skins: readonly number[];
+  readonly slotPose: SlotPose;
+  setAttachment(slot: number, attachment: AttachmentData | null): void;
+  setColor(slot: number, r: number, g: number, b: number, a: number): void;
+  setDarkColor(slot: number, r: number, g: number, b: number): void;
   setupPose(): void;
   setupPoseBones(): void;
   setupPoseSlots(): void;
@@ -708,6 +743,11 @@ export interface SliderConstraintData extends ConstraintBase {
   scale: number;
   max: number;
   local: boolean;
+}
+export interface SlotPose {
+  readonly colors: Float64Array;
+  readonly darkColors: Float64Array;
+  readonly attachments: readonly (AttachmentData | null)[];
 }
 export interface SlotTable {
   count: number;

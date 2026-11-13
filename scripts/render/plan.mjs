@@ -164,8 +164,10 @@ export async function planRigs({ root, size, animations, only, pkg = join(root, 
         const physics = info.features.includes('physics');
         const played = sliderFeatures(model, info.animations);
         const captures = physics ? [...CAPTURES, LATE_CAPTURE] : CAPTURES;
-        const sequences = skins.flatMap((skin, skinIndex) =>
-            // the second skin plays the first animation only
+        // with two skins, both at once too: the second wins where both store an attachment under one name
+        const worn = skins.length === 2 ? [...skins, [...skins]] : skins;
+        const sequences = worn.flatMap((skin, skinIndex) =>
+            // the second skin and the combined one play the first animation only
             (skinIndex === 0 ? chosen : chosen.slice(0, 1)).map((animation) => ({
                 skin,
                 animation: animation.name,

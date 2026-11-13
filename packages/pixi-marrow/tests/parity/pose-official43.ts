@@ -12,6 +12,7 @@ import {
     SkeletonBinary,
     type SkeletonData,
     SkeletonJson,
+    Skin,
     SliderData,
     Texture,
     TextureAtlas,
@@ -21,7 +22,7 @@ import {
 import type { AttachmentRef, PhysicsMode, TrackField } from '../../src/core';
 import { attachmentRefs, eventKey, indexer, skinEntries, timelineKind } from './model-shared';
 import type { RigFiles } from './official';
-import { describeAnimation, describeBones } from './pose-info';
+import { describeAnimation, describeBones, describeSlots } from './pose-info';
 import {
     animationIndexer,
     COMMON_FLAGS,
@@ -40,6 +41,7 @@ import {
     writeWorld,
     yDownKeeper,
 } from './pose-shared';
+import { slotWrites } from './pose-slot-writes';
 
 /** Stands in for a GPU texture. Posing needs page sizes only. */
 class FakeTexture extends Texture {
@@ -171,7 +173,12 @@ function createDriver(shared: Shared): OfficialDriver {
         },
         clearTrack: (track) => state.clearTrack(track),
         clearTracks: () => state.clearTracks(),
-        setSkin: (index) => skeleton.setSkin(data.skins[index] ?? null),
+        ...slotWrites({
+            skins: data.skins,
+            makeSkin: (name) => new Skin(name),
+            setSkin: (skin) => skeleton.setSkin(skin),
+            slotPose: (slot) => skeleton.slots[slot]?.pose,
+        }),
         setupPose: () => skeleton.setupPose(),
         setupPoseBones: () => skeleton.setupPoseBones(),
         setupPoseSlots: () => skeleton.setupPoseSlots(),
@@ -241,11 +248,12 @@ function readBy(constraint: unknown): (BoneData | null)[] {
 /** Loads a 4.3 skeleton for posing with the official 4.3 core. */
 export function loadPose43(files: RigFiles): OfficialPoseRig {
     const data = readData43(files);
+    const entries = data.skins.map((skin) => skinEntries(skin.attachments));
     const shared: Shared = {
         data,
         animationIndex: animationIndexer(data.animations),
         eventIndex: indexer(data.events, 'event'),
-        ref: cachedRefs(attachmentRefs(data.skins.map((skin) => skinEntries(skin.attachments)))),
+        ref: cachedRefs(attachmentRefs(entries)),
     };
 
     return {
@@ -257,6 +265,10 @@ export function loadPose43(files: RigFiles): OfficialPoseRig {
             animations: data.animations.map((animation) => describeAnimation(animation, timelineKind)),
             physics: data.constraints.filter((constraint: unknown) => constraint instanceof PhysicsConstraintData)
                 .length,
+            ...describeSlots(
+                entries,
+                data.slots.map((slot) => slot.setupPose),
+            ),
             sliders: data.constraints.filter((constraint: unknown) => constraint instanceof SliderData).length,
             ...describeBones(data.bones, data.constraints.flatMap(writtenBy(data)), data.constraints.flatMap(readBy)),
         },

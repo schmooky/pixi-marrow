@@ -40,7 +40,7 @@ const UNIFORM_SLACK = 1024;
  * are in the root: 29 kB. The support for Pixi `Assets` added 0.2 kB to a game that does not
  * register it: 30 kB.
  */
-const SIZE_LIMIT = 30 * 1024;
+const SIZE_LIMIT = 31 * 1024;
 /** The entry of ci/size-baseline.json that the limit is for. */
 const SIZE_ENTRY = 'root (MarrowSpine)';
 

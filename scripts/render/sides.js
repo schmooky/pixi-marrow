@@ -82,7 +82,13 @@ export function officialSide(PIXI, lib) {
                 root,
                 place: (placement) => place(spine, placement),
                 setSkin(name) {
-                    spine.skeleton.setSkinByName(name);
+                    if (Array.isArray(name)) {
+                        // several skins at once: an empty skin that `addSkin` fills with each, as code with the official runtime does it
+                        const skin = new lib.Skin('combined');
+
+                        for (const each of name) skin.addSkin(spine.skeleton.data.findSkin(each));
+                        spine.skeleton.setSkin(skin);
+                    } else spine.skeleton.setSkinByName(name);
                     if (spine.skeleton.setupPoseSlots) spine.skeleton.setupPoseSlots();
                     else spine.skeleton.setSlotsToSetupPose();
                 },
@@ -256,7 +262,8 @@ export function oursSide(PIXI, lib) {
                 mode: () => readMode(spine),
                 place: (placement) => place(spine, placement),
                 setSkin(name) {
-                    spine.skin = name;
+                    if (Array.isArray(name)) spine.skins = name;
+                    else spine.skin = name;
                 },
                 play: (name, loop = true) => spine.play(name, { loop, track: 0 }),
                 /** Asks for another render mode at run time: `auto`, `mesh` or `batched`. */

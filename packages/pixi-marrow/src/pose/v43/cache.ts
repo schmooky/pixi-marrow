@@ -30,7 +30,7 @@ function updateActive(pose: Pose43): void {
     const { active } = state;
     const { sorted, wasActive } = pose.rig.solver.scratch;
     const { parents, skinRequired, count } = pose.rig.model.bones;
-    const skin = pose.rig.model.skins[state.skin];
+    const skin = pose.rig.lookup.skin(state.skin);
 
     wasActive.set(active);
     for (let bone = 0; bone < count; bone++) active[bone] = skinRequired[bone] === 1 ? 0 : 1;
@@ -155,7 +155,7 @@ function sortPathAttachment(pose: Pose43, plan: PathPlan, attachment: Attachment
 
 /** The official `PathConstraint.sortPathSlot`: every attachment a skin has for the slot of the constraint. */
 function sortPathSlot(pose: Pose43, plan: PathPlan, skin: number): void {
-    for (const entry of pose.rig.model.skins[skin]?.attachments ?? []) {
+    for (const entry of pose.rig.lookup.skin(skin)?.attachments ?? []) {
         if (entry.slot === plan.slot) sortPathAttachment(pose, plan, entry.attachment);
     }
 }
@@ -258,7 +258,7 @@ function sortConstraint(pose: Pose43, plan: Plan43): void {
 function sortConstraints(pose: Pose43): void {
     const { plans } = pose.rig.solver;
     const { active } = pose.solve;
-    const skin = pose.rig.model.skins[pose.state.skin];
+    const skin = pose.rig.lookup.skin(pose.state.skin);
 
     for (let i = 0; i < plans.length; i++) {
         const plan = plans[i];

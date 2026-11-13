@@ -1,6 +1,6 @@
 import { MarrowError } from '../../base/errors';
 import type { ConstraintData, PathConstraintData, PhysicsConstraintData } from '../../model/constraints';
-import type { SkeletonModel } from '../../model/model';
+import type { SkeletonModel, SkinData } from '../../model/model';
 
 /** Constraint kind code: an IK constraint. */
 export const C_IK = 0;
@@ -211,23 +211,29 @@ function addWeightBones(weights: Int16Array, boneCount: number, found: Set<numbe
 }
 
 /**
- * Per skin, the bones the path attachments of a slot are weighted to, or the bone of the slot for
- * a path without weights.
+ * The bones the path attachments of a slot in one skin are weighted to, or the bone of the slot
+ * for a path without weights.
+ *
+ * @example
+ * const bones = pathBonesOfSkin(skin, constraint.target, constraint.targetBone, model.bones.count);
  */
+export function pathBonesOfSkin(skin: SkinData, slot: number, slotBone: number, boneCount: number): Int16Array {
+    const found = new Set<number>();
+
+    for (const entry of skin.attachments) {
+        if (entry.slot !== slot || entry.attachment.type !== 'path') continue;
+        const weights = entry.attachment.bones;
+
+        if (weights === null) found.add(slotBone);
+        else addWeightBones(weights, boneCount, found);
+    }
+
+    return Int16Array.from(found);
+}
+
+/** Per skin of the model, {@link pathBonesOfSkin}. */
 function pathBonesOf(model: SkeletonModel, slot: number, slotBone: number): Int16Array[] {
-    return model.skins.map((skin) => {
-        const found = new Set<number>();
-
-        for (const entry of skin.attachments) {
-            if (entry.slot !== slot || entry.attachment.type !== 'path') continue;
-            const weights = entry.attachment.bones;
-
-            if (weights === null) found.add(slotBone);
-            else addWeightBones(weights, model.bones.count, found);
-        }
-
-        return Int16Array.from(found);
-    });
+    return model.skins.map((skin) => pathBonesOfSkin(skin, slot, slotBone, model.bones.count));
 }
 
 interface Parts {

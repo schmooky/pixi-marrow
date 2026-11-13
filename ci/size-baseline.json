@@ -1,12 +1,12 @@
 {
   "everything": {
-    "gzip": 31056
+    "gzip": 32313
   },
   "root (MarrowSpine)": {
-    "gzip": 29884
+    "gzip": 31108
   },
   "core (everything)": {
-    "gzip": 5892
+    "gzip": 6138
   },
   "core (sniffSkeleton)": {
     "gzip": 806

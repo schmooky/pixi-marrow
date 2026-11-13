@@ -65,7 +65,7 @@ export function setSlotsToSetupPose(rig: Rig, pose: PoseState, solver: Solver): 
 
 /** The official `Skin.attachAll`: slots that show an attachment of the old skin get the one the new skin has under that name. */
 function attachAll(rig: Rig, pose: PoseState, newSkin: number, oldSkin: number): void {
-    const entries = rig.model.skins[oldSkin]?.attachments ?? [];
+    const entries = rig.lookup.skin(oldSkin)?.attachments ?? [];
     let done = -1;
 
     // entries are sorted by slot. The first match of a slot wins, as in the official loop.
@@ -83,11 +83,12 @@ function attachAll(rig: Rig, pose: PoseState, newSkin: number, oldSkin: number):
  * which decides the bones and constraints that are active.
  */
 export function setSkin(rig: Rig, pose: PoseState, solver: Solver, skin: number): void {
-    const { skins, slots } = rig.model;
+    const { slots } = rig.model;
+    const count = rig.lookup.skinCount;
 
-    if (!Number.isInteger(skin) || skin < -1 || skin >= skins.length) {
-        throw new MarrowError('invalid-data', `The skeleton has no skin ${skin}. It has ${skins.length} skins.`, {
-            fix: 'Pass an index into the skin list of the model, or -1 for no skin.',
+    if (!Number.isInteger(skin) || skin < -1 || skin >= count || (skin >= 0 && rig.lookup.skin(skin) === undefined)) {
+        throw new MarrowError('invalid-data', `The skeleton has no skin ${skin}. It has ${count} skins.`, {
+            fix: 'Pass an index into the skin list of the model, one that combineSkins made, or -1 for no skin.',
         });
     }
     if (skin === pose.skin) return;

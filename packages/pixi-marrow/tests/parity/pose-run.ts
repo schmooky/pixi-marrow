@@ -32,6 +32,8 @@ export interface Subject {
     forces(windX: number, windY: number, gravityX: number, gravityY: number): void;
     /** Writes one field of the local pose of a bone from outside the engine, between two updates. */
     writeBone(bone: number, field: BoneField, value: number): void;
+    /** Shows the attachment a ref points at in a slot, or none, from outside the engine, between two updates. */
+    writeAttachment(slot: number, ref: AttachmentRef | null): void;
     /** The pose, in the same shape on both sides. Attachments are names, so they compare by identity. */
     read(): Record<string, unknown>;
     /**
@@ -52,6 +54,7 @@ export function officialSubject(driver: OfficialDriver, label: (ref: AttachmentR
         yDown: (value) => driver.yDown(value),
         forces: (windX, windY, gravityX, gravityY) => driver.forces(windX, windY, gravityX, gravityY),
         writeBone: (bone, field, value) => driver.writeBone(bone, field, value),
+        writeAttachment: (slot, ref) => driver.writeAttachment(slot, ref),
         read() {
             const pose = driver.read();
 
@@ -73,6 +76,7 @@ export function engineSubject(engine: PoseEngine, label: (attachment: Attachment
     const world = new Float64Array(state.world.length);
     const darkColors = new Float64Array(state.darkColors.length);
     const watch = stampWatch(state);
+    const lookup = createAttachmentLookup(state.model);
 
     return {
         driver: engine,
@@ -90,6 +94,12 @@ export function engineSubject(engine: PoseEngine, label: (attachment: Attachment
             // the mark the doc of `version` asks of code that writes an array. The local pose has no
             // stamp, and no world transform has changed yet, so the version is all there is to raise.
             state.version = nextVersion(state.version);
+        },
+        writeAttachment(slot, ref) {
+            const attachment = ref === null ? null : lookup.get(ref.skin, ref.slot, ref.name);
+
+            if (attachment === undefined) throw new Error(`The model has no attachment ${JSON.stringify(ref)}`);
+            engine.setAttachment(slot, attachment);
         },
         read() {
             world.set(state.world);
@@ -245,6 +255,18 @@ function call(subject: Subject, op: ScriptOp, entries: TrackEntry[]): TrackEntry
             break;
         case 'skin':
             driver.setSkin(op.skin);
+            break;
+        case 'skins':
+            driver.setSkins(op.skins);
+            break;
+        case 'slotAttachment':
+            subject.writeAttachment(op.slot, op.ref);
+            break;
+        case 'slotColor':
+            driver.setColor(op.slot, op.r, op.g, op.b, op.a);
+            break;
+        case 'slotDark':
+            driver.setDarkColor(op.slot, op.r, op.g, op.b);
             break;
         case 'setupPose':
             driver.setupPose();

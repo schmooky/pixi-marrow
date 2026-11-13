@@ -9,6 +9,7 @@ import {
     SkeletonBinary,
     type SkeletonData,
     SkeletonJson,
+    Skin,
     Texture,
     TextureAtlas,
     type TrackEntry,
@@ -16,7 +17,7 @@ import {
 import type { AttachmentRef, PhysicsMode, TrackField } from '../../src/core';
 import { attachmentRefs, eventKey, indexer, skinEntries, timelineKind } from './model-shared';
 import type { RigFiles } from './official';
-import { describeAnimation, describeBones } from './pose-info';
+import { describeAnimation, describeBones, describeSlots } from './pose-info';
 import {
     animationIndexer,
     COMMON_FLAGS,
@@ -35,6 +36,7 @@ import {
     writeWorld,
     yDownKeeper,
 } from './pose-shared';
+import { slotWrites } from './pose-slot-writes';
 
 /** Stands in for a GPU texture. Posing needs page sizes only. */
 class FakeTexture extends Texture {
@@ -166,7 +168,12 @@ function createDriver(shared: Shared): OfficialDriver {
         },
         clearTrack: (track) => state.clearTrack(track),
         clearTracks: () => state.clearTracks(),
-        setSkin: (index) => skeleton.setSkin(data.skins[index] ?? null),
+        ...slotWrites({
+            skins: data.skins,
+            makeSkin: (name) => new Skin(name),
+            setSkin: (skin) => skeleton.setSkin(skin),
+            slotPose: (slot) => skeleton.slots[slot],
+        }),
         setupPose: () => skeleton.setToSetupPose(),
         setupPoseBones: () => skeleton.setBonesToSetupPose(),
         setupPoseSlots: () => skeleton.setSlotsToSetupPose(),
@@ -210,11 +217,12 @@ function createDriver(shared: Shared): OfficialDriver {
 /** Loads a 4.2 skeleton for posing with the official 4.2 core. */
 export function loadPose42(files: RigFiles): OfficialPoseRig {
     const data = readData(files);
+    const entries = data.skins.map((skin) => skinEntries(skin.attachments));
     const shared: Shared = {
         data,
         animationIndex: animationIndexer(data.animations),
         eventIndex: indexer(data.events, 'event'),
-        ref: cachedRefs(attachmentRefs(data.skins.map((skin) => skinEntries(skin.attachments)))),
+        ref: cachedRefs(attachmentRefs(entries)),
     };
 
     return {
@@ -225,6 +233,7 @@ export function loadPose42(files: RigFiles): OfficialPoseRig {
             skins: data.skins.length,
             animations: data.animations.map((animation) => describeAnimation(animation, timelineKind)),
             physics: data.physicsConstraints.length,
+            ...describeSlots(entries, data.slots),
             sliders: 0,
             ...describeBones(
                 data.bones,

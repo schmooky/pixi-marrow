@@ -1,0 +1,42 @@
+---
+layout: ../layouts/Docs.astro
+title: Skins and slots
+description: Wear several skins at once, change what a slot shows, tint a slot, and go back to the setup pose.
+---
+
+import Snippet from '../components/Snippet.astro';
+import source from '../snippets/skins.ts?raw';
+
+## Several skins at once
+
+<Snippet source={source} regions="skins" />
+
+A list of skins is active as one skin. Each skin adds its attachments, bones and constraints, in the order of the list. Where two skins store an attachment under one slot and name, the later one wins.
+
+That is what the official runtime does with a skin that `Skin.addSkin` fills, so a rig from the mix-and-match example works as it does there. All instances of an asset share the combined skin of a list. One that no instance shows any more is freed after a while. Setting `skins` puts the slots into their setup pose, as setting `skin` does.
+
+## Change what a slot shows
+
+<Snippet source={source} regions="attachment" />
+
+`slot` returns the handle of a slot, the same object at every call. `attachment` takes the name the skins store an attachment under for that slot: the active skins first, then the default skin. Null shows nothing. A name the skins do not have throws an error that lists the names they have.
+
+## Tint a slot
+
+<Snippet source={source} regions="color" />
+
+`tint` is the color of the slot as a Pixi tint. `alpha` goes from 0 to 1. A slot with tint black in the editor also has `darkTint`.
+
+A write to a slot stays until an animation that keys the slot writes it again. A setup pose of the slots ends it too.
+
+## The setup pose
+
+<Snippet source={source} regions="setup" />
+
+`setupPose` puts the bones and the slots into their setup pose. `'bones'` or `'slots'` resets one half. The tracks keep playing, so stop them first to hold the pose.
+
+## Points on a bone
+
+<Snippet source={source} regions="points" />
+
+`localToWorld` takes a point next to a bone into the space of the skeleton. `worldToLocal` goes the other way. Pixi's `toGlobal` and `toLocal` of the skeleton take it on to the stage.

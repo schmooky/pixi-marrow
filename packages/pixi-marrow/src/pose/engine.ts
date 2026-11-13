@@ -1,3 +1,4 @@
+import type { AttachmentData } from '../model/attachments';
 import type { SkeletonModel } from '../model/model';
 import type { EventKey } from '../model/timelines';
 import type { PoseState } from './state';
@@ -115,8 +116,48 @@ export interface PoseEngine {
     /** Removes what a track holds, without mixing out. The pose keeps what the track did to it. */
     clearTrack(track: number): void;
     clearTracks(): void;
-    /** Makes a skin active, as the official `setSkin` does. -1 for none. */
+    /**
+     * Makes a skin active, as the official `setSkin` does. -1 for none. The index can also be one
+     * that {@link setSkins} made for several skins.
+     */
     setSkin(skin: number): void;
+    /**
+     * Makes several skins of the model active as one. That is what the official runtime does with
+     * an empty skin that `Skin.addSkin` filled with each of them, in order, and then `setSkin`.
+     * Where two skins hold an attachment under one slot and name, the later one wins. A list of
+     * one is {@link setSkin} with that skin, an empty list is no skin.
+     *
+     * Every instance of a model shares the combined skin of a list, so the same list costs no
+     * memory a second time.
+     */
+    setSkins(skins: readonly number[]): void;
+    /** The skins of the model that are active, in the order they were given. Empty for none. */
+    readonly skins: readonly number[];
+    /**
+     * The pose of the slots that {@link setAttachment}, {@link setColor} and {@link setDarkColor}
+     * write. It holds the arrays of {@link state}, except in 4.3 for an engine whose sliders pose
+     * slots. There it is the animated pose, and the pose state holds what the sliders make of it.
+     */
+    readonly slotPose: SlotPose;
+    /**
+     * Shows an attachment in a slot, or nothing: the official `Slot.setAttachment`. A changed
+     * attachment resets the sequence index. The deform stays only when the old and the new
+     * attachment share their timeline attachment. The attachment stays until an attachment
+     * timeline keys the slot, or the setup pose of the slots is set. The attachment the slot
+     * shows already changes nothing, so a write in every frame lets the skeleton rest.
+     */
+    setAttachment(slot: number, attachment: AttachmentData | null): void;
+    /**
+     * Sets the color of a slot, each part from 0 to 1: the official `slot.color.set`. In 4.3 it
+     * is the color of the slot's pose. It stays until a color timeline keys the slot. The color
+     * the slot has already changes nothing, so a write in every frame lets the skeleton rest.
+     */
+    setColor(slot: number, r: number, g: number, b: number, a: number): void;
+    /**
+     * Sets the dark color of a slot, each part from 0 to 1: the official `slot.darkColor.set`.
+     * Throws a `MarrowError` for a slot without a dark color, where the official one is null.
+     */
+    setDarkColor(slot: number, r: number, g: number, b: number): void;
     /** Resets bones and slots to the setup pose. */
     setupPose(): void;
     setupPoseBones(): void;
@@ -143,6 +184,18 @@ export interface PoseEngine {
     update(dt: number): void;
     /** What happened since the last call, in the order the official listener is called. */
     takeEvents(): PoseEvent[];
+}
+
+/**
+ * The slots as a write reaches them: the official `slot.pose` in 4.3, the slots themselves
+ * before. Read it to change one part of a value, such as the alpha of a color.
+ */
+export interface SlotPose {
+    /** r, g, b, a per slot. */
+    readonly colors: Float64Array;
+    /** r, g, b per slot. Meaningful where the model's `hasDark` is 1. */
+    readonly darkColors: Float64Array;
+    readonly attachments: readonly (AttachmentData | null)[];
 }
 
 /** Creates one more pose engine for the model it was loaded for. Synchronous. */

@@ -1,24 +1,32 @@
 import { Container } from 'pixi.js';
+import { MarrowError } from '../base/errors';
 import { unknownName } from '../base/names';
 import { Bone } from './bone';
+import { namedIndex } from './checks';
 import { type LinkParts, Links } from './links';
 import type { AttachOptions, MarrowNames } from './options';
+import { Slot } from './slot';
+
+/** What `setupPose` resets. */
+export type SetupPosePart = 'all' | 'bones' | 'slots';
 
 /**
- * The part of a display object that ties Pixi objects to the skeleton. These are the handles
- * of its bones, the containers that follow a bone and the ones that are attached to a slot.
- * `MarrowSpine` is the one class that extends it.
+ * The part of a display object that reaches into the skeleton by name. It holds the handles of
+ * bones and slots, the active skins and the setup pose. It also holds the Pixi objects that
+ * follow a bone or are attached to a slot. `MarrowSpine` is the one class that extends it.
  *
  * @example
- * hero.follow('hand', sparkle);
- * hero.attach('placeholder', label);
+ * hero.skins = ['body', 'hat'];
+ * hero.slot('glow').alpha = 0.5;
  * hero.bone('head').rotation += 10;
+ * hero.attach('placeholder', label);
  */
 export abstract class SpineLinks<N extends MarrowNames = MarrowNames> extends Container {
     /** The followed and the attached containers, once there is one. An update without any pays one check of this field. */
     protected links: Links | undefined;
     private linkParts: LinkParts | undefined;
     private readonly handles = new Map<string, Bone<N>>();
+    private readonly slotHandles = new Map<string, Slot<N>>();
 
     /**
      * The handle of a bone: its pose next to its parent, to read and to write, and where it is in
@@ -42,6 +50,104 @@ export abstract class SpineLinks<N extends MarrowNames = MarrowNames> extends Co
         }
 
         return handle;
+    }
+
+    /**
+     * The handle of a slot: the attachment it shows, its color and its dark color, to read and to
+     * write. One object per slot, the same at every call.
+     *
+     * Throws a `MarrowError` that lists the slot names for a name the skeleton does not have.
+     *
+     * @example
+     * const weapon = hero.slot('weapon');
+     * weapon.attachment = 'axe';
+     * weapon.tint = 0xff8080;
+     */
+    slot(name: N['slots']): Slot<N> {
+        let handle = this.slotHandles.get(name);
+
+        if (handle === undefined) {
+            const { engine, model } = this.parts();
+
+            handle = new Slot<N>(engine, indexOf('slot', model.slots.names, name), name);
+            this.slotHandles.set(name, handle);
+        }
+
+        return handle;
+    }
+
+    /**
+     * The name of the active skin, or null for none. It is null too while several skins are
+     * active: read `skins` then. Setting a skin also puts the slots into their setup pose, as
+     * code with the official runtime does after `setSkin`.
+     */
+    get skin(): N['skins'] | null {
+        const { engine, model } = this.parts();
+        const [only, more] = engine.skins;
+
+        // the names type lists the skins of this skeleton
+        return (more === undefined && only !== undefined ? (model.skins[only]?.name ?? null) : null) as
+            | N['skins']
+            | null;
+    }
+
+    set skin(name: N['skins'] | null) {
+        this.skins = name === null ? [] : [name];
+    }
+
+    /**
+     * The skins that are active, in order. Several skins are active as one skin. The official
+     * runtime does that with a skin that `Skin.addSkin` filled with each of them in order: it
+     * holds the attachments, bones and constraints of all of them. Where two skins store an attachment under
+     * one slot and name, the later one wins. An empty list is no skin.
+     *
+     * Setting the list also puts the slots into their setup pose, as the `skin` setter does. Every
+     * instance of an asset shares the combined skin of a list. Throws a `MarrowError` that lists
+     * the skin names for a name the skeleton does not have.
+     *
+     * @example
+     * hero.skins = ['body/girl', 'hair/long', 'outfit/knight'];
+     */
+    get skins(): N['skins'][] {
+        const { engine, model } = this.parts();
+
+        // the names type lists the skins of this skeleton
+        return engine.skins.map((index) => model.skins[index]?.name ?? '') as N['skins'][];
+    }
+
+    set skins(names: readonly N['skins'][]) {
+        const { engine, model } = this.parts();
+
+        if (!Array.isArray(names)) {
+            throw new MarrowError('invalid-data', `skins takes a list of skin names, not ${String(names)}.`, {
+                fix: "Pass an array of names, such as ['body', 'hat'], or [] for no skin.",
+            });
+        }
+        engine.setSkins(names.map((name) => namedIndex('skin', model.skins, String(name))));
+        engine.setupPoseSlots();
+    }
+
+    /**
+     * Puts the skeleton into its setup pose: the official `setupPose`, which is `setToSetupPose`
+     * before 4.3. `bones` resets the bones and the constraints only, `slots` the draw order and
+     * the slots only. Tracks keep playing: the next update applies them over the setup pose. Call
+     * `stop()` first to hold it.
+     *
+     * @example
+     * hero.stop();
+     * hero.setupPose();
+     */
+    setupPose(part: SetupPosePart = 'all'): void {
+        const { engine } = this.parts();
+
+        if (part === 'all') engine.setupPose();
+        else if (part === 'bones') engine.setupPoseBones();
+        else if (part === 'slots') engine.setupPoseSlots();
+        else {
+            throw new MarrowError('invalid-data', `setupPose has no part "${String(part)}".`, {
+                fix: "Pass 'all', 'bones' or 'slots', or nothing for all.",
+            });
+        }
     }
 
     /**

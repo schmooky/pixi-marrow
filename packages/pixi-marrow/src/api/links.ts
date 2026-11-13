@@ -1,6 +1,7 @@
 import { type Container, Matrix } from 'pixi.js';
 import { MarrowError } from '../base/errors';
 import type { SkeletonModel } from '../model/model';
+import type { PoseEngine } from '../pose/engine';
 import { isNewer, type PoseState, WORLD_STRIDE } from '../pose/state';
 import { attachCode, attachCodeState, loadAttachCode } from '../render/attach-code';
 import type { Link, ViewInserts } from '../render/attach-work';
@@ -19,6 +20,7 @@ import type { AttachOptions } from './options';
 
 /** What the links of a display object work on. */
 export interface LinkParts {
+    readonly engine: PoseEngine;
     readonly state: PoseState;
     readonly model: SkeletonModel;
     readonly view: SkeletonView;

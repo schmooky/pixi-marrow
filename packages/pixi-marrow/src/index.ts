@@ -18,8 +18,9 @@ export type {
     UpdateProbe,
 } from './api/options';
 export type { PerfEntry, PerfFeature } from './api/report-base';
+export type { Slot } from './api/slot';
 export { MarrowSpine } from './api/spine';
-export type { SpineLinks } from './api/spine-links';
+export type { SetupPosePart, SpineLinks } from './api/spine-links';
 export type { MarrowPerf, PerfMemory } from './api/spine-perf';
 export type { Track } from './api/track';
 export type { MarrowErrorCode, MarrowErrorDetails } from './base/errors';
