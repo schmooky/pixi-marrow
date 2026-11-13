@@ -9,5 +9,6 @@ Baked animations: an animation can play from frames sampled once, in place of th
 - Events, loops, time scales, reverse and the `start` and `end` options stay exactly as without baking: the engine still runs the tracks and fires the events.
 - A clip keeps the world transforms of the bones that move and the slot values that change, as 32-bit numbers, at 60 frames per second. At a sample time a frame equals the pose of the engine rounded to 32 bits. Between two samples the frame before is shown. The local pose of a bone shows the values of the last update the engine posed.
 - The code loads on demand and adds 0.1 kB to the root import. A display object plays without baking until it is there.
+- The clips of a combined skin go when the skin is freed. `addBakedClips` throws a `MarrowError` for a clip whose arrays do not fit together, and reading the bytes of a file throws on a big-endian host.
 - The new entry `pixi-marrow/bake` bakes in Node at build time: `bakeAnimation`, `bakeAnimations`, `encodeBakedClips` and `decodeBakedClips`. `addBakedClips` hands clips to an asset, whose instances play them in place of baking.
 - The pose engines of `pixi-marrow/core` gain `solo`, `advance`, `holdsSetup` and `source`, and a track entry shows `animationStart` and `animationEnd`.
