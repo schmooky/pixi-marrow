@@ -2,54 +2,87 @@ import type { Container, Renderer } from 'pixi.js';
 import type { BuiltScene } from './lab';
 
 /*
- * The clock of the lab, after the A/B bench of the repository (scripts/bench/page.js). A timed
- * frame has three parts. The update is what the scene and pixi-marrow do on the CPU to advance
- * every skeleton by 1/60 second. The submit is `renderer.render(stage)`, the CPU work that hands
- * the frame to the GPU. The wait lasts until the GPU has finished that frame. No part waits for
- * vsync, so a frame that takes 3 ms reads 3 ms on a screen of 60 Hz and of 120 Hz.
- *
- * On WebGL the wait is a read of one pixel, which needs the finished picture. On WebGPU it is
- * the promise of the device queue. The page gets an animation frame between two samples, so
- * the browser shows the scene and stays responsive.
+ * The clock of the lab. A scene plays at the rate of the screen, as in a game: one update and
+ * one render per animation frame of the page, by the time that passed. The clock counts the
+ * frames the screen gets and times the two parts of each on the CPU. The update is what the
+ * scene and pixi-marrow do to advance every skeleton. The render is `renderer.render(stage)`,
+ * the work of the CPU that hands the frame to the GPU. Nothing waits for the GPU on purpose, so
+ * a GPU that cannot keep up shows as frames that the screen did not get.
  */
 
-/** Seconds every skeleton advances per frame. */
-const STEP = 1 / 60;
+/** The longest step of a frame in seconds, so that the scene does not jump after a stall. */
+const LONGEST_STEP = 0.1;
 
-/** What the clock needs: the renderer, the stage it draws, how to wait for the GPU and the draw counter. */
+/** What the clock needs: the renderer, the stage it draws and the draw counter. */
 export interface Clock {
     renderer: Renderer;
     stage: Container;
-    wait(): Promise<void> | void;
     draws: { count: number };
-    /** True once the page was hidden during a block, which spoils the block. */
+    /** True once the page was hidden while the scene played, which spoils the times. */
     hidden: boolean;
 }
 
-/** The times of one block, per sample: the means of the update, the submit and the wait of a frame. */
-export interface BlockTimes {
+/** The times of the frames a scene played, in milliseconds. */
+export interface FrameTimes {
+    /** The time between the animation frame of a frame and the one before. */
+    gaps: number[];
     update: number[];
-    submit: number[];
-    wait: number[];
-    /** The most draw calls a frame of the block took. */
+    render: number[];
+    /** The most draw calls a frame took. */
     draws: number;
 }
 
-/** Thrown when the page was hidden during a block. The runner runs the block again. */
+/** Thrown when the page was hidden while the scene played. The runner plays it again. */
 export class HiddenError extends Error {
     constructor() {
-        super('the page was hidden during a block');
+        super('the page was hidden while the scene played');
     }
 }
 
-/** Waits for the next animation frame of the page. */
-const nextFrame = (): Promise<void> => new Promise((done) => requestAnimationFrame(() => done()));
+/** Waits for the next animation frame of the page, and gives its time. */
+const nextFrame = (): Promise<number> => new Promise((done) => requestAnimationFrame(done));
 
-/** The wait for the GPU on WebGL: a read of one pixel of the canvas. */
-export function readPixelWait(gl: WebGL2RenderingContext): () => void {
-    const pixel = new Uint8Array(4);
+/**
+ * Plays a scene for some milliseconds at the rate of the screen and times every frame.
+ *
+ * @param onFrame Called after every frame with the times so far and the milliseconds played.
+ * @throws {HiddenError} When the page was hidden while the scene played.
+ */
+export async function play(
+    clock: Clock,
+    scene: BuiltScene,
+    milliseconds: number,
+    onFrame?: (times: FrameTimes, played: number) => void,
+): Promise<FrameTimes> {
+    const { renderer, stage, draws } = clock;
+    const times: FrameTimes = { gaps: [], update: [], render: [], draws: 0 };
+    let last = await nextFrame();
+    const start = last;
 
-    return () => gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+    clock.hidden = false;
+    for (;;) {
+        const now = await nextFrame();
+
+        if (clock.hidden) throw new HiddenError();
+        const gap = now - last;
+
+        last = now;
+        const begin = performance.now();
+
+        scene.step(Math.min(gap / 1000, LONGEST_STEP));
+        const updated = performance.now();
+
+        draws.count = 0;
+        renderer.render(stage);
+        const rendered = performance.now();
+
+        times.gaps.push(gap);
+        times.update.push(updated - begin);
+        times.render.push(rendered - updated);
+        if (draws.count > times.draws) times.draws = draws.count;
+        onFrame?.(times, now - start);
+        if (now - start >= milliseconds) return times;
+    }
 }
 
 /**
@@ -83,72 +116,6 @@ export function countDraws(): { count: number } {
     return draws;
 }
 
-/** One frame that is not timed. */
-async function frame(clock: Clock, scene: BuiltScene): Promise<void> {
-    scene.step(STEP);
-    clock.renderer.render(clock.stage);
-    await clock.wait();
-}
-
-/**
- * Draws frames that are not timed: buffers get their size, the code gets compiled, baked clips
- * get baked and the idle cache takes its images. Every frame gives the page a turn, as the
- * frames of a game do, so a chunk that loads on demand arrives.
- */
-export async function warmUp(clock: Clock, scene: BuiltScene, frames: number): Promise<void> {
-    for (let i = 0; i < frames; i++) {
-        await frame(clock, scene);
-        await nextFrame();
-    }
-}
-
-/**
- * Times `samples` samples of `group` frames each. Nothing is allocated between two readings of
- * the clock. The page gets an animation frame between two samples, which is not timed.
- *
- * @throws {HiddenError} When the page was hidden during the block.
- */
-export async function timeBlock(clock: Clock, scene: BuiltScene, samples: number, group: number): Promise<BlockTimes> {
-    const { renderer, stage, draws } = clock;
-    const update = new Float64Array(samples);
-    const submit = new Float64Array(samples);
-    const wait = new Float64Array(samples);
-    let most = 0;
-
-    clock.hidden = false;
-    for (let sample = 0; sample < samples; sample++) {
-        let updating = 0;
-        let submitting = 0;
-        let waiting = 0;
-
-        for (let i = 0; i < group; i++) {
-            const start = performance.now();
-
-            scene.step(STEP);
-            const updated = performance.now();
-
-            draws.count = 0;
-            renderer.render(stage);
-            const submitted = performance.now();
-
-            await clock.wait();
-            const done = performance.now();
-
-            updating += updated - start;
-            submitting += submitted - updated;
-            waiting += done - submitted;
-            if (draws.count > most) most = draws.count;
-        }
-        update[sample] = updating / group;
-        submit[sample] = submitting / group;
-        wait[sample] = waiting / group;
-        await nextFrame();
-        if (clock.hidden) throw new HiddenError();
-    }
-
-    return { update: Array.from(update), submit: Array.from(submit), wait: Array.from(wait), draws: most };
-}
-
 /** The median of some numbers. */
 export function median(values: readonly number[]): number {
     return quantile(values, 0.5);
@@ -162,32 +129,15 @@ export function quantile(values: readonly number[], share: number): number {
     return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * share))] ?? Number.NaN;
 }
 
-/** The medians of an empty stage: what asking the GPU costs, which every frame of a block holds too. */
-export async function timeEmpty(clock: Clock, frames: number): Promise<number> {
-    const times: number[] = [];
-
-    for (let i = 0; i < frames; i++) {
-        const start = performance.now();
-
-        clock.renderer.render(clock.stage);
-        await clock.wait();
-        times.push(performance.now() - start);
-        if (i % 8 === 7) await nextFrame();
-    }
-
-    return median(times);
-}
-
 /** The refresh rate of the screen in Hz, from the time between animation frames. */
 export async function refreshRate(frames = 40): Promise<number> {
     const gaps: number[] = [];
-    let last = 0;
+    let last = await nextFrame();
 
-    for (let i = 0; i <= frames; i++) {
-        await nextFrame();
-        const now = performance.now();
+    for (let i = 0; i < frames; i++) {
+        const now = await nextFrame();
 
-        if (i > 0) gaps.push(now - last);
+        gaps.push(now - last);
         last = now;
     }
 

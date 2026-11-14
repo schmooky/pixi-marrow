@@ -3,13 +3,13 @@ import { CATALOG } from '../../lab/catalog';
 import Lab from '../../layouts/Lab.astro';
 ---
 
-<Lab title="Tests" description="Tests that measure pixi-marrow on the device that opens them.">
+<Lab title="Tests" description="Scenes that show how pixi-marrow plays on the device that opens them.">
     <main class="lab-index">
         <a href="/" class="lab-back">pixi-marrow</a>
         <h1 class="lab-title">Lab</h1>
         <p class="lab-question">
-            Each test measures pixi-marrow on the device that opens it, a phone above all. Open one, keep the screen on and wait about a minute. It
-            shows its result at the end, with a text to copy.
+            Each test plays a scene on the device that opens it, a phone above all, with the settings a game gets when it sets none. Open one and
+            keep the screen on. It shows its numbers while it plays, and its result at the end with a text to copy.
         </p>
         <ul class="lab-tests">
             {
@@ -33,13 +33,14 @@ import Lab from '../../layouts/Lab.astro';
         <ul class="lab-settings">
             <li><code>?renderer=webgpu</code> draws with WebGPU where the browser has it. WebGL2 is the default.</li>
             <li><code>?n=100</code> sets the number of skeletons.</li>
-            <li><code>?rounds=5</code> runs every side 5 times. The default is 3.</li>
+            <li><code>?seconds=30</code> plays the scene for 30 seconds. The default is 10, and 12 for the slot grid.</li>
         </ul>
         <h2 class="lab-subtitle">How it measures</h2>
         <p class="lab-question">
-            A frame is the update of every skeleton, the submit of the render and the wait until the GPU has finished it. Nothing waits for the
-            screen, so the times are the same on a screen of 60 Hz and of 120 Hz. The sides of a test take turns, so the heat of the phone weighs
-            on all of them alike.
+            A scene plays at the rate of the screen, as in a game, after two seconds to warm up. The lab counts the frames the screen got and the
+            ones it dropped, and times the work of the CPU in each frame: the update of every skeleton and the render call of Pixi. Nothing waits
+            for the GPU on purpose, so a GPU that cannot keep up shows as dropped frames. How many adds symbols every few seconds while the frames
+            keep the rate of the screen.
         </p>
     </main>
 </Lab>

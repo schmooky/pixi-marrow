@@ -1,29 +1,22 @@
 import type { Container, Rectangle } from 'pixi.js';
-import type { MarrowAsset, MarrowSpineOptions } from 'pixi-marrow';
+import type { MarrowAsset } from 'pixi-marrow';
 
 /*
- * The lab: pages that measure pixi-marrow on the device that opens them, a phone above all. A
- * test is a module of `src/lab/tests`. It names the rigs it loads, the sides it compares and
- * how it builds its scene. The runner loads the rigs, runs every side a few times in turns and
- * shows the result with a text to copy.
+ * The lab: pages that show how pixi-marrow plays on the device that opens them, a phone above
+ * all. Every skeleton has the settings a game gets when it sets none. A test is a module of
+ * `src/lab/tests`. It names the rigs it loads and builds its scene. The runner plays the scene
+ * at the rate of the screen, as a game does, and shows the frame rate and the time per frame.
  */
-
-/** One way to draw the scene of a test: a name for the result and the options of every skeleton. */
-export interface LabSide {
-    name: string;
-    options: MarrowSpineOptions;
-}
 
 /** What a test builds its scene with. */
 export interface BuildContext {
-    /** The container of the scene. Its children are taken away and destroyed after the block. */
+    /** The container of the scene. Its children are destroyed with it at the end. */
     stage: Container;
     /** The loaded rigs by file name, without the extension. */
     assets: ReadonlyMap<string, MarrowAsset>;
     /** The box of each rig in skeleton units, read from an instance that plays its first animation. */
     frames: ReadonlyMap<string, Rectangle>;
-    side: LabSide;
-    /** The size of the canvas in CSS pixels. */
+    /** The size of the area of the scene in CSS pixels, below the head of the page. */
     width: number;
     height: number;
     /** How many skeletons the scene has, from the test or from `?n=` of the address. */
@@ -37,6 +30,8 @@ export interface BuiltScene {
      * `seconds`. The runner times all of it as the update of the frame.
      */
     step(seconds: number): void;
+    /** Makes the scene hold another number of skeletons. A test that grows has it. */
+    resize?(count: number): void;
 }
 
 /** What a page says about a test before its code loads. */
@@ -48,21 +43,20 @@ export interface LabInfo {
     question: string;
     /** What the scene shows, for `count` skeletons. */
     scene(count: number): string;
-    /** How many skeletons the scene has by default. */
+    /** How many skeletons the scene has by default. A test that grows starts there. */
     count: number;
+    /** What the skeletons are, in the plural, as in "bees". */
+    noun: string;
+    /** True for a test that adds skeletons until the frames drop. */
+    grows?: boolean;
 }
 
 /** A test of the lab. */
 export interface LabTest extends LabInfo {
     /** The rigs to load, as file names of `/rigs` without the extension. */
     rigs: readonly string[];
-    /** The sides to compare. The first one is the one every other is compared with. */
-    sides: readonly LabSide[];
-    /**
-     * Frames drawn before a block is timed, and samples timed, where the test needs other
-     * numbers than the run: a scene with a cycle times all of it.
-     */
-    timing?: { warmup: number; samples: number };
+    /** Seconds the scene plays for its result, where the test needs another time than the run. */
+    seconds?: number;
     build(context: BuildContext): BuiltScene;
 }
 
@@ -72,22 +66,17 @@ export const defineTest = (test: LabTest): LabTest => test;
 /** The settings of a run, from the address of the page. */
 export interface RunSettings {
     renderer: 'webgl' | 'webgpu';
-    /** How many times every side runs. The sides take turns, so heat and clocks hit all of them alike. */
-    rounds: number;
-    /** Samples timed per block, and frames per sample. */
-    samples: number;
-    group: number;
-    /** Frames drawn before a block is timed. */
-    warmup: number;
+    /** Seconds the scene plays for its result, or null for the time of the test. */
+    seconds: number | null;
     /** The number of skeletons, or null for the default of the test. */
     count: number | null;
 }
 
-/** A whole number from the address, within limits, or the default. */
-function wholeNumber(query: URLSearchParams, name: string, fallback: number, low: number, high: number): number {
+/** A whole number from the address, within limits, or null. */
+function wholeNumber(query: URLSearchParams, name: string, low: number, high: number): number | null {
     const value = Number(query.get(name));
 
-    return Number.isInteger(value) && value >= low && value <= high ? value : fallback;
+    return query.has(name) && Number.isInteger(value) && value >= low && value <= high ? value : null;
 }
 
 /**
@@ -97,14 +86,9 @@ function wholeNumber(query: URLSearchParams, name: string, fallback: number, low
  * readSettings(new URLSearchParams('?renderer=webgpu&n=100'));
  */
 export function readSettings(query: URLSearchParams): RunSettings {
-    const count = wholeNumber(query, 'n', 0, 1, 2000);
-
     return {
         renderer: query.get('renderer') === 'webgpu' ? 'webgpu' : 'webgl',
-        rounds: wholeNumber(query, 'rounds', 3, 1, 10),
-        samples: wholeNumber(query, 'samples', 30, 5, 200),
-        group: 4,
-        warmup: 60,
-        count: count === 0 ? null : count,
+        seconds: wholeNumber(query, 'seconds', 3, 120),
+        count: wholeNumber(query, 'n', 1, 2000),
     };
 }
