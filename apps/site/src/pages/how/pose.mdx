@@ -1,0 +1,51 @@
+---
+layout: ../../layouts/Docs.astro
+title: The pose
+description: An animation sets each bone relative to its parent. Before anything is drawn, the runtime works out where every bone is in the skeleton. Turn a bone of the bee and watch what follows.
+---
+
+import Preview from '../../components/Preview.astro';
+
+<Preview name="pose" height={440} rows={5} caption="The bee of the slot game Bzzz in its setup pose, dimmed. One bone turns, and the bones drawn in orange turn with it. Pick drag to turn the bone yourself by dragging across the canvas." />
+
+## Local and world
+
+The animation of the last page wrote values like "the neck turns 12 degrees". That is a local value, relative to the parent bone. To draw a wing, the runtime needs to know where the wing is in the skeleton, after the neck, the body and the root turned it. That is its world transform.
+
+The world transform of a bone is the world transform of its parent, combined with the local values of the bone. Pick **neck** and watch the numbers. Its first child, the body, keeps its local rotation the whole time. Its rotation on screen changes, because its parent turns.
+
+The two numbers count differently on purpose. A local rotation counts counter-clockwise, as in the Spine editor. The rotation on screen counts clockwise, as a Pixi `angle` does.
+
+## One pass, parents first
+
+The bones of a skeleton are stored so that a parent comes before its children. So one pass from the first bone to the last computes every world transform, and each bone finds its parent already done.
+
+A world transform is six numbers: a 2 by 2 matrix for rotation, scale and shear, and a position. The pose of pixi-marrow keeps them for all bones in one typed array, and the render step reads them from there with no copy.
+
+## What follows a bone
+
+Pick **neck**: 22 bones below it turn, nearly the whole bee. Pick **hand**: one bone below it. Pick **wing**: none. The slots of a bone and their images move with it, which is why the animator turns one bone where a picture of many parts should move.
+
+Pick **antenna**. The antennae are part of the mesh of the head, 41 vertices weighted to 7 bones. A vertex follows several bones by weight, so the antenna bends and the face around it stays. The next page shows how.
+
+A bone can also refuse part of what its parent does. A crown can keep upright while the head tilts, if the animator sets its bone to take the position of its parent and not its rotation. Every bone of the bee takes everything from its parent.
+
+## Constraints
+
+Some bones are not animated by keys alone. A constraint changes bones during the pass, from other bones:
+
+- **IK** turns a chain of bones so that its end reaches a target, such as a foot on the ground.
+- **Transform** copies rotation, position or scale from one bone to others.
+- **Path** moves bones along a curve.
+- **Physics**, from Spine 4.2, lets bones swing and settle like springs: hair, antennae, a dangling coin.
+- **Slider**, from Spine 4.3, plays an animation by a value instead of by time.
+
+The animator sets the order in which bones and constraints update. The runtime turns it into one list for each skin, the update cache of the official runtime. This runtime builds that list once per skin and shares it between every copy that wears the skin.
+
+The Bzzz symbols have no constraints. Big characters of a feature often do. A physics constraint keeps moving while the skeleton rests, and it does not see the Pixi position change on its own. [Good to know](/good-to-know/) shows how to tell it.
+
+## What pixi-marrow skips
+
+The official runtime computes every bone in every frame. pixi-marrow computes a bone again only when its local values, its parent or the place of the skeleton changed. The line under the preview counts them: turning the neck poses 23 bones again each frame, turning a wing poses one.
+
+So the cost of a frame follows what moves, not the size of the skeleton. A symbol whose animation ended poses no bone at all. A path constraint is also left out while nothing it reads changed. Every world transform still equals the official one to the bit.

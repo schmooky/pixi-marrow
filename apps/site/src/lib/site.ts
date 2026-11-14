@@ -61,6 +61,12 @@ export const PAGES: readonly DocsPage[] = [
         section: 'How it works',
     },
     {
+        href: '/how/pose/',
+        title: 'The pose',
+        description: 'Local and world transforms, what follows a bone, constraints, and what pixi-marrow skips.',
+        section: 'How it works',
+    },
+    {
         href: '/bones-and-placeholders/',
         title: 'Bones and placeholders',
         description: 'Read a bone and put your own Pixi objects into a rig.',
