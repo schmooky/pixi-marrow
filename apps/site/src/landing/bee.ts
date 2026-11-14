@@ -6,12 +6,12 @@ import { MarrowSpine } from 'pixi-marrow';
 
 /*
  * The bee of the landing page: the bee of the slot game Bzzz, playing its idle loop, drawn on a
- * transparent canvas so that the grey of the card shows through, the same grey as the code beside
- * it. The regions are the code the page shows.
+ * transparent canvas so that she stands on the page itself, beside the code that draws her. The
+ * regions are the code the page shows.
  */
 
-/** Share of the height of the element that the bee fills. */
-const FILL = 0.82;
+/** Share of the element that the bee fills, across or down, whichever runs out first. */
+const FILL = 0.9;
 
 /**
  * Draws the bee into an element and keeps it centred as the element changes size.
@@ -55,6 +55,8 @@ export async function mountBee(host: HTMLElement): Promise<void> {
 
     place();
     app.renderer.on('resize', place);
+    // the element takes its height from the text and code beside it, which can change without the window changing
+    new ResizeObserver(() => app.queueResize()).observe(host);
     document.addEventListener('visibilitychange', () => {
         if (document.hidden) app.ticker.stop();
         else app.ticker.start();
