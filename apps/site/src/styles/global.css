@@ -352,6 +352,13 @@ pre {
 
 /* ---------------------------------------------------------------------- previews */
 
+/* a diagram draws its shapes in an SVG that keeps the shape of its view box */
+.diagram-svg {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
 .preview {
     margin: 2rem 0;
 }
