@@ -1,0 +1,30 @@
+---
+import Lab from '../layouts/Lab.astro';
+import '../styles/playground.css';
+---
+
+<Lab title="Playground" description="Drop Spine files or a folder, and every skeleton plays in pixi-marrow with its numbers.">
+    <div class="pg">
+        <div class="pg-stage" data-pg-canvas>
+            <div class="pg-empty" data-pg-empty>
+                <p class="pg-empty-title">Drop Spine files or a folder here</p>
+                <p class="pg-empty-text">
+                    Skeletons as .json or .skel, their atlases and page images in PNG, WebP or AVIF. Folders are fine, and an atlas finds its
+                    images by name.
+                </p>
+                <p class="pg-empty-text">Nothing leaves this browser: the files are read here.</p>
+            </div>
+        </div>
+        <div class="pg-drop" aria-hidden="true">Drop to load</div>
+    </div>
+</Lab>
+<script>
+    import { startPlayground } from '../playground/playground';
+
+    const canvas = document.querySelector<HTMLElement>('[data-pg-canvas]');
+    const empty = document.querySelector<HTMLElement>('[data-pg-empty]');
+
+    if (canvas !== null && empty !== null) {
+        void startPlayground({ canvas, empty });
+    }
+</script>

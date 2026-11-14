@@ -224,3 +224,8 @@ body.lab {
     font-size: 0.82rem;
     color: hsl(var(--marrow-text));
 }
+.lab-link {
+    color: hsl(var(--marrow-text));
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}

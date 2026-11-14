@@ -1,0 +1,60 @@
+/*
+ * The playground: one canvas over the whole page. Its controls are drawn in it with pixi-silk.
+ * The canvas shows a hint until the first skeleton arrives.
+ */
+.pg {
+    height: 100dvh;
+}
+
+.pg-stage {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+}
+.pg-stage canvas {
+    display: block;
+}
+
+.pg-empty {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.9rem;
+    padding: 1.5rem;
+    text-align: center;
+    pointer-events: none;
+}
+.pg-empty[hidden] {
+    display: none;
+}
+.pg-empty-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+.pg-empty-text {
+    max-width: 30rem;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: hsl(var(--muted-foreground));
+}
+
+.pg-drop {
+    position: fixed;
+    inset: 0.75rem;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    border: 2px dashed hsl(var(--marrow));
+    border-radius: var(--radius);
+    background: hsl(var(--background) / 0.7);
+    font-size: 1.3rem;
+    font-weight: 700;
+    pointer-events: none;
+}
+body.pg-dragging .pg-drop {
+    display: flex;
+}
