@@ -1,6 +1,6 @@
 import { SETUP } from './mixing';
 import { defineDiagram } from './runtime';
-import { COLORS, lane, timeline } from './shapes';
+import { COLORS, lanes } from './shapes';
 
 /*
  * When `finished` resolves. A win of 1.2 seconds grows a square. On the left it plays to its
@@ -13,10 +13,20 @@ const CUT = 0.6;
 const SPAN = 2;
 
 export default defineDiagram({
-    setup({ svg, onFrame, say }) {
-        const whole = lane(svg, { x: 20, y: 10, label: 'win plays to its end', color: COLORS.first, solid: true });
-        const cut = lane(svg, { x: 260, y: 10, label: 'win replaced at 0.6 s', color: COLORS.second, solid: true });
-        const line = timeline(svg, 20, 200, 680, SPAN);
+    setup({ svg, narrow, onFrame, say }) {
+        const {
+            lanes: [whole, cut],
+            timeline: drawTimeline,
+        } = lanes(
+            svg,
+            [
+                { label: 'win plays to its end', color: COLORS.first, solid: true },
+                { label: 'win replaced at 0.6 s', color: COLORS.second, solid: true },
+            ],
+            narrow,
+            true,
+        );
+        const line = drawTimeline(SPAN);
         let time = 0;
 
         line.draw([

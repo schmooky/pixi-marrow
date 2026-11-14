@@ -1,3 +1,4 @@
+import { PHONE_ROW, PHONE_WIDTH, phoneSize } from './layout';
 import type { Pose } from './mixing';
 import { svgElement } from './runtime';
 
@@ -21,18 +22,21 @@ const TRAIL = [
 ] as const;
 
 /** A lane: a name, a mark where the setup pose stands, and a square that shows a pose. */
-export interface Lane {
+interface Lane {
     show(pose: Pose): void;
 }
 
 /** Where a lane stands and what it shows. */
-export interface LaneOptions {
+interface LaneOptions {
     x: number;
     y: number;
     label: string;
     color: string;
     /** True for a solid square, false for an outline. */
     solid: boolean;
+    /** The size of the stage under the label: 200 by 136 unless given. */
+    width?: number;
+    height?: number;
 }
 
 /**
@@ -42,10 +46,10 @@ export interface LaneOptions {
  * const result = lane(svg, { x: 20, y: 40, label: 'Result', color: COLORS.result, solid: true });
  * result.show({ x: 60, y: 0, scale: 1.2 });
  */
-export function lane(svg: SVGSVGElement, options: LaneOptions): Lane {
-    const { x, y, label, color, solid } = options;
+function lane(svg: SVGSVGElement, options: LaneOptions): Lane {
+    const { x, y, label, color, solid, width = 200, height = 136 } = options;
     const baseX = x + SIDE;
-    const baseY = y + 120;
+    const baseY = y + height - 16;
     const paint = (shape: SVGRectElement, opacity: number): void => {
         if (solid) {
             shape.setAttribute('fill', color);
@@ -69,8 +73,8 @@ export function lane(svg: SVGSVGElement, options: LaneOptions): Lane {
         {
             x,
             y: y + 24,
-            width: 200,
-            height: 136,
+            width,
+            height,
             rx: 8,
             fill: '#ffffff',
             'fill-opacity': 0.025,
@@ -84,7 +88,7 @@ export function lane(svg: SVGSVGElement, options: LaneOptions): Lane {
         {
             x1: x + 8,
             y1: baseY + SIDE / 2 + 6,
-            x2: x + 192,
+            x2: x + width - 8,
             y2: baseY + SIDE / 2 + 6,
             stroke: COLORS.line,
             'stroke-width': 1,
@@ -240,5 +244,48 @@ export function timeline(svg: SVGSVGElement, x: number, y: number, width: number
             head.setAttribute('x1', String(xOf(time)));
             head.setAttribute('x2', String(xOf(time)));
         },
+    };
+}
+
+/** What a lane of a row shows: its place comes from the row. */
+type LaneSpec = Omit<LaneOptions, 'x' | 'y' | 'width' | 'height'>;
+
+/** A row of lanes, one per spec, and the way to draw a time line under them. */
+export interface Lanes<T extends readonly LaneSpec[]> {
+    lanes: { [K in keyof T]: Lane };
+    /** Draws a time line of `seconds` seconds under the lanes. */
+    timeline(seconds: number): Timeline;
+}
+
+/**
+ * Draws lanes side by side, or one under the other when `narrow` is true. The narrow drawing
+ * takes the size `phoneSize` gives, which `Diagram` reserves on a phone.
+ *
+ * @example
+ * const { lanes: [first, second], timeline: line } = lanes(svg, [a, b], narrow, true);
+ */
+export function lanes<const T extends readonly LaneSpec[]>(
+    svg: SVGSVGElement,
+    specs: T,
+    narrow: boolean,
+    withTimeline: boolean,
+): Lanes<T> {
+    if (narrow) {
+        const [width, height] = phoneSize(specs.length, withTimeline);
+
+        svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+    }
+    const made = specs.map((spec, index) =>
+        narrow
+            ? lane(svg, { ...spec, x: 20, y: 10 + index * PHONE_ROW, width: PHONE_WIDTH - 40, height: 120 })
+            : lane(svg, { ...spec, x: 20 + index * 240, y: 10 }),
+    );
+
+    return {
+        lanes: made as { [K in keyof T]: Lane },
+        timeline: (seconds) =>
+            narrow
+                ? timeline(svg, 20, 24 + specs.length * PHONE_ROW, PHONE_WIDTH - 40, seconds)
+                : timeline(svg, 20, 200, 680, seconds),
     };
 }

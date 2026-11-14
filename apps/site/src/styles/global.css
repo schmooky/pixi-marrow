@@ -475,6 +475,13 @@ pre {
     height: auto;
     font-family: var(--font-sans);
 }
+/* on a phone a row of lanes stands one under the other: the page keeps that height before the diagram loads.
+   The width matches PHONE_QUERY of src/diagrams/layout.ts */
+@media (max-width: 640px) {
+    .diagram-svg[data-phone] {
+        aspect-ratio: var(--phone-ratio);
+    }
+}
 /* the drawings name their fonts loosely; they take the fonts of the site */
 .diagram-svg text {
     font-family: var(--font-sans);

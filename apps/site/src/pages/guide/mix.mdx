@@ -10,7 +10,7 @@ import source from '../../snippets/guide-mix.ts?raw';
 
 ## Queue
 
-<Diagram name="mix-queue" rows={1} height={260} caption="A landing bounces a square once, and an idle loop that pulses its scale is queued after it with a mix of 0.2 seconds. Pick a delay to see where the idle loop starts. The light band is the mix." />
+<Diagram name="mix-queue" lanes={3} timeline rows={1} height={260} caption="A landing bounces a square once, and an idle loop that pulses its scale is queued after it with a mix of 0.2 seconds. Pick a delay to see where the idle loop starts. The light band is the mix." />
 
 `queue` plays an animation after what the track holds now, with no gap between them. On an empty track it plays at once. A short animation that ends in a loop is the common case: a bounce and then rest, a hit and then idle.
 
@@ -26,7 +26,7 @@ At `delay 0` the mix ends exactly where the landing ends, so the bounce plays wh
 
 When one animation replaces another, the pose would jump from one to the other. A mix blends them over some time instead: the outgoing animation fades while the incoming one grows.
 
-<Diagram name="mix-time" rows={1} height={260} caption="One track plays A, which moves a square right, then B, which scales it, then A again. Pick a mix to see how long the change takes. The light bands are the mixes." />
+<Diagram name="mix-time" lanes={3} timeline rows={1} height={260} caption="One track plays A, which moves a square right, then B, which scales it, then A again. Pick a mix to see how long the change takes. The light bands are the mixes." />
 
 Pick **0 s** first. The square jumps: one frame it is to the right, the next it is home and scaling. With **0.5 s** it slides home while it starts to scale. Each value goes from where the old animation has it to where the new one has it, a little further every frame.
 
@@ -46,7 +46,7 @@ A mix blends what moves: bones, colors and deforms. The image a slot shows does 
 
 ## Layers
 
-<Diagram name="mix-layers" height={170} rows={1} caption="Track 0 moves a square right, track 1 scales it. Turn track 1 off and on." />
+<Diagram name="mix-layers" lanes={3} height={170} rows={1} caption="Track 0 moves a square right, track 1 scales it. Turn track 1 off and on." />
 
 Each track holds one animation, and a higher track applies over the lower ones. An animation on track 1 sets the bones and slots it keys, and the others keep what track 0 gives them. So an overlay can wave a hand while the legs keep walking.
 
@@ -56,7 +56,7 @@ The two tracks key different values, so nothing competes: the square moves and s
 
 When two tracks key the same value, the higher one decides how they combine:
 
-<Diagram name="mix-same" height={170} rows={1} caption="Track 0 scales a square up, track 1 scales it down. Pick how track 1 applies." />
+<Diagram name="mix-same" lanes={3} height={170} rows={1} caption="Track 0 scales a square up, track 1 scales it down. Pick how track 1 applies." />
 
 - **replace**, the default: track 1 wins. The square only shrinks, as if track 0 were not there.
 - **alpha 0.5**: track 1 applies half way. The scale sits between what track 0 and track 1 give, so the two partly cancel.

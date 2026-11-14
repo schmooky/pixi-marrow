@@ -1,6 +1,6 @@
 import { layer, SETUP, wave } from './mixing';
 import { defineDiagram } from './runtime';
-import { COLORS, lane } from './shapes';
+import { COLORS, lanes } from './shapes';
 
 /*
  * Two tracks that key different values. Track 0 moves the square right, track 1 scales it. The
@@ -8,10 +8,19 @@ import { COLORS, lane } from './shapes';
  */
 
 export default defineDiagram({
-    setup({ svg, onFrame, toggle, say }) {
-        const first = lane(svg, { x: 20, y: 10, label: 'Track 0: moves right', color: COLORS.first, solid: false });
-        const second = lane(svg, { x: 260, y: 10, label: 'Track 1: scales', color: COLORS.second, solid: false });
-        const result = lane(svg, { x: 500, y: 10, label: 'What you see', color: COLORS.result, solid: true });
+    setup({ svg, narrow, onFrame, toggle, say }) {
+        const {
+            lanes: [first, second, result],
+        } = lanes(
+            svg,
+            [
+                { label: 'Track 0: moves right', color: COLORS.first, solid: false },
+                { label: 'Track 1: scales', color: COLORS.second, solid: false },
+                { label: 'What you see', color: COLORS.result, solid: true },
+            ],
+            narrow,
+            false,
+        );
         const show = say;
         let upper = true;
         let time = 0;

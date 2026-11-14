@@ -1,6 +1,6 @@
 import { mix, SETUP, wave } from './mixing';
 import { defineDiagram } from './runtime';
-import { COLORS, lane, timeline } from './shapes';
+import { COLORS, lanes } from './shapes';
 
 /*
  * A queue. A landing bounces the square up once in 0.6 seconds, and an idle loop that pulses
@@ -20,11 +20,21 @@ type DelayName = keyof typeof DELAYS;
 const startOf = (delay: number): number => (delay > 0 ? delay : LANDING - MIX + delay);
 
 export default defineDiagram({
-    setup({ svg, onFrame, pick, say }) {
-        const first = lane(svg, { x: 20, y: 10, label: 'landing: bounces once', color: COLORS.first, solid: false });
-        const second = lane(svg, { x: 260, y: 10, label: 'idle: pulses, loops', color: COLORS.second, solid: false });
-        const result = lane(svg, { x: 500, y: 10, label: 'Track 0', color: COLORS.result, solid: true });
-        const line = timeline(svg, 20, 200, 680, SPAN);
+    setup({ svg, narrow, onFrame, pick, say }) {
+        const {
+            lanes: [first, second, result],
+            timeline: drawTimeline,
+        } = lanes(
+            svg,
+            [
+                { label: 'landing: bounces once', color: COLORS.first, solid: false },
+                { label: 'idle: pulses, loops', color: COLORS.second, solid: false },
+                { label: 'Track 0', color: COLORS.result, solid: true },
+            ],
+            narrow,
+            true,
+        );
+        const line = drawTimeline(SPAN);
         const show = say;
         let delay = 0;
         let time = 0;
@@ -62,7 +72,7 @@ export default defineDiagram({
             if (time < start) show('{first:The landing} bounces. {second:Idle} waits in the queue until its turn.');
             else if (weight < 1) {
                 show(
-                    `Mix: {result:the track} turns from {first:the landing} into {second:idle}, ${Math.round(weight * 10) * 10} percent of the way.${time < LANDING ? ' The landing is still in the air.' : ''}`,
+                    `Mix: {result:the track} turns from {first:the landing} into {second:idle}, ${Math.floor(weight * 10) * 10} percent of the way.${time < LANDING ? ' The landing is still in the air.' : ''}`,
                 );
             } else {
                 show(

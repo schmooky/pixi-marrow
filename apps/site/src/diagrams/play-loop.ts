@@ -1,6 +1,6 @@
 import { SETUP } from './mixing';
 import { defineDiagram } from './runtime';
-import { COLORS, lane, timeline } from './shapes';
+import { COLORS, lanes } from './shapes';
 
 /*
  * Loop and hold. The same animation, which moves a square right in one second, plays three
@@ -12,11 +12,21 @@ const LENGTH = 1;
 const SPAN = 3;
 
 export default defineDiagram({
-    setup({ svg, onFrame, say }) {
-        const looping = lane(svg, { x: 20, y: 10, label: 'loop: true', color: COLORS.first, solid: true });
-        const once = lane(svg, { x: 260, y: 10, label: 'loop: false', color: COLORS.second, solid: true });
-        const pose = lane(svg, { x: 500, y: 10, label: 'an animation of 0 s', color: COLORS.result, solid: true });
-        const line = timeline(svg, 20, 200, 680, SPAN);
+    setup({ svg, narrow, onFrame, say }) {
+        const {
+            lanes: [looping, once, pose],
+            timeline: drawTimeline,
+        } = lanes(
+            svg,
+            [
+                { label: 'loop: true', color: COLORS.first, solid: true },
+                { label: 'loop: false', color: COLORS.second, solid: true },
+                { label: 'an animation of 0 s', color: COLORS.result, solid: true },
+            ],
+            narrow,
+            true,
+        );
+        const line = drawTimeline(SPAN);
         const show = say;
         let time = 0;
 

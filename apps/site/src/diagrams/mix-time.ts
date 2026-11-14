@@ -1,6 +1,6 @@
 import { mix, SETUP, wave } from './mixing';
 import { defineDiagram } from './runtime';
-import { COLORS, lane, timeline } from './shapes';
+import { COLORS, lanes } from './shapes';
 
 /*
  * A mix on one track. Animation A moves the square right, animation B scales it. Every two
@@ -17,11 +17,21 @@ type MixName = keyof typeof MIXES;
 const TURN = 2;
 
 export default defineDiagram({
-    setup({ svg, onFrame, pick, say }) {
-        const first = lane(svg, { x: 20, y: 10, label: 'A: moves right', color: COLORS.first, solid: false });
-        const second = lane(svg, { x: 260, y: 10, label: 'B: scales', color: COLORS.second, solid: false });
-        const result = lane(svg, { x: 500, y: 10, label: 'Track 0', color: COLORS.result, solid: true });
-        const line = timeline(svg, 20, 200, 680, TURN * 2);
+    setup({ svg, narrow, onFrame, pick, say }) {
+        const {
+            lanes: [first, second, result],
+            timeline: drawTimeline,
+        } = lanes(
+            svg,
+            [
+                { label: 'A: moves right', color: COLORS.first, solid: false },
+                { label: 'B: scales', color: COLORS.second, solid: false },
+                { label: 'Track 0', color: COLORS.result, solid: true },
+            ],
+            narrow,
+            true,
+        );
+        const line = drawTimeline(TURN * 2);
         const show = say;
         let duration = 0.5;
         let time = 0;
@@ -56,7 +66,7 @@ export default defineDiagram({
             second.show({ ...SETUP, ...b });
             result.show(pose);
             line.show(time);
-            const share = `${Math.round(weight * 10) * 10} percent of the way`;
+            const share = `${Math.floor(weight * 10) * 10} percent of the way`;
 
             if (weight < 1 && intoB) {
                 show(

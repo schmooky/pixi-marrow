@@ -1,4 +1,5 @@
 import { type Controls, panel } from '../previews/panel';
+import { PHONE_QUERY } from './layout';
 
 /*
  * The runtime of the diagrams: small animations in SVG that show one idea on plain shapes. A
@@ -23,6 +24,8 @@ interface Playable {
 /** What a diagram builds itself with: its drawing, its clock and the controls under it. */
 interface DiagramContext extends Controls {
     svg: SVGSVGElement;
+    /** True on a phone, where a row of lanes stands one under the other. */
+    narrow: boolean;
     /**
      * Calls `step` in every animation frame while the diagram is in view and plays, with the
      * seconds since the frame before, times the speed the reader picked.
@@ -229,6 +232,7 @@ async function start(frame: HTMLElement, svg: SVGSVGElement, bar: HTMLElement): 
 
     diagram.setup({
         svg,
+        narrow: matchMedia(PHONE_QUERY).matches,
         ...panel(bar),
         onFrame: (step) => steps.push(step),
         own: (playable) => owned.push(playable),
