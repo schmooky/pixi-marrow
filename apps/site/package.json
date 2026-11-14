@@ -9,6 +9,7 @@
     "dev": "pnpm rigs && astro dev --port 5179",
     "build": "pnpm rigs && pnpm typecheck && astro build",
     "preview": "astro preview --port 5179",
+    "lab": "pnpm build && node scripts/lab-serve.mjs",
     "typecheck": "tsc"
   },
   "dependencies": {

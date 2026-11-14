@@ -34,3 +34,6 @@ packages/*/LICENSE
 # apps/site/scripts/copy-rigs.mjs copies from fixtures/bzzz. Not committed twice.
 .astro/
 apps/site/public/rigs/
+
+# Results that phones sent to the dev server of the site from the lab pages
+apps/site/lab-results/
