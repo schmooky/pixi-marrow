@@ -1,5 +1,6 @@
 import { type MeshAdaptor, MeshPipe, type Renderer } from 'pixi.js';
 import { watchContext } from './context-watch';
+import { watchUniformBatch } from './mesh-uniforms';
 
 /*
  * The pipe Pixi draws a mesh with, for a renderer that has none.
@@ -31,8 +32,9 @@ function adaptorOf(renderer: Renderer): MeshAdaptor | undefined {
 }
 
 /**
- * Makes sure a renderer can draw the meshes of a view: gives it Pixi's mesh pipe when it has
- * none, and makes it say when its WebGL context is lost, see `context-watch.ts`. A view in the
+ * Makes sure a renderer can draw the meshes of a view. It gives the renderer Pixi's mesh pipe
+ * when it has none, and makes it say when its WebGL context is lost, see `context-watch.ts`. On
+ * WebGPU it lets the meshes of the mesh mode draw past the room of Pixi's batch of uniforms. A view in the
  * mesh mode calls it before the first frame a renderer draws of it.
  *
  * @example
@@ -41,14 +43,17 @@ function adaptorOf(renderer: Renderer): MeshAdaptor | undefined {
 export function linkMeshPipe(renderer: Renderer): void {
     watchContext(renderer);
     // the type says that every renderer has the pipe. One that was created before `Mesh` loaded has not
-    if (renderer.renderPipes.mesh !== undefined) return;
-    const adaptor = adaptorOf(renderer);
+    if (renderer.renderPipes.mesh === undefined) {
+        const adaptor = adaptorOf(renderer);
 
-    // a renderer without a mesh adaptor is none of Pixi's: it draws its meshes in a way of its own
-    if (adaptor === undefined) return;
-    const pipe = new MeshPipe(renderer, adaptor);
+        // a renderer without a mesh adaptor is none of Pixi's: it draws its meshes in a way of its own
+        if (adaptor === undefined) return;
+        const pipe = new MeshPipe(renderer, adaptor);
 
-    // what a renderer does with the pipes it finds when it is initialized
-    renderer.renderPipes.mesh = pipe;
-    renderer.runners.destroy.add(pipe);
+        // what a renderer does with the pipes it finds when it is initialized
+        renderer.renderPipes.mesh = pipe;
+        renderer.runners.destroy.add(pipe);
+    }
+    // on WebGPU the uniforms of a mesh take a slot of a batch that holds about 2000, see `mesh-uniforms.ts`
+    watchUniformBatch(renderer);
 }
