@@ -211,8 +211,8 @@ pre {
         margin-inline: -0.5rem;
     }
     .nav-links a {
-        padding-inline: 0.5rem;
-        font-size: 0.82rem;
+        padding-inline: 0.34rem;
+        font-size: 0.77rem;
     }
 }
 .nav-links a[aria-current="page"]::after {
@@ -578,97 +578,64 @@ pre {
 
 /* ---------------------------------------------------------------------- home */
 
-.hero {
-    position: relative;
-    overflow: hidden;
-    border-bottom-width: 1px;
+/* the landing: a line, the bee and its code on one card of the code grey, and a way to the docs */
+.landing {
+    padding-block: 3.5rem 4rem;
 }
-.hero-grid {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    opacity: 0.7;
-    background-image:
-        linear-gradient(hsl(var(--border) / 0.55) 1px, transparent 1px),
-        linear-gradient(90deg, hsl(var(--border) / 0.55) 1px, transparent 1px);
-    background-size: 44px 44px;
-    mask-image: radial-gradient(ellipse at center, black 30%, transparent 75%);
+.landing-title {
+    font-size: clamp(1.75rem, 4vw, 2.6rem);
+    font-weight: 750;
+    line-height: 1.1;
+    letter-spacing: -0.03em;
 }
-.hero-text {
-    position: relative;
-    padding-block: 4rem 3rem;
-}
-.hero-text .display-1 {
-    margin-top: 1.25rem;
-}
-.hero-text .lead {
-    margin-top: 1.5rem;
-    max-width: 42rem;
-}
-.hero-actions {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.75rem;
-    margin-top: 2.25rem;
-}
-.hero-note {
-    margin-top: 0.9rem;
-    font-size: 0.8125rem;
+.landing-lead {
+    margin-top: 0.75rem;
     color: hsl(var(--muted-foreground));
 }
-.home-demo {
-    position: relative;
+.landing-card {
     display: grid;
-    gap: 1.5rem;
-    align-items: start;
-    padding-bottom: 4rem;
-}
-@media (min-width: 960px) {
-    .home-demo {
-        grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
-    }
-}
-.home-demo .preview {
-    margin: 0;
-}
-.code-card {
-    min-width: 0;
+    margin-top: 2rem;
     overflow: hidden;
     border: 1px solid hsl(var(--code-border));
     border-radius: var(--radius);
     background: hsl(var(--code-bg));
 }
-.code-card-title {
-    border-bottom: 1px solid hsl(var(--code-border));
-    padding: 0.65rem 1rem;
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    color: hsl(0 0% 100% / 0.55);
+.landing-bee {
+    height: 300px;
 }
-.code-card pre {
+.landing-bee canvas {
+    display: block;
+}
+.landing-code {
+    min-width: 0;
+    align-self: center;
+}
+.landing-code pre {
     overflow-x: auto;
-    padding: 1rem 1.25rem;
+    padding: 1.25rem 1.5rem;
     font-size: 13px;
     line-height: 1.7;
 }
-.home-part {
-    padding-top: 3.5rem;
-}
-.home-part-title {
-    margin-bottom: 1rem;
-    font-size: 1.15rem;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-}
-.home-pages {
-    display: grid;
-    gap: 1rem;
-}
-@media (min-width: 720px) {
-    .home-pages {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+@media (min-width: 900px) {
+    .landing-card {
+        grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
     }
+    .landing-bee {
+        height: 420px;
+    }
+}
+@media (max-width: 640px) {
+    .landing-code pre {
+        padding: 1rem;
+        font-size: 11.5px;
+    }
+}
+.landing-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 1.75rem;
 }
 
 /* ---------------------------------------------------------------------- docs layout */
