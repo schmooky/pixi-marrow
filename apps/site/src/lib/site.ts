@@ -7,45 +7,81 @@ export const SITE = {
     install: 'npm install pixi-marrow pixi.js',
 };
 
+/** The parts of the docs, in reading order. The slot guide builds a slot game step by step. */
+export type DocsSection = 'Start' | 'Slot guide' | 'Reference';
+
 /** A page of the docs, as the navigation lists it. */
 export interface DocsPage {
     href: string;
     title: string;
     /** One line for the card on the home page. */
     description: string;
+    section: DocsSection;
 }
 
 /** The pages of the docs, in reading order. */
 export const PAGES: readonly DocsPage[] = [
-    { href: '/start/', title: 'Start', description: 'Install, load, play, queue, mix, events and skins.' },
+    {
+        href: '/start/',
+        title: 'Start',
+        description: 'Install, load, play, queue, mix, events and skins.',
+        section: 'Start',
+    },
+    {
+        href: '/guide/symbol-set/',
+        title: 'A symbol set',
+        description: 'Load each symbol once and make as many copies as the reels show.',
+        section: 'Slot guide',
+    },
+    {
+        href: '/guide/cell/',
+        title: 'A symbol in its cell',
+        description: 'Size a symbol for the cells of the reels, and what its scale changes.',
+        section: 'Slot guide',
+    },
+    {
+        href: '/guide/states/',
+        title: 'Symbol states',
+        description: 'Idle, landing, win, dimmed and blurred, and how a symbol moves between them.',
+        section: 'Slot guide',
+    },
     {
         href: '/bones-and-placeholders/',
         title: 'Bones and placeholders',
         description: 'Read a bone and put your own Pixi objects into a rig.',
+        section: 'Reference',
     },
     {
         href: '/skins-and-slots/',
         title: 'Skins and slots',
         description: 'Several skins at once, slot attachments and colors, and the setup pose.',
+        section: 'Reference',
     },
     {
         href: '/reels/',
         title: 'Reels',
         description: 'The reels of a slot game, spun by pixi-reels and drawn by pixi-marrow, with line wins.',
+        section: 'Reference',
     },
     {
         href: '/performance/',
         title: 'Performance',
         description: 'Presets, pacing, the idle cache, baking and GPU skinning, and the report of what is in effect.',
+        section: 'Reference',
     },
     {
         href: '/debug/',
         title: 'Debug overlays',
         description: 'Bones, shapes, clipping and overdraw drawn over a skeleton.',
+        section: 'Reference',
     },
     {
         href: '/good-to-know/',
         title: 'Good to know',
         description: 'What is automatic, the options, the versions and the limits.',
+        section: 'Reference',
     },
 ];
+
+/** The pages of a part of the docs, in reading order. */
+export const pagesOf = (section: DocsSection): DocsPage[] => PAGES.filter((page) => page.section === section);
