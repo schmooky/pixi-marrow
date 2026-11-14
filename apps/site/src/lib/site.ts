@@ -1,9 +1,14 @@
+import { version } from '../../../../packages/pixi-marrow/package.json';
+
 /** What every page of the site says about the project. */
 export const SITE = {
     name: 'pixi-marrow',
     tagline: 'A Spine runtime for PixiJS v8',
     description: 'pixi-marrow plays Spine 4.1, 4.2 and 4.3 skeletons in PixiJS v8 with its own pose core.',
     repository: 'https://github.com/schmooky/pixi-marrow',
+    npm: 'https://www.npmjs.com/package/pixi-marrow',
+    /** The version of the package in this checkout, which the bar at the top shows. */
+    version,
     install: 'npm install pixi-marrow pixi.js',
 };
 
@@ -181,21 +186,44 @@ export const pagesOf = (section: DocsSection): DocsPage[] => PAGES.filter((page)
 export interface TopLink {
     href: string;
     title: string;
+    /** One line on what is behind the link, for the menu on a phone. */
+    note: string;
     /** True when the page at `path` belongs to this link. */
     current(path: string): boolean;
 }
 
-/** The bar at the top: one link per part of the docs, then the playground and the lab. */
-export const TOP_LINKS: readonly TopLink[] = [
-    ...SECTIONS.map((section) => {
-        const pages = pagesOf(section);
+/** What each part of the docs holds, in one line. */
+const SECTION_NOTES: Record<DocsSection, string> = {
+    Basics: 'The computer graphics a runtime stands on.',
+    Guide: 'Load, play, mix and follow animations.',
+    'How it works': 'The runtime taken apart, one frame at a time.',
+    Reference: 'Performance, debugging, details and an example.',
+};
 
-        return {
-            href: pages[0]?.href ?? '/',
-            title: section,
-            current: (path: string) => pages.some((page) => page.href === path),
-        };
-    }),
-    { href: '/playground/', title: 'Playground', current: (path: string) => path.startsWith('/playground') },
-    { href: '/lab/', title: 'Lab', current: (path: string) => path.startsWith('/lab') },
+/** The parts of the docs, as the bar at the top links them: each to its first page. */
+export const DOCS_LINKS: readonly TopLink[] = SECTIONS.map((section) => {
+    const pages = pagesOf(section);
+
+    return {
+        href: pages[0]?.href ?? '/',
+        title: section,
+        note: SECTION_NOTES[section],
+        current: (path: string) => pages.some((page) => page.href === path),
+    };
+});
+
+/** The tools of the site. They open on pages of their own, without the docs around them. */
+export const TOOL_LINKS: readonly TopLink[] = [
+    {
+        href: '/playground/',
+        title: 'Playground',
+        note: 'Drop your own Spine files, and they play here.',
+        current: (path: string) => path.startsWith('/playground'),
+    },
+    {
+        href: '/lab/',
+        title: 'Lab',
+        note: 'Tests that show how the runtime plays on this device.',
+        current: (path: string) => path.startsWith('/lab'),
+    },
 ];
