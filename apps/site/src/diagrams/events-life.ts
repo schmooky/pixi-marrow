@@ -23,10 +23,10 @@ const MARKS = [
 ] as const;
 
 export default defineDiagram({
-    setup({ svg, onFrame, readout }) {
+    setup({ svg, onFrame, say }) {
         const line = timeline(svg, 20, 150, 680, SPAN);
         const marks = svgElement('g', {}, svg);
-        const show = readout('Last', 60);
+        const show = say;
         const xOf = (seconds: number): number => 20 + (seconds / SPAN) * 680;
         let time = 0;
 

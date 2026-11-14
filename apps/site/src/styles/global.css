@@ -473,6 +473,102 @@ pre {
     display: block;
     width: 100%;
     height: auto;
+    font-family: var(--font-sans);
+}
+/* the drawings name their fonts loosely; they take the fonts of the site */
+.diagram-svg text {
+    font-family: var(--font-sans);
+}
+.diagram-svg text[font-family*="mono"] {
+    font-family: var(--font-mono);
+}
+
+/* the line under a drawing: what happens now, as subtitles do, and the buttons that pause it and slow it down */
+.diagram-strip {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.4rem;
+    border-top-width: 1px;
+    padding: 0.6rem 0.6rem 0.6rem 0.9rem;
+}
+.diagram-say {
+    flex: 1;
+    min-width: 0;
+    /* two lines are kept, so that the page does not jump as the line changes */
+    min-height: calc(2 * 1.5em);
+    margin: 0;
+    padding-top: 0.2rem;
+    font-size: 14px;
+    line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+    color: hsl(var(--foreground));
+    text-wrap: pretty;
+}
+@media (max-width: 640px) {
+    .diagram-say {
+        min-height: calc(3 * 1.5em);
+        font-size: 13.5px;
+    }
+}
+.diagram-tone {
+    font-weight: 600;
+}
+.diagram-tone-first {
+    color: #7cb8ff;
+}
+.diagram-tone-second {
+    color: #ffa070;
+}
+.diagram-tone-result {
+    color: #ffffff;
+}
+.diagram-button {
+    display: inline-flex;
+    width: 2rem;
+    height: 2rem;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    border-width: 1px;
+    border-radius: 0.45rem;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: hsl(var(--muted-foreground));
+    transition:
+        color 0.15s,
+        background-color 0.15s;
+}
+.diagram-button:hover {
+    background: hsl(var(--accent));
+    color: hsl(var(--foreground));
+}
+.diagram-button svg {
+    width: 0.85rem;
+    height: 0.85rem;
+    fill: currentColor;
+    stroke: currentColor;
+    stroke-width: 2.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+.diagram-speed {
+    width: 2.6rem;
+}
+[data-still] > .diagram-button {
+    display: none;
+}
+.diagram-icon-play,
+.diagram-button[aria-pressed="true"] .diagram-icon-pause {
+    display: none;
+}
+.diagram-button[aria-pressed="true"] .diagram-icon-play {
+    display: block;
+}
+/* a paused diagram says so with its button */
+.diagram-button[aria-pressed="true"] {
+    border-color: hsl(var(--marrow) / 0.7);
+    background: hsl(var(--marrow) / 0.14);
+    color: hsl(var(--foreground));
 }
 
 .preview {
@@ -533,6 +629,9 @@ pre {
     border-top-width: 1px;
     padding: 0.7rem 0.8rem;
     font-size: 12.5px;
+}
+.preview-panel:empty {
+    display: none;
 }
 .preview-row {
     display: contents;
@@ -677,17 +776,16 @@ pre {
     max-width: 100%;
     overflow: hidden;
     padding-block: 0.4rem;
-    font-family: var(--font-mono);
-    font-size: 12px;
+    font-size: 13px;
     font-variant-numeric: tabular-nums;
     line-height: 1.45;
     white-space: pre-wrap;
     color: hsl(var(--foreground) / 0.84);
 }
 .preview figcaption {
-    margin-top: 0.6rem;
+    margin-top: 0.7rem;
     padding-inline: 0.25rem;
-    font-size: 13px;
+    font-size: 14px;
     line-height: 1.6;
     color: hsl(var(--muted-foreground));
 }

@@ -17,12 +17,12 @@ type MixName = keyof typeof MIXES;
 const TURN = 2;
 
 export default defineDiagram({
-    setup({ svg, onFrame, pick, readout }) {
+    setup({ svg, onFrame, pick, say }) {
         const first = lane(svg, { x: 20, y: 10, label: 'A: moves right', color: COLORS.first, solid: false });
         const second = lane(svg, { x: 260, y: 10, label: 'B: scales', color: COLORS.second, solid: false });
         const result = lane(svg, { x: 500, y: 10, label: 'Track 0', color: COLORS.result, solid: true });
         const line = timeline(svg, 20, 200, 680, TURN * 2);
-        const show = readout('Now', 56);
+        const show = say;
         let duration = 0.5;
         let time = 0;
         /** Draws the bars of the two animations with the mix into each. */
@@ -56,11 +56,25 @@ export default defineDiagram({
             second.show({ ...SETUP, ...b });
             result.show(pose);
             line.show(time);
-            show(
-                weight < 1
-                    ? `${intoB ? 'A to B' : 'B to A'}, ${(weight * 100).toFixed(0)} percent of the way: x ${pose.x.toFixed(0)}, scale ${pose.scale.toFixed(2)}`
-                    : `${intoB ? 'B' : 'A'} alone: x ${pose.x.toFixed(0)}, scale ${pose.scale.toFixed(2)}`,
-            );
+            const share = `${Math.round(weight * 10) * 10} percent of the way`;
+
+            if (weight < 1 && intoB) {
+                show(
+                    `Mix from {first:A} into {second:B}, ${share}. B keys no position, so the square slides home as B's scale grows.`,
+                );
+            } else if (weight < 1) {
+                show(
+                    `Mix from {second:B} into {first:A}, ${share}. B's scale fades back to the setup pose as A moves the square right.`,
+                );
+            } else if (duration === 0) {
+                show(`{${intoB ? 'second:B' : 'first:A'}} alone. With no mix, the square jumped to it in one frame.`);
+            } else {
+                show(
+                    intoB
+                        ? '{second:B} alone: it scales the square, and keys no position.'
+                        : '{first:A} alone: it moves the square right.',
+                );
+            }
         });
     },
 });

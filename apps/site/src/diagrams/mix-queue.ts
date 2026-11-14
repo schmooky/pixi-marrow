@@ -20,12 +20,12 @@ type DelayName = keyof typeof DELAYS;
 const startOf = (delay: number): number => (delay > 0 ? delay : LANDING - MIX + delay);
 
 export default defineDiagram({
-    setup({ svg, onFrame, pick, readout }) {
+    setup({ svg, onFrame, pick, say }) {
         const first = lane(svg, { x: 20, y: 10, label: 'landing: bounces once', color: COLORS.first, solid: false });
         const second = lane(svg, { x: 260, y: 10, label: 'idle: pulses, loops', color: COLORS.second, solid: false });
         const result = lane(svg, { x: 500, y: 10, label: 'Track 0', color: COLORS.result, solid: true });
         const line = timeline(svg, 20, 200, 680, SPAN);
-        const show = readout('Idle', 56);
+        const show = say;
         let delay = 0;
         let time = 0;
         /** Draws the landing and the idle loop where the delay puts it. */
@@ -36,7 +36,6 @@ export default defineDiagram({
                 { from: 0, to: LANDING, color: COLORS.first, label: 'landing' },
                 { from: start, to: SPAN, color: COLORS.second, label: 'idle', mixIn: MIX },
             ]);
-            show(`starts at ${start.toFixed(2)} s and mixes in until ${(start + MIX).toFixed(2)} s`);
         };
 
         pick(
@@ -60,6 +59,18 @@ export default defineDiagram({
             second.show({ ...SETUP, ...idle });
             result.show(mix(landing, idle, weight));
             line.show(time);
+            if (time < start) show('{first:The landing} bounces. {second:Idle} waits in the queue until its turn.');
+            else if (weight < 1) {
+                show(
+                    `Mix: {result:the track} turns from {first:the landing} into {second:idle}, ${Math.round(weight * 10) * 10} percent of the way.${time < LANDING ? ' The landing is still in the air.' : ''}`,
+                );
+            } else {
+                show(
+                    delay < 0
+                        ? '{second:Idle} alone. It started early, so the bounce never landed.'
+                        : '{second:Idle} alone: the queue handed over, and it loops from here.',
+                );
+            }
         });
     },
 });

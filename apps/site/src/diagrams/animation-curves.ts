@@ -42,7 +42,7 @@ const xOf = (time: number): number => GRAPH.x + time * GRAPH.w;
 const yOf = (value: number): number => GRAPH.y + GRAPH.h - (value / 100) * GRAPH.h;
 
 export default defineDiagram({
-    setup({ svg, onFrame, pick, readout }) {
+    setup({ svg, onFrame, pick, say }) {
         svgElement(
             'rect',
             { x: GRAPH.x, y: GRAPH.y, width: GRAPH.w, height: GRAPH.h, fill: 'none', stroke: COLORS.line },
@@ -61,7 +61,7 @@ export default defineDiagram({
             { x1: 540, y1: GRAPH.y + GRAPH.h, x2: 630, y2: GRAPH.y + GRAPH.h, stroke: COLORS.line },
             svg,
         );
-        const show = readout('Value', 60);
+        const show = say;
         let curve: Curve = 'linear';
         let time = 0;
         const drawCurve = (): void => {

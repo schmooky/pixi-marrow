@@ -21,9 +21,9 @@ const PER_CALL = 3.2;
 const GPU_WORK = 180;
 
 export default defineDiagram({
-    setup({ svg, pick, readout }) {
+    setup({ svg, pick, say }) {
         const lanes = svgElement('g', {}, svg);
-        const show = readout('Frame', 60);
+        const show = say;
 
         for (const [index, name] of ['CPU', 'GPU'].entries()) {
             svgElement(
@@ -49,7 +49,7 @@ export default defineDiagram({
                 x: LEFT + FRAME - 4,
                 y: 24,
                 fill: COLORS.text,
-                'font-size': 11,
+                'font-size': 12,
                 'text-anchor': 'end',
                 'font-family': 'ui-monospace, monospace',
             },
@@ -60,7 +60,7 @@ export default defineDiagram({
             svgElement('rect', { x: LEFT, y: 50, width: UPDATE, height: 30, rx: 3, fill: COLORS.first }, lanes);
             svgElement(
                 'text',
-                { x: LEFT + 6, y: 70, fill: '#111113', 'font-size': 11, 'font-family': 'ui-sans-serif, system-ui' },
+                { x: LEFT + 6, y: 70, fill: '#111113', 'font-size': 12, 'font-family': 'ui-sans-serif, system-ui' },
                 lanes,
             ).textContent = 'update';
             const callsWidth = calls * PER_CALL;
@@ -92,7 +92,7 @@ export default defineDiagram({
                     x: gpuStart + 6,
                     y: 140,
                     fill: '#111113',
-                    'font-size': 11,
+                    'font-size': 12,
                     'font-family': 'ui-sans-serif, system-ui',
                 },
                 lanes,

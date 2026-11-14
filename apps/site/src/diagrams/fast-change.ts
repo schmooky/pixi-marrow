@@ -15,7 +15,7 @@ const COLUMNS = 8;
 const COUNT = 24;
 
 export default defineDiagram({
-    setup({ svg, onFrame, pick, readout }) {
+    setup({ svg, onFrame, pick, say }) {
         const cells = Array.from({ length: COUNT }, (_, index) =>
             svgElement(
                 'rect',
@@ -30,7 +30,7 @@ export default defineDiagram({
                 svg,
             ),
         );
-        const show = readout('This frame', 60);
+        const show = say;
         let share = 1;
         let clock = 0;
 
@@ -55,7 +55,9 @@ export default defineDiagram({
                 cell.setAttribute('fill', moves ? COLORS.second : '#26262c');
                 if (moves) moved++;
             }
-            show(`${moved} posed, placed and uploaded. ${COUNT - moved} asked and skipped`);
+            show(
+                `${moved} moved, so they were posed, placed and uploaded. The other ${COUNT - moved} were asked, and skipped.`,
+            );
         });
     },
 });

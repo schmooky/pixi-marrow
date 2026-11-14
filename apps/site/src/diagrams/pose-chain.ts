@@ -20,7 +20,7 @@ const along = (from: [number, number], length: number, degrees: number): [number
 ];
 
 export default defineDiagram({
-    setup({ svg, onFrame, pick, readout }) {
+    setup({ svg, onFrame, pick, readout, say }) {
         const upper = svgElement('line', { stroke: COLORS.first, 'stroke-width': 10, 'stroke-linecap': 'round' }, svg);
         const lower = svgElement('line', { stroke: COLORS.second, 'stroke-width': 10, 'stroke-linecap': 'round' }, svg);
         const ghost = svgElement(
@@ -49,8 +49,16 @@ export default defineDiagram({
             MODES,
             (next) => {
                 mode = next;
+                say(
+                    next === 'lower bone holds 30'
+                        ? 'The {second:lower bone} keeps its own 30 degrees, yet it turns on screen: the {first:upper bone} carries it along.'
+                        : 'The {second:lower bone} turns on its own as well. On screen its turn adds to the turn of the {first:upper bone}.',
+                );
             },
             'lower bone holds 30',
+        );
+        say(
+            'The {second:lower bone} keeps its own 30 degrees, yet it turns on screen: the {first:upper bone} carries it along.',
         );
         onFrame((seconds) => {
             time += seconds;

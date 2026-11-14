@@ -35,7 +35,7 @@ function matrixFor(from: [number, number][], to: [number, number][]): string {
 }
 
 export default defineDiagram({
-    setup({ svg, onFrame, readout }) {
+    setup({ svg, onFrame, say }) {
         const defs = svgElement('defs', {}, svg);
         const picture = svgElement('g', { id: 'uv-picture' }, defs);
 
@@ -76,7 +76,7 @@ export default defineDiagram({
             return { shape, use };
         });
         const edges = svgElement('g', {}, svg);
-        const show = readout('Watch', 60);
+        const show = say;
         let time = 0;
 
         onFrame((seconds) => {

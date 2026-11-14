@@ -17,11 +17,11 @@ const SLOT = 64;
 const SCALE = 3.2;
 
 export default defineDiagram({
-    setup({ svg, pick, readout }) {
+    setup({ svg, pick, say }) {
         const parts = ['game', 'skeletons', 'render'];
         const colors = [COLORS.first, COLORS.second, '#6fd08c'];
         const lane = svgElement('g', {}, svg);
-        const show = readout('Frames', 60);
+        const show = say;
 
         svgElement(
             'text',
@@ -68,7 +68,7 @@ export default defineDiagram({
                             x: x + SLOT / 2,
                             y: 40 + (BUDGET * SCALE) / 2,
                             fill: '#ff6b6b',
-                            'font-size': 11,
+                            'font-size': 12,
                             'text-anchor': 'middle',
                             'font-family': 'ui-monospace, monospace',
                         },

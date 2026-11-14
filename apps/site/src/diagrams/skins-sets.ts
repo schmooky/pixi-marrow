@@ -28,7 +28,7 @@ const CHOICES = {
 type Choice = keyof typeof CHOICES;
 
 export default defineDiagram({
-    setup({ svg, pick, readout }) {
+    setup({ svg, pick, say }) {
         const text = (x: number, y: number, value: string, color = COLORS.text): SVGTextElement => {
             const node = svgElement(
                 'text',
@@ -45,7 +45,7 @@ export default defineDiagram({
         text(260, 20, 'skin knight');
         text(470, 20, 'what shows');
         const result = svgElement('g', {}, svg);
-        const show = readout('Rule', 60);
+        const show = say;
 
         for (const [row, slot] of SLOTS.entries()) {
             const y = 40 + row * 50;

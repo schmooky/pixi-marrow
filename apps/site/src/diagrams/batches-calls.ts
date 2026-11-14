@@ -20,10 +20,11 @@ interface Item {
 const BATCH_COLORS = [COLORS.first, COLORS.second, '#6fd08c', '#b48cff', '#ffd84a'];
 
 export default defineDiagram({
-    setup({ svg, own, toggle, readout }) {
-        const show = readout('Draw calls', 60);
+    setup({ svg, own, toggle, say }) {
+        const show = say;
         const options = { text: false, multiply: false };
         let timeline = createTimeline({ loop: true, autoplay: false });
+        let rate = 1;
         /** The display list for the switches. */
         const list = (): Item[] => {
             const items: Item[] = ['A', 'B', 'C', 'D', 'E', 'F'].map((name) => ({
@@ -42,6 +43,7 @@ export default defineDiagram({
             timeline.pause();
             svg.replaceChildren();
             timeline = createTimeline({ loop: true, autoplay: false });
+            timeline.speed = rate;
             const items = list();
             let batch = -1;
             let previous: Item | undefined;
@@ -101,7 +103,17 @@ export default defineDiagram({
             timeline.play();
         };
 
-        own({ play: () => timeline.play(), pause: () => timeline.pause() });
+        own({
+            play: () => timeline.play(),
+            pause: () => timeline.pause(),
+            get speed() {
+                return rate;
+            },
+            set speed(next: number) {
+                rate = next;
+                timeline.speed = next;
+            },
+        });
         toggle('Add', 'a text between', false, (on) => {
             options.text = on;
             build();

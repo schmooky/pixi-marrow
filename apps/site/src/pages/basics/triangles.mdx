@@ -8,7 +8,7 @@ import Diagram from '../../components/Diagram.astro';
 
 ## Everything is triangles
 
-<Diagram name="triangles" height={270} rows={1} caption="A star is cut into triangles, one after the other." />
+<Diagram name="triangles" height={270} rows={0} caption="A star is cut into triangles, one after the other." />
 
 The GPU, the chip that draws, knows one shape: the triangle. A triangle is three corners, its vertices, and the GPU fills millions of them a second. Every other shape is cut into triangles first. A rectangle is 2 triangles, the star above is 10, and a smooth curve is many.
 
@@ -16,7 +16,7 @@ More triangles cost more: each vertex has to be placed in every frame it moves. 
 
 ## A picture on the triangles
 
-<Diagram name="texture-sample" height={280} rows={1} caption="A triangle on the screen, and the picture it takes its colors from. The square is a pixel inside the triangle, and the circle is where it reads the picture." />
+<Diagram name="texture-sample" height={280} rows={0} caption="A triangle on the screen, and the picture it takes its colors from. The square is a pixel inside the triangle, and the circle is where it reads the picture." />
 
 The pictures of a game are textures: images the GPU can read. Each vertex of a triangle names a place on the texture, its texture coordinate, written u and v from 0 to 1. For each pixel inside the triangle, the GPU mixes the three places by how close the pixel is to each vertex, and reads the texture at the mixed place.
 

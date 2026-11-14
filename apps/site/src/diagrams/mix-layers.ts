@@ -8,11 +8,11 @@ import { COLORS, lane } from './shapes';
  */
 
 export default defineDiagram({
-    setup({ svg, onFrame, toggle, readout }) {
+    setup({ svg, onFrame, toggle, say }) {
         const first = lane(svg, { x: 20, y: 10, label: 'Track 0: moves right', color: COLORS.first, solid: false });
         const second = lane(svg, { x: 260, y: 10, label: 'Track 1: scales', color: COLORS.second, solid: false });
         const result = lane(svg, { x: 500, y: 10, label: 'What you see', color: COLORS.result, solid: true });
-        const show = readout('Values', 48);
+        const show = say;
         let upper = true;
         let time = 0;
 
@@ -30,7 +30,9 @@ export default defineDiagram({
             second.show(layer(SETUP, scales, 1, 'replace'));
             result.show(pose);
             show(
-                `x ${pose.x.toFixed(0)} from track 0, scale ${pose.scale.toFixed(2)} from ${upper ? 'track 1' : 'the setup pose'}`,
+                upper
+                    ? '{first:Track 0} moves the square and {second:track 1} scales it. They key different values, so {result:what you see} does both.'
+                    : '{second:Track 1} is off. {first:Track 0} keys no scale, so the scale comes from the setup pose.',
             );
         });
     },

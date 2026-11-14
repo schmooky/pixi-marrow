@@ -2,20 +2,28 @@
 interface Props {
     /** The name of a module of src/diagrams, as `DIAGRAMS` of its runtime lists it. */
     name: string;
-    /** What the diagram shows, as a line under it and for screen readers. */
+    /** What the diagram shows and what to watch, as a line under it and for screen readers. */
     caption: string;
     /** The size of the drawing in its own units. */
     width?: number;
     height?: number;
-    /** How many rows the panel under the drawing has, so that the page does not jump. */
+    /** How many rows the panel under the drawing has, so that the page does not jump. 0 for none. */
     rows?: number;
 }
-const { name, caption, width = 720, height = 250, rows = 2 } = Astro.props;
+const { name, caption, width = 720, height = 250, rows = 1 } = Astro.props;
 ---
 
 <figure class="preview diagram">
     <div class="preview-frame" data-diagram={name}>
         <svg class="diagram-svg" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={caption}></svg>
+        <div class="diagram-strip" data-diagram-strip>
+            <p class="diagram-say" data-diagram-say></p>
+            <button type="button" class="diagram-button" data-diagram-pause aria-label="Pause" aria-pressed="false">
+                <svg class="diagram-icon-pause" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.5v9M11 3.5v9" /></svg>
+                <svg class="diagram-icon-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.2v9.6L12.5 8Z" /></svg>
+            </button>
+            <button type="button" class="diagram-button diagram-speed" data-diagram-speed aria-label="Speed: 1x">1x</button>
+        </div>
         <div class="preview-panel" id={`diagram-${name}-panel`} data-diagram-bar style={`--rows:${rows}`}></div>
     </div>
     <figcaption>{caption}</figcaption>

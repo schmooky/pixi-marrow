@@ -13,12 +13,10 @@ const CUT = 0.6;
 const SPAN = 2;
 
 export default defineDiagram({
-    setup({ svg, onFrame, readout }) {
+    setup({ svg, onFrame, say }) {
         const whole = lane(svg, { x: 20, y: 10, label: 'win plays to its end', color: COLORS.first, solid: true });
         const cut = lane(svg, { x: 260, y: 10, label: 'win replaced at 0.6 s', color: COLORS.second, solid: true });
         const line = timeline(svg, 20, 200, 680, SPAN);
-        const showWhole = readout('Left', 60);
-        const showCut = readout('Right', 60);
         let time = 0;
 
         line.draw([
@@ -32,8 +30,19 @@ export default defineDiagram({
             whole.show({ ...SETUP, scale: time < WIN ? grow(time) : 1 });
             cut.show({ ...SETUP, scale: time < CUT ? grow(time) : 1, x: time < CUT ? 0 : 60 });
             line.show(time);
-            showWhole(time < WIN ? 'playing' : `finished resolved at ${WIN} s, no interrupt: it played whole`);
-            showCut(time < CUT ? 'playing' : `finished resolved at ${CUT} s, after an interrupt: it was cut short`);
+            if (time < CUT)
+                say(
+                    'Both wins play. {first:The left one} will play to its end, {second:the right one} is replaced at 0.6 s.',
+                );
+            else if (time < WIN) {
+                say(
+                    '{second:Right}: replaced at 0.6 s, so finished resolves now, after an interrupt. {first:Left} still plays.',
+                );
+            } else {
+                say(
+                    '{first:Left}: played to its end, so finished resolved at 1.2 s with no interrupt. {second:Right} was cut short.',
+                );
+            }
         });
     },
 });

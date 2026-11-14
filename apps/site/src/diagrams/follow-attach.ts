@@ -14,7 +14,7 @@ const MODES = ['follow', 'attach to middle'] as const;
 type Mode = (typeof MODES)[number];
 
 export default defineDiagram({
-    setup({ svg, onFrame, pick, readout }) {
+    setup({ svg, onFrame, pick, say }) {
         const scene = svgElement('g', {}, svg);
         const back = svgElement('rect', { width: 120, height: 120, rx: 10, fill: COLORS.first }, scene);
         const middle = svgElement('rect', { width: 100, height: 100, rx: 10, fill: COLORS.second }, scene);
@@ -24,7 +24,7 @@ export default defineDiagram({
             scene,
         );
         const front = svgElement('rect', { width: 90, height: 60, rx: 10, fill: COLORS.result }, scene);
-        const show = readout('Draw order', 60);
+        const show = say;
         let mode: Mode = 'follow';
         let time = 0;
         /** Puts the star into the draw order the mode gives it. */

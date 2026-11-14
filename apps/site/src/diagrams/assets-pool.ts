@@ -20,7 +20,7 @@ interface Symbol {
 }
 
 export default defineDiagram({
-    setup({ svg, onFrame, toggle, readout }) {
+    setup({ svg, onFrame, toggle, say }) {
         svgElement(
             'rect',
             {
@@ -47,7 +47,7 @@ export default defineDiagram({
         ).textContent = 'the pool';
         const reel = svgElement('g', {}, svg);
         const shelf = svgElement('g', {}, svg);
-        const show = readout('Counters', 60);
+        const show = say;
         const pool: string[] = [];
         const symbols: Symbol[] = [];
         let pooled = true;
@@ -134,7 +134,9 @@ export default defineDiagram({
             }
             drawPool();
             show(
-                `made ${made}, reused ${reused} from the pool${pooled ? '' : ': without a pool every symbol is made new'}`,
+                pooled
+                    ? `Made ${made} copies, and reused ${reused} from the pool.`
+                    : `Made ${made} copies. Without a pool, every symbol that enters is made new.`,
             );
         });
     },

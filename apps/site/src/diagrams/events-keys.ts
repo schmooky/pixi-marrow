@@ -17,10 +17,10 @@ const KEYS = [
 const MIX_OUT = 0.7;
 
 export default defineDiagram({
-    setup({ svg, onFrame, readout }) {
+    setup({ svg, onFrame, say }) {
         const line = timeline(svg, 20, 60, 680, LENGTH * 2);
         const log = svgElement('g', {}, svg);
-        const show = readout('Pass', 60);
+        const show = say;
         const xOf = (seconds: number): number => 20 + (seconds / (LENGTH * 2)) * 680;
         let time = 0;
         let lines = 0;
@@ -41,7 +41,7 @@ export default defineDiagram({
                         x,
                         y: 32,
                         fill: COLORS.text,
-                        'font-size': 11,
+                        'font-size': 12,
                         'text-anchor': 'middle',
                         'font-family': 'ui-monospace, monospace',
                     },
