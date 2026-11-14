@@ -1,14 +1,17 @@
 ---
 layout: ../../layouts/Docs.astro
 title: Play
-description: Start an animation, loop it, change its speed, stop it, hold a pose, and know when it ends.
+description: Start an animation, loop it, change its speed, play part of it, stop it, hold a pose, and know when it ends.
 ---
 
+import Diagram from '../../components/Diagram.astro';
 import Preview from '../../components/Preview.astro';
 import Snippet from '../../components/Snippet.astro';
 import source from '../../snippets/guide-play.ts?raw';
 
-<Preview name="play" height={400} caption="The bee of the slot game Bzzz. Press an animation to play it, and the runtime mixes into it from the one before." />
+## An animation is a stretch of time
+
+An animation has a length, such as 1.33 seconds. Playing it puts it on a track, and the track has a playhead that moves through that length as time passes. In every frame the runtime reads the pose at the playhead and draws it, as [One frame](/how/frame/) shows. Everything on this page changes how the playhead moves.
 
 ## Know the names
 
@@ -29,32 +32,42 @@ A skeleton usually has one animation per state it can be in. The symbols of Bzzz
 | `win` | A celebration. | 1.33 s |
 | `disable` | A dimmed pose. | 0 s |
 
-## Play and loop
+## Loop or hold
 
-<Snippet source={source} regions="loop" />
+<Diagram name="play-loop" height={250} rows={1} caption="One animation that moves a square right in one second, played three ways. Watch what each does when the second is over." />
 
-`play` starts an animation now, on track 0 unless you name another. It replaces what the track played, with a mix if one is set. `loop: true` plays it again from its start each time it ends, until the track plays something else.
+The first second, all of them move. Then they part:
 
-## Speed and part of an animation
+- With `loop: true` the playhead jumps back to the start, and the move plays again.
+- With `loop: false` the playhead stops at the end, and the square **holds its last frame**. It does not go back to the setup pose.
+- An animation of 0 seconds has only a last frame, so it is a pose that holds from the start.
+
+<Snippet source={source} regions="loop hold" />
+
+`play` starts an animation now, on track 0 unless you name another, in place of what the track played. Animators use 0-second animations for states that do not move, such as `disable`, which dims a Bzzz symbol and keeps it dimmed.
+
+## Speed and part
+
+<Diagram name="play-speed" height={250} rows={1} caption="The same one-second move at speed 1, at speed 0.5, and with only its middle half played." />
+
+`speed` makes the playhead move faster or slower: at 0.5 the move takes two seconds. `start` and `end` cut a part out of the animation, and a loop repeats that part only. `reverse` moves the playhead backwards. `timeScale` sets the speed of the whole skeleton, every track at once.
 
 <Snippet source={source} regions="speed" />
-
-`speed` changes how fast one animation plays, and `timeScale` how fast the whole skeleton does. `start` and `end` play part of an animation, and a loop repeats that part. `reverse` plays it backwards.
 
 ## Stop
 
 <Snippet source={source} regions="stop" />
 
-`stop` clears one track, or all of them when you name none. Without a mix the pose stays as the track left it. With a mix the track fades back to the setup pose over that time.
-
-## Hold a pose
-
-<Snippet source={source} regions="hold" />
-
-An animation that does not loop holds its last frame until the track plays something else. An animation of 0 seconds is a pose: `disable` dims the bee and keeps it dimmed. Animators use that for states that do not move, such as dimmed, highlighted or disabled.
+`stop` takes the animation off a track, or off all tracks when you name none. Without a mix the pose stays as the track left it, because nothing changes it any more. With a mix the track fades back to the setup pose over that time.
 
 ## Know when it ends
 
+<Diagram name="play-finished" height={250} rows={2} caption="A win of 1.2 seconds, played whole on the left and replaced by another animation at 0.6 seconds on the right." />
+
+`play` returns a `Track`, the handle on that animation. Its `finished` promise resolves when the animation has played to its end. It also resolves when something else takes its place first, as on the right. Code that waits for a win before it shows the total must therefore check whether the win was cut short. [Events](/guide/events/) shows how.
+
 <Snippet source={source} regions="finished" />
 
-`play` returns a `Track`, the handle on that animation. `finished` resolves when an animation that does not loop has played to its end. It also resolves when something replaces the animation first, so a game that waits on it must check whether it was cut short. [Events](/guide/events/) shows how.
+## Try it on a real skeleton
+
+<Preview name="play" height={400} caption="The bee of the slot game Bzzz. Press an animation to play it, and the runtime mixes into it from the one before." />

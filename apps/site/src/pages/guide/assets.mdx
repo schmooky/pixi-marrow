@@ -4,12 +4,17 @@ title: Assets and copies
 description: A skeleton is loaded once and shown as often as a scene needs. Load with pixi-marrow or with Pixi Assets, and keep copies at hand.
 ---
 
+import Diagram from '../../components/Diagram.astro';
 import Snippet from '../../components/Snippet.astro';
 import source from '../../snippets/guide-assets.ts?raw';
 
 ## An asset and its copies
 
 A game often shows one skeleton many times: a crowd, a row of coins, the symbols of a reel. pixi-marrow splits what all of them share from what each one keeps.
+
+<Diagram name="assets-share" height={210} rows={2} caption="One asset and its copies. Pick how many copies there are, and watch which part of the memory grows." />
+
+The big part, the skeleton data, the pictures and the code, is loaded once and stays the same however many copies there are. Each copy adds only what makes it move on its own: its pose, its tracks and the buffers it draws from. So a hundred copies of one symbol cost little more than one, and a hundred different skeletons cost a hundred times as much.
 
 <Snippet source={source} regions="load" />
 
@@ -37,7 +42,9 @@ An atlas named like `hero@0.5x.webp.atlas` counts as resolution 0.5 in WebP, so 
 
 <Snippet source={source} regions="pool" />
 
-Making a copy allocates its pose and its buffers, and destroying it frees them. A scene that shows and hides copies often, such as a reel that brings in a new symbol many times a spin, is better off with a pool. A copy from the pool still holds its last pose, so stop it and set its setup pose before it shows again.
+<Diagram name="assets-pool" height={210} rows={2} caption="A reel whose symbols scroll down. A symbol that leaves at the bottom goes into the pool, and one that enters at the top comes from it. Turn the pool off to see every symbol made new." />
+
+With the pool, the counter of made symbols stops after a few, and every later symbol is reused. Without it, a new copy is made for every symbol that enters, and the old one waits for the garbage collector, which can cost a frame on a phone. Making a copy allocates its pose and its buffers, so a scene that shows and hides copies often is better off with a pool. A copy from the pool still holds its last pose, so stop it and set its setup pose before it shows again.
 
 ## Keep copies together
 
