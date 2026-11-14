@@ -196,6 +196,8 @@ async function run(test: LabTest, page: LabPage, show: (text: string, done: numb
             const asset = await MarrowAsset.load({
                 skeleton: `/rigs/${rig}.skel`,
                 atlas: '/rigs/symbols.atlas',
+                // the fill test compares tight meshes, which need the outlines of the pages
+                outlines: 'auto',
                 ...(mesh ? { renderMode: 'mesh' as const } : {}),
             });
 

@@ -9,8 +9,7 @@ import { durationOf, frameOf, makeSkeleton, updateAll } from '../skeletons';
  * The grid of a slot game, with the beats of the Reels page but no reel that moves: every
  * symbol stays in its cell, so the test times pixi-marrow and not the reels. A cycle of 4
  * seconds spins every symbol, lands the reels one after another and shows two line wins.
- * Symbols that did not win stand still, dimmed, which is where the idle cache of `balanced`
- * takes its images. The grid is drawn from fixed numbers, so every side sees the same symbols.
+ * Symbols that did not win stand still, dimmed, which is where the idle cache takes its images. The grid is drawn from fixed numbers, so every side sees the same symbols.
  */
 
 const COLUMNS = 5;
@@ -64,9 +63,10 @@ export default defineTest({
     ...testInfo('grid'),
     rigs: SYMBOL_IDS.map((id) => SYMBOLS[id].file),
     sides: [
-        { name: 'exact', options: {} },
-        { name: 'balanced', options: { perf: 'balanced' } },
-        { name: 'fast', options: { perf: 'fast' } },
+        { name: 'default', options: {} },
+        { name: 'bake', options: { bake: 'auto' } },
+        { name: 'idle cache', options: { idleCache: 'auto' } },
+        { name: 'tight meshes', options: { tightMesh: 'on' } },
         { name: 'GPU skinning', options: { renderMode: 'mesh', skinning: 'gpu' } },
     ],
     // half a cycle to warm up, then a whole cycle of 240 frames, 4 to a sample

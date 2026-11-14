@@ -124,7 +124,7 @@ describe('the rows of the perf report about the cuts of overdraw', () => {
         });
 
         it('say that a scan could read no page, and why', async () => {
-            const asset = await fixtureAsset('4.2/spineboy-pro.skel');
+            const asset = await fixtureAsset('4.2/spineboy-pro.skel', { outlines: 'auto' });
             const spine = create(asset);
 
             await asset.optimized;
@@ -343,7 +343,7 @@ describe('the rows of the perf report about the cuts of overdraw', () => {
     it('state where the outlines of an asset stand, for every state', async () => {
         const given = await coverAsset(BEHIND);
         const off = await coverAsset(BEHIND, { outlines: 'off' });
-        const unread = await fixtureAsset('4.1/coin-pro.skel');
+        const unread = await fixtureAsset('4.1/coin-pro.skel', { outlines: 'auto' });
         const { asset: scanned } = await boyAsset();
 
         assets.push(given, off, scanned);

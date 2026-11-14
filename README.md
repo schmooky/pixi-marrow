@@ -14,7 +14,7 @@ The plan is in [docs/DESIGN.md](docs/DESIGN.md).
 npm install pixi-marrow@next pixi.js
 ```
 
-It needs pixi.js 8.16 or later. Docs and live previews are at [pixi-marrow.schmooky.dev](https://pixi-marrow.schmooky.dev).
+It needs pixi.js 8.21 or later. Docs and live previews are at [pixi-marrow.schmooky.dev](https://pixi-marrow.schmooky.dev).
 
 ## Use
 
@@ -115,7 +115,16 @@ const coin = await MarrowSpine.load({ skeleton: 'coin.skel', atlas: 'coin.atlas'
 const fan = await MarrowSpine.load({ skeleton: 'fan.skel', atlas: 'fan.atlas', perf: 'fast', updateRate: 24 });
 ```
 
-`perf` is `exact` by default, which changes nothing. `balanced` plays an animation from baked frames where it can, draws a skeleton at rest as one image, and updates a skeleton off the screen 4 times a second. `fast` also pauses a skeleton off the screen, poses batched skeletons 30 times a second and leaves physics and deform out below 96 pixels. Each setting is an option of its own too: `bake`, `idleCache`, `offscreen`, `updateRate`, `lod`, `tightMesh` and `skinning`. `skinning: 'gpu'` places the vertices of the mesh mode in the vertex shader, and instances of one rig that follow each other in the display list then draw in one instanced call. It is opt-in. It pays for many copies of one rig next to each other. A grid of different symbols draws in fewer calls in the batched mode. `bakeAnimations` of `pixi-marrow/bake` bakes at build time. The first two rows of `perf.report()` say which settings are in effect and how often the skeleton updates.
+`perf` is `exact` by default, which changes nothing. The presets set when a skeleton updates, and nothing else. `balanced` updates a skeleton off the screen 4 times a second. `fast` pauses a skeleton off the screen and poses batched skeletons 30 times a second. `offscreen` and `updateRate` are options of their own too.
+
+Everything that costs memory, vertices or draw calls is in no preset, because what it costs depends on the device and the scene. Set it by name where it pays:
+
+- `bake: 'auto'` plays an animation from frames baked the first time it plays alone. A clip keeps 23 KB to 0.9 MB per animation and skin for the life of the asset.
+- `tightMesh: 'on'` draws regions as tight polygons, see below. It adds vertices, which a phone whose CPU is the limit pays for.
+
+- `idleCache: 'auto'` draws a skeleton at rest as one image. Each image is a texture of its own, so many of them take memory and split batches. On a low-end phone small resting symbols drew slower with it.
+- `lod: 'auto'` leaves physics and deform out of a skeleton drawn smaller than 96 pixels. Its meshes then show their setup shape.
+- `instancing: 'auto'` with `skinning: 'gpu'` draws copies of one rig that follow each other in the display list in one instanced call. It pays for many copies of one rig, and not for a grid of different symbols, which the batched mode draws in fewer calls. `bakeAnimations` of `pixi-marrow/bake` bakes at build time. The first two rows of `perf.report()` say which settings are in effect and how often the skeleton updates.
 
 ## Why is it slow
 
@@ -128,15 +137,20 @@ The report lists what the runtime decided for this instance and why: draw calls,
 
 ## Less overdraw
 
-After a load the page images are read in idle time. From then on a region without a visible pixel is not drawn, and a slot behind the opaque part of a later slot is skipped. The picture stays the same, bit for bit.
+With the outlines of its atlas a skeleton draws no region without a visible pixel, and skips a slot behind the opaque part of a later slot. The picture stays the same, bit for bit. Outlines are off by default.
 
 ```ts
-const hero = await MarrowSpine.load({ skeleton: 'hero.skel', atlas: 'hero.atlas', tightMesh: 'on' });
+const hero = await MarrowSpine.load({
+    skeleton: 'hero.skel',
+    atlas: 'hero.atlas',
+    outlines: 'hero.outlines.json',
+    tightMesh: 'on',
+});
 ```
 
 `tightMesh: 'on'` also draws every region as the polygon around its visible pixels. On the example rigs that shades 3 to 19 percent less triangle area. The picture is the same to the eye and not to the bit: some pixels move by 1 of 255 levels.
 
-`pixi-marrow outlines hero.atlas` writes the outlines to `hero.outlines.json` at build time. Pass that URL as `outlines` in the load options and nothing is read at load time.
+`pixi-marrow outlines hero.atlas` writes the outlines to `hero.outlines.json` at build time. Pass that URL as `outlines` in the load options, and nothing is read at load time. `outlines: 'auto'` reads the page images in idle time after the load instead. That draws each page into a canvas, 32 MB for a page of 2048 by 2048 for a moment, which a phone with little memory can fail on.
 
 ## Debug overlays
 

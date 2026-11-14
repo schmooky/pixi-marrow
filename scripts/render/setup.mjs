@@ -80,10 +80,10 @@ export function builtPackage(root, dist, name) {
  *
  * Without `version` that is the `pixi.js` the package is developed with. `--pixi=<version>`
  * names another one, which must be installed as a dev dependency of the package under an alias
- * that starts with `pixi-`, as `pixi-8.16` is for pixi.js 8.16.0. The peer range of the package
+ * that starts with `pixi-`, as `pixi-8.21` is for pixi.js 8.21.0. The peer range of the package
  * allows versions nobody develops on. This is how a page runs on one of them.
  *
- * @param version The value of `--pixi`, as `8.16` or `8.16.0`, or undefined.
+ * @param version The value of `--pixi`, as `8.21` or `8.21.0`, or undefined.
  * @param name The name of the tool, for the line it prints.
  */
 export function pixiPackage(root, version, name) {
@@ -102,7 +102,7 @@ export function pixiPackage(root, version, name) {
     if (!found) {
         throw new Error(
             `--pixi=${version} is not installed. There are ${installed.map((it) => it.version).join(', ')}. ` +
-                'Add an alias like "pixi-8.16": "npm:pixi.js@8.16.0" to the devDependencies of packages/pixi-marrow/package.json',
+                'Add an alias like "pixi-8.21": "npm:pixi.js@8.21.0" to the devDependencies of packages/pixi-marrow/package.json',
         );
     }
     if (version) console.log(`${name}: the page runs on pixi.js ${found.version}`);

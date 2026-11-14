@@ -2,7 +2,7 @@
 'pixi-marrow': minor
 ---
 
-The idle cache: with `idleCache: 'auto'`, which the presets `balanced` and `fast` set, a skeleton at rest is drawn as one image.
+The idle cache: with `idleCache: 'auto'`, a skeleton at rest is drawn as one image. No preset sets it. Each image is a texture of its own, so many images take memory and split batches, and on a low-end phone small resting symbols drew slower with it. Set it by name where a skeleton is expensive to draw live.
 
 - After 30 updates in which its pose, its layout and its render mode did not change, and two renders at the same place, the skeleton is drawn once into a render texture. The view is hidden and a sprite with that image shows in its place, as one quad in Pixi's batch.
 - The image lies on the pixel grid of the target, so it shows the pixels of the live skeleton. The pixel check holds it to the live skeleton and to the official runtime in both render modes, on WebGL2 and WebGPU.

@@ -30,7 +30,7 @@ describe('what instanced draws hold on to', () => {
     it('lets go of the views of runs that a new build does not take', async () => {
         const stage = createStage();
         const raptor = await loadFamily('4.3/raptor-pro.skel');
-        const gpu = { renderMode: 'mesh', skinning: 'gpu' } as const;
+        const gpu = { renderMode: 'mesh', skinning: 'gpu', instancing: 'auto' } as const;
         const [a] = await populate(stage, raptor, 1, gpu);
         const [x1] = await populate(stage, raptor, 1, { renderMode: 'mesh' });
         const [b] = await populate(stage, raptor, 1, gpu);
@@ -63,7 +63,7 @@ describe('what instanced draws hold on to', () => {
         const stage = createStage();
         const raptor = await loadFamily('4.3/raptor-pro.skel');
 
-        await populate(stage, raptor, 2, { renderMode: 'mesh', skinning: 'gpu' });
+        await populate(stage, raptor, 2, { renderMode: 'mesh', skinning: 'gpu', instancing: 'auto' });
         stage.render();
         const pipe: unknown = Reflect.get(stage.renderer.renderPipes, INSTANCE_PIPE);
         const books = booksOf(stage);
@@ -88,7 +88,7 @@ describe('what instanced draws hold on to', () => {
     it('counts the static data of a layout once, with the template', async () => {
         const stage = createStage();
         const raptor = await loadFamily('4.3/raptor-pro.skel');
-        const [rig] = await populate(stage, raptor, 1, { renderMode: 'mesh', skinning: 'gpu' });
+        const [rig] = await populate(stage, raptor, 1, { renderMode: 'mesh', skinning: 'gpu', instancing: 'auto' });
 
         stage.render();
         if (rig === undefined) throw new Error('a rig');
@@ -114,7 +114,7 @@ describe('what instanced draws hold on to', () => {
     it('makes no instanced draw for a layout that always draws alone', async () => {
         const stage = createStage();
         const tank = await loadFamily('4.2/tank-pro.skel');
-        const [rig] = await populate(stage, tank, 2, { renderMode: 'mesh', skinning: 'gpu' });
+        const [rig] = await populate(stage, tank, 2, { renderMode: 'mesh', skinning: 'gpu', instancing: 'auto' });
 
         stage.render();
         if (rig === undefined) throw new Error('a rig');

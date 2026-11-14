@@ -60,7 +60,9 @@ export interface MarrowSpineOptions {
      * - `on` draws a region as the polygon around its visible pixels: fewer pixels are shaded. The
      *   picture is the same to the eye and not to the bit. A GPU interpolates texture coordinates
      *   per triangle, so other triangles round some pixels to the next of 255 steps. A pixel on
-     *   the edge of a region can also fall to the other side of that edge.
+     *   the edge of a region can also fall to the other side of that edge. It adds vertices, 13 to
+     *   94 percent on the rigs of the bench, which a phone whose CPU is the limit pays for. No
+     *   preset sets it.
      * - `off` keeps every quad.
      */
     tightMesh?: 'auto' | 'on' | 'off';
@@ -76,9 +78,12 @@ export interface MarrowSpineOptions {
      * given by its own name wins over the preset.
      *
      * - `exact` (the default): nothing that changes timing, memory or the picture to the bit.
-     * - `balanced`: `tightMesh: 'on'`, `bake: 'auto'`, `idleCache: 'auto'`, `offscreen: 'throttle'`.
-     * - `fast`: `balanced` with `lod: 'auto'`, `offscreen: 'pause'`, and `updateRate: 30` for a
-     *   skeleton that the batched mode draws.
+     * - `balanced`: `offscreen: 'throttle'`.
+     * - `fast`: `offscreen: 'pause'`, and `updateRate: 30` for a skeleton that the batched mode draws.
+     *
+     * The presets set when a skeleton updates, and nothing else. `tightMesh: 'on'`, `bake`,
+     * `idleCache`, `lod` and `instancing` each cost memory, vertices or draw calls. What they cost
+     * depends on the device and the scene, so each one is set by its own name.
      */
     perf?: PerfPreset | PerfOptions;
     /** See {@link PerfSettings.skinning}. */

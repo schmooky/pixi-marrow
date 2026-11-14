@@ -344,7 +344,7 @@ describe('MarrowAsset.load with outlines', () => {
     });
 
     it('shares one asset between loads with the same outlines option, and no asset between other ones', async () => {
-        const auto = await load(base);
+        const auto = await load({ ...base, outlines: 'auto' });
         const copy: AtlasOutlines = JSON.parse(JSON.stringify(outlines));
         const loaded = [
             auto,
@@ -357,6 +357,8 @@ describe('MarrowAsset.load with outlines', () => {
         expect(new Set(loaded).size).toBe(5);
         expect(await load({ ...base, outlines: 'auto' })).toBe(auto);
         expect(await load({ ...base, outlines: 'off' })).toBe(loaded[1]);
+        // no outlines option is off, and shares its asset
+        expect(await load(base)).toBe(loaded[1]);
         expect(await load({ ...base, outlines: 'art/boy.outlines.json' })).toBe(loaded[2]);
         expect(await load({ ...base, outlines })).toBe(loaded[3]);
         expect(await load({ ...base, outlines: copy })).toBe(loaded[4]);

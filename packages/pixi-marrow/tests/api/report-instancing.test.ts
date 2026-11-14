@@ -14,7 +14,14 @@ describe('the option instancing and its row of the report', () => {
     const made: MarrowSpine[] = [];
 
     function create(asset: MarrowAsset, options: ConstructorParameters<typeof MarrowSpine>[1] = {}): MarrowSpine {
-        const spine = new MarrowSpine(asset, { renderMode: 'mesh', skinning: 'gpu', ...options, autoUpdate: false });
+        // instancing is in no preset: the tests name it, and the ones about its absence turn it off
+        const spine = new MarrowSpine(asset, {
+            renderMode: 'mesh',
+            skinning: 'gpu',
+            instancing: 'auto',
+            ...options,
+            autoUpdate: false,
+        });
 
         made.push(spine);
 
@@ -37,13 +44,17 @@ describe('the option instancing and its row of the report', () => {
         for (const spine of made.splice(0)) spine.destroy();
     });
 
-    it('is auto in every preset, takes off by name, and names the closest value of a wrong one', async () => {
+    it('is off in every preset, takes auto by name, and names the closest value of a wrong one', async () => {
         const asset = await fixtureAsset('4.3/raptor-pro.skel');
 
-        for (const perf of ['exact', 'balanced', 'fast'] as const)
-            expect(create(asset, { perf }).perfSettings.instancing).toBe('auto');
-        expect(create(asset, { perf: 'fast', instancing: 'off' }).perfSettings.instancing).toBe('off');
-        expect(create(asset, { perf: { preset: 'fast', instancing: 'off' } }).perfSettings.instancing).toBe('off');
+        for (const perf of ['exact', 'balanced', 'fast'] as const) {
+            const spine = new MarrowSpine(asset, { renderMode: 'mesh', skinning: 'gpu', perf, autoUpdate: false });
+
+            made.push(spine);
+            expect(spine.perfSettings.instancing).toBe('off');
+        }
+        expect(create(asset, { perf: 'fast', instancing: 'auto' }).perfSettings.instancing).toBe('auto');
+        expect(create(asset, { perf: { preset: 'fast', instancing: 'auto' } }).perfSettings.instancing).toBe('auto');
         try {
             create(asset, { instancing: 'of' as 'off' });
             expect.unreachable();

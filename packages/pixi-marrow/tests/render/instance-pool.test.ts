@@ -76,7 +76,7 @@ describe('a pool of instanced views', () => {
         expect(pool.alloc()).toBeUndefined();
         const family = await loadFamily('4.3/raptor-pro.skel');
         const stage = createStage();
-        const rigs = await populate(stage, family, 2, { renderMode: 'mesh', skinning: 'gpu' });
+        const rigs = await populate(stage, family, 2, { renderMode: 'mesh', skinning: 'gpu', instancing: 'auto' });
         const layout = layoutOf(rigs[0] as Rig);
 
         expect(layout.pools).toHaveLength(1);
@@ -136,7 +136,7 @@ describe('the index buffers of draw orders', () => {
     it('hold every entry of every slot in the draw order, one per order, shared by the views', async () => {
         const family = await loadFamily('4.3/raptor-pro.skel');
         const stage = createStage();
-        const [a, b] = await populate(stage, family, 2, { renderMode: 'mesh', skinning: 'gpu' });
+        const [a, b] = await populate(stage, family, 2, { renderMode: 'mesh', skinning: 'gpu', instancing: 'auto' });
 
         if (a === undefined || b === undefined) throw new Error('two rigs');
         for (const rig of [a, b]) {
@@ -171,7 +171,11 @@ describe('the geometries of a run', () => {
         });
         const stage = createStage();
         const family = await loadFamily('4.3/raptor-pro.skel');
-        const [moving, still] = await populate(stage, family, 2, { renderMode: 'mesh', skinning: 'gpu' });
+        const [moving, still] = await populate(stage, family, 2, {
+            renderMode: 'mesh',
+            skinning: 'gpu',
+            instancing: 'auto',
+        });
 
         if (moving === undefined || still === undefined) throw new Error('two rigs');
         try {
@@ -204,7 +208,7 @@ describe('the life of an instanced view', () => {
         const stage = createStage({ context });
         const family = await loadFamily('4.3/raptor-pro.skel');
 
-        await populate(stage, family, 2, { renderMode: 'mesh', skinning: 'gpu' });
+        await populate(stage, family, 2, { renderMode: 'mesh', skinning: 'gpu', instancing: 'auto' });
         stage.render();
         expect(stage.counts.draws.map((draw) => draw.instances)).toEqual([2]);
         context.lost = true;
@@ -218,7 +222,7 @@ describe('the life of an instanced view', () => {
     it('uploads no instance data while its run rests, and the data of a frame in which one moved', async () => {
         const stage = createStage();
         const family = await loadFamily('4.3/raptor-pro.skel');
-        const [first] = await populate(stage, family, 3, { renderMode: 'mesh', skinning: 'gpu' });
+        const [first] = await populate(stage, family, 3, { renderMode: 'mesh', skinning: 'gpu', instancing: 'auto' });
 
         if (first === undefined) throw new Error('three rigs');
         stage.render();
@@ -239,7 +243,7 @@ describe('the life of an instanced view', () => {
     it('gives its slot back when destroyed, and leaves its run', async () => {
         const stage = createStage();
         const family = await loadFamily('4.3/raptor-pro.skel');
-        const rigs = await populate(stage, family, 3, { renderMode: 'mesh', skinning: 'gpu' });
+        const rigs = await populate(stage, family, 3, { renderMode: 'mesh', skinning: 'gpu', instancing: 'auto' });
 
         stage.render();
         const [first, second] = rigs;
@@ -264,7 +268,7 @@ describe('the life of an instanced view', () => {
     it('lets its shaders go before it destroys the textures they bind, so that Pixi does not warn', async () => {
         const stage = createStage();
         const family = await loadFamily('4.3/raptor-pro.skel');
-        const rigs = await populate(stage, family, 2, { renderMode: 'mesh', skinning: 'gpu' });
+        const rigs = await populate(stage, family, 2, { renderMode: 'mesh', skinning: 'gpu', instancing: 'auto' });
         const warnings: unknown[] = [];
         const warn = vi
             .spyOn(console, 'warn')

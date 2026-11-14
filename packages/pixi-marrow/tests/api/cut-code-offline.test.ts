@@ -50,7 +50,7 @@ describe('an asset whose code that cuts does not load', () => {
     });
 
     it('is not asked for by an asset whose scan reads no page, and by one without outlines', async () => {
-        const unread = await fixtureAsset('4.2/speedy-ess.skel');
+        const unread = await fixtureAsset('4.2/speedy-ess.skel', { outlines: 'auto' });
         const off = await coverAsset(BEHIND, { outlines: 'off' });
 
         await unread.optimized;

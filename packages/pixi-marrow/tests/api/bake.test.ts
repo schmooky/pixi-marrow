@@ -122,14 +122,16 @@ describe.each(VERSIONS)('baked playback of a Spine %s display object', (version)
         expect(await row(plain)).toMatchObject({ value: 'off' });
     });
 
-    it('bakes with the balanced preset, and not with off or the default', async () => {
+    it('bakes when bake is set by name, and not with a preset or the default', async () => {
+        const named = create({ perf: 'balanced', bake: 'auto' });
         const balanced = create({ perf: 'balanced' });
-        const off = create({ perf: 'balanced', bake: 'off' });
+        const fast = create({ perf: 'fast' });
         const exact = create();
 
         await codeLoaded();
-        expect(tallyOf(balanced.engine.source)).toBeDefined();
-        expect(off.engine.source).toBeNull();
+        expect(tallyOf(named.engine.source)).toBeDefined();
+        expect(balanced.engine.source).toBeNull();
+        expect(fast.engine.source).toBeNull();
         expect(exact.engine.source).toBeNull();
     });
 

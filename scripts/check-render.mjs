@@ -7,7 +7,7 @@
  * usage: pnpm check:render [--renderer=webgl|webgpu|both] [--only=4.3/spineboy] [--animations=3|all]
  *                          [--render-mode=both|mesh|batched] [--strict-rebuilds] [--trust-mode]
  *                          [--strict-clipping] [--self-test] [--verbose] [--shots=4]
- *                          [--out=.shots/render] [--size=512] [--dist=<folder>] [--pixi=8.16]
+ *                          [--out=.shots/render] [--size=512] [--dist=<folder>] [--pixi=8.21]
  *                          [--skinning=gpu]
  *
  * The rigs are the entries of fixtures/manifest.json that have page images. For each one a few
@@ -19,8 +19,9 @@
  * second loop. Per frame the check reports the largest channel difference and the share of the
  * covered pixels that differ by more than 1 and by more than 8 (of 255).
  *
- * Ours is drawn after `asset.optimized` has resolved, with the default cuts of overdraw. Those
- * are therefore part of every comparison with the official runtime.
+ * Ours is loaded with `outlines: 'auto'`, which is off by default, and drawn after
+ * `asset.optimized` has resolved, with the default cuts of overdraw. Those are therefore part
+ * of every comparison with the official runtime.
  *
  * Render modes. pixi-marrow draws a skeleton with meshes of its own or as a part of the batches
  * of its render group: `renderMode: 'auto' | 'mesh' | 'batched'`. Every rig is drawn in both
@@ -193,7 +194,7 @@
  * nothing about a batched mode. --dist names a folder with the `package.json` and the `dist` of a
  * build of pixi-marrow that was kept: the check then draws that build and leaves the working
  * tree alone.
- * --pixi names the version of pixi.js the pages run on, for example `--pixi=8.16`. The package
+ * --pixi names the version of pixi.js the pages run on, for example `--pixi=8.21`. The package
  * allows a range of versions and is developed on one of them, and the runtime has branches by
  * the version of Pixi. The version must be installed as a dev dependency of the package under
  * an alias, see `pixiPackage` of scripts/render/setup.mjs. pixi-marrow then runs on that
