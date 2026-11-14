@@ -67,6 +67,12 @@ export const PAGES: readonly DocsPage[] = [
         section: 'How it works',
     },
     {
+        href: '/how/vertices/',
+        title: 'Vertices',
+        description: 'Regions and weighted meshes become triangles, and each vertex takes its pixels from the atlas.',
+        section: 'How it works',
+    },
+    {
         href: '/bones-and-placeholders/',
         title: 'Bones and placeholders',
         description: 'Read a bone and put your own Pixi objects into a rig.',

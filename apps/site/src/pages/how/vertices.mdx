@@ -1,0 +1,57 @@
+---
+layout: ../../layouts/Docs.astro
+title: Vertices
+description: Bones say where things are, and the GPU draws triangles. See how a region and a mesh of the bee become vertices, and where each vertex takes its pixels from.
+---
+
+import Preview from '../../components/Preview.astro';
+import Snippet from '../../components/Snippet.astro';
+import source from '../../previews/vertices.ts?raw';
+
+<Preview name="vertices" height={460} rows={4} caption="One attachment of the bee of the slot game Bzzz over the dimmed bee: its triangles, its vertices, and the bones one vertex follows. On the right, where the image lies on the atlas page, magnified with the same triangles." />
+
+## Triangles
+
+The GPU draws triangles and nothing else. Each corner of a triangle is a vertex with two things: a position on the screen, and a place on the atlas page that its pixels come from. Every frame, the runtime turns the pose of the bones into those positions.
+
+The preview places them with the same functions the runtime uses, from `pixi-marrow/core`:
+
+<Snippet source={source} regions="import" />
+
+## A region
+
+Pick **wing**. A region is a rectangle: 4 vertices and 2 triangles, all moved by one bone. The animator placed the image next to its bone with an offset, a rotation and a scale. Those 4 corners relative to the bone never change, so they are computed once.
+
+<Snippet source={source} regions="region" />
+
+Each frame then needs only the world transform of the bone. It multiplies the 4 corners and gives their positions in the skeleton.
+
+## A mesh
+
+Pick **body**. A mesh is a polygon cut into triangles, here 9 vertices. 8 of them follow two bones, the neck and the body. One of them follows the neck by 0.31 and the body by 0.69.
+
+A weighted vertex keeps a position next to each of its bones. The runtime asks each bone where it would put the vertex, and mixes the answers by the weights. So when the body bends away from the neck, the vertices between them spread the bend over the mesh, and the body bends instead of breaking.
+
+<Snippet source={source} regions="mesh" />
+
+Pick **head**. Its 41 vertices follow 7 bones, and 18 of them follow two. A vertex in the middle of an antenna follows `head2` and `head3` by half each, which is why the antenna curves when its bones turn. Move the pointer over the bee to pick a vertex.
+
+## Where the pixels come from
+
+On the right is the atlas page of the Bzzz symbols, with a box where the image lies. Under it that part of the page is magnified, with the same triangles drawn on its pixels.
+
+The place of a vertex on the page is fixed. An animation moves the vertex on the screen and never on the page, so the GPU stretches the pixels of each triangle to its new shape. A packer can also turn an image to fit the page better, and the places on the page take care of it.
+
+An animation can move the vertices of a mesh directly too, with deform keys. The runtime adds those offsets before it applies the weights.
+
+## What it costs
+
+A region costs 4 vertices, however it moves. A mesh costs as many vertices as it has, and a weighted vertex costs work for every bone it follows. The attachments of the bee add up to 161 vertices: 21 regions of 4, and 6 meshes with 77.
+
+A skeleton of up to 1024 vertices is batched with the skeletons around it, so the bee and every symbol of the set share draw calls. A larger one gets meshes of its own.
+
+## What pixi-marrow does
+
+The vertex math is the arithmetic of the official runtime, and it is public in `pixi-marrow/core`. The corners of every region are computed once into a layout, which every copy of the asset shares. Each frame, a copy places, colors and uploads only what changed since the frame before.
+
+With `skinning: 'gpu'`, a skeleton in the mesh mode leaves the weighting to the vertex shader. It then uploads its bone matrices, 24 bytes a bone, in place of its vertices. [Performance](/performance/) says when that pays.
