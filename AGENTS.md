@@ -123,7 +123,7 @@ It draws rigs with pixi-marrow and with the official Pixi runtime in headless Ch
 
 A frame that fails against the official runtime is drawn again, moved by a fraction of a pixel, and fails only when it fails at both places. The two runtimes place vertices in different code, so a vertex on a subpixel boundary can round two ways. A defect stays wrong after the move.
 
-A change to the render path also runs on the lowest pixi.js the package allows: `pnpm check:render --pixi=8.16.0`. Versions 8.16.0 and 8.21.0 are installed for that.
+A change to the render path also runs on the lowest pixi.js the package allows: `pnpm check:render --pixi=8.21.0`. Version 8.21.0 is installed for that.
 
 The pixel check ends with a game check: cases from a bundle made as a game makes one, with named imports and the tree shaken. Pixi registers pipes when modules load, so code that loads on demand must not count on a pipe the game never imported.
 
