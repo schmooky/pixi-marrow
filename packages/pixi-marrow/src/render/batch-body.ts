@@ -1,8 +1,7 @@
 import { type Bounds, type Renderer, ViewContainer } from 'pixi.js';
-import { BatchElement, type BatchElementOptions } from './batch-element';
+import { BatchElement, type BatchElementOptions, PIPE_ID } from './batch-element';
 import { GROUP_PAGES } from './batch-layout';
 import { linkRenderer } from './batch-pipe';
-import { PIPE_ID } from './batcher';
 import type { DrawGate } from './gate';
 
 /** What a {@link BatchBody} is created with: what its element needs, and its bounds. */

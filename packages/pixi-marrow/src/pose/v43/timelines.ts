@@ -75,7 +75,7 @@ export function applyTimeline(
             applyAttachment(pose, timeline, from, out);
             break;
         case OP_DEFORM:
-            applyDeform(pose, timeline, from, add);
+            if (!pose.solve.deformOff) applyDeform(pose, timeline, from, add);
             break;
         case OP_SEQUENCE:
             applySequence(pose, timeline, from, out);

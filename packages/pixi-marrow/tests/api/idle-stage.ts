@@ -1,6 +1,7 @@
-import { Container, type Matrix, type Renderer, type RenderTexture, type Sprite } from 'pixi.js';
+import { Container, type Matrix, type Renderer, type RenderTexture } from 'pixi.js';
 import { viewOf } from '../../src/api/view-of';
 import type { MarrowSpine } from '../../src/index';
+import type { ImageBody } from '../../src/render/batch-image';
 import { FRAME } from './helpers';
 
 /*
@@ -40,7 +41,13 @@ export function fakeRenderer(spine: MarrowSpine, resolution = 1, antialias = fal
     const fake = {
         gl: { isContextLost: () => context.lost },
         renderTarget: { renderTarget: { resolution, colorTextures: [{ antialias }] } },
-        runners: { contextChange: { add: (item: { contextChange(): void }) => listeners.push(item) } },
+        // the pipe of the batched mode, which the body of an image draws through, is put in here
+        renderPipes: {},
+        runners: {
+            contextChange: { add: (item: { contextChange(): void }) => listeners.push(item) },
+            destroy: { add: () => {} },
+            prerender: { add: () => {} },
+        },
         render(options: { container: Container; target: RenderTexture; transform: Matrix; clear?: boolean }): void {
             const { container, target, transform, clear } = options;
 
@@ -67,14 +74,14 @@ export function fakeRenderer(spine: MarrowSpine, resolution = 1, antialias = fal
 }
 
 /**
- * The label of the sprite of an image: `IDLE_LABEL` of `idle-image.ts`. It is written out here,
+ * The label of the body of an image: `IDLE_LABEL` of `idle-image.ts`. It is written out here,
  * because a test of a chunk that does not load cannot import that module.
  */
 const IDLE_LABEL = 'marrow-idle';
 
-/** The sprite that shows the image of a display object, once it has one. */
-export function idleSprite(spine: MarrowSpine): Sprite | undefined {
-    return spine.children.find((child): child is Sprite => child.label === IDLE_LABEL);
+/** The body that shows the image of a display object, once it has one. */
+export function idleSprite(spine: MarrowSpine): ImageBody | undefined {
+    return spine.children.find((child): child is ImageBody => child.label === IDLE_LABEL);
 }
 
 /** The view container of a display object. */
@@ -86,7 +93,7 @@ export function viewContainer(spine: MarrowSpine): Container {
     return container;
 }
 
-/** Whether a display object shows its image: the view is hidden and the sprite shows. */
+/** Whether a display object shows its image: the view is hidden and the body shows. */
 export function cached(spine: MarrowSpine): boolean {
     const sprite = idleSprite(spine);
 

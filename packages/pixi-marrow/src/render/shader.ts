@@ -159,7 +159,8 @@ struct LocalUniforms {
 @group(0) @binding(0) var<uniform> globalUniforms: GlobalUniforms;
 @group(1) @binding(0) var<uniform> localUniforms: LocalUniforms;`;
 
-const WGSL_ROUND = `fn roundPixels(position: vec2<f32>, targetSize: vec2<f32>) -> vec2<f32> {
+/** The WGSL function that rounds a clip position to the pixels of the target, as Pixi's batch shader does. */
+export const WGSL_ROUND = `fn roundPixels(position: vec2<f32>, targetSize: vec2<f32>) -> vec2<f32> {
     return (floor(((position * 0.5 + 0.5) * targetSize) + 0.5) / targetSize) * 2.0 - 1.0;
 }`;
 

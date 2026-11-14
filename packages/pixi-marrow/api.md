@@ -149,7 +149,6 @@ export declare class MarrowSpine<N extends MarrowNames = MarrowNames> extends Sp
   readonly perfSettings: ResolvedPerf;
   private readonly pacer;
   private readonly idle;
-  private lodOn;
   private probe;
   constructor(asset: MarrowAsset, options?: MarrowSpineOptions);
   static load<N extends MarrowNames = MarrowNames>(options: MarrowLoadOptions & MarrowSpineOptions): Promise<MarrowSpine<N>>;
@@ -199,6 +198,7 @@ export interface MarrowSpineOptions {
   occlusion?: "auto" | "off";
   perf?: PerfPreset | PerfOptions;
   skinning?: PerfSettings["skinning"];
+  instancing?: PerfSettings["instancing"];
   bake?: PerfSettings["bake"];
   idleCache?: PerfSettings["idleCache"];
   offscreen?: PerfSettings["offscreen"];
@@ -219,7 +219,7 @@ export interface PerfEntry {
   reason: string;
   animation?: string;
 }
-export type PerfFeature = "perf" | "pacing" | "renderMode" | "motion" | "links" | "drawCalls" | "blend" | "pages" | "clipping" | "tightMesh" | "occlusion" | "outlines" | "darkTint" | "physics" | "bake" | "constraints" | "bones" | "slots" | "vertices" | "uploads" | "layout";
+export type PerfFeature = "perf" | "pacing" | "renderMode" | "instancing" | "motion" | "links" | "drawCalls" | "blend" | "pages" | "clipping" | "tightMesh" | "occlusion" | "outlines" | "darkTint" | "physics" | "bake" | "constraints" | "bones" | "slots" | "vertices" | "uploads" | "layout";
 export interface PerfMemory {
   shared: number;
   instance: number;
@@ -234,6 +234,7 @@ export type PerfPreset = "exact" | "balanced" | "fast";
 export interface PerfSettings {
   tightMesh: "auto" | "on" | "off";
   skinning: SkinningMode;
+  instancing: "auto" | "off";
   bake: BakeMode;
   idleCache: "off" | "auto";
   offscreen: OffscreenMode;
@@ -322,12 +323,15 @@ export declare abstract class SpineLinks<N extends MarrowNames = MarrowNames> ex
 export declare abstract class SpinePhysics<N extends MarrowNames = MarrowNames> extends SpineLinks<N> {
   abstract readonly engine: PoseEngine;
   private afterReset;
+  private reduced;
+  private hidDeform;
   get physics(): PhysicsMode;
   set physics(mode: PhysicsMode);
   resetPhysics(): void;
   physicsTranslate(x: number, y: number): void;
   physicsRotate(x: number, y: number, degrees: number): void;
-  protected settleReset(): void;
+  protected poseAt(seconds: number, small: boolean): void;
+  private settleReset;
 }
 export interface StopOptions {
   track?: number;
@@ -637,6 +641,7 @@ export interface PoseEngine {
   physics: PhysicsMode;
   physicsTranslate(x: number, y: number): void;
   physicsRotate(x: number, y: number, degrees: number): void;
+  deform: boolean;
   update(dt: number): void;
   source: PoseSource | null;
   solo(): TrackEntry | null;

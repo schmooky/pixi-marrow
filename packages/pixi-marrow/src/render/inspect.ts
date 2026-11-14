@@ -6,6 +6,7 @@ import type { CoverTest } from './cover';
 import { type CutCodeState, cutCodeState } from './cut-code';
 import type { CutState } from './cut-state';
 import { drawsPlain, type EdgeBend } from './gate';
+import type { InstanceWhy } from './instance-paint';
 import { ownsStatics } from './layouts';
 import { type MeshCodeState, meshCodeState } from './mesh-code';
 import { AUTO_BATCH_VERTICES, type ModeReason, type RenderMode } from './mode';
@@ -96,6 +97,25 @@ interface ModeReport {
     clipIndices: number;
 }
 
+/** How a view draws instanced, as plain data. */
+interface InstancingReport {
+    /** Why the view draws alone, or null while it draws instanced. `batched` in the batched mode. */
+    why: InstanceWhy | 'batched';
+    /** The bodies of its run at the last build of the instructions. 0 before Pixi built them with it. */
+    run: number;
+    /** The instanced draws of that run in the last frame. */
+    draws: number;
+    /** The instances in its own draw in the last frame, 0 when it drew nothing. */
+    drawnWith: number;
+    /** The vertices the vertex shader runs per instance: every entry of every slot of the layout. */
+    unionVertices: number;
+    /** The bytes of its slot in the pool. */
+    slotBytes: number;
+    /** The slots of the pools of its layout that views take, and their room. */
+    poolSlots: number;
+    poolRoom: number;
+}
+
 /** How much of a skeleton moved for its view, as plain data. */
 interface MotionReport {
     /** Whether the last update of the view found nothing to do: the pose was the one it drew last. */
@@ -115,6 +135,8 @@ export interface ViewReport {
     motion: MotionReport;
     /** The options of the cuts of overdraw and what stops them at the moment. */
     cuts: CutReport;
+    /** Whether the view draws instanced, with the views next to it, and why not. */
+    instancing: InstancingReport;
     /** How many attachments of the layout have an opaque rectangle, which can cover other slots. */
     opaqueRects: number;
     /** Whether Pixi draws the meshes as their vertices say. See `drawsPlain`. */
@@ -278,6 +300,31 @@ function shapeOf(template: Template, entry: number): SlotShape {
     return i32(template.tightAt, entry) >= 0 ? 'polygon' : 'quad';
 }
 
+/** How a view draws instanced and why not. */
+function describeInstancing({ paints, template }: ViewParts, batched: boolean): InstancingReport {
+    const mesh = paints.mesh;
+    const instance = mesh?.instanced;
+    const pools = instance?.layout?.pools ?? [];
+    let poolSlots = 0;
+    let poolRoom = 0;
+
+    for (const pool of pools) {
+        poolSlots += pool.used;
+        poolRoom += pool.room;
+    }
+
+    return {
+        why: batched || mesh === undefined ? 'batched' : mesh.why,
+        run: instance?.body.run?.members.length ?? 0,
+        draws: instance?.body.run?.draws ?? 0,
+        drawnWith: instance?.body.drawnWith ?? 0,
+        unionVertices: template.vertexCount,
+        slotBytes: instance?.bytes ?? 0,
+        poolSlots,
+        poolRoom,
+    };
+}
+
 /**
  * Reads a view into plain data: its visible slots, its cuts and its bytes. The GPU bytes are
  * those of the buffers of its meshes, which a view that was destroyed no longer has.
@@ -315,12 +362,15 @@ export function inspectView(view: SkeletonView): ViewReport {
             wanted: paints.waits ? 'mesh' : paints.mode,
             reason: paints.reason,
             meshCode: meshCodeState(),
-            gpu: (paints.mesh?.skinBytes ?? 0) > 0,
+            gpu: paints.mesh?.gpu ?? false,
             drawn: !(refused && paints.waits),
             vertices: layout.plain,
             limit: AUTO_BATCH_VERTICES,
             batches: element?.placed ? element.runs : 0,
-            sharedBy: element?.placed ? (element.batches[0]?.elements.length ?? 0) : 0,
+            // the images of the idle cache share batches too, and are no skeletons
+            sharedBy: element?.placed
+                ? (element.batches[0]?.elements.filter((other) => !('quad' in other)).length ?? 0)
+                : 0,
             batchBytes,
             clipVertices: element?.clipVertices ?? 0,
             clipIndices: element?.clipIndices ?? 0,
@@ -331,6 +381,7 @@ export function inspectView(view: SkeletonView): ViewReport {
             slots: pose === undefined ? 0 : newerThan(pose.slotStamps, pass.before),
         },
         cuts: describeCuts(cutState),
+        instancing: describeInstancing(view.parts, element !== undefined),
         opaqueRects: template.opaqueCount,
         plain: drawsPlain(view.container),
         arrayBytes:
@@ -339,9 +390,10 @@ export function inspectView(view: SkeletonView): ViewReport {
             cover.bytes +
             cutState.allowed.byteLength +
             (paints.mesh?.ranges.bytes ?? 0) +
+            (paints.mesh?.instanced?.bytes ?? 0) +
             (paints.body?.element.arrayBytes ?? 0) +
             batchBytes,
-        layoutBytes: layoutArrayBytes(template),
+        layoutBytes: layoutArrayBytes(template) + (paints.mesh?.instanced?.layout?.bytes ?? 0),
         gpuBytes: meshBufferBytes(view.container) + batchBytes,
     };
 }

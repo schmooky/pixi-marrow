@@ -32,6 +32,8 @@ export interface SkinLayout {
     /** How many entries the vertex shader can place. */
     readonly count: number;
     uses: number;
+    /** What the views of the layout share to draw instanced, once one does. It goes with the layout. */
+    instances: { destroy(): void } | undefined;
 }
 
 /** The width and height of a data texture of this many texels. */
@@ -187,7 +189,7 @@ function layOut(template: Template, slotBones: Int16Array): SkinLayout {
         if (placeable[entry] === 1) texel = writeEntry(template, entry, i16(slotBones, slot), vertices, out, texel);
     }
 
-    return { vertices, influences, placeable, count, uses: 0 };
+    return { vertices, influences, placeable, count, uses: 0, instances: undefined };
 }
 
 /** Per layout, by an array that all instances of it share: its skin data while a view draws with it. */
@@ -225,5 +227,8 @@ export function releaseSkinLayout(template: Template, layout: SkinLayout): void 
     layout.uses--;
     if (layout.uses > 0) return;
     if (layouts.get(template.first) === layout) layouts.delete(template.first);
+    // the shaders of the instanced draw bind the influences
+    layout.instances?.destroy();
+    layout.instances = undefined;
     layout.influences.destroy();
 }

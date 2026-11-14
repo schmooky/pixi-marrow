@@ -7,7 +7,7 @@ function settingsText(perf: ResolvedPerf): string {
     const rate = typeof perf.updateRate === 'number' ? `${perf.updateRate} a second` : perf.updateRate;
     const bake = Array.isArray(perf.bake) ? perf.bake.join(', ') : perf.bake;
 
-    return `tightMesh ${perf.tightMesh}, skinning ${perf.skinning}, bake ${bake}, idleCache ${perf.idleCache}, offscreen ${perf.offscreen}, updateRate ${rate}, lod ${perf.lod}`;
+    return `tightMesh ${perf.tightMesh}, skinning ${perf.skinning}, instancing ${perf.instancing}, bake ${bake}, idleCache ${perf.idleCache}, offscreen ${perf.offscreen}, updateRate ${rate}, lod ${perf.lod}`;
 }
 
 /**
@@ -31,7 +31,7 @@ export function perfRow(perf: ResolvedPerf): PerfEntry {
  */
 export function pacingRow(status: PacingStatus): PerfEntry {
     const size = Number.isFinite(status.size) ? `${Math.round(status.size)} pixels across` : 'not rendered yet';
-    const physics = status.physicsOff ? ', physics left out while it is drawn this small' : '';
+    const physics = status.reduced ? ', physics and deform left out while it is drawn this small' : '';
 
     if (status.hidden && status.offscreen === 'pause') {
         return {

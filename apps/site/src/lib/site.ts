@@ -29,6 +29,11 @@ export const PAGES: readonly DocsPage[] = [
         description: 'Several skins at once, slot attachments and colors, and the setup pose.',
     },
     {
+        href: '/reels/',
+        title: 'Reels',
+        description: 'The reels of a slot game, spun by pixi-reels and drawn by pixi-marrow, with line wins.',
+    },
+    {
         href: '/performance/',
         title: 'Performance',
         description: 'Presets, pacing, the idle cache, baking and GPU skinning, and the report of what is in effect.',

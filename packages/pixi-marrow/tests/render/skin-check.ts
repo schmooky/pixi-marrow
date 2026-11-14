@@ -178,10 +178,13 @@ export function expectSkinned(rig: Rig): (Drawn & { cpu: boolean })[] {
     });
 }
 
-/** A fixture in the mesh mode with `skinning: 'gpu'`. */
+/**
+ * A fixture in the mesh mode with `skinning: 'gpu'`, drawn alone: these tests read the buffers of
+ * its meshes. `instance-check.ts` reads a view that draws instanced.
+ */
 export const loadSkinned = (id: string, more: (atlas: AtlasModel) => object = () => ({})): Promise<Rig> =>
     createRig(fixtureFiles(id), undefined, {
-        options: (atlas) => ({ renderMode: 'mesh', skinning: 'gpu', ...more(atlas) }),
+        options: (atlas) => ({ renderMode: 'mesh', skinning: 'gpu', instancing: 'off', ...more(atlas) }),
     });
 
 /** The calls of `update` of a buffer or a texture from now on, with the arguments of each. */

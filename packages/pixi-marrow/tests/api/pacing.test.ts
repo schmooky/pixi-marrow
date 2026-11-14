@@ -156,12 +156,12 @@ describe('a display object with pacing', () => {
         spine.destroy();
     });
 
-    it('leaves physics out while drawn small, and resets it after', async () => {
+    it('leaves physics and deform out while drawn small, and brings them back after', async () => {
         const spine = new MarrowSpine(await fixtureAsset('4.2/cloud-pot.skel'), { autoUpdate: false, lod: 'auto' });
         const modes: string[] = [];
 
         vi.spyOn(spine.engine, 'update').mockImplementation(() => {
-            modes.push(spine.engine.physics);
+            modes.push(`${spine.engine.physics} ${spine.engine.deform ? 'deform' : 'flat'}`);
         });
         rendered(spine);
         // a render of the real object: its bounds decide
@@ -169,12 +169,81 @@ describe('a display object with pacing', () => {
         vi.spyOn(spine, 'getBounds').mockReturnValue({ x: 0, y: 0, width: 40, height: 40 } as never);
         rendered(spine);
         spine.update(1 / 60);
+        spine.update(1 / 60);
         vi.spyOn(spine, 'getBounds').mockReturnValue({ x: 0, y: 0, width: 400, height: 400 } as never);
         rendered(spine);
         spine.update(1 / 60);
         spine.update(1 / 60);
-        expect(modes).toEqual(['update', 'none', 'reset', 'update']);
+        expect(modes).toEqual(['update deform', 'none flat', 'none flat', 'reset deform', 'update deform']);
         expect(spine.physics).toBe('update');
+        expect(spine.pacingStatus().reduced).toBe(false);
+        spine.destroy();
+    });
+
+    it('leaves a deform switch the game turned off as it is, with lod', async () => {
+        const spine = new MarrowSpine(await fixtureAsset('4.2/alien-pro.skel'), { autoUpdate: false, lod: 'auto' });
+
+        spine.engine.deform = false;
+        vi.spyOn(spine, 'getBounds').mockReturnValue({ x: 0, y: 0, width: 40, height: 40 } as never);
+        rendered(spine);
+        spine.update(1 / 60);
+        vi.spyOn(spine, 'getBounds').mockReturnValue({ x: 0, y: 0, width: 400, height: 400 } as never);
+        rendered(spine);
+        spine.update(1 / 60);
+        expect(spine.engine.deform).toBe(false);
+        spine.destroy();
+    });
+
+    it('keeps the deform of a stopped skeleton through a spell at a small size', async () => {
+        const spine = new MarrowSpine(await fixtureAsset('4.2/alien-pro.skel'), { autoUpdate: false, lod: 'auto' });
+        const deformed = (): number => [...spine.engine.state.deformLengths].filter((length) => length > 0).length;
+
+        spine.play('death');
+        for (let i = 0; i < 12; i++) spine.update(1 / 60);
+        // without a mix the track is cleared at once and the pose stays as it is
+        spine.stop();
+        spine.update(1 / 60);
+        const held = deformed();
+
+        expect(held).toBeGreaterThan(0);
+        vi.spyOn(spine, 'getBounds').mockReturnValue({ x: 0, y: 0, width: 40, height: 40 } as never);
+        rendered(spine);
+        spine.update(1 / 60);
+        expect(deformed()).toBe(0);
+        vi.spyOn(spine, 'getBounds').mockReturnValue({ x: 0, y: 0, width: 400, height: 400 } as never);
+        rendered(spine);
+        for (let i = 0; i < 5; i++) spine.update(1 / 60);
+        expect(deformed()).toBe(held);
+        spine.destroy();
+    });
+
+    it('leaves a deform switch the game set alone without lod', async () => {
+        const spine = new MarrowSpine(await fixtureAsset('4.2/cloud-pot.skel'), { autoUpdate: false });
+
+        spine.engine.deform = false;
+        for (let i = 0; i < 3; i++) spine.update(1 / 60);
+        expect(spine.engine.deform).toBe(false);
+        spine.destroy();
+    });
+
+    it('keeps physics off that the game turned off, when lod gives it back', async () => {
+        const spine = new MarrowSpine(await fixtureAsset('4.2/cloud-pot.skel'), { autoUpdate: false, lod: 'auto' });
+
+        const modes: string[] = [];
+
+        spine.physics = 'none';
+        vi.spyOn(spine.engine, 'update').mockImplementation(() => {
+            modes.push(spine.engine.physics);
+        });
+        vi.spyOn(spine, 'getBounds').mockReturnValue({ x: 0, y: 0, width: 40, height: 40 } as never);
+        rendered(spine);
+        spine.update(1 / 60);
+        vi.spyOn(spine, 'getBounds').mockReturnValue({ x: 0, y: 0, width: 400, height: 400 } as never);
+        rendered(spine);
+        spine.update(1 / 60);
+        // no reset runs the physics the game turned off
+        expect(modes).toEqual(['none', 'none']);
+        expect(spine.engine.deform).toBe(true);
         spine.destroy();
     });
 });

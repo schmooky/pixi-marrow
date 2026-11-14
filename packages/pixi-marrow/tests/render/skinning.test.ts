@@ -160,7 +160,7 @@ describe('skinning on the GPU', () => {
                     if (name === 'eye-surprised' && 'color' in attachment) attachment.color.set([0.5, 0.5, 0.5, 1]);
                 }
             },
-            { options: () => ({ renderMode: 'mesh', skinning: 'gpu' }) },
+            { options: () => ({ renderMode: 'mesh', skinning: 'gpu', instancing: 'off' }) },
         );
         const { state } = rig.engine;
         const eye = slotIndex(rig, 'eye');
@@ -256,7 +256,11 @@ describe('skinning on the GPU', () => {
     it('shares the skin data of a layout between views and frees it with the last one', async () => {
         const rig = await loadSkinned('4.2/raptor-pro.skel');
         const textures = rig.atlas.pages.map(() => new Texture({ source: new TextureSource({ width: 1, height: 1 }) }));
-        const other = new SkeletonView(rig.model, rig.atlas, textures, { renderMode: 'mesh', skinning: 'gpu' });
+        const other = new SkeletonView(rig.model, rig.atlas, textures, {
+            renderMode: 'mesh',
+            skinning: 'gpu',
+            instancing: 'off',
+        });
 
         step(rig, 0);
         other.update(rig.engine.state);
@@ -341,7 +345,7 @@ describe('skinning on the GPU', () => {
             { name: 'small', shows: 'small' },
             { name: 'big', shows: 'big' },
         ];
-        const rig = await coverRig(behind, { skinning: 'gpu' });
+        const rig = await coverRig(behind, { skinning: 'gpu', instancing: 'off' });
         const { state } = rig.engine;
 
         redraw(rig);

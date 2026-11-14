@@ -15,7 +15,8 @@ import {
     VERSION,
 } from 'pixi.js';
 import { MarrowError } from '../base/errors';
-import { BATCHER, BatchElement, type BatchHome, type BatchPart, DARK_BATCHER } from './batch-element';
+import { BATCHER, BatchElement, type BatchHome, type BatchPart, DARK_BATCHER, PIPE_ID } from './batch-element';
+import type { ImageElement } from './batch-image';
 import { GROUP_PAGES, POSITION_WORDS, STATIC_WORDS } from './batch-layout';
 import { createBatchShader } from './batch-shader';
 import { PendingUpload, uploadsStretch } from './batch-upload';
@@ -39,14 +40,14 @@ import { PendingUpload, uploadsStretch } from './batch-upload';
  *   it wrote, and the batcher uploads those before it draws. A skeleton at rest uploads nothing.
  */
 
-/** The name of the render pipe that runs the batches. See `batch-pipe.ts`. */
-export const PIPE_ID = 'marrow';
-
 /** The most vertices 16-bit indices can point at. */
 const NARROW = 65535;
 
 /** The vertices the static buffer of a new batcher has room for. */
 const FIRST_ROOM = 64;
+
+/** Whether an element is the quad of an image, see `batch-image.ts`. */
+const isQuad = (element: object): element is ImageElement => 'quad' in element;
 
 /** A Pixi vertex buffer that keeps its size when its data shrinks. */
 const vertexBuffer = (data: Float32Array, label: string): Buffer =>
@@ -110,7 +111,7 @@ export class MarrowBatcher extends Batcher implements BatchHome {
     /** Words per vertex in the buffer Pixi uploads: the position alone. */
     protected vertexSize: number = POSITION_WORDS;
     /** The elements and the parts of elements that were added since the last break. Valid up to {@link waiting}. */
-    private readonly pending: (BatchElement | BatchPart | undefined)[] = [];
+    private readonly pending: (BatchElement | ImageElement | BatchPart | undefined)[] = [];
     private waiting = 0;
     /** While a break runs: the batch the next indices go on in, the index after its last one, and whether a batch was opened. */
     private current: Batch | undefined;
@@ -172,7 +173,7 @@ export class MarrowBatcher extends Batcher implements BatchHome {
 
             return;
         }
-        if (!(element instanceof BatchElement)) {
+        if (!(element instanceof BatchElement || isQuad(element))) {
             throw new MarrowError('invalid-data', `The batcher "${this.name}" got an element that is no skeleton.`, {
                 fix: 'Give the batch elements of other display objects another batcherName.',
             });
@@ -204,6 +205,7 @@ export class MarrowBatcher extends Batcher implements BatchHome {
 
             pending[i] = undefined;
             if (item instanceof BatchElement) this.emitOwn(instructionSet, item);
+            else if (item !== undefined && isQuad(item)) this.emitImage(instructionSet, item);
             else if (item?.owner.placed === true) {
                 const { partRuns, runs } = item.owner;
                 const from = partRuns[item.index] ?? runs;
@@ -267,6 +269,19 @@ export class MarrowBatcher extends Batcher implements BatchHome {
         }
     }
 
+    /** Puts the quad of an image into the open batch where it fits and its indices follow, a new one otherwise. */
+    private emitImage(instructionSet: InstructionSet, image: ImageElement): void {
+        const { current } = this;
+
+        if (current === undefined || image._indexStart !== this.cursor || !image.fits(current, this.maxTextures)) {
+            this.close();
+        }
+        this.cursor = image._indexStart;
+        this.current ??= this.open(instructionSet, image.blendMode);
+        image.enter(this, this.current);
+        this.cursor += image.indexSize;
+    }
+
     /** Notes a stretch of the positions that changed. {@link flush} uploads it. */
     touchPositions(from: number, words: number): void {
         this.positionsPending.add(from, words);
@@ -319,7 +334,7 @@ export class MarrowBatcher extends Batcher implements BatchHome {
 
     /** Pixi's batcher packs an element here. An element of the batched mode writes itself. */
     override packAttributes(element: BatchableMeshElement): void {
-        if (element instanceof BatchElement) element.sync();
+        if (element instanceof BatchElement || isQuad(element)) element.sync();
     }
 
     /** Skeletons are no quads. */
@@ -451,21 +466,5 @@ export class MarrowBatcher extends Batcher implements BatchHome {
 
         next.set(current.subarray(0, Math.min(current.length, next.length)));
         this.indexBuffer = next;
-    }
-}
-
-/**
- * Batches skeletons with dark colors: a vertex carries 4 more bytes, and the shader tints with
- * two colors.
- *
- * @example
- * extensions.add(MarrowDarkBatcher);
- */
-export class MarrowDarkBatcher extends MarrowBatcher {
-    /** How Pixi registers the class. */
-    static override extension: ExtensionMetadata = { type: [ExtensionType.Batcher], name: DARK_BATCHER };
-
-    constructor(options?: BatcherOptions) {
-        super(options, true);
     }
 }

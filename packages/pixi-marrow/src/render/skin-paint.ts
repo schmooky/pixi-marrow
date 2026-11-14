@@ -5,6 +5,7 @@ import type { PosePass } from './pose-pass';
 import { releaseSkinLayout, retainSkinLayout, type SkinLayout } from './skin-layout';
 import { SkinPose } from './skin-pose';
 import { createSkinShader } from './skin-shader';
+import { type SkinStore, TextureStore } from './skin-store';
 import { MAX_PAGES, type Template } from './template';
 import type { VisibleList } from './visible';
 
@@ -12,6 +13,8 @@ import type { VisibleList } from './visible';
  * What a view of the mesh mode draws with when its vertex shader places the vertices. That is
  * the vertex buffer `aSkin` on the skin data of its layout, the bone and palette textures, and a
  * shader per group of pages that reads them. The skin data is shared by the views of a layout.
+ * The textures of its own exist once the view draws alone: a view that draws instanced writes
+ * its pose into a slot of shared ones, see {@link use}.
  *
  * @example
  * const skin = new MeshSkin(model, template, pages, dark);
@@ -22,6 +25,8 @@ export class MeshSkin {
     /** Per vertex: the first influence, and the influence count with the slot. See `skin-layout.ts`. */
     readonly buffer: Buffer;
     private readonly textures: SkinPose;
+    /** The bone and palette textures of the view, once it drew alone. */
+    private own: TextureStore | undefined;
     private readonly model: SkeletonModel;
     private readonly pages: readonly TextureSource[];
     private readonly dark: boolean;
@@ -36,7 +41,8 @@ export class MeshSkin {
         this.dark = dark;
         this.template = template;
         this.layout = retainSkinLayout(template, model);
-        this.textures = new SkinPose(model);
+        this.own = new TextureStore(model);
+        this.textures = new SkinPose(model, this.own);
         this.buffer = new Buffer({
             data: this.layout.vertices,
             label: 'marrow-skin',
@@ -45,14 +51,40 @@ export class MeshSkin {
         });
     }
 
-    /** The bytes of the bone and palette textures. The skin data of the layout is shared. */
+    /** The bytes of the bone and palette textures of the view. The skin data of the layout is shared. */
     get bytes(): number {
-        return this.textures.bytes;
+        return this.own?.bytes ?? 0;
+    }
+
+    /** The skin data of the layout the view draws with. */
+    get skinLayout(): SkinLayout {
+        return this.layout;
+    }
+
+    /**
+     * Writes the pose into another store from now on, or into the textures of the view with
+     * `undefined`, which are made again when the view let them go. The next pass of the view
+     * must write everything: `pass.all`. The textures of a view that drew alone stay while it
+     * writes elsewhere, since it may well draw alone again.
+     */
+    use(store: SkinStore | undefined): void {
+        if (store === undefined) {
+            this.own ??= new TextureStore(this.model);
+            this.textures.use(this.own);
+            for (const shader of this.shaders) this.bind(shader);
+
+            return;
+        }
+        this.textures.use(store);
+        if (this.shaders.length > 0) return;
+        this.own?.destroy();
+        this.own = undefined;
     }
 
     /** The shader of a group of 8 pages. The draw ranges ask for it once per group and destroy it. */
     readonly shade = (group: number): Shader => {
-        const { bones, palette } = this.textures;
+        this.own ??= new TextureStore(this.model);
+        const { boneTexture: bones, palette } = this.own;
         const shader = createSkinShader(this.pages.slice(group * MAX_PAGES, (group + 1) * MAX_PAGES), this.dark, {
             bones,
             influences: this.layout.influences,
@@ -99,7 +131,18 @@ export class MeshSkin {
     destroy(): void {
         releaseSkinLayout(this.template, this.layout);
         this.buffer.destroy();
-        this.textures.destroy();
+        this.own?.destroy();
+        this.own = undefined;
         this.shaders.length = 0;
+    }
+
+    /** Points a shader of the view at the textures of the view, which can be new ones. */
+    private bind(shader: Shader): void {
+        const { own } = this;
+
+        // a destroyed shader has no resources
+        if (own === undefined || shader.resources === null) return;
+        shader.resources.uBones = own.boneTexture;
+        shader.resources.uPalette = own.palette;
     }
 }

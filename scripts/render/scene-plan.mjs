@@ -18,6 +18,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { count, phase, round, scene, spine, use } from './scene-kit.mjs';
 import { idleScenes } from './scene-plan-idle.mjs';
+import { instanceScenes } from './scene-plan-instances.mjs';
 import { linkScenes } from './scene-plan-links.mjs';
 import { lazyScenes, sleepScenes } from './scene-plan-sleep.mjs';
 
@@ -349,6 +350,7 @@ export function planScenes({ root, rigs, made }) {
         ...parentScenes(rigs),
         ...featureScenes(rigs, screenFile),
         changeScene(rigs),
+        ...instanceScenes(rigs),
         ...sleepScenes(rigs),
         ...idleScenes(rigs),
         ...linkScenes(rigs),

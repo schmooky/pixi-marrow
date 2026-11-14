@@ -1,4 +1,5 @@
 import type { AttachmentData } from '../../model/attachments';
+import { hideDeforms, showDeforms } from '../shared/deform-switch';
 import { writeColor } from '../shared/slot-writes';
 import { updateCache } from './cache';
 import { setSlotAttachment, setupAttachment, stampDrawOrder, stampSlot } from './slots';
@@ -121,4 +122,23 @@ export function writeSlotColor(pose: Pose43, slot: number, r: number, g: number,
 /** The official `slot.pose.darkColor.set` of 4.3, from outside an update. */
 export function writeSlotDark(pose: Pose43, slot: number, r: number, g: number, b: number): void {
     if (writeColor(pose.darkColors, slot * 3, r, g, b)) wroteSlot(pose, slot);
+}
+
+/**
+ * Hides or shows the deforms of the animated pose and of the applied pose, from outside an
+ * update, for `PoseEngine.deform`. See `shared/deform-switch.ts`. The applied pose of a slot
+ * that a slider poses follows at once, so that the drawn pose shows the change.
+ */
+export function switchDeforms(pose: Pose43, on: boolean): void {
+    const { state, solve } = pose;
+    const toggle = on ? showDeforms : hideDeforms;
+
+    toggle(pose.deformLengths, (slot) => stampSlot(pose, slot));
+    if (state.deformLengths !== pose.deformLengths) {
+        toggle(state.deformLengths, (slot) => {
+            state.version = solve.pending;
+            state.slotStamps[slot] = solve.pending;
+        });
+    }
+    solve.dirty = true;
 }

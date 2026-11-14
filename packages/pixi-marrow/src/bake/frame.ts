@@ -1,5 +1,6 @@
 import type { AttachmentData } from '../model/attachments';
 import type { SkeletonModel } from '../model/model';
+import { forgetDeform } from '../pose/shared/deform-switch';
 import { createAttachmentLookup } from '../pose/shared/lookup';
 import { nextVersion, type PoseState } from '../pose/state';
 import type { BakedClip } from './clip';
@@ -119,7 +120,10 @@ function writeShown(state: PoseState, prepared: PreparedClip, frame: number, ver
         if (attachment === undefined || shown === attachment) continue;
         const key = deformKey(state.model, attachment);
 
-        if (key === null || key !== deformKey(state.model, shown)) state.deformLengths[slot] = 0;
+        if (key === null || key !== deformKey(state.model, shown)) {
+            state.deformLengths[slot] = 0;
+            forgetDeform(state.deformLengths, slot);
+        }
         state.attachments[slot] = attachment;
         state.sequenceIndices[slot] = -1;
         state.slotStamps[slot] = version;
@@ -187,11 +191,12 @@ function writeDrawOrder(state: PoseState, clip: BakedClip, frame: number, versio
  * Writes frame `frame` of a prepared clip into a pose state: the world transforms of the bones
  * that move and the slot values that change. What it writes gets the next version as its stamp,
  * and the state that version. A frame that leaves everything as it was changes no stamp.
+ * With `deform` false the deforms are left out, for an engine whose deform timelines are off.
  *
  * @example
  * writeFrame(engine.state, prepared, frameAt(prepared.clip, time));
  */
-export function writeFrame(state: PoseState, prepared: PreparedClip, frame: number): void {
+export function writeFrame(state: PoseState, prepared: PreparedClip, frame: number, deform = true): void {
     const { clip } = prepared;
     const version = nextVersion(state.version);
     const bones = writeBones(state, clip, frame, version);
@@ -216,7 +221,8 @@ export function writeFrame(state: PoseState, prepared: PreparedClip, frame: numb
         version,
     );
     const shown = writeShown(state, prepared, frame, version);
-    const deforms = writeDeforms(state, clip, frame, version);
+    // an engine that leaves deform timelines out keeps every deform cleared
+    const deforms = deform && writeDeforms(state, clip, frame, version);
     const order = writeDrawOrder(state, clip, frame, version);
 
     if (bones || colors || darks || shown || deforms || order) state.version = version;

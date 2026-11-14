@@ -47,9 +47,15 @@ importers:
       astro:
         specifier: ^7.4.11
         version: 7.4.11(@types/node@24.19.2)(jiti@2.7.0)(yaml@2.9.1)
+      gsap:
+        specifier: ^3.15.1
+        version: 3.15.1
       pixi-marrow:
         specifier: workspace:*
         version: link:../../packages/pixi-marrow
+      pixi-reels:
+        specifier: 4.4.0
+        version: 4.4.0(@esotericsoftware/spine-pixi-v8@4.2.120(pixi.js@8.23.0))(gsap@3.15.1)(pixi-silk@1.0.1(pixi.js@8.23.0))(pixi.js@8.23.0)
       pixi-silk:
         specifier: ^1.0.1
         version: 1.0.1(pixi.js@8.23.0)
@@ -2740,6 +2746,9 @@ packages:
   graceful-fs@4.2.12:
     resolution: {integrity: sha512-iuyGF2E4oafQfPsRrG2wtY2ILupMhvtdrhzrxB+0VcjsPpSPttpfYdjnGFGsTi5MaJFjI1jOKHPQ6UTbTj9TAw==}
 
+  gsap@3.15.1:
+    resolution: {integrity: sha512-63yjWRFWj3QRP1UOuD8kcidCcy3nxb1mMRpwHr/xJRvPfm9GtWOXFAYUiL0ro1fgPq2nY53LR+98pAgy9BumBg==}
+
   h3@1.15.11:
     resolution: {integrity: sha512-L3THSe2MPeBwgIZVSH5zLdBBU90TOxarvhK9d04IDY2AmVS8j2Jz2LIWtwsGOU3lu2I5jCN7FNvVfY2+XyF+mg==}
 
@@ -3303,6 +3312,19 @@ packages:
   pixelmatch@5.3.0:
     resolution: {integrity: sha512-o8mkY4E/+LNUf6LzX96ht6k6CEDi65k9G2rjMtBe9Oo+VPKSvl+0GKHuH/AlG+GA5LPG/i5hrekkxUc3s2HU+Q==}
     hasBin: true
+
+  pixi-reels@4.4.0:
+    resolution: {integrity: sha512-mGyo7K5b3pvzvZeuWl93+Hww0hQ7aml3hgcgVz1lJxb9sPNlR1i8d2mv14fkHFkC1QW8HGBLv1ccbKGDTod6xQ==}
+    peerDependencies:
+      '@esotericsoftware/spine-pixi-v8': ~4.2.110
+      gsap: ^3.15.0
+      pixi-silk: ^0.1.0
+      pixi.js: ^8.18.1
+    peerDependenciesMeta:
+      '@esotericsoftware/spine-pixi-v8':
+        optional: true
+      pixi-silk:
+        optional: true
 
   pixi-silk@1.0.1:
     resolution: {integrity: sha512-PNjHA/R1KiepZ4aZ5FPoyu4uGnCqzNkMbT7NEKdZFfAA/nrBzVqUHQAlbRrUylJ7pHo4mBUKWKftzBHtp8Mzjg==}
@@ -6495,6 +6517,8 @@ snapshots:
 
   graceful-fs@4.2.12: {}
 
+  gsap@3.15.1: {}
+
   h3@1.15.11:
     dependencies:
       cookie-es: 1.2.3
@@ -7080,6 +7104,14 @@ snapshots:
   pixelmatch@5.3.0:
     dependencies:
       pngjs: 6.0.0
+
+  pixi-reels@4.4.0(@esotericsoftware/spine-pixi-v8@4.2.120(pixi.js@8.23.0))(gsap@3.15.1)(pixi-silk@1.0.1(pixi.js@8.23.0))(pixi.js@8.23.0):
+    dependencies:
+      gsap: 3.15.1
+      pixi.js: 8.23.0
+    optionalDependencies:
+      '@esotericsoftware/spine-pixi-v8': 4.2.120(pixi.js@8.23.0)
+      pixi-silk: 1.0.1(pixi.js@8.23.0)
 
   pixi-silk@1.0.1(pixi.js@8.23.0):
     dependencies:

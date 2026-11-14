@@ -60,8 +60,6 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
     /** When an update poses the skeleton, and with how much time. */
     private readonly pacer: Pacer;
     private readonly idle: IdleCache | undefined;
-    /** True while `lod` leaves physics out of the updates. */
-    private lodOn = false;
     /** What {@link updateProbe} holds. An update without a probe pays one check of this field. */
     private probe: UpdateProbe | null = null;
 
@@ -77,15 +75,8 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
             throw new MarrowError('invalid-data', 'The asset was destroyed.', { fix: 'Load the asset again.' });
         }
         this.asset = asset;
-        const settings = resolvePerf(options.perf, {
-            tightMesh: options.tightMesh,
-            skinning: options.skinning,
-            bake: options.bake,
-            idleCache: options.idleCache,
-            offscreen: options.offscreen,
-            updateRate: options.updateRate,
-            lod: options.lod,
-        });
+        // the options name each setting as the settings do
+        const settings = resolvePerf(options.perf, options);
 
         this.perfSettings = settings;
         this.engine = bakingEngine(asset, asset.createEngine(), settings.bake);
@@ -100,6 +91,7 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
             occlusion: options.occlusion,
             renderMode: renderMode(options.renderMode ?? 'auto'),
             skinning: settings.skinning,
+            instancing: settings.instancing,
         });
         this.addChild(this.skeletonView.container);
         this.linkTo({ engine: this.engine, state: this.engine.state, model: asset.model, view: this.skeletonView });
@@ -413,26 +405,9 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
         probe.record(posed - start, drawn - absorbed, absorbed - posed + (performance.now() - drawn));
     }
 
-    /**
-     * Poses the skeleton. While `lod` leaves physics out, the engine updates in mode `none`, and
-     * the first update after that resets the physics, so that it does not swing from an old pose.
-     */
+    /** Poses the skeleton, with the level of detail the last render asked for. */
     private pose(seconds: number): void {
-        const { engine } = this;
-
-        if (this.pacer.small && engine.physics !== 'none') {
-            const mode = engine.physics;
-
-            engine.physics = 'none';
-            engine.update(seconds);
-            engine.physics = mode;
-            this.lodOn = true;
-        } else {
-            if (this.lodOn) this.resetPhysics();
-            this.lodOn = false;
-            engine.update(seconds);
-        }
-        this.settleReset();
+        this.poseAt(seconds, this.pacer.small);
     }
 
     /** Where the pacing of updates stands, for `perf.report()`. */

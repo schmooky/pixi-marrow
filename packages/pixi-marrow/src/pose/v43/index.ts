@@ -29,6 +29,7 @@ import {
     setSkin,
     setupPoseBones,
     setupPoseSlots,
+    switchDeforms,
     writeSlotAttachment,
     writeSlotColor,
     writeSlotDark,
@@ -113,6 +114,21 @@ class Engine43 implements PoseEngine {
         }
         if (number !== this.pose.solve.physicsMode) this.pose.solve.dirty = true;
         this.pose.solve.physicsMode = number;
+    }
+
+    get deform(): boolean {
+        return !this.pose.solve.deformOff;
+    }
+
+    set deform(value: boolean) {
+        const { solve } = this.pose;
+
+        if (value !== solve.deformOff) return;
+        solve.deformOff = !value;
+        this.open();
+        // the deform timelines apply in the next update, whatever the pose did before
+        switchDeforms(this.pose, value);
+        this.close();
     }
 
     get timeScale(): number {

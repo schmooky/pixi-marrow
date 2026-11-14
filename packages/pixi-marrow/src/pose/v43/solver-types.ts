@@ -368,6 +368,8 @@ export interface Solve43 {
     readonly physics: Float64Array;
     /** The official `Physics` argument of `updateWorldTransform`: one of the `PHYSICS_` modes. */
     physicsMode: number;
+    /** True while deform timelines are left out, see `PoseEngine.deform`. */
+    deformOff: boolean;
     /**
      * What the engine keeps apart for sliders. Null for a model without sliders. It is set once,
      * when the engine is created, because it holds a pose that points back at this state.

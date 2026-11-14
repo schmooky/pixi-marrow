@@ -46,6 +46,8 @@ export const PAIRS = [
         kind: 'polygons',
     },
     { label: 'ours with polygons, official', a: 'ours-polygons', b: 'official', kind: 'polygonsOfficial' },
+    // ours drawn instanced and alone, with skinning on the GPU: the same bits
+    { label: 'ours, instancing on and off', a: 'ours', b: 'ours-alone', kind: 'exact', group: 'instancing' },
     // the batched mode: against the official runtime under the same rules, and against the mesh mode
     { label: 'ours batched', a: 'ours-batched', b: 'official', kind: 'match', group: 'matchBatched' },
     { label: 'ours, batched and mesh', a: 'ours-batched', b: 'ours', kind: 'modes' },

@@ -14,6 +14,7 @@ const FEATURES: readonly PerfFeature[] = [
     'perf',
     'pacing',
     'renderMode',
+    'instancing',
     'motion',
     'links',
     'drawCalls',

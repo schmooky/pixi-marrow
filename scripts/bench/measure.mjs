@@ -24,13 +24,15 @@ const rounded = (values) => values.map((ms) => Math.round(ms * 1e4) / 1e4);
  * milestone M5 asks for it. The side `gpu` is ours in the mesh mode with `skinning: 'gpu'`, where
  * `--skinning=gpu` asks for it. It runs in every scene.
  *
- * The side `baked` is ours with `bake: 'auto'`, with `--bake`.
+ * The side `baked` is ours with `bake: 'auto'`, with `--bake`. The side `alone` is the side `gpu`
+ * with `instancing: 'off'`, with `--skinning=gpu --instancing=compare`: each instance draws alone,
+ * where `gpu` draws the instances of a layout in one instanced draw.
  *
  * @param config `renderMode` is what ours is asked for, `meshSide` the value of `--mesh`, `skinning`
- * the value of `--skinning`, `idleSide` adds ours with the idle cache on as the side `idle`, and
- * `bakeSide` is true with `--bake`.
+ * the value of `--skinning`, `idleSide` adds ours with the idle cache on as the side `idle`,
+ * `bakeSide` is true with `--bake` and `aloneSide` with `--instancing=compare`.
  */
-export function sidesOf(subject, { renderMode, meshSide, skinning, idleSide, bakeSide }) {
+export function sidesOf(subject, { renderMode, meshSide, skinning, idleSide, bakeSide, aloneSide }) {
     const sides = [
         { side: 'ours', runtime: 'ours', options: modeOptions(renderMode) },
         { side: 'official', runtime: 'official', options: {} },
@@ -44,6 +46,13 @@ export function sidesOf(subject, { renderMode, meshSide, skinning, idleSide, bak
         sides.push({ side: 'idle', runtime: 'ours', options: { ...modeOptions(renderMode), idleCache: 'auto' } });
     if (skinning === 'gpu')
         sides.push({ side: 'gpu', runtime: 'ours', options: { renderMode: 'mesh', skinning: 'gpu' } });
+    if (skinning === 'gpu' && aloneSide) {
+        sides.push({
+            side: 'alone',
+            runtime: 'ours',
+            options: { renderMode: 'mesh', skinning: 'gpu', instancing: 'off' },
+        });
+    }
     if (bakeSide) sides.push({ side: 'baked', runtime: 'ours', options: { ...modeOptions(renderMode), bake: 'auto' } });
 
     return sides;

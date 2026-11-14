@@ -2,7 +2,7 @@
   "name": "@pixi-marrow/site",
   "private": true,
   "version": "0.0.0",
-  "description": "The docs site of pixi-marrow: four short pages and two live previews.",
+  "description": "The docs site of pixi-marrow: short pages and live previews.",
   "type": "module",
   "scripts": {
     "rigs": "node scripts/copy-rigs.mjs",
@@ -14,7 +14,9 @@
   "dependencies": {
     "@astrojs/mdx": "^8.1.5",
     "astro": "^7.4.11",
+    "gsap": "^3.15.1",
     "pixi-marrow": "workspace:*",
+    "pixi-reels": "4.4.0",
     "pixi-silk": "^1.0.1",
     "pixi.js": "^8.22.0"
   },

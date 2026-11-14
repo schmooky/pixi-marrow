@@ -1,0 +1,32 @@
+---
+layout: ../layouts/Docs.astro
+title: Reels
+description: The reels of a slot game, spun by pixi-reels and drawn by pixi-marrow, with line wins.
+---
+
+import Preview from '../components/Preview.astro';
+import Snippet from '../components/Snippet.astro';
+import symbol from '../previews/reel-symbol.ts?raw';
+
+<Preview name="reels" height={480} rows={5} caption="Five reels of the slot game Bzzz. The reels spin with pixi-reels, and every symbol is a pixi-marrow skeleton. A win plays win on its line and disable on the other symbols." />
+
+## What it shows
+
+The grid is five reels of three rows, with ten paylines. Each symbol is a skeleton of the game Bzzz. A round spins, lands and shows its line wins one after another.
+
+- A reel that starts plays `blur_in`, which holds the blurred frame while it spins. A reel that stops plays `blur_out`, then `landing`, then the `idle` loop.
+- A win plays `win` on the symbols of its line. Every other symbol plays `disable`, a still and dimmed pose. Several wins show one after another, each with its own line lit.
+
+`Perf` switches the preset of every skeleton. With `balanced` an animation that plays alone plays from baked frames, and a skeleton at rest is drawn once as an image. The dimmed symbols of a win rest, so they become images. `Skinning` puts the vertices into the vertex shader of the mesh mode. `Draw calls` counts the calls of the last frame.
+
+## A reel symbol on pixi-marrow
+
+[pixi-reels](https://pixi-reels.schmooky.dev) asks a symbol to show an id and to play its beats. Its own Spine symbol uses the official runtime. This one makes a `MarrowSpine` per id and keeps it.
+
+<Snippet source={symbol} regions="activate" />
+
+When its reel stops, the symbol plays the beats of the game in a row:
+
+<Snippet source={symbol} regions="landed" />
+
+The whole symbol is `src/previews/reel-symbol.ts` of the site, about 170 lines.

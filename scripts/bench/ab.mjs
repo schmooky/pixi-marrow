@@ -10,6 +10,7 @@
  *                      [--runs=3] [--frames=200] [--warmup=40] [--size=1280x720] [--out=.bench]
  *                      [--memory=all|off] [--dist=<folder>] [--pixi=8.16] [--baseline=<file>]
  *                      [--write-baseline] [--check] [--idle-cache=off|compare] [--skinning=gpu] [--bake]
+ *                      [--instancing=compare]
  *
  * The values above are the defaults of the A/B mode. The overdraw mode has its own: 24 instances,
  * 5 runs of 100 frames per setting after 30, on a canvas of 1920x1080.
@@ -43,6 +44,11 @@
  * shader places what hangs on bones alone. With --render-mode=mesh the side `ours` is the mesh
  * mode with the CPU placing every vertex, and the row `gpu/ours` divides the two in the same
  * seconds. The uploads count textures too, which is where the bones and the palette go.
+ *
+ * --instancing=compare, with --skinning=gpu, adds a side `alone`: the side `gpu` with
+ * `instancing: 'off'`. The side `gpu` has the default, `auto`, so the instances of a layout that
+ * follow each other draw in one instanced draw. The row `gpu/alone` divides the two: what
+ * instancing gains or costs on this machine.
  *
  * --pixi names the version of pixi.js both sides run on, see `pixiPackage` of
  * scripts/render/setup.mjs. The head of a renderer names the version that ran.
@@ -216,6 +222,8 @@ const settings = {
     skinning: args.skinning === 'gpu' ? 'gpu' : null,
     // ours once more with baked playback, see the usage text
     bakeSide: args.bake !== undefined,
+    // ours with skinning on the GPU and each instance drawn alone, next to `gpu`
+    aloneSide: args.instancing === 'compare',
     runs: Number(args.runs ?? DEFAULTS[mode].runs),
     frames: Number(args.frames ?? DEFAULTS[mode].frames),
     warmup: Number(args.warmup ?? DEFAULTS[mode].warmup),

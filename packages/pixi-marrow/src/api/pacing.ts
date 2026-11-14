@@ -3,9 +3,9 @@ import type { ResolvedPerf } from './presets';
 
 /** How long a skeleton off the screen waits between two updates in the `throttle` mode, in seconds. */
 const THROTTLE = 0.25;
-/** Below this size on the screen, in pixels across, `lod: 'auto'` leaves physics out. */
+/** Below this size on the screen, in pixels across, `lod: 'auto'` leaves physics and deform out. */
 const LOD_SIZE = 96;
-/** Physics that `lod` left out comes back above this size, so a skeleton at the limit does not flip each frame. */
+/** What `lod` left out comes back above this size, so a skeleton at the limit does not flip each frame. */
 const LOD_BACK = 120;
 /** How far a sum of seconds may fall short of a step and still count as due. */
 const EPSILON = 1e-9;
@@ -26,8 +26,8 @@ export interface PacingStatus {
     hidden: boolean;
     /** The size on the screen at the last render, in pixels across. Infinite before a render. */
     size: number;
-    /** True while `lod` leaves physics out. */
-    physicsOff: boolean;
+    /** True while `lod` leaves physics and deform out. */
+    reduced: boolean;
 }
 
 /** What the pacing reads of a display object when it is rendered. */
@@ -136,12 +136,12 @@ export class Pacer {
             offscreen: settings.offscreen,
             hidden: this.hidden,
             size: this.size,
-            physicsOff: this.small,
+            reduced: this.small,
         };
     }
 
     /**
-     * True while `lod: 'auto'` leaves physics out: the skeleton is drawn smaller than 96 pixels.
+     * True while `lod: 'auto'` leaves physics and deform out: the skeleton is drawn smaller than 96 pixels.
      * It stays true until the skeleton is drawn at 120 pixels or more.
      */
     get small(): boolean {

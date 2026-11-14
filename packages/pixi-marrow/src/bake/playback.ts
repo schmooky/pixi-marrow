@@ -36,6 +36,7 @@ const PRIMED = 7;
 const WRITTEN = 8;
 const TRACKS = 9;
 const BAKED = 10;
+const PATH_DEFORM = 11;
 
 const REASONS: readonly string[] = [
     'nothing played yet',
@@ -49,7 +50,17 @@ const REASONS: readonly string[] = [
     'posed: the pose was written, or the skin or the physics mode changed',
     'posed: the tracks changed',
     'baked',
+    'posed: the deform is off, and a path the clip deforms places bones',
 ];
+
+/**
+ * True when a clip deforms a slot whose path a path constraint follows. Its bones were baked
+ * with the deform, so they do not fit a pose whose deform is off.
+ */
+const pathFollows = (clip: BakedClip, state: PoseState): boolean =>
+    state.model.constraints.some(
+        (constraint) => constraint.type === 'path' && clip.deformSlots.includes(constraint.slot),
+    );
 
 /** True when a state places its skeleton where the clip was baked. */
 const placed = (state: PoseState, clip: BakedClip): boolean =>
@@ -166,8 +177,9 @@ class BakedPlayback implements PoseSource, BakeTally {
 
         if (entry !== this.primed || entry.animation !== this.animation) return this.drop(TRACKS);
         if (!placed(state, prepared.clip)) return this.drop(ELSEWHERE);
+        if (!engine.deform && pathFollows(prepared.clip, state)) return this.drop(PATH_DEFORM);
         engine.advance(dt, TIME);
-        writeFrame(state, prepared, frameOf(prepared));
+        writeFrame(state, prepared, frameOf(prepared), engine.deform);
         this.seen = state.version;
         this.reason = BAKED;
         this.baked++;
@@ -197,6 +209,7 @@ class BakedPlayback implements PoseSource, BakeTally {
 
         if (prepared === null) return BLOCKED;
         if (!placed(state, prepared.clip)) return ELSEWHERE;
+        if (!this.engine.deform && pathFollows(prepared.clip, state)) return PATH_DEFORM;
         if (!this.engine.holdsSetup(entry.animation, prepared.needs)) return NOT_SETUP;
         timeOf(entry, prepared.duration);
         if (!showsClipAttachments(state, prepared, frameOf(prepared))) return OTHER_ATTACHMENT;

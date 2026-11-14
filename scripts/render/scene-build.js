@@ -74,6 +74,8 @@ async function makeInstance(scene, side, node) {
         preload: node.preload,
         // the idle cache of ours, except on a side that draws the same scene live to compare with
         idle: node.idle === true && !side.live,
+        // the side that draws each instance alone, against which the instanced side is held
+        instancing: side.alone ? 'off' : undefined,
     });
 
     side.instances.push(instance);

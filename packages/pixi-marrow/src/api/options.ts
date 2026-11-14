@@ -84,6 +84,14 @@ export interface MarrowSpineOptions {
     /** See {@link PerfSettings.skinning}. */
     skinning?: PerfSettings['skinning'];
     /**
+     * See {@link PerfSettings.instancing}. It acts on a skeleton in the mesh mode with
+     * `skinning: 'gpu'` and leaves every other one as it is. A run ends where Pixi draws anything
+     * else, and where the next instance has another skin, cuts, draw order, pages or blend mode.
+     * An instance whose clipping attachment cuts a visible slot, or with an attached container in
+     * view, draws alone while that lasts. `perf.report()` says which it is, and why.
+     */
+    instancing?: PerfSettings['instancing'];
+    /**
      * See {@link PerfSettings.bake}. With `auto` an animation is baked the first time it plays
      * alone on track 0, at 60 frames per second. A list bakes the animations it names, and a name
      * the skeleton lacks throws a `MarrowError`. The clips are shared by the instances of the
