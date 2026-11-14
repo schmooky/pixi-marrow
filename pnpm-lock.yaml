@@ -55,10 +55,10 @@ importers:
         version: link:../../packages/pixi-marrow
       pixi-reels:
         specifier: 4.4.0
-        version: 4.4.0(@esotericsoftware/spine-pixi-v8@4.2.120(pixi.js@8.23.0))(gsap@3.15.1)(pixi-silk@1.0.1(pixi.js@8.23.0))(pixi.js@8.23.0)
+        version: 4.4.0(@esotericsoftware/spine-pixi-v8@4.2.120(pixi.js@8.23.0))(gsap@3.15.1)(pixi-silk@1.0.2(pixi.js@8.23.0))(pixi.js@8.23.0)
       pixi-silk:
-        specifier: ^1.0.1
-        version: 1.0.1(pixi.js@8.23.0)
+        specifier: ^1.0.2
+        version: 1.0.2(pixi.js@8.23.0)
       pixi.js:
         specifier: ^8.22.0
         version: 8.23.0
@@ -82,8 +82,8 @@ importers:
         specifier: npm:pixi.js@8.21.0
         version: pixi.js@8.21.0
       pixi-silk:
-        specifier: ^1.0.1
-        version: 1.0.1(pixi.js@8.23.0)
+        specifier: ^1.0.2
+        version: 1.0.2(pixi.js@8.23.0)
       pixi.js:
         specifier: ^8.22.0
         version: 8.23.0
@@ -3320,8 +3320,8 @@ packages:
       pixi-silk:
         optional: true
 
-  pixi-silk@1.0.1:
-    resolution: {integrity: sha512-PNjHA/R1KiepZ4aZ5FPoyu4uGnCqzNkMbT7NEKdZFfAA/nrBzVqUHQAlbRrUylJ7pHo4mBUKWKftzBHtp8Mzjg==}
+  pixi-silk@1.0.2:
+    resolution: {integrity: sha512-582YRGjVPlnOu+LeMoPpam7YgXS1VB7LvlBcFJd9k/BPbm8cBzhip6Ghu2DshHVg21cu//+20vVZSFY8DD2tkA==}
     peerDependencies:
       pixi.js: ^8.6.0
 
@@ -7094,15 +7094,15 @@ snapshots:
     dependencies:
       pngjs: 6.0.0
 
-  pixi-reels@4.4.0(@esotericsoftware/spine-pixi-v8@4.2.120(pixi.js@8.23.0))(gsap@3.15.1)(pixi-silk@1.0.1(pixi.js@8.23.0))(pixi.js@8.23.0):
+  pixi-reels@4.4.0(@esotericsoftware/spine-pixi-v8@4.2.120(pixi.js@8.23.0))(gsap@3.15.1)(pixi-silk@1.0.2(pixi.js@8.23.0))(pixi.js@8.23.0):
     dependencies:
       gsap: 3.15.1
       pixi.js: 8.23.0
     optionalDependencies:
       '@esotericsoftware/spine-pixi-v8': 4.2.120(pixi.js@8.23.0)
-      pixi-silk: 1.0.1(pixi.js@8.23.0)
+      pixi-silk: 1.0.2(pixi.js@8.23.0)
 
-  pixi-silk@1.0.1(pixi.js@8.23.0):
+  pixi-silk@1.0.2(pixi.js@8.23.0):
     dependencies:
       pixi.js: 8.23.0
 

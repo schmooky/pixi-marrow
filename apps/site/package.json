@@ -18,7 +18,7 @@
     "gsap": "^3.15.1",
     "pixi-marrow": "workspace:*",
     "pixi-reels": "4.4.0",
-    "pixi-silk": "^1.0.1",
+    "pixi-silk": "^1.0.2",
     "pixi.js": "^8.22.0"
   },
   "devDependencies": {

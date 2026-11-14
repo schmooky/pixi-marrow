@@ -16,7 +16,7 @@
         "tests/**/*.test.ts"
       ],
       "project": ["src/**/*.ts", "tests/**/*.ts"],
-      "ignoreDependencies": ["spine-pixi-4.2", "spine-pixi-4.3", "pixi-8.16", "pixi-8.21"]
+      "ignoreDependencies": ["spine-pixi-4.2", "spine-pixi-4.3", "pixi-8.21"]
     },
     "apps/site": {
       "entry": ["src/layouts/Docs.astro", "scripts/*.mjs"],

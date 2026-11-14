@@ -139,17 +139,9 @@ export class Scene {
         spine.on('pointerdown', (event: FederatedPointerEvent) => {
             if (event.button !== 0) return;
             this.select(entry);
+            // from pixi-silk 1.0.2 a grab ends on the release, wherever it happens
             this.gizmo.grab(event, 'move-free');
         });
-        // The gizmo ends a drag when it hears the release itself. Pixi sends the release to what
-        // was pressed, the skeleton here, so the skeleton hands it on
-        const release = (event: FederatedPointerEvent): void => {
-            this.gizmo.emit('pointerup', event);
-        };
-
-        spine.on('pointerup', release);
-        spine.on('pointerupoutside', release);
-        spine.on('pointercancel', release);
     }
 
     /**
