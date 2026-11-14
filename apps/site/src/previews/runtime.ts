@@ -65,6 +65,7 @@ export const definePreview = (preview: Preview): Preview => preview;
 /** The preview modules by name. Each is a chunk of its own, loaded when its frame comes into view. */
 const PREVIEWS: Record<string, Loader> = {
     play: () => import('./play'),
+    anatomy: () => import('./anatomy'),
     placeholders: () => import('./placeholders'),
     debug: () => import('./debug'),
     reels: () => import('./reels'),
