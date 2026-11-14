@@ -1,14 +1,22 @@
 ---
-import { PAGES, pagesOf, SITE } from '../lib/site';
+import { type DocsSection, PAGES, pagesOf, SITE } from '../lib/site';
 
 const path = Astro.url.pathname;
-const guide = pagesOf('Slot guide');
-// the guide shows as one link, to its first step
-const links = PAGES.filter((page) => page.section !== 'Slot guide' || page === guide[0]).map((page) => ({
-    href: page.href,
-    title: page.section === 'Slot guide' ? 'Slot guide' : page.title,
-    current: page.section === 'Slot guide' ? path.startsWith('/guide/') : page.href === path,
-}));
+/** The parts of the docs that the bar shows as one link each, to their first page, with the folder of their pages. */
+const grouped: Partial<Record<DocsSection, string>> = { 'Slot guide': '/guide/', 'How it works': '/how/' };
+const links = PAGES.filter((page) => {
+    const folder = grouped[page.section];
+
+    return folder === undefined || page === pagesOf(page.section)[0];
+}).map((page) => {
+    const folder = grouped[page.section];
+
+    return {
+        href: page.href,
+        title: folder === undefined ? page.title : page.section,
+        current: folder === undefined ? page.href === path : path.startsWith(folder),
+    };
+});
 ---
 
 <header class="nav">

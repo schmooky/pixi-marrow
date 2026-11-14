@@ -7,8 +7,11 @@ export const SITE = {
     install: 'npm install pixi-marrow pixi.js',
 };
 
-/** The parts of the docs, in reading order. The slot guide builds a slot game step by step. */
-export type DocsSection = 'Start' | 'Slot guide' | 'Reference';
+/**
+ * The parts of the docs, in reading order. The slot guide builds a slot game step by step. How
+ * it works takes the runtime apart, so that the reader sees why it does what it does.
+ */
+export type DocsSection = 'Start' | 'Slot guide' | 'How it works' | 'Reference';
 
 /** A page of the docs, as the navigation lists it. */
 export interface DocsPage {
@@ -44,6 +47,12 @@ export const PAGES: readonly DocsPage[] = [
         title: 'Symbol states',
         description: 'Idle, landing, win, dimmed and blurred, and how a symbol moves between them.',
         section: 'Slot guide',
+    },
+    {
+        href: '/how/anatomy/',
+        title: 'Anatomy of a symbol',
+        description: 'Bones, slots, attachments, skins and the atlas, taken apart on the Bzzz symbols.',
+        section: 'How it works',
     },
     {
         href: '/bones-and-placeholders/',
