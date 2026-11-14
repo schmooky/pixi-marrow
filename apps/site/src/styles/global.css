@@ -640,7 +640,7 @@ pre {
     padding-top: 1.5rem;
 }
 .docs-side {
-    /* on a narrow screen the bar at the top lists the same pages */
+    /* on a narrow screen the bar at the top lists the pages, and the guide by its first step */
     display: none;
 }
 .docs-side .eyebrow {
@@ -649,8 +649,11 @@ pre {
 .docs-side nav {
     font-size: 0.875rem;
 }
-.docs-side nav div:last-child {
+.docs-side-part > div:last-child {
     border-left-width: 1px;
+}
+.docs-side-part + .docs-side-part {
+    margin-top: 1.75rem;
 }
 .docs-side nav a {
     display: block;

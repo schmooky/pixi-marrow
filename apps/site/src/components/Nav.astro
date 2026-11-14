@@ -1,15 +1,22 @@
 ---
-import { PAGES, SITE } from '../lib/site';
+import { PAGES, pagesOf, SITE } from '../lib/site';
 
 const path = Astro.url.pathname;
+const guide = pagesOf('Slot guide');
+// the guide shows as one link, to its first step
+const links = PAGES.filter((page) => page.section !== 'Slot guide' || page === guide[0]).map((page) => ({
+    href: page.href,
+    title: page.section === 'Slot guide' ? 'Slot guide' : page.title,
+    current: page.section === 'Slot guide' ? path.startsWith('/guide/') : page.href === path,
+}));
 ---
 
 <header class="nav">
     <div class="container-page nav-row">
         <a href="/" class="nav-brand">pixi-<span class="marrow-text">marrow</span></a>
         <nav aria-label="Main" class="nav-links">
-            {PAGES.map((page) => (
-                <a href={page.href} aria-current={page.href === path ? 'page' : undefined}>{page.title}</a>
+            {links.map((link) => (
+                <a href={link.href} aria-current={link.current ? 'page' : undefined}>{link.title}</a>
             ))}
         </nav>
         <a href={SITE.repository} class="nav-repo">

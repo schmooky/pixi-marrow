@@ -1,0 +1,62 @@
+---
+layout: ../../layouts/Docs.astro
+title: Symbol states
+description: A slot symbol rests, blurs while its reel spins, lands, wins and dims. Each state is an animation, and the game moves a symbol from one to the next.
+---
+
+import Preview from '../../components/Preview.astro';
+import Snippet from '../../components/Snippet.astro';
+import source from '../../snippets/guide-states.ts?raw';
+
+<Preview name="play" height={400} caption="The bee of the slot game Bzzz. Press an animation to play it, and the runtime mixes into it from the one before." />
+
+## The states of a symbol
+
+Animators of slot symbols make a small set of animations, one per state. The names differ between studios, so read them from the files. These are the states of a Bzzz symbol:
+
+| Animation | When | Length |
+|---|---|---|
+| `idle` | On the reels, at rest. It loops. | 1.33 s |
+| `blur_in` | The reel starts to spin. The symbol turns blurred and stays so. | 0.27 s |
+| `blur_out` | The reel stops. The symbol turns sharp again. | 0.27 s |
+| `landing` | Right after the stop: a short bounce into the cell. | 0.33 s |
+| `win` | The symbol is on a winning line. | 1.33 s |
+| `disable` | The symbol is not on the winning line. A dimmed pose. | 0 s |
+
+Special symbols have more. The coin of Bzzz also has `collect`, `ready`, `second_chance` and bonus versions of several states.
+
+<Snippet source={source} regions="names" />
+
+`info` lists the animations, skins, bones, slots and events of a skeleton, with the length of each animation. For names checked by TypeScript, `pixi-marrow typegen` writes them as types at build time.
+
+## Rest
+
+<Snippet source={source} regions="idle" />
+
+`play` starts an animation on track 0 now, in place of what the track played. A symbol at rest loops its `idle`.
+
+## Land, then rest
+
+<Snippet source={source} regions="land" />
+
+`queue` plays an animation after what the track holds now, with no gap between them. A landing is short and does not loop, so the symbol bounces once and then rests.
+
+`mix: 0` starts the landing at once, without a blend from the blurred state. A landing that starts late looks as if the reel had stopped without the symbol.
+
+## Mix between states
+
+<Snippet source={source} regions="mix" />
+
+A mix is the time one animation takes to blend into the next. `defaultMix` holds for every pair, and `setMix` for one pair. A short mix hides the cut between two states that end and start in different poses, such as the end of a win and the start of the idle loop.
+
+## Hold a pose
+
+<Snippet source={source} regions="hold" />
+
+An animation that does not loop holds its last frame until the track plays something else. `disable` lasts 0 seconds, so it is a pose: the symbol stays dimmed until the next `play`. `blur_in` works the same way, and keeps the symbol blurred for as long as its reel spins.
+
+## Know when a state ends
+
+<Snippet source={source} regions="finished" />
+
+`play` and `queue` return a `Track`, the handle on that animation. `finished` resolves when an animation that does not loop has played to its end. It also resolves when another `play` replaces the animation first, so a game that waits on a win must check whether the win was cut short.

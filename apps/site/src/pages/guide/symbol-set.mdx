@@ -1,0 +1,48 @@
+---
+layout: ../../layouts/Docs.astro
+title: A symbol set
+description: A slot game draws the same few symbols again and again. Load each symbol once, and make as many copies as the reels show.
+---
+
+import Snippet from '../../components/Snippet.astro';
+import source from '../../snippets/guide-symbol-set.ts?raw';
+
+This guide builds the symbols of a slot game step by step. Each step takes one thing a slot needs, says what the runtime does about it, and shows the calls. The examples use the symbols of the slot game Bzzz, which the previews of this site play.
+
+## What a slot needs
+
+Five reels of three rows show 15 symbols. A spin swaps them many times a second, and most games have between 8 and 12 different symbols. So the game draws few skeletons, but many copies of each.
+
+An animator exports one skeleton per symbol, and the symbols of a set share one atlas. The Bzzz set has `animation_a.skel` to `animation_wild.skel`, and every one of them names `symbols.atlas`.
+
+## Load each symbol once
+
+<Snippet source={source} regions="load" />
+
+`MarrowAsset.load` reads a skeleton and its atlas. The asset holds what every copy shares: the skeleton data, the atlas, one texture per atlas page and the code that poses the skeleton. Assets that name the same atlas share its pages, so the page images load once for the whole set.
+
+A second load of the same files returns the same asset. So two parts of a game can load a symbol without knowing about each other.
+
+## Make copies
+
+<Snippet source={source} regions="copies" />
+
+`new MarrowSpine(asset)` makes a copy that plays on its own. A copy keeps its own pose, its tracks and its draw buffers, and nothing else. It is a Pixi `Container`, so it goes into a reel like any other display object.
+
+## Load with Pixi Assets
+
+<Snippet source={source} regions="assets" />
+
+A game that loads with bundles and manifests registers the Spine files once with `registerMarrowAssets`. `MarrowAsset.get` then returns the asset of files that `Assets` loaded, at once.
+
+## Keep copies in a pool
+
+<Snippet source={source} regions="pool" />
+
+A reel shows a new symbol in a cell many times a spin. Making a copy allocates its pose and its buffers, and destroying one frees them again. A pool per symbol keeps the copies a reel needs, so a spin makes none. A copy from the pool still holds its last pose, so call `stop()` and then `setupPose()` before it shows again.
+
+## Keep the set together
+
+Copies that follow each other in the display list share draw calls, when each has up to 1024 vertices. A whole reel of symbols then draws in one call. Any other Pixi object between two symbols ends that batch, and so does a slot that multiplies or screens.
+
+So put the symbols of all reels into one container, and frames, texts and effects above or below it. [Performance](/performance/) says what else costs draw calls.
