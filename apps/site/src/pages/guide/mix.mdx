@@ -4,6 +4,7 @@ title: Mix and queue
 description: Play animations one after the other, blend one into the next, and layer them on tracks.
 ---
 
+import Diagram from '../../components/Diagram.astro';
 import Snippet from '../../components/Snippet.astro';
 import source from '../../snippets/guide-mix.ts?raw';
 
@@ -17,9 +18,19 @@ import source from '../../snippets/guide-mix.ts?raw';
 
 `delay` above 0 starts the queued animation that many seconds after the one before it started. At 0 or below it counts from the end of the one before, less the mix, so a negative delay starts it a little early.
 
+<Diagram name="mix-queue" height={260} caption="A landing bounces a square once, and an idle loop that pulses its scale is queued after it with a mix of 0.2 seconds. Pick a delay to see where the idle loop starts. The light band is the mix." />
+
+At `delay 0` the mix ends exactly where the landing ends, so the bounce plays whole and the pulse takes over as it lands. At `delay -0.2` the idle loop starts while the square is still in the air, and the bounce is cut short. At `delay 0.15` it starts 0.15 seconds after the landing started, which is how a reaction can begin before the action is over.
+
 ## Mix
 
 When one animation replaces another, the pose would jump from one to the other. A mix blends them over some time instead: the outgoing animation fades while the incoming one grows.
+
+<Diagram name="mix-time" height={260} caption="One track plays A, which moves a square right, then B, which scales it, then A again. Pick a mix to see how long the change takes. The light bands are the mixes." />
+
+Pick **0 s** first. The square jumps: one frame it is to the right, the next it is home and scaling. With **0.5 s** it slides home while it starts to scale. Each value goes from where the old animation has it to where the new one has it, a little further every frame.
+
+A value that the new animation does not key goes back to the setup pose over the mix. B keys no position, so the square slides home. If B moved the square too, it would slide from where A had it to where B has it.
 
 <Snippet source={source} regions="mix" />
 
@@ -39,7 +50,19 @@ A mix blends what moves: bones, colors and deforms. The image a slot shows does 
 
 Each track holds one animation, and a higher track applies over the lower ones. An animation on track 1 sets the bones and slots it keys, and the others keep what track 0 gives them. So an overlay can wave a hand while the legs keep walking.
 
-`alpha` applies a track part of the way. At 0.5 every value it keys sits half way between track 0 and track 1. `additive: true` adds what a track keys to the pose below it, instead of replacing it.
+<Diagram name="mix-layers" height={170} rows={2} caption="Track 0 moves a square right, track 1 scales it. Turn track 1 off and on." />
+
+The two tracks key different values, so nothing competes: the square moves and scales at once. Turn track 1 off, and the scale goes back to what track 0 gives it, which is the setup pose, because track 0 keys no scale.
+
+When two tracks key the same value, the higher one decides how they combine:
+
+<Diagram name="mix-same" height={170} rows={2} caption="Track 0 scales a square up, track 1 scales it down. Pick how track 1 applies." />
+
+- **replace**, the default: track 1 wins. The square only shrinks, as if track 0 were not there.
+- **alpha 0.5**: track 1 applies half way. The scale sits between what track 0 and track 1 give, so the two partly cancel.
+- **additive**: track 1 adds its change from the setup pose. Track 0 grows the square by 0.8 and track 1 shrinks it by 0.5, so the result grows by 0.3 at most.
+
+`alpha` sets the share in code, and `additive: true` makes a track add. An additive track suits a change that should come on top of anything, such as a breath or a recoil.
 
 <Snippet source={source} regions="fade" />
 

@@ -1,0 +1,27 @@
+---
+interface Props {
+    /** The name of a module of src/diagrams, as `DIAGRAMS` of its runtime lists it. */
+    name: string;
+    /** What the diagram shows, as a line under it and for screen readers. */
+    caption: string;
+    /** The size of the drawing in its own units. */
+    width?: number;
+    height?: number;
+    /** How many rows the panel under the drawing has, so that the page does not jump. */
+    rows?: number;
+}
+const { name, caption, width = 720, height = 250, rows = 2 } = Astro.props;
+---
+
+<figure class="preview diagram">
+    <div class="preview-frame" data-diagram={name}>
+        <svg class="diagram-svg" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={caption}></svg>
+        <div class="preview-panel" id={`diagram-${name}-panel`} data-diagram-bar style={`--rows:${rows}`}></div>
+    </div>
+    <figcaption>{caption}</figcaption>
+</figure>
+<script>
+    import { mountDiagrams } from '../diagrams/runtime';
+
+    mountDiagrams();
+</script>
