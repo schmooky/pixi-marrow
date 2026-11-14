@@ -56,6 +56,7 @@ const DIAGRAMS: Record<string, () => Promise<{ default: Diagram }>> = {
     'batches-calls': () => import('./batches-calls'),
     'batches-blend': () => import('./batches-blend'),
     'fast-change': () => import('./fast-change'),
+    'perf-pacing': () => import('./perf-pacing'),
     'mix-layers': () => import('./mix-layers'),
     'mix-same': () => import('./mix-same'),
     'mix-time': () => import('./mix-time'),
