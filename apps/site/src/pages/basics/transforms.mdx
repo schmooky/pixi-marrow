@@ -1,0 +1,30 @@
+---
+layout: ../../layouts/Docs.astro
+title: Coordinates and transforms
+description: Where things are on the screen, how they are moved, turned and scaled, and how a child takes the transform of its parent along. Bones work exactly this way.
+---
+
+import Diagram from '../../components/Diagram.astro';
+import Preview from '../../components/Preview.astro';
+
+## Coordinates
+
+Every place on the screen is two numbers: x across and y down. In Pixi the origin, where both are 0, is the top left corner. x grows to the right, and **y grows down**, the other way round from school maths. Positive rotations turn clockwise for the same reason.
+
+## A transform: move, turn, scale
+
+<Diagram name="transform-order" height={260} rows={1} caption="A square at the origin is scaled, then turned, then moved. The dashed outline keeps where it was before each step." />
+
+Moving, turning and scaling an object are together its transform. Each step works on the result of the one before. The computer keeps the whole transform as six numbers, a small matrix, shown under the drawing. The GPU applies those six numbers to every corner of the object at once.
+
+## A parent and a child
+
+Objects can sit inside other objects. A child stores its transform relative to its parent, and the computer combines the two to find where the child is on the screen. Drag the handles to move, turn or scale the parent, or pick the child to move it alone:
+
+<Preview name="transforms" height={440} rows={5} caption="A blue parent holds an orange child, on a grid with the origin at the top left. The gizmo of pixi-silk moves, turns and scales the one you pick. The numbers show the child in its parent and on the scene." />
+
+Watch the two lines for the child. **In its parent** its numbers stay the same while the parent turns: it has not moved relative to the parent. **On the scene** its numbers change all the time, because the parent's transform is applied to them. Move the child with the gizmo, and only its own numbers change.
+
+## What this means for animation
+
+A skeleton is exactly this, many levels deep. Each bone is a child of another bone, with a transform relative to its parent. An animation changes those local transforms, and the runtime combines them down the tree to find where every bone is. [The pose](/how/pose/) shows it on a real skeleton, and [Triangles and textures](/basics/triangles/) shows how a picture is drawn once it is placed.
