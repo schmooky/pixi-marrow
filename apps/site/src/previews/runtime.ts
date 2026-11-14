@@ -68,6 +68,7 @@ const PREVIEWS: Record<string, Loader> = {
     anatomy: () => import('./anatomy'),
     timeline: () => import('./timeline'),
     pose: () => import('./pose'),
+    vertices: () => import('./vertices'),
     placeholders: () => import('./placeholders'),
     debug: () => import('./debug'),
     reels: () => import('./reels'),
