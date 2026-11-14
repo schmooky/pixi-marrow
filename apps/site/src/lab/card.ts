@@ -1,4 +1,4 @@
-import { type LabResult, plural, resultText, verdicts } from './report';
+import { type LabResult, ms, resultText, verdicts } from './report';
 
 /*
  * What the page shows over the canvas: the status while a run goes, and the result at its end.
@@ -68,15 +68,30 @@ export interface CardActions {
     again(): void;
 }
 
+/** A box with a name, a big number and a line under it. */
+function box(name: string, value: string, parts: string): HTMLElement {
+    const made = element('div', 'lab-side');
+
+    made.append(
+        element('p', 'lab-side-name', name),
+        element('p', 'lab-side-frame', value),
+        element('p', 'lab-side-parts', parts),
+    );
+
+    return made;
+}
+
 /**
- * Shows the result of a run: the verdicts, a box per side, the device and the text to copy.
+ * Shows the result of a run: what it means, the frame rate, the time per frame, the draw calls,
+ * the device and the text to copy.
  *
  * @param saved What became of the result on the server that serves the page, or null.
  */
 export function showResult(host: HTMLElement, result: LabResult, saved: string | null, actions: CardActions): void {
+    const { play } = result;
     const text = resultText(result);
     const card = element('section', 'lab-card');
-    const sides = element('div', 'lab-sides');
+    const boxes = element('div', 'lab-sides');
     const area = element('textarea', 'lab-text');
     const buttons = element('div', 'lab-buttons');
     const copyButton = element('button', 'lab-button lab-button-main', 'Copy result');
@@ -85,23 +100,25 @@ export function showResult(host: HTMLElement, result: LabResult, saved: string |
     const device = element(
         'p',
         'lab-device',
-        `${result.device.name}. ${result.device.gpu}. ${result.device.refresh} Hz.`,
+        `${result.device.name}. ${result.device.gpu}. ${result.device.refresh} Hz. pixi.js ${result.device.pixi}, ${result.settings.renderer}.`,
     );
 
-    for (const side of result.sides) {
-        const box = element('div', 'lab-side');
-
-        box.append(
-            element('p', 'lab-side-name', side.name),
-            element('p', 'lab-side-frame', `${side.frame.toFixed(2)} ms`),
-            element(
-                'p',
-                'lab-side-parts',
-                `update ${side.update.toFixed(2)}, submit ${side.submit.toFixed(2)}, wait ${side.wait.toFixed(2)}, ${plural(side.draws, 'draw')}`,
-            ),
-        );
-        sides.append(box);
+    if (result.grows) {
+        boxes.append(box(`At ${result.device.refresh} fps`, String(result.count), result.noun));
     }
+    boxes.append(
+        box(
+            'Frame rate',
+            `${Math.round(play.fps)} fps`,
+            `${play.dropped} of ${play.frames + play.dropped} frames dropped, on a ${result.device.refresh} Hz screen`,
+        ),
+        box(
+            'CPU per frame',
+            `${ms(play.cpu)} ms`,
+            `update ${ms(play.update)}, render ${ms(play.render)}, 95th percentile ${ms(play.cpuP95)}`,
+        ),
+        box('Draw calls', String(play.draws), `per frame, with ${result.count} ${result.noun}`),
+    );
     area.readOnly = true;
     area.value = text;
     area.rows = 8;
@@ -125,10 +142,14 @@ export function showResult(host: HTMLElement, result: LabResult, saved: string |
     card.append(element('h2', 'lab-card-title', `Result: ${result.title}`));
     for (const line of verdicts(result)) card.append(element('p', 'lab-verdict', line));
     card.append(
-        sides,
-        element('p', 'lab-note', 'Milliseconds per frame without vsync: update, submit and the wait for the GPU.'),
+        boxes,
+        element(
+            'p',
+            'lab-note',
+            'Every skeleton has the settings a game gets when it sets none. The scene played at the rate of the screen. The CPU times are the update of the skeletons and the render call of Pixi.',
+        ),
+        device,
     );
-    card.append(device);
     if (saved !== null) card.append(element('p', 'lab-note', saved));
     card.append(buttons, area);
     host.replaceChildren(card);

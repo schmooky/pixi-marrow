@@ -9,13 +9,15 @@ import { durationOf, frameOf, makeSkeleton, updateAll } from '../skeletons';
  * The grid of a slot game, with the beats of the Reels page but no reel that moves: every
  * symbol stays in its cell, so the test times pixi-marrow and not the reels. A cycle of 4
  * seconds spins every symbol, lands the reels one after another and shows two line wins.
- * Symbols that did not win stand still, dimmed, which is where the idle cache takes its images. The grid is drawn from fixed numbers, so every side sees the same symbols.
+ * Symbols that did not win stand still, dimmed. The grid is drawn from fixed numbers, so every
+ * run shows the same symbols. The beats count sixtieths of a second, so a screen of 120 Hz
+ * sees the same cycle.
  */
 
 const COLUMNS = 5;
-/** Frames of one cycle, at 60 a second. */
+/** Beats of one cycle, at 60 a second. */
 const CYCLE = 240;
-/** The frames of the cycle where the beats start. A reel lands `LAND_GAP` frames after the one before. */
+/** The beats of the cycle where things start. A reel lands `LAND_GAP` beats after the one before. */
 const LAND = 40;
 const LAND_GAP = 10;
 const FIRST_WIN = 130;
@@ -62,15 +64,8 @@ interface Cell {
 export default defineTest({
     ...testInfo('grid'),
     rigs: SYMBOL_IDS.map((id) => SYMBOLS[id].file),
-    sides: [
-        { name: 'default', options: {} },
-        { name: 'bake', options: { bake: 'auto' } },
-        { name: 'idle cache', options: { idleCache: 'auto' } },
-        { name: 'tight meshes', options: { tightMesh: 'on' } },
-        { name: 'GPU skinning', options: { renderMode: 'mesh', skinning: 'gpu' } },
-    ],
-    // half a cycle to warm up, then a whole cycle of 240 frames, 4 to a sample
-    timing: { warmup: CYCLE / 2, samples: CYCLE / 4 },
+    // three cycles of 4 seconds
+    seconds: 12,
     build(context) {
         const { width, height, count } = context;
         const rows = Math.ceil(count / COLUMNS);
@@ -99,22 +94,25 @@ export default defineTest({
                 } else cell.symbol.play('disable');
             }
         };
-        let frame = 0;
+        /** What happens at a beat of the cycle. */
+        const beat = (at: number): void => {
+            if (at === 0) for (const symbol of symbols) symbol.play('blur_in');
+            for (const cell of cells) {
+                if (at !== LAND + cell.reel * LAND_GAP) continue;
+                cell.symbol.play('blur_out');
+                cell.symbol.queue('landing');
+                cell.symbol.queue('idle', { loop: true });
+            }
+            if (at === FIRST_WIN) win((cell) => cell.row % 3 === 1);
+            if (at === SECOND_WIN) win((cell) => cell.row % 3 === V_LINE[cell.reel]);
+        };
+        let time = 0;
+        let beats = 0;
 
         return {
             step(seconds) {
-                const at = frame % CYCLE;
-
-                if (at === 0) for (const symbol of symbols) symbol.play('blur_in');
-                for (const cell of cells) {
-                    if (at !== LAND + cell.reel * LAND_GAP) continue;
-                    cell.symbol.play('blur_out');
-                    cell.symbol.queue('landing');
-                    cell.symbol.queue('idle', { loop: true });
-                }
-                if (at === FIRST_WIN) win((cell) => cell.row % 3 === 1);
-                if (at === SECOND_WIN) win((cell) => cell.row % 3 === V_LINE[cell.reel]);
-                frame++;
+                time += seconds;
+                for (; beats < time * 60; beats++) beat(beats % CYCLE);
                 updateAll(symbols, seconds);
             },
         };

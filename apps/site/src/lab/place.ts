@@ -53,22 +53,3 @@ export function placeGrid(
         fitCell(object, frameOf(index), x, y, cellWidth, cellHeight);
     }
 }
-
-/**
- * Puts every object over the whole canvas: its frame covers it, and the objects lie on top of
- * each other a few pixels apart. The GPU then fills the canvas once per object and layer.
- */
-export function placeCover(objects: readonly Container[], frame: Rectangle, width: number, height: number): void {
-    const scale = Math.max(width / frame.width, height / frame.height);
-
-    for (const [index, object] of objects.entries()) {
-        const shiftX = ((index % 5) - 2) * 6;
-        const shiftY = ((Math.floor(index / 5) % 5) - 2) * 6;
-
-        object.scale.set(scale);
-        object.position.set(
-            width / 2 + shiftX - (frame.x + frame.width / 2) * scale,
-            height / 2 + shiftY - (frame.y + frame.height / 2) * scale,
-        );
-    }
-}
