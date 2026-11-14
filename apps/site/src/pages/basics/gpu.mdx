@@ -16,7 +16,7 @@ The GPU cannot read the variables of a program. The CPU writes the vertices into
 
 ## Draw calls
 
-<Diagram name="cpu-gpu" height={200} rows={1} caption="One frame of the CPU and the GPU. The CPU updates, then sends draw calls. The GPU draws once it has them. Pick how many calls the frame takes." />
+<Diagram name="cpu-gpu" height={200} rows={0} caption="One frame of the CPU and the GPU. The CPU updates, then sends draw calls. The GPU draws once it has them. Pick how many calls the frame takes." />
 
 A draw call is the CPU telling the GPU: draw these triangles, from this buffer, with this texture and this way of blending. Every call costs the CPU a fixed amount of work, however little it draws. With one call, the CPU is done early. With hundreds, the CPU spends the frame sending calls, and the picture is late though the GPU is idle.
 

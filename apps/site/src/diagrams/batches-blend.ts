@@ -31,7 +31,7 @@ function blend(mode: Mode): number[] {
 const css = (color: number[]): string => `rgb(${color.map((value) => Math.round(value * 255)).join(' ')})`;
 
 export default defineDiagram({
-    setup({ svg, pick, readout }) {
+    setup({ svg, pick, say }) {
         const swatch = (x: number, label: string): SVGRectElement => {
             svgElement(
                 'text',
@@ -60,7 +60,7 @@ export default defineDiagram({
             { x: 530, y: 100, fill: COLORS.result, 'font-size': 14, 'font-family': 'ui-monospace, monospace' },
             svg,
         );
-        const show = readout('Blend state', 60);
+        const show = say;
 
         pick(
             'Slot',
@@ -71,14 +71,14 @@ export default defineDiagram({
                     mode === 'normal' ? 'new + old x (1 - a)' : mode === 'additive' ? 'new + old x 1' : 'new x old';
                 show(
                     mode === 'multiply'
-                        ? 'another rule: a blend state of its own, so a new draw call'
-                        : 'the same rule for both: they share one draw call',
+                        ? 'Another rule: multiply needs a blend state of its own, so it takes a new draw call.'
+                        : 'The same rule for both, so they share one draw call.',
                 );
             },
             'normal',
         );
         result.setAttribute('fill', css(blend('normal')));
         rule.textContent = 'new + old x (1 - a)';
-        show('the same rule for both: they share one draw call');
+        show('The same rule for both, so they share one draw call.');
     },
 });

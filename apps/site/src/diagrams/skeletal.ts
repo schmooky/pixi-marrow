@@ -39,7 +39,7 @@ function drawFigure(group: SVGGElement, angle: number, scale: number): SVGGEleme
 const angleAt = (share: number): number => LOW + (HIGH - LOW) * share;
 
 export default defineDiagram({
-    setup({ svg, own, readout }) {
+    setup({ svg, own, readout, say }) {
         const label = (x: number, y: number, text: string, size = 13): void => {
             svgElement(
                 'text',
@@ -73,6 +73,10 @@ export default defineDiagram({
         svgElement('circle', { cx: 584, cy: 212, r: 5, fill: COLORS.result }, svg);
         const showSheet = readout('Frame by frame', 56);
         const showSkeleton = readout('Skeleton', 56);
+
+        say(
+            'Both arms make the same wave. The sheet has 8 pictures, so its arm jumps. The skeleton computes its bone in every frame, so its arm glides.',
+        );
         const sheet = { frame: 0 };
         const skeleton = { share: 0 };
 

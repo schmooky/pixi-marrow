@@ -16,7 +16,7 @@ const ORIGIN_X = 80;
 const ORIGIN_Y = 150;
 
 export default defineDiagram({
-    setup({ svg, pick, readout }) {
+    setup({ svg, pick, readout, say }) {
         svgElement('line', { x1: 20, y1: ORIGIN_Y, x2: 700, y2: ORIGIN_Y, stroke: COLORS.line }, svg);
         for (let px = 0; px <= 600; px += 100) {
             svgElement(
@@ -25,7 +25,7 @@ export default defineDiagram({
                     x: ORIGIN_X + px,
                     y: ORIGIN_Y + 22,
                     fill: COLORS.text,
-                    'font-size': 11,
+                    'font-size': 12,
                     'text-anchor': 'middle',
                     'font-family': 'ui-monospace, monospace',
                 },
@@ -47,7 +47,7 @@ export default defineDiagram({
                 x: 100,
                 y: -10,
                 fill: COLORS.result,
-                'font-size': 11,
+                'font-size': 12,
                 'text-anchor': 'middle',
                 'font-family': 'ui-monospace, monospace',
             },
@@ -70,10 +70,16 @@ export default defineDiagram({
                 animate(state, { scale, duration: 500, ease: 'outCubic', onUpdate: apply });
                 showBone('100: in units of the skeleton, the same at every scale');
                 showStage(`${(100 * scale).toFixed(0)} px right of the origin: toGlobal applies the scale ${scale}`);
+                say(
+                    `At scale ${next} the picture is ${next} times as big. The {second:bone} stays 100 units from the origin, and lands ${(100 * scale).toFixed(0)} px from it on the stage.`,
+                );
             },
             '1',
         );
         showBone('100: in units of the skeleton, the same at every scale');
         showStage('100 px right of the origin: toGlobal applies the scale 1');
+        say(
+            'At scale 1 a unit is a pixel. Pick another scale: the {second:bone} keeps its units, and only its place on the stage changes.',
+        );
     },
 });

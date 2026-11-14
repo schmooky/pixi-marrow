@@ -33,9 +33,9 @@ const inRect = (picture: (typeof PICTURES)[number], column: number, row: number)
 const HEAT = ['#18181c', '#2f4b6e', '#5fa8ff', '#ff8a4c', '#ff4d4d'];
 
 export default defineDiagram({
-    setup({ svg, pick, readout }) {
+    setup({ svg, pick, say }) {
         const cells = svgElement('g', {}, svg);
-        const show = readout('Painted', 60);
+        const show = say;
         const draw = (mode: Mode): void => {
             cells.replaceChildren();
             let total = 0;

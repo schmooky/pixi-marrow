@@ -18,7 +18,7 @@ Both shapes are `SilkGraphics` of [pixi-silk](https://github.com/schmooky/pixi-s
 
 A game often needs its own objects on a skeleton: a number over a coin, a glow on a sword, a hat a player picked. There are two ways, and they differ in where the object is drawn.
 
-<Diagram name="follow-attach" height={210} rows={2} caption="A skeleton of three slots and a star that goes with its bone. Pick how the star is added." />
+<Diagram name="follow-attach" height={210} rows={1} caption="A skeleton of three slots and a star that goes with its bone. Pick how the star is added." />
 
 With **follow**, the star moves with a bone but stays where it was in Pixi's display list, after the skeleton, so it draws over every slot. With **attach**, the star becomes part of the skeleton's draw order, after the slot it is attached to, so slots after that one cover it. Pick attach to see the front slot pass over the star.
 

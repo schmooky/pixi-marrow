@@ -23,7 +23,7 @@ So the fewer calls a frame takes, the more of the frame is left for the game. Ma
 
 ## A batch
 
-<Diagram name="batches-calls" height={130} rows={2} caption="Six skeletons in the display list, walked from first to last into draw calls. Add a text between them, or make one multiply." />
+<Diagram name="batches-calls" height={130} rows={1} caption="Six skeletons in the display list, walked from first to last into draw calls. Add a text between them, or make one multiply." />
 
 The renderer walks the display list in order and keeps adding objects to the current batch while they fit. Each color is one draw call. With nothing added, all six skeletons fit into one. A text needs another shader, so it ends the batch, takes a call of its own, and the skeletons after it start a third. A skeleton that multiplies needs another blend, and does the same.
 
@@ -31,7 +31,7 @@ The batched mode writes the triangles of skeletons that follow each other into o
 
 ## Additive slots stay in the batch
 
-<Diagram name="batches-blend" height={190} rows={2} caption="A pixel on the screen, a color painted over it at half cover, and the result. Pick how the slot blends." />
+<Diagram name="batches-blend" height={190} rows={1} caption="A pixel on the screen, a color painted over it at half cover, and the result. Pick how the slot blends." />
 
 The glow of the coin is additive: it brightens what lies under it. Additive blending usually needs a blend state of its own, which would end the batch at every coin.
 

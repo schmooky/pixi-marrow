@@ -1,6 +1,6 @@
 import { SETUP } from './mixing';
 import { defineDiagram } from './runtime';
-import { COLORS, lane, timeline } from './shapes';
+import { COLORS, lanes } from './shapes';
 
 /*
  * Speed and part of an animation. The animation moves a square right in one second and loops.
@@ -11,11 +11,21 @@ import { COLORS, lane, timeline } from './shapes';
 const SPAN = 2;
 
 export default defineDiagram({
-    setup({ svg, onFrame }) {
-        const normal = lane(svg, { x: 20, y: 10, label: 'speed 1', color: COLORS.first, solid: true });
-        const half = lane(svg, { x: 260, y: 10, label: 'speed 0.5', color: COLORS.second, solid: true });
-        const part = lane(svg, { x: 500, y: 10, label: 'start 0.25, end 0.75', color: COLORS.result, solid: true });
-        const line = timeline(svg, 20, 200, 680, SPAN);
+    setup({ svg, narrow, onFrame, say }) {
+        const {
+            lanes: [normal, half, part],
+            timeline: drawTimeline,
+        } = lanes(
+            svg,
+            [
+                { label: 'speed 1', color: COLORS.first, solid: true },
+                { label: 'speed 0.5', color: COLORS.second, solid: true },
+                { label: 'start 0.25, end 0.75', color: COLORS.result, solid: true },
+            ],
+            narrow,
+            true,
+        );
+        const line = drawTimeline(SPAN);
         let time = 0;
 
         line.draw([
@@ -29,6 +39,11 @@ export default defineDiagram({
             half.show({ ...SETUP, x: 140 * ((time * 0.5) % 1) });
             part.show({ ...SETUP, x: 140 * (0.25 + (time % 0.5)) });
             line.show(time);
+            say(
+                time < 1
+                    ? '{first:Speed 1} makes the whole move in 1 s. {second:Speed 0.5} is only halfway. {result:The part} plays the middle half, twice as often.'
+                    : '{first:Speed 1} plays the move again. {second:Speed 0.5} ends its one move at 2 s. {result:The part} never reaches the ends.',
+            );
         });
     },
 });

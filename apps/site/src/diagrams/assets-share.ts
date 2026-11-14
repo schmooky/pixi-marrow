@@ -17,7 +17,7 @@ const SHARED = 220;
 const PER_COPY = 14;
 
 export default defineDiagram({
-    setup({ svg, pick, readout }) {
+    setup({ svg, pick, say }) {
         const text = (x: number, y: number, value: string, color = COLORS.text, size = 12): void => {
             svgElement(
                 'text',
@@ -38,7 +38,7 @@ export default defineDiagram({
         text(270, 42, 'Copies: each has its own pose, tracks and buffers', COLORS.result, 13);
         const copies = svgElement('g', {}, svg);
         const bars = svgElement('g', {}, svg);
-        const show = readout('Memory', 60);
+        const show = say;
         /** Shows a number of copies, and the memory of the shared part against the part of the copies. */
         const draw = (count: number): void => {
             copies.replaceChildren();

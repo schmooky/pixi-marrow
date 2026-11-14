@@ -39,7 +39,7 @@ const STEPS = [
 ] as const;
 
 export default defineDiagram({
-    setup({ svg, own, readout }) {
+    setup({ svg, own, say }) {
         svgElement('line', { x1: 20, y1: ORIGIN[1], x2: 700, y2: ORIGIN[1], stroke: COLORS.line }, svg);
         svgElement('line', { x1: ORIGIN[0], y1: 20, x2: ORIGIN[0], y2: 250, stroke: COLORS.line }, svg);
         svgElement(
@@ -48,7 +48,7 @@ export default defineDiagram({
                 x: ORIGIN[0] + 6,
                 y: ORIGIN[1] + 16,
                 fill: COLORS.text,
-                'font-size': 11,
+                'font-size': 12,
                 'font-family': 'ui-monospace, monospace',
             },
             svg,
@@ -73,7 +73,7 @@ export default defineDiagram({
             { x: 430, y: 230, fill: COLORS.result, 'font-size': 13, 'font-family': 'ui-monospace, monospace' },
             svg,
         );
-        const show = readout('Step', 60);
+        const show = say;
         const state = { scale: 1, turn: 0, x: 0, y: 0 };
         const apply = (): void => {
             square.setAttribute(

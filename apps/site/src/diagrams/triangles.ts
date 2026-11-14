@@ -11,7 +11,7 @@ import { COLORS } from './shapes';
 const POINTS = 5;
 
 export default defineDiagram({
-    setup({ svg, own, readout }) {
+    setup({ svg, own, say }) {
         const corners: [number, number][] = [];
 
         for (let i = 0; i < POINTS * 2; i++) {
@@ -50,10 +50,7 @@ export default defineDiagram({
         for (const corner of corners)
             svgElement('circle', { cx: corner[0], cy: corner[1], r: 4, fill: COLORS.result }, svg);
         svgElement('circle', { cx: 360, cy: 135, r: 4, fill: COLORS.result }, svg);
-        readout(
-            'Count',
-            60,
-        )(`${corners.length} corners and the centre: ${triangles.length} triangles of 3 vertices each`);
+        say(`${corners.length} corners and the centre: ${triangles.length} triangles of 3 vertices each`);
         own(
             animate(triangles, {
                 opacity: [0, 0.9],

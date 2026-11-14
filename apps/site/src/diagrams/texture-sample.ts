@@ -22,7 +22,7 @@ const UV: [number, number][] = [
 ];
 
 export default defineDiagram({
-    setup({ svg, onFrame, readout }) {
+    setup({ svg, onFrame, say }) {
         // the picture: four colored quarters, so a place on it is easy to read
         const colors = [COLORS.first, COLORS.second, '#6fd08c', '#b48cff'];
 
@@ -70,7 +70,7 @@ export default defineDiagram({
                     x: point[0] + 6,
                     y: point[1] - 6,
                     fill: COLORS.text,
-                    'font-size': 11,
+                    'font-size': 12,
                     'font-family': 'ui-monospace, monospace',
                 },
                 svg,
@@ -84,7 +84,7 @@ export default defineDiagram({
         const link = svgElement('line', { stroke: COLORS.result, 'stroke-dasharray': '3 4', opacity: 0.6 }, svg);
         const pixel = svgElement('rect', { width: 18, height: 18, stroke: COLORS.result, 'stroke-width': 2 }, svg);
         const place = svgElement('circle', { r: 6, fill: 'none', stroke: COLORS.result, 'stroke-width': 2.5 }, svg);
-        const show = readout('Pixel', 60);
+        const show = say;
         let time = 0;
 
         onFrame((seconds) => {

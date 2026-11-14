@@ -40,11 +40,11 @@ const mixColor = (weight: number): string =>
     `rgb(${Math.round(95 + (255 - 95) * weight)} ${Math.round(168 + (138 - 168) * weight)} ${Math.round(255 + (76 - 255) * weight)})`;
 
 export default defineDiagram({
-    setup({ svg, onFrame, pick, readout }) {
+    setup({ svg, onFrame, pick, say }) {
         const strip = svgElement('polygon', { fill: COLORS.second, opacity: 0.25, stroke: COLORS.second }, svg);
         const bones = svgElement('polyline', { fill: 'none', stroke: COLORS.result, 'stroke-width': 3 }, svg);
         const dots = svgElement('g', {}, svg);
-        const show = readout('Elbow', 60);
+        const show = say;
         let mode: Mode = 'rigid';
         let time = 0;
 

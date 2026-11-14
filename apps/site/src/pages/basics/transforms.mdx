@@ -13,7 +13,7 @@ Every place on the screen is two numbers: x across and y down. In Pixi the origi
 
 ## A transform: move, turn, scale
 
-<Diagram name="transform-order" height={260} rows={1} caption="A square at the origin is scaled, then turned, then moved. The dashed outline keeps where it was before each step." />
+<Diagram name="transform-order" height={260} rows={0} caption="A square at the origin is scaled, then turned, then moved. The dashed outline keeps where it was before each step." />
 
 Moving, turning and scaling an object are together its transform. Each step works on the result of the one before. The computer keeps the whole transform as six numbers, a small matrix, shown under the drawing. The GPU applies those six numbers to every corner of the object at once.
 

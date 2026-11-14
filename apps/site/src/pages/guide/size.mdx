@@ -20,11 +20,11 @@ The origin of a skeleton is where the animator put the root bone. That can be it
 
 ## Measure the setup pose once
 
-<Snippet source={source} regions="measure" />
-
-<Diagram name="size-box" height={200} rows={1} caption="A square that grows and lifts, fitted into a cell two ways." />
+<Diagram name="size-box" height={200} rows={0} caption="A square that grows and lifts, fitted into a cell two ways." />
 
 On the left the square is fitted by its box in each frame. That box hugs the square, so the fit shrinks every growth away and centres every lift away, and the animation is lost. On the right the square is fitted once by the box of its setup pose, and the animation plays as it was made. With a real skeleton, whose parts move differently, a fit per frame also makes it jitter. Measure the setup pose once per asset, and keep the box with it.
+
+<Snippet source={source} regions="measure" />
 
 ## Fit a box
 

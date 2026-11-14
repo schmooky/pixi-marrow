@@ -24,14 +24,16 @@ const PARTS: Record<string, { x: number; y: number; w: number; h: number; color:
 };
 
 export default defineDiagram({
-    setup({ svg, own, pick, readout }) {
+    setup({ svg, own, pick, say }) {
         const canvas = svgElement('g', {}, svg);
-        const show = readout('Painted', 60);
+        const show = say;
         let timeline = createTimeline({ loop: true, autoplay: false });
+        let rate = 1;
         /** Paints the slots in an order, one after the other, then starts again. */
         const paint = (order: readonly string[]): void => {
             timeline.pause();
             timeline = createTimeline({ loop: true, autoplay: false });
+            timeline.speed = rate;
             const nodes = order.map((name) => {
                 const part = PARTS[name] ?? { x: 0, y: 0, w: 0, h: 0, color: '#000' };
                 const group = svgElement('g', { opacity: 0 }, canvas);
@@ -59,18 +61,34 @@ export default defineDiagram({
 
             canvas.replaceChildren(...nodes);
             for (const [index, node] of nodes.entries()) {
-                timeline.call(() => show(`${index + 1} of 3: ${order[index]} paints over what is there`), index * 900);
+                timeline.call(
+                    () => show(`Step ${index + 1} of 3: the ${order[index]} is painted over what is already there.`),
+                    index * 900,
+                );
                 timeline.add(node, { opacity: [0, 1], duration: 400 }, index * 900);
             }
             timeline.call(
-                () => show(`all 3: ${order[order.length - 1]} was painted last, so it covers the others`),
+                () =>
+                    show(
+                        `Done. The ${order[order.length - 1]} was painted last, so it covers the others where they overlap.`,
+                    ),
                 2700,
             );
             timeline.add(nodes, { opacity: 0, duration: 300 }, 4600);
             timeline.play();
         };
 
-        own({ play: () => timeline.play(), pause: () => timeline.pause() });
+        own({
+            play: () => timeline.play(),
+            pause: () => timeline.pause(),
+            get speed() {
+                return rate;
+            },
+            set speed(next: number) {
+                rate = next;
+                timeline.speed = next;
+            },
+        });
         pick('Order', Object.keys(ORDERS) as OrderName[], (next) => paint(ORDERS[next]), 'wing, body, face');
         paint(ORDERS['wing, body, face']);
     },

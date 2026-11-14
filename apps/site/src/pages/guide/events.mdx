@@ -12,7 +12,7 @@ import source from '../../snippets/guide-events.ts?raw';
 
 An animator marks moments in an animation with event keys: a footstep, a hit, the moment a coin is collected. An event key changes nothing in the picture. It is a mark on the time of the animation, and the runtime tells the game when the playhead passes it.
 
-<Diagram name="events-keys" height={240} rows={1} caption="An animation with two event keys, played twice. Each key writes a line when the playhead passes it. In the second pass the animation mixes out from 0.7 seconds." />
+<Diagram name="events-keys" height={240} rows={0} caption="An animation with two event keys, played twice. Each key writes a line when the playhead passes it. In the second pass the animation mixes out from 0.7 seconds." />
 
 In the first pass both keys fire. In the second, another animation takes over at 0.7 seconds, and `hit` at 0.9 does not fire: an animation that mixes out fires no event, unless its `eventThreshold` allows it. The game listens for the keys instead of guessing times in code, so when the animator moves the hit, the sound moves with it.
 
@@ -28,7 +28,7 @@ An event fires in the update in which the playhead passes it. At 60 frames a sec
 
 Besides the keys of the animator, the runtime reports what happens to each animation on a track.
 
-<Diagram name="events-life" height={200} rows={1} caption="An idle loop of one second, replaced at 2.4 seconds by a win with a mix of 0.4 seconds. Each report appears when it happens." />
+<Diagram name="events-life" height={200} rows={0} caption="An idle loop of one second, replaced at 2.4 seconds by a win with a mix of 0.4 seconds. Each report appears when it happens." />
 
 Each animation goes through these, in order:
 

@@ -18,7 +18,7 @@ const LEFT = 20;
 const TOP = 20;
 
 export default defineDiagram({
-    setup({ svg, onFrame, pick, readout }) {
+    setup({ svg, onFrame, pick, say }) {
         const grid = svgElement('g', {}, svg);
         const outline = svgElement(
             'circle',
@@ -36,7 +36,7 @@ export default defineDiagram({
             { x: 530, y: 30, fill: COLORS.text, 'font-size': 12, 'font-family': 'ui-sans-serif, system-ui' },
             svg,
         ).textContent = 'frame';
-        const show = readout('This frame', 60);
+        const show = say;
         let columns = 24;
         let cells: SVGRectElement[] = [];
         let frame = 0;

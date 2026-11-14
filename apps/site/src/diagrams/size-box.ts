@@ -19,7 +19,7 @@ function poseAt(time: number): { scale: number; lift: number } {
 }
 
 export default defineDiagram({
-    setup({ svg, onFrame, readout }) {
+    setup({ svg, onFrame, say }) {
         const cell = (x: number, label: string): { square: SVGRectElement; box: SVGRectElement } => {
             svgElement(
                 'text',
@@ -39,7 +39,7 @@ export default defineDiagram({
         };
         const live = cell(60, 'fitted by the box of each frame');
         const setup = cell(400, 'fitted once by the setup box');
-        const show = readout('Watch', 60);
+        const show = say;
         let time = 0;
         /** Places the square of a cell: its size and lift scaled by `fit`, and its dashed box. */
         const place = (

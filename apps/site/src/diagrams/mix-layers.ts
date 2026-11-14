@@ -1,6 +1,6 @@
 import { layer, SETUP, wave } from './mixing';
 import { defineDiagram } from './runtime';
-import { COLORS, lane } from './shapes';
+import { COLORS, lanes } from './shapes';
 
 /*
  * Two tracks that key different values. Track 0 moves the square right, track 1 scales it. The
@@ -8,11 +8,20 @@ import { COLORS, lane } from './shapes';
  */
 
 export default defineDiagram({
-    setup({ svg, onFrame, toggle, readout }) {
-        const first = lane(svg, { x: 20, y: 10, label: 'Track 0: moves right', color: COLORS.first, solid: false });
-        const second = lane(svg, { x: 260, y: 10, label: 'Track 1: scales', color: COLORS.second, solid: false });
-        const result = lane(svg, { x: 500, y: 10, label: 'What you see', color: COLORS.result, solid: true });
-        const show = readout('Values', 48);
+    setup({ svg, narrow, onFrame, toggle, say }) {
+        const {
+            lanes: [first, second, result],
+        } = lanes(
+            svg,
+            [
+                { label: 'Track 0: moves right', color: COLORS.first, solid: false },
+                { label: 'Track 1: scales', color: COLORS.second, solid: false },
+                { label: 'What you see', color: COLORS.result, solid: true },
+            ],
+            narrow,
+            false,
+        );
+        const show = say;
         let upper = true;
         let time = 0;
 
@@ -30,7 +39,9 @@ export default defineDiagram({
             second.show(layer(SETUP, scales, 1, 'replace'));
             result.show(pose);
             show(
-                `x ${pose.x.toFixed(0)} from track 0, scale ${pose.scale.toFixed(2)} from ${upper ? 'track 1' : 'the setup pose'}`,
+                upper
+                    ? '{first:Track 0} moves the square and {second:track 1} scales it. They key different values, so {result:what you see} does both.'
+                    : '{second:Track 1} is off. {first:Track 0} keys no scale, so the scale comes from the setup pose.',
             );
         });
     },

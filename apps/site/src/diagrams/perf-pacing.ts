@@ -28,7 +28,7 @@ function posedAt(frame: number, every: number): number {
 }
 
 export default defineDiagram({
-    setup({ svg, onFrame, readout }) {
+    setup({ svg, onFrame, say }) {
         const squares = LANES.map((lane, index) => {
             const y = 30 + index * 48;
 
@@ -71,7 +71,7 @@ export default defineDiagram({
             { y1: 24, y2: 30 + LANES.length * 48, stroke: COLORS.result, 'stroke-width': 1.5 },
             svg,
         );
-        const show = readout('Frame', 60);
+        const show = say;
         let time = 0;
 
         onFrame((seconds) => {

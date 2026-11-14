@@ -10,7 +10,7 @@ This part explains the computer graphics that a Spine runtime stands on, from th
 
 ## A screen is a grid of pixels
 
-<Diagram name="pixels-grid" height={360} rows={2} caption="A circle moves over a small screen. In every frame each pixel whose centre lies inside the circle is lit. Pick a finer screen." />
+<Diagram name="pixels-grid" height={360} rows={1} caption="A circle moves over a small screen. In every frame each pixel whose centre lies inside the circle is lit. Pick a finer screen." />
 
 A screen is a grid of small squares, the pixels, and each pixel shows one color. To show a circle, the computer decides for every pixel whether it lies inside the circle, and colors it. A finer grid gives a smoother edge, and more pixels to decide.
 
@@ -18,7 +18,7 @@ Nothing stays on the screen by itself. The circle moves because in every frame t
 
 ## Motion is a new picture many times a second
 
-<Diagram name="frames-budget" height={230} rows={1} caption="Ten refreshes of a screen at 60 Hz. Each is 16.7 milliseconds long. The bars are the work a game does for a frame. Pick how much work there is." />
+<Diagram name="frames-budget" height={230} rows={0} caption="Ten refreshes of a screen at 60 Hz. Each is 16.7 milliseconds long. The bars are the work a game does for a frame. Pick how much work there is." />
 
 A screen at 60 Hz shows a new picture 60 times a second, one every 16.7 milliseconds. That picture is a frame. A game has to make each frame within those 16.7 milliseconds: run its logic, update its animations, and draw.
 

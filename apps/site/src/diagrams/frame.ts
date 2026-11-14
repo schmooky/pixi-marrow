@@ -100,7 +100,7 @@ const cellCenter = (column: number, row: number): [number, number] => [
 function text(group: SVGGElement, x: number, y: number, value: string): void {
     svgElement(
         'text',
-        { x, y, fill: COLORS.result, 'font-size': 11, 'font-family': 'ui-monospace, monospace' },
+        { x, y, fill: COLORS.result, 'font-size': 12, 'font-family': 'ui-monospace, monospace' },
         group,
     ).textContent = value;
 }
@@ -206,8 +206,7 @@ function drawPixels(group: SVGGElement, frame: Frame): void {
 const PAINTERS = [drawTime, drawCurve, drawBones, drawVertices, drawBuffer, drawPixels] as const;
 
 export default defineDiagram({
-    setup({ svg, onFrame, own, pick, readout }) {
-        const say = readout('Stage', 96);
+    setup({ svg, onFrame, own, pick, say }) {
         const panels = STAGES.map((name, index) => {
             const x = 8 + index * (PANEL_WIDTH + 6);
             const frame = svgElement(
@@ -282,7 +281,16 @@ export default defineDiagram({
         let mode: 'slow' | 'as a game does' = 'slow';
         let time = 0;
 
-        own({ play: () => (mode === 'slow' ? timeline.play() : undefined), pause: () => timeline.pause() });
+        own({
+            play: () => (mode === 'slow' ? timeline.play() : undefined),
+            pause: () => timeline.pause(),
+            get speed() {
+                return timeline.speed;
+            },
+            set speed(next: number) {
+                timeline.speed = next;
+            },
+        });
         pick(
             'Speed',
             ['slow', 'as a game does'] as const,

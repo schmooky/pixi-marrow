@@ -34,7 +34,7 @@ A skeleton usually has one animation per state it can be in. The symbols of Bzzz
 
 ## Loop or hold
 
-<Diagram name="play-loop" height={250} rows={1} caption="One animation that moves a square right in one second, played three ways. Watch what each does when the second is over." />
+<Diagram name="play-loop" lanes={3} timeline height={250} rows={0} caption="One animation that moves a square right in one second, played three ways. Watch what each does when the second is over." />
 
 The first second, all of them move. Then they part:
 
@@ -48,7 +48,7 @@ The first second, all of them move. Then they part:
 
 ## Speed and part
 
-<Diagram name="play-speed" height={250} rows={1} caption="The same one-second move at speed 1, at speed 0.5, and with only its middle half played." />
+<Diagram name="play-speed" lanes={3} timeline height={250} rows={0} caption="The same one-second move at speed 1, at speed 0.5, and with only its middle half played." />
 
 `speed` makes the playhead move faster or slower: at 0.5 the move takes two seconds. `start` and `end` cut a part out of the animation, and a loop repeats that part only. `reverse` moves the playhead backwards. `timeScale` sets the speed of the whole skeleton, every track at once.
 
@@ -62,7 +62,7 @@ The first second, all of them move. Then they part:
 
 ## Know when it ends
 
-<Diagram name="play-finished" height={250} rows={2} caption="A win of 1.2 seconds, played whole on the left and replaced by another animation at 0.6 seconds on the right." />
+<Diagram name="play-finished" lanes={2} timeline height={250} rows={0} caption="A win of 1.2 seconds, played whole on the left and replaced by another animation at 0.6 seconds on the right." />
 
 `play` returns a `Track`, the handle on that animation. Its `finished` promise resolves when the animation has played to its end. It also resolves when something else takes its place first, as on the right. Code that waits for a win before it shows the total must therefore check whether the win was cut short. [Events](/guide/events/) shows how.
 

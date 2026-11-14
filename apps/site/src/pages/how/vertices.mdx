@@ -29,7 +29,7 @@ Each frame then needs only the world transform of the bone. It multiplies the 4 
 
 ## A mesh
 
-<Diagram name="vertices-weights" height={230} rows={2} caption="A strip of picture along two bones that bend at the elbow. Its vertices are colored by their weights, blue for the upper bone and orange for the lower. Pick rigid or weighted." />
+<Diagram name="vertices-weights" height={230} rows={1} caption="A strip of picture along two bones that bend at the elbow. Its vertices are colored by their weights, blue for the upper bone and orange for the lower. Pick rigid or weighted." />
 
 With **rigid** vertices each one follows a single bone, so at the elbow the strip creases like folded paper. With **weighted** vertices the ones near the joint follow both bones, part each, and the bend spreads over them like skin over an elbow. That is what a weighted mesh is for, and what each weight costs: one more bone to ask, for every vertex, in every frame it moves.
 
@@ -43,7 +43,7 @@ Pick **head**. Its 41 vertices follow 7 bones, and 18 of them follow two. A vert
 
 ## Where the pixels come from
 
-<Diagram name="vertices-uv" height={220} rows={1} caption="A picture with a grid, drawn as two triangles. One corner moves." />
+<Diagram name="vertices-uv" height={220} rows={0} caption="A picture with a grid, drawn as two triangles. One corner moves." />
 
 Each vertex keeps the place on the picture it was given. When a corner moves, each triangle stretches its part of the picture to its new shape. Where the two triangles meet, the grid lines bend, because the GPU maps each triangle on its own. A mesh with more triangles hides that bend.
 
