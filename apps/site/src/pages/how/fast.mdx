@@ -4,13 +4,18 @@ title: Why it is fast
 description: The pages before took one frame apart. This one puts together what pixi-marrow leaves out of a frame, shows it live, and lists what still makes a scene slow.
 ---
 
+import Diagram from '../../components/Diagram.astro';
 import Preview from '../../components/Preview.astro';
 
 <Preview name="fast" height={470} rows={4} caption="Sixty symbols of the slot game Bzzz. The preview updates them itself and times that update, counts the skeletons that wrote new vertices in the last frame, and counts the draw calls." />
 
 ## Work follows change
 
-Pick **all play**, then **few play**, then **all rest**, and watch the numbers. The times depend on the device, so compare them with each other.
+<Diagram name="fast-change" height={210} rows={2} caption="Twenty-four skeletons. Each frame, the ones that move light up: they are posed, placed and uploaded. Pick how many move." />
+
+A skeleton that moves costs the whole pipeline of [One frame](/how/frame/). A skeleton at rest costs one question, whether anything changed, and is skipped. So the work of a frame follows how many skeletons move.
+
+In the preview at the top, pick **all play**, then **few play**, then **all rest**, and watch the numbers. The times depend on the device, so compare them with each other.
 
 - With all 60 skeletons moving, every one of them poses its bones and writes its vertices in every frame.
 - With a few moving, only those few do. The others run no timeline, pose no bone, write no vertex and upload nothing.

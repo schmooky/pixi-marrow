@@ -4,6 +4,7 @@ title: Anatomy of a skeleton
 description: A Spine skeleton is bones, slots, attachments and an atlas. Take a skeleton apart to see each, and why the runtime keeps them the way it does.
 ---
 
+import Diagram from '../../components/Diagram.astro';
 import Preview from '../../components/Preview.astro';
 
 <Preview name="anatomy" height={440} rows={4} caption="Three symbols of the slot game Bzzz. Pick a view to take one apart: its bones, its slots in the order they are drawn, and the shapes of its images." />
@@ -20,7 +21,13 @@ The letter `A` has 3 bones, the coin 8 and the bee 27. A bone is cheap, but ever
 
 ## Slots
 
-Pick **slots**. The bee builds up from the back to the front, one slot at a time. A slot is a place in the draw order that belongs to one bone. It shows at most one image at a time, the attachment, and it has a color and a blend mode.
+A skeleton is painted one picture at a time, and each picture paints over what is already there:
+
+<Diagram name="anatomy-order" height={210} rows={2} caption="Three pictures painted one after the other. Pick another order and see which one ends up on top." />
+
+The same three pictures look different in another order, because the last one painted covers the others. That order is the draw order, and its places are the slots.
+
+Now pick **slots** in the preview at the top. The bee builds up from the back to the front, one slot at a time. A slot is a place in the draw order that belongs to one bone. It shows at most one image at a time, the attachment, and it has a color and a blend mode.
 
 The order of the slots is the order of drawing. Each slot paints over the ones before it, so the wings come before the body and the eyes after it. An animation can change the attachment of a slot, which is how the bee turns blurred, and its color, which is how it dims.
 

@@ -4,6 +4,7 @@ title: An animation
 description: An animation is a list of timelines, and a timeline is a list of keys. See the win of the bee as its animator built it, and how the runtime turns a time into a pose.
 ---
 
+import Diagram from '../../components/Diagram.astro';
 import Preview from '../../components/Preview.astro';
 
 <Preview name="timeline" height={520} rows={5} caption="The win of the bee of the slot game Bzzz as a dope sheet. Each row is a bone or a slot, each dot a key. Drag over the sheet to set the time, or slow it down." />
@@ -21,6 +22,10 @@ A key is a value at a time. The dots of a row are its keys, colored by what they
 Look at the rows of the wings, `wingl` and `wingr`. Each has 41 keys that alternate between two angles, one every 2 frames. That is the flapping of the wings, and it is all keys, because the animator wanted that exact rhythm.
 
 ## Curves
+
+<Diagram name="animation-curves" height={200} rows={2} caption="One value keyed at three times: 0, then 100, then 0. Pick a curve and watch the value between the keys." />
+
+The keys are the same in all three, and only the way between them changes. Linear moves at an even speed. Stepped holds and jumps at the next key. Bezier starts slowly, speeds up and slows down again.
 
 A key also says how the value moves to the next key. Linear moves at an even speed. Stepped holds the value and jumps at the next key. A bezier curve eases in and out, as the animator drew it in the graph editor.
 

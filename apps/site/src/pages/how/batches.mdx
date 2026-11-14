@@ -4,6 +4,7 @@ title: Draw order and batches
 description: The vertices are ready, and the GPU has to be told to draw them. See how 15 skeletons draw in one call, and what makes them take more.
 ---
 
+import Diagram from '../../components/Diagram.astro';
 import Preview from '../../components/Preview.astro';
 
 <Preview name="batches" height={460} rows={4} caption="Fifteen symbols of the slot game Bzzz. The counter counts the draw calls of each frame on the WebGL context of this preview. Turn a switch on to break the batch." />
@@ -22,9 +23,15 @@ So the fewer calls a frame takes, the more of the frame is left for the game. Ma
 
 ## A batch
 
+<Diagram name="batches-calls" height={130} rows={2} caption="Six skeletons in the display list, walked from first to last into draw calls. Add a text between them, or make one multiply." />
+
+The renderer walks the display list in order and keeps adding objects to the current batch while they fit. Each color is one draw call. With nothing added, all six skeletons fit into one. A text needs another shader, so it ends the batch, takes a call of its own, and the skeletons after it start a third. A skeleton that multiplies needs another blend, and does the same.
+
 The batched mode writes the triangles of skeletons that follow each other into one shared buffer, and draws them with one call. That works while they all use the same shader, the same blend state and at most 16 atlas pages. The Bzzz symbols share one page, so the 15 symbols take one call.
 
 ## Additive slots stay in the batch
+
+<Diagram name="batches-blend" height={190} rows={2} caption="A pixel on the screen, a color painted over it at half cover, and the result. Pick how the slot blends." />
 
 The glow of the coin is additive: it brightens what lies under it. Additive blending usually needs a blend state of its own, which would end the batch at every coin.
 
