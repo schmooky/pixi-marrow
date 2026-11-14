@@ -4,6 +4,7 @@ title: Vertices
 description: Bones say where things are, and the GPU draws triangles. See how a region and a mesh of the bee become vertices, and where each vertex takes its pixels from.
 ---
 
+import Diagram from '../../components/Diagram.astro';
 import Preview from '../../components/Preview.astro';
 import Snippet from '../../components/Snippet.astro';
 import source from '../../previews/vertices.ts?raw';
@@ -28,7 +29,11 @@ Each frame then needs only the world transform of the bone. It multiplies the 4 
 
 ## A mesh
 
-Pick **body**. A mesh is a polygon cut into triangles, here 9 vertices. 8 of them follow two bones, the neck and the body. One of them follows the neck by 0.31 and the body by 0.69.
+<Diagram name="vertices-weights" height={230} rows={2} caption="A strip of picture along two bones that bend at the elbow. Its vertices are colored by their weights, blue for the upper bone and orange for the lower. Pick rigid or weighted." />
+
+With **rigid** vertices each one follows a single bone, so at the elbow the strip creases like folded paper. With **weighted** vertices the ones near the joint follow both bones, part each, and the bend spreads over them like skin over an elbow. That is what a weighted mesh is for, and what each weight costs: one more bone to ask, for every vertex, in every frame it moves.
+
+Pick **body** in the preview at the top. A mesh is a polygon cut into triangles, here 9 vertices. 8 of them follow two bones, the neck and the body. One of them follows the neck by 0.31 and the body by 0.69.
 
 A weighted vertex keeps a position next to each of its bones. The runtime asks each bone where it would put the vertex, and mixes the answers by the weights. So when the body bends away from the neck, the vertices between them spread the bend over the mesh, and the body bends instead of breaking.
 
@@ -38,7 +43,11 @@ Pick **head**. Its 41 vertices follow 7 bones, and 18 of them follow two. A vert
 
 ## Where the pixels come from
 
-On the right is the atlas page of the Bzzz symbols, with a box where the image lies. Under it that part of the page is magnified, with the same triangles drawn on its pixels.
+<Diagram name="vertices-uv" height={220} rows={1} caption="A picture with a grid, drawn as two triangles. One corner moves." />
+
+Each vertex keeps the place on the picture it was given. When a corner moves, each triangle stretches its part of the picture to its new shape. Where the two triangles meet, the grid lines bend, because the GPU maps each triangle on its own. A mesh with more triangles hides that bend.
+
+On the right of the preview is the atlas page of the Bzzz symbols, with a box where the image lies. Under it that part of the page is magnified, with the same triangles drawn on its pixels.
 
 The place of a vertex on the page is fixed. An animation moves the vertex on the screen and never on the page, so the GPU stretches the pixels of each triangle to its new shape. A packer can also turn an image to fit the page better, and the places on the page take care of it.
 

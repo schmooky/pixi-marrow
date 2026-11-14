@@ -4,10 +4,31 @@ title: Start
 description: Install pixi-marrow, load a Spine skeleton and play an animation. The rest of the guide builds on these three calls.
 ---
 
+import Diagram from '../components/Diagram.astro';
 import Snippet from '../components/Snippet.astro';
 import source from '../snippets/start.ts?raw';
 
-This guide shows how to load, play and control Spine animations in PixiJS with pixi-marrow, one step at a time. Its examples use the symbols of the slot game Bzzz, which ship with this site, so many of them look like slot symbols. Nothing in the guide is specific to slots.
+This guide shows how to load, play and control Spine animations in PixiJS with pixi-marrow, one step at a time. You need no experience with Spine. Its examples use the symbols of the slot game Bzzz, which ship with this site, so many of them look like slot symbols. Nothing in the guide is specific to slots.
+
+## What Spine is
+
+There are two ways to animate a 2D character. Watch the same wave made both ways:
+
+<Diagram name="skeletal" height={300} rows={2} caption="Left, a wave from a sprite sheet of 8 pictures, shown one after the other. Right, the same wave from a skeleton: 2 pictures and a bone that turns the arm." />
+
+**Frame by frame**, an artist draws every picture of the motion, and the game shows them one after the other. The left side has 8 pictures, and the arm jumps from one to the next. More smoothness means more pictures, and more pictures mean more memory and longer loading.
+
+**Skeletal animation**, which Spine does, splits the character into parts: a body, an arm. A bone holds each part, and the animation stores only a few numbers per bone, such as "the arm turns from -35 to 55 degrees". In every frame the runtime computes where each bone is and draws the parts there. So the motion is smooth at any frame rate, the files stay small, and two animations can blend into each other, which pictures cannot.
+
+## What a runtime does
+
+The Spine editor exports three kinds of files:
+
+- A skeleton file, `.skel` or `.json`, with the bones, the parts and the animations, all as numbers.
+- An atlas file, `.atlas`, that says where each part lies in the images.
+- The images, such as `.png`, `.webp` or `.avif`, with all parts packed into one or a few pages.
+
+A runtime reads these files and does the work in every frame. It finds the pose of each bone at the current time, places the parts, and has the GPU draw them. pixi-marrow is a runtime for PixiJS v8. [One frame](/how/frame/) shows the whole way from the time to the pixels.
 
 ## Install
 

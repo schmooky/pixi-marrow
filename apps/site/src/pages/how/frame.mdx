@@ -1,0 +1,43 @@
+---
+layout: ../../layouts/Docs.astro
+title: One frame
+description: Sixty times a second a runtime turns the time into pixels. Step through one frame on a two-bone arm, and see which stage costs what.
+---
+
+import Diagram from '../../components/Diagram.astro';
+
+A game draws a new picture many times a second, 60 on most screens. Each of those pictures is a frame, and in each frame the runtime does the same six things for every skeleton. Step through them on an arm of two bones that holds one picture:
+
+<Diagram name="frame" width={760} height={220} rows={2} caption="One frame in six stages, on a two-bone arm with a picture on its second bone. Each stage lights up in turn. Pick as a game does to see all six run in every frame." />
+
+The rest of this part takes each stage apart on the real rigs. This page is the map.
+
+## 1 Time
+
+The frame starts with the time that passed since the frame before, about 16.7 milliseconds at 60 frames a second. Each track of the skeleton moves its animation forward by that time, times its speed. Nothing is drawn yet, and this stage costs almost nothing.
+
+## 2 Animation
+
+An animation stores keys: values at certain times, such as "40 degrees at 0.33 seconds". For the time of the frame, the runtime finds the keys before and after it and computes the value between them. The more values an animation changes, the more this stage costs. [An animation](/how/animation/) shows the keys of a real one.
+
+## 3 Bones
+
+The values turn and move bones, each relative to its parent. The runtime then works out where every bone is in the skeleton, parents first, so that a child takes the turn of its parent along. In the diagram the second bone turns with the first. The cost grows with the bones that move. [The pose](/how/pose/) shows it on the bee.
+
+## 4 Vertices
+
+A picture held by a bone has corners, its vertices. The bone places them: a rectangle has 4, a mesh that bends has many. A vertex of a mesh can follow several bones, and costs work for each. [Vertices](/how/vertices/) shows both kinds.
+
+## 5 Buffer
+
+The GPU does not know bones. It gets plain numbers: two per vertex for the position, plus where each vertex takes its pixels from and its color. The runtime writes them into a buffer, sends the parts that changed to the GPU, and asks it to draw with a draw call. Many skeletons can share one buffer and one call. [Draw order and batches](/how/batches/) shows when.
+
+## 6 Pixels
+
+The GPU cuts the picture into triangles and fills every pixel each triangle covers, blending it over what was there. This stage runs on the GPU, so it does not cost the CPU. It costs GPU time for every pixel filled, also where the picture is transparent. A phone has little of that time.
+
+## Where the time goes
+
+Stages 1 to 5 run on the CPU, stage 6 on the GPU, and both have to finish within the frame. At 60 frames a second that is 16.7 milliseconds for the whole game, not only for its skeletons.
+
+[Why it is fast](/how/fast/) shows what pixi-marrow leaves out of each stage, and the [lab](/lab/) measures a frame on your device.

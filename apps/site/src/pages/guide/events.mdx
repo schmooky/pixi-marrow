@@ -4,12 +4,17 @@ title: Events
 description: React to moments that the animator marked in an animation, and to the life of each track, without guessing times in code.
 ---
 
+import Diagram from '../../components/Diagram.astro';
 import Snippet from '../../components/Snippet.astro';
 import source from '../../snippets/guide-events.ts?raw';
 
 ## Keys the animator placed
 
-An animator marks moments in an animation with event keys: a footstep, a hit, the moment a coin is collected. The game listens for them instead of guessing the time in code, so a change to the animation keeps the sound on its beat.
+An animator marks moments in an animation with event keys: a footstep, a hit, the moment a coin is collected. An event key changes nothing in the picture. It is a mark on the time of the animation, and the runtime tells the game when the playhead passes it.
+
+<Diagram name="events-keys" height={240} rows={1} caption="An animation with two event keys, played twice. Each key writes a line when the playhead passes it. In the second pass the animation mixes out from 0.7 seconds." />
+
+In the first pass both keys fire. In the second, another animation takes over at 0.7 seconds, and `hit` at 0.9 does not fire: an animation that mixes out fires no event, unless its `eventThreshold` allows it. The game listens for the keys instead of guessing times in code, so when the animator moves the hit, the sound moves with it.
 
 <Snippet source={source} regions="keys" />
 
@@ -17,19 +22,25 @@ The coin of Bzzz fires `onCollect` 0.23 seconds into its `collect`, and `onSound
 
 An event carries a name and the values the animator set: `int`, `float`, `string`, and `volume` and `balance` for an event with audio. It also carries `time`, where it sits in the animation. The listener gets the `Track` of the animation as well.
 
-An event fires in the update in which the time of its animation passes it. An animation that mixes out fires none, unless its `eventThreshold` lets it.
+An event fires in the update in which the playhead passes it. At 60 frames a second the playhead moves about 0.017 seconds a frame, so an event fires within one frame of its time.
 
 ## The life of a track
 
-<Snippet source={source} regions="life" />
+Besides the keys of the animator, the runtime reports what happens to each animation on a track.
 
-Each animation on a track goes through these, in order:
+<Diagram name="events-life" height={200} rows={1} caption="An idle loop of one second, replaced at 2.4 seconds by a win with a mix of 0.4 seconds. Each report appears when it happens." />
+
+Each animation goes through these, in order:
 
 - `start` when it begins to play.
 - `complete` each time it reaches its end. A loop completes once per loop.
 - `interrupt` when another animation replaces it, before its mix out.
 - `end` when it leaves the track, after its mix out.
 - `dispose` when the runtime drops it, after `end`.
+
+The idle above reports `complete` at 1 and 2 seconds, once per loop. At 2.4 seconds it reports `interrupt` and the win reports `start`. The idle still shows during the mix, so its `end` comes at 2.8 seconds, when the mix is over.
+
+<Snippet source={source} regions="life" />
 
 ## Waiting for an animation
 

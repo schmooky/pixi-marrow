@@ -4,6 +4,7 @@ title: Performance
 description: The presets, the settings that trade exactness for speed, and how to see which are in effect.
 ---
 
+import Diagram from '../components/Diagram.astro';
 import Snippet from '../components/Snippet.astro';
 import source from '../snippets/performance.ts?raw';
 
@@ -33,6 +34,14 @@ The presets set when a skeleton updates, and nothing else. `tightMesh: 'on'`, `b
 <Snippet source={source} regions="settings" />
 
 A `perf` object starts from its `preset` and changes the settings it names. An option given by name wins over both. A value that does not exist throws a `MarrowError` with the closest valid name.
+
+## How pacing works
+
+The presets change how often a skeleton is posed, and nothing else. A skeleton that is posed less often costs less, and moves in steps:
+
+<Diagram name="perf-pacing" height={230} rows={1} caption="One second at 60 frames, slowed down. A tick marks each frame in which the skeleton is posed, and the square moves with the time it was posed at." />
+
+On the screen the skeleton is posed in every frame. Off the screen, `throttle` poses it 4 times a second with all the time that passed, so its square steps, and the event key at 0.4 seconds fires at 0.5. `pause` stops its time until it comes back on the screen. `updateRate: 30` poses it every other frame, which halves the work and steps the motion at 30 frames a second.
 
 ## The settings
 

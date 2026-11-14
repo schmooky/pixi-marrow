@@ -4,6 +4,7 @@ title: Size and units
 description: The animator drew in units of the Spine editor, and the screen has pixels. Fit a skeleton to a place on the screen, and know what its scale changes.
 ---
 
+import Diagram from '../../components/Diagram.astro';
 import Snippet from '../../components/Snippet.astro';
 import source from '../../snippets/guide-size.ts?raw';
 
@@ -11,13 +12,19 @@ import source from '../../snippets/guide-size.ts?raw';
 
 The animator draws in the units of the Spine editor. A skeleton 300 units wide shows 300 pixels wide at scale 1. The layout of a game has its own sizes, so most skeletons need a scale.
 
+<Diagram name="size-units" height={210} rows={3} caption="A skeleton with a bone 100 units right of its origin. Pick a scale for its container." />
+
+The picture grows and shrinks with the scale. The bone does not move inside the skeleton: it stays 100 units from the origin. Only its place on the stage changes, and `toGlobal` works that out with the scale.
+
 The origin of a skeleton is where the animator put the root bone. That can be its middle, its feet or a corner. So place a skeleton by its box, not by its origin.
 
 ## Measure the setup pose once
 
 <Snippet source={source} regions="measure" />
 
-Measure the setup pose, not the current frame. A glow grows and a jump goes up, so the box of a playing skeleton changes every frame, and anything fitted to it would jump. Measure once per asset and keep the box with it.
+<Diagram name="size-box" height={200} rows={1} caption="A square that grows and lifts, fitted into a cell two ways." />
+
+On the left the square is fitted by its box in each frame. That box hugs the square, so the fit shrinks every growth away and centres every lift away, and the animation is lost. On the right the square is fitted once by the box of its setup pose, and the animation plays as it was made. With a real skeleton, whose parts move differently, a fit per frame also makes it jitter. Measure the setup pose once per asset, and keep the box with it.
 
 ## Fit a box
 

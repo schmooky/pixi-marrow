@@ -4,11 +4,16 @@ title: The pose
 description: An animation sets each bone relative to its parent. Before anything is drawn, the runtime works out where every bone is in the skeleton. Turn a bone of the bee and watch what follows.
 ---
 
+import Diagram from '../../components/Diagram.astro';
 import Preview from '../../components/Preview.astro';
 
 <Preview name="pose" height={440} rows={5} caption="The bee of the slot game Bzzz in its setup pose, dimmed. One bone turns, and the bones drawn in orange turn with it. Pick drag to turn the bone yourself by dragging across the canvas." />
 
 ## Local and world
+
+<Diagram name="pose-chain" height={210} rows={3} caption="A two-bone arm. The upper bone sways. Pick whether the lower bone keeps its own rotation or turns too." />
+
+The lower bone keeps a local rotation of 30 degrees, yet it points in a new direction in every frame, because its parent turns. Its world rotation is the world rotation of its parent plus its own local rotation, and the numbers under the drawing add them up. The dashed line shows where it would point with its local rotation alone.
 
 The animation of the last page wrote values like "the neck turns 12 degrees". That is a local value, relative to the parent bone. To draw a wing, the runtime needs to know where the wing is in the skeleton, after the neck, the body and the root turned it. That is its world transform.
 

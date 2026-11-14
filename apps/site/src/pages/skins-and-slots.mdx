@@ -4,10 +4,19 @@ title: Skins and slots
 description: Wear several skins at once, change what a slot shows, tint a slot, and go back to the setup pose.
 ---
 
+import Diagram from '../components/Diagram.astro';
 import Snippet from '../components/Snippet.astro';
 import source from '../snippets/skins.ts?raw';
 
+## What a skin is
+
+A slot shows one attachment at a time, by name. A skin is a set of attachments for slots: a skin `knight` may hold a helmet for the slot `hat` and a sword for the slot `hand`. Changing the skin changes the pictures and keeps the bones and the animations, so one skeleton can be many characters or many versions of a symbol.
+
 ## Several skins at once
+
+<Diagram name="skins-sets" height={200} rows={2} caption="Two skins over three slots. Pick which skins are active, and in which order." />
+
+With one skin, a slot it fills shows its attachment, and a slot it does not fill stays empty. With two, each slot takes the attachment of the later skin that has one. With `cap, knight` the hat is the helmet, because knight comes later, and the shirt is still blue, because only cap has a shirt.
 
 <Snippet source={source} regions="skins" />
 

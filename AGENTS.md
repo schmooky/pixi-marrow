@@ -20,6 +20,7 @@ packages/pixi-marrow/   the library
 scripts/                repo checks and generators
 fixtures/               manifest of the official example exports. Downloads are not committed
 docs/DESIGN.md          the design
+docs/EXPLAINING.md      how the docs explain: the standard for every page of the site
 ```
 
 Entry points:
@@ -140,6 +141,7 @@ Library changes need a changeset. Run `pnpm changeset`.
 ## 7. How to work here
 
 - Read `docs/DESIGN.md` before designing anything. Update it when a decision changes.
+- Read `docs/EXPLAINING.md` before writing a page of the site. Every idea starts with a diagram the reader sees move, then the words, then the call.
 - Write the test first when the official core defines the answer.
 - A performance claim in the docs names its measurement and its machine. Numbers for phones wait for spine-benchmark.
 - In code that runs every update, pass indices into typed arrays, not numbers. V8 puts a double on the heap when it crosses a call that is not inlined.
