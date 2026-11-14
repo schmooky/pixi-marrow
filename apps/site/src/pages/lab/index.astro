@@ -1,0 +1,40 @@
+---
+import { CATALOG } from '../../lab/catalog';
+import Lab from '../../layouts/Lab.astro';
+---
+
+<Lab title="Tests" description="Tests that measure pixi-marrow on the device that opens them.">
+    <main class="lab-index">
+        <a href="/" class="lab-back">pixi-marrow</a>
+        <h1 class="lab-title">Lab</h1>
+        <p class="lab-question">
+            Each test measures pixi-marrow on the device that opens it, a phone above all. Open one, keep the screen on and wait about a minute. It
+            shows its result at the end, with a text to copy.
+        </p>
+        <ul class="lab-tests">
+            {
+                CATALOG.map((test) => (
+                    <li>
+                        <a href={`/lab/${test.name}/`} class="lab-test">
+                            <strong>{test.title}</strong>
+                            <span>{test.question}</span>
+                            <span class="lab-scene">{test.scene(test.count)}</span>
+                        </a>
+                    </li>
+                ))
+            }
+        </ul>
+        <h2 class="lab-subtitle">Settings in the address</h2>
+        <ul class="lab-settings">
+            <li><code>?renderer=webgpu</code> draws with WebGPU where the browser has it. WebGL2 is the default.</li>
+            <li><code>?n=100</code> sets the number of skeletons.</li>
+            <li><code>?rounds=5</code> runs every side 5 times. The default is 3.</li>
+        </ul>
+        <h2 class="lab-subtitle">How it measures</h2>
+        <p class="lab-question">
+            A frame is the update of every skeleton, the submit of the render and the wait until the GPU has finished it. Nothing waits for the
+            screen, so the times are the same on a screen of 60 Hz and of 120 Hz. The sides of a test take turns, so the heat of the phone weighs
+            on all of them alike.
+        </p>
+    </main>
+</Lab>

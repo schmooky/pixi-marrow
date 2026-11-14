@@ -1,0 +1,34 @@
+---
+import { CATALOG, testInfo } from '../../lab/catalog';
+import Lab from '../../layouts/Lab.astro';
+
+export function getStaticPaths(): { params: { name: string } }[] {
+    return CATALOG.map((test) => ({ params: { name: test.name } }));
+}
+
+const test = testInfo(String(Astro.params.name));
+---
+
+<Lab title={test.title} description={test.question}>
+    <div class="lab-stage" data-lab-canvas></div>
+    <header class="lab-head">
+        <a href="/lab/" class="lab-back">pixi-marrow lab</a>
+        <h1 class="lab-title">{test.title}</h1>
+        <p class="lab-question">{test.question}</p>
+        <p class="lab-scene" data-lab-scene>{test.scene(test.count)}</p>
+        <div class="lab-status" data-lab-status></div>
+    </header>
+    <div class="lab-result" data-lab-result data-lab={test.name}></div>
+</Lab>
+<script>
+    import { runLab } from '../../lab/runner';
+
+    const canvas = document.querySelector<HTMLElement>('[data-lab-canvas]');
+    const scene = document.querySelector<HTMLElement>('[data-lab-scene]');
+    const status = document.querySelector<HTMLElement>('[data-lab-status]');
+    const result = document.querySelector<HTMLElement>('[data-lab-result]');
+
+    if (canvas !== null && scene !== null && status !== null && result !== null) {
+        void runLab(result.dataset.lab ?? '', { canvas, scene, status, result });
+    }
+</script>
