@@ -67,6 +67,7 @@ const PREVIEWS: Record<string, Loader> = {
     play: () => import('./play'),
     anatomy: () => import('./anatomy'),
     timeline: () => import('./timeline'),
+    pose: () => import('./pose'),
     placeholders: () => import('./placeholders'),
     debug: () => import('./debug'),
     reels: () => import('./reels'),
