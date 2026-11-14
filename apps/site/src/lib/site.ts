@@ -77,6 +77,12 @@ export const PAGES: readonly DocsPage[] = [
         section: 'Guide',
     },
     {
+        href: '/how/frame/',
+        title: 'One frame',
+        description: 'From the time to the pixels in six stages, and which stage costs what.',
+        section: 'How it works',
+    },
+    {
         href: '/how/anatomy/',
         title: 'Anatomy of a skeleton',
         description: 'Bones, slots, attachments, skins and the atlas, taken apart live.',

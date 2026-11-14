@@ -10,11 +10,19 @@ import { type Controls, panel } from '../previews/panel';
  * hidden. Its controls are the rows of the panel of the previews, under the drawing.
  */
 
+/** Something that plays over time and can stop, such as a timeline of anime.js. */
+interface Playable {
+    play(): unknown;
+    pause(): unknown;
+}
+
 /** What a diagram builds itself with: its drawing, its clock and the controls under it. */
 interface DiagramContext extends Controls {
     svg: SVGSVGElement;
     /** Calls `step` in every animation frame while the diagram is in view, with the seconds since the frame before. */
     onFrame(step: (seconds: number) => void): void;
+    /** Plays an animation while the diagram is in view, and pauses it while it is not. */
+    own(playable: Playable): void;
 }
 
 /** A diagram: the function that builds it. */
@@ -27,6 +35,8 @@ export const defineDiagram = (diagram: Diagram): Diagram => diagram;
 
 /** The diagram modules by name. Each is a chunk of its own, loaded when its frame comes into view. */
 const DIAGRAMS: Record<string, () => Promise<{ default: Diagram }>> = {
+    skeletal: () => import('./skeletal'),
+    frame: () => import('./frame'),
     'mix-layers': () => import('./mix-layers'),
     'mix-same': () => import('./mix-same'),
     'mix-time': () => import('./mix-time'),
@@ -60,12 +70,20 @@ async function start(frame: HTMLElement, svg: SVGSVGElement, bar: HTMLElement): 
 
     if (load === undefined) return;
     const steps: ((seconds: number) => void)[] = [];
+    const owned: Playable[] = [];
     const diagram = (await load()).default;
     let visible = false;
     let last = 0;
     let running = false;
 
-    diagram.setup({ svg, ...panel(bar), onFrame: (step) => steps.push(step) });
+    diagram.setup({ svg, ...panel(bar), onFrame: (step) => steps.push(step), own: (playable) => owned.push(playable) });
+    /** Plays the owned animations while the diagram shows, and pauses them otherwise. */
+    const sync = (): void => {
+        for (const playable of owned) {
+            if (visible && !document.hidden) playable.play();
+            else playable.pause();
+        }
+    };
     const tick = (now: number): void => {
         if (!visible || document.hidden) {
             running = false;
@@ -89,8 +107,12 @@ async function start(frame: HTMLElement, svg: SVGSVGElement, bar: HTMLElement): 
     new IntersectionObserver((entries) => {
         visible = entries.some((entry) => entry.isIntersecting);
         run();
+        sync();
     }).observe(frame);
-    document.addEventListener('visibilitychange', run);
+    document.addEventListener('visibilitychange', () => {
+        run();
+        sync();
+    });
 }
 
 /** Starts every diagram of the page once its frame comes near the view. */
