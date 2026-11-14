@@ -15,11 +15,19 @@ const QUIET = 2048;
  * The first windows are the warm-up. The JavaScript engine compiles a function in steps, and only
  * the last step stops allocating: Pixi's event emitter, which every buffer upload goes through,
  * allocates its arguments until it was called about 16,000 times.
+ *
+ * Each window starts after a full collection where the test runner exposes `gc`, as the config
+ * of this package does. A window then starts with an empty young generation, so a collection
+ * inside it means the run allocated. Without that, a slow runner under coverage can make a
+ * collection in nearly every window and never see three quiet ones, though nothing allocates.
  */
 export function settle(run: (i: number) => void, limit = 150): number {
     let quiet = 0;
 
+    const collect: unknown = Reflect.get(globalThis, 'gc');
+
     for (let window = 0, i = 0; window < limit; window++) {
+        if (typeof collect === 'function') collect();
         const before = process.memoryUsage().heapUsed;
 
         for (let n = 0; n < WINDOW; n++, i++) run(i);

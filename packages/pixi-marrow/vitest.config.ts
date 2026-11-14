@@ -10,6 +10,9 @@ export default defineConfig({
         // changes from run to run. The default of 5 seconds is too short on a slow run.
         testTimeout: 60_000,
         hookTimeout: 60_000,
+        // the heap checks of tests/render/heap.ts collect garbage before each window they measure,
+        // so that a collection that a busy runner happens to make cannot spoil a window
+        execArgv: ['--expose-gc'],
         coverage: {
             provider: 'v8',
             include: ['src/**/*.ts'],
