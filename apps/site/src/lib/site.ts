@@ -55,6 +55,12 @@ export const PAGES: readonly DocsPage[] = [
         section: 'How it works',
     },
     {
+        href: '/how/animation/',
+        title: 'An animation',
+        description: 'Timelines, keys, curves and events, on the win of the bee, and how a time becomes a pose.',
+        section: 'How it works',
+    },
+    {
         href: '/bones-and-placeholders/',
         title: 'Bones and placeholders',
         description: 'Read a bone and put your own Pixi objects into a rig.',
