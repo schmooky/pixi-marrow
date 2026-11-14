@@ -73,6 +73,12 @@ export const PAGES: readonly DocsPage[] = [
         section: 'How it works',
     },
     {
+        href: '/how/batches/',
+        title: 'Draw order and batches',
+        description: 'How 15 symbols draw in one call, why additive slots stay in it, and what ends a batch.',
+        section: 'How it works',
+    },
+    {
         href: '/bones-and-placeholders/',
         title: 'Bones and placeholders',
         description: 'Read a bone and put your own Pixi objects into a rig.',

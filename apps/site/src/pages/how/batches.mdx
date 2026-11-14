@@ -1,0 +1,53 @@
+---
+layout: ../../layouts/Docs.astro
+title: Draw order and batches
+description: The vertices are ready, and the GPU has to be told to draw them. See how 15 symbols draw in one call, and what makes them take more.
+---
+
+import Preview from '../../components/Preview.astro';
+
+<Preview name="batches" height={460} rows={4} caption="Fifteen symbols of the slot game Bzzz. The counter counts the draw calls of each frame on the WebGL context of this preview. Turn a switch on to break the batch." />
+
+## Draw order
+
+Inside a skeleton, the slots draw from the back to the front, as the anatomy page showed. Between skeletons, Pixi decides. The children of a container draw in order, and the last child draws on top.
+
+Every two seconds a symbol wins in the preview. It grows a little, so it has to draw over its neighbours. The preview moves it to the end of the container with `reels.addChild(symbol)`, and the counter stays at one.
+
+## Draw calls
+
+The GPU draws when the CPU asks it to, with a draw call. A draw call names a shader, the textures to sample and how to blend the result over what is there. Each call costs time on the CPU and in the graphics driver, whatever it draws, and a phone has less of that time than a desktop.
+
+So the fewer calls a frame takes, the more of the frame is left for the game. A reel of symbols drawn in one call is the goal.
+
+## A batch
+
+The batched mode writes the triangles of skeletons that follow each other into one shared buffer, and draws them with one call. That works while they all use the same shader, the same blend state and at most 16 atlas pages. The Bzzz symbols share one page, so the 15 symbols take one call.
+
+## Additive slots stay in the batch
+
+The glow of the coin is additive: it brightens what lies under it. Additive blending usually needs a blend state of its own, which would end the batch at every coin.
+
+pixi-marrow draws with premultiplied alpha, where a color is already multiplied by its alpha. The GPU then blends with one rule: the new color, plus what lies under it times one minus the new alpha. A normal pixel covers what is under it by its alpha. An additive pixel writes an alpha of 0, so what lies under it stays whole and the color adds to it. One rule serves both, and the coin stays in the batch.
+
+## What ends a batch
+
+Turn the switches on one at a time:
+
+- **text between** puts a Pixi text into the container, between two symbols. The frame takes 3 calls: the symbols before the text, the text, and the symbols after it. Keep texts, frames and effects above or below the symbols, never between them.
+- **multiply** makes one symbol multiply what is under it. That needs another blend state, so the frame takes 3 calls again. A slot that multiplies or screens inside a skeleton ends the batch the same way. Additive slots do not.
+- **meshes** switches every symbol to the mesh mode, where a skeleton draws its own mesh. The frame takes 15 calls. `renderMode: 'auto'` picks that mode for a skeleton of more than 1024 vertices, and the batched mode for every smaller one.
+
+A batch also ends when its skeletons need more than 16 atlas pages. So a symbol set on a few pages keeps its batches long.
+
+## Uploads
+
+Before a draw, the GPU needs the vertices. The batched mode keeps them in two buffers. Positions change with the pose. Texture coordinates, colors and flags change now and then.
+
+Every skeleton notes the parts of the buffer it wrote, and only those are uploaded before the draw. A skeleton at rest uploads nothing, so a reel that stands still costs one draw call and no upload.
+
+## What pixi-marrow does
+
+pixi-marrow has two batchers of its own. An element of a batch is a whole skeleton, with up to 16 pages of its atlas. The batch goes to the batch pipe of Pixi like any other, so skeletons mix with Pixi objects in the display list and keep their order.
+
+`stats.drawCalls` gives the draw calls of one skeleton, and `perf.report()` says why it takes them.
