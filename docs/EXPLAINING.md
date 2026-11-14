@@ -10,6 +10,7 @@ Assume a developer who knows TypeScript and a little Pixi, and nothing else. The
 
 The site follows Diátaxis. Each page has one job, and mixing jobs on one page serves none of them.
 
+- **Basics** pages explain the computer graphics a runtime stands on: pixels and frames, transforms, triangles and textures, the GPU and draw calls, blending. They come first, so that no later page has to assume them.
 - **Guide** pages lead to a result: load, play, mix, listen. They show the calls and say what each does. They link to How it works for the why, and do not explain the machinery themselves.
 - **How it works** pages build understanding: what the runtime does in a frame, why, and what it costs. They show no setup code.
 - **Reference** pages are for looking things up: options, numbers, limits.

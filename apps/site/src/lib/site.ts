@@ -8,14 +8,14 @@ export const SITE = {
 };
 
 /**
- * The parts of the docs, in reading order. The guide shows how to load, play and control
- * animations, one step at a time. How it works takes the runtime apart, so that the reader sees
+ * The parts of the docs, in reading order. The basics explain the computer graphics a runtime
+ * stands on. The guide shows how to load, play and control animations, one step at a time. How it works takes the runtime apart, so that the reader sees
  * why it does what it does. The reference holds what a game looks up.
  */
-export type DocsSection = 'Guide' | 'How it works' | 'Reference';
+export type DocsSection = 'Basics' | 'Guide' | 'How it works' | 'Reference';
 
 /** The parts in the order the navigation shows them. */
-export const SECTIONS: readonly DocsSection[] = ['Guide', 'How it works', 'Reference'];
+export const SECTIONS: readonly DocsSection[] = ['Basics', 'Guide', 'How it works', 'Reference'];
 
 /** A page of the docs, as the navigation lists it. */
 export interface DocsPage {
@@ -28,6 +28,36 @@ export interface DocsPage {
 
 /** The pages of the docs, in reading order. */
 export const PAGES: readonly DocsPage[] = [
+    {
+        href: '/basics/pixels/',
+        title: 'Pixels and frames',
+        description: 'A screen is a grid of pixels, and motion is a new picture every 16.7 ms.',
+        section: 'Basics',
+    },
+    {
+        href: '/basics/transforms/',
+        title: 'Coordinates and transforms',
+        description: 'Move, turn and scale, and how a child takes its parent along.',
+        section: 'Basics',
+    },
+    {
+        href: '/basics/triangles/',
+        title: 'Triangles and textures',
+        description: 'The GPU draws only triangles, and colors them from pictures.',
+        section: 'Basics',
+    },
+    {
+        href: '/basics/gpu/',
+        title: 'The GPU and draw calls',
+        description: 'How the CPU and the GPU work together, and what a draw call costs.',
+        section: 'Basics',
+    },
+    {
+        href: '/basics/blending/',
+        title: 'Transparency and blending',
+        description: 'Alpha, blend rules, and overdraw, the main GPU cost of 2D.',
+        section: 'Basics',
+    },
     {
         href: '/start/',
         title: 'Start',

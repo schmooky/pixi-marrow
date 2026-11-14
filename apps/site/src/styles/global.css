@@ -557,12 +557,15 @@ pre {
 }
 .preview-readout span {
     display: block;
+    /* the width keeps the line still on a wide screen; on a narrow one it wraps instead of being cut */
+    max-width: 100%;
     overflow: hidden;
+    padding-block: 0.4rem;
     font-family: var(--font-mono);
     font-size: 12px;
     font-variant-numeric: tabular-nums;
-    line-height: 1.85rem;
-    white-space: pre;
+    line-height: 1.45;
+    white-space: pre-wrap;
     color: hsl(var(--foreground) / 0.84);
 }
 .preview figcaption {

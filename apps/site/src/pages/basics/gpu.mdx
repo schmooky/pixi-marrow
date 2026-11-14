@@ -1,0 +1,27 @@
+---
+layout: ../../layouts/Docs.astro
+title: The GPU and draw calls
+description: The CPU prepares a frame and the GPU draws it. They talk through buffers and draw calls, and every call has a price.
+---
+
+import Diagram from '../../components/Diagram.astro';
+
+## Two processors
+
+A computer has two processors that matter here. The CPU runs the code of the game: the logic, the animations, where every vertex goes. The GPU draws: it fills triangles with pixels, millions a frame, all at once. They work side by side, and the CPU tells the GPU what to do.
+
+## Buffers
+
+The GPU cannot read the variables of a program. The CPU writes the vertices into a buffer, a block of memory in a fixed layout: two numbers for the position, two for the texture coordinate, and a color, per vertex. Then it sends the buffer to the GPU. Sending is called an upload, and it costs time for every byte, so a good runtime sends only what changed.
+
+## Draw calls
+
+<Diagram name="cpu-gpu" height={200} rows={1} caption="One frame of the CPU and the GPU. The CPU updates, then sends draw calls. The GPU draws once it has them. Pick how many calls the frame takes." />
+
+A draw call is the CPU telling the GPU: draw these triangles, from this buffer, with this texture and this way of blending. Every call costs the CPU a fixed amount of work, however little it draws. With one call, the CPU is done early. With hundreds, the CPU spends the frame sending calls, and the picture is late though the GPU is idle.
+
+So the number of draw calls matters more than the number of triangles. Ten skeletons in one call can be cheaper than ten in ten calls. Joining them into one call is called batching. It works while they share the texture, the shader and the blend, and [Draw order and batches](/how/batches/) shows when that holds.
+
+## What this means for animation
+
+A Spine runtime spends its CPU time on posing bones and placing vertices, and on the draw calls and uploads that hand them to the GPU. Fewer calls and smaller uploads leave more of the frame to the game. [Transparency and blending](/basics/blending/) shows the cost on the GPU side.

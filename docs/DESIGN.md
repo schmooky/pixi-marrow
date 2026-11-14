@@ -726,6 +726,7 @@ Budget: at most 10 guide pages and 6,000 words in total. Each page has one runna
 
 Change after M9: the user asked for docs that guide and explain, not only list the API. So the site has three parts, and the budget above no longer holds. On 2026-11-14 they were 18 pages and about 8,000 words:
 
+- **Basics**, 5 pages: pixels and frames, coordinates and transforms (with an interactive pixi-silk gizmo), triangles and textures, the GPU and draw calls, transparency and blending. Computer graphics from zero, for readers who never wrote any.
 - **Guide**, 8 pages: start, assets and copies, size and units, play, mix and queue, events, skins and slots, bones and attachments. It is about animation in general. Its examples use the Bzzz slot symbols, because most users come from slot games.
 - **How it works**, 6 pages: anatomy of a skeleton, an animation, the pose, vertices, draw order and batches, why it is fast. Each has a live preview that takes the runtime apart on the Bzzz rigs. They explain why the runtime does what it does, and what makes a scene slow.
 - **Reference**, 4 pages: performance, debug overlays, good to know, an example with reels.
