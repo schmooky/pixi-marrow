@@ -359,7 +359,7 @@ Limits, stated:
 
 - A Pixi object between two skeletons in draw order breaks our batch. It does not break the batch of the official runtime, which uses Pixi's default batcher.
 - The two modes are not equal to the bit, because one places vertices in 64-bit on the CPU and the other in 32-bit on the GPU. Each passes the pixel check against the official runtime. Against each other they differ by 5 levels at most, on 0.006 percent of pixels by more than 1.
-- Mesh mode on WebGPU fails above 2047 mesh draws in a frame: Pixi's uniform buffer batch is full then. The batched mode has no such limit.
+- On WebGPU Pixi gives every mesh draw a slot of one uniform buffer per frame, with room for 2047, and throws past that. Since after M9 a mesh of the mesh mode binds a small uniform buffer of its own once fewer than 256 slots are left. That buffer is uploaded only when its transform, tint or rounding change. So 1200 instances of a rig with a clip, four draws each, draw in the mesh mode. The batched mode never used the slots.
 - A skeleton can grow its room, which rebuilds the instructions once. A clipped animation settles within its first turn.
 
 The batched mode relies on these parts inside Pixi, checked against the source of 8.16.0 and 8.23.0. The `Batcher` base class and the fields of a batch element. `renderPipes.batch` and the protocol of a render pipe. `Container.onRender` and `ViewContainer`. The bind layout of the batch adaptors and `renderer.limits.maxBatchableTextures`. The official runtime builds on the same parts.

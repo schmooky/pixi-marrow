@@ -306,14 +306,15 @@ function changeScene(rigs) {
 }
 
 /**
- * The scenes that look for a limit: 1200 instances in one stage. What they find is reported and
- * does not fail the check, and each render mode of ours runs on a page of its own, so that a mode
- * that throws cannot disturb the next one.
+ * The scenes that look for a limit: 1200 instances in one stage. Each render mode of ours runs on
+ * a page of its own, so that a mode that throws cannot disturb the next one. Every mode must draw
+ * them. A difference they find is reported and does not fail the check.
  *
  * In the mesh mode every draw of a mesh takes a slot in the batch of uniform buffers of Pixi. On
  * WebGPU that batch is one buffer of 65535 floats in slots of 128 bytes, read in pixi.js 8.23.0,
  * and Pixi throws when it is full. The coin draws four meshes per instance, two of them for its
- * clip mask, and the speedy rig draws one.
+ * clip mask, and the speedy rig draws one, so the coins need more slots than the batch has. The
+ * meshes of ours bind buffers of their own past that, see `src/render/mesh-uniforms.ts`.
  */
 function limitScenes(rigs) {
     const grid = (rig) =>

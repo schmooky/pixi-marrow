@@ -212,6 +212,7 @@ describe('the code of the mesh mode, the code for clips and the code that cuts o
         'render/measured-geometry.ts',
         'render/mesh-paint.ts',
         'render/mesh-pipe.ts',
+        'render/mesh-uniforms.ts',
         'render/range-mesh.ts',
         'render/ranges.ts',
         'render/shader.ts',

@@ -162,8 +162,9 @@
  * for that mode, see scripts/render/sides.js.
  * The last scenes look for a limit: 1200 instances in one stage, once of a rig with a clip and
  * once of a rig without. Each render mode of ours gets a page of its own there, so a mode that
- * throws inside Pixi cannot disturb the next one. What such a scene runs into prints as `FOUND`,
- * is listed in the summary as a finding and does not fail the check.
+ * throws inside Pixi cannot disturb the next one. Every mode must draw the scene: a page that
+ * fails fails the check. A difference such a scene runs into prints as `FOUND`, is listed in
+ * the summary as a finding and does not fail the check.
  * TOLERANCE below holds the pass criteria and what they rest on.
  * The second look: a frame that is outside the tolerance of ours against official is drawn again,
  * both sides moved by SECOND_PLACEMENT of scripts/render/judge.js, a fraction of a pixel that is
@@ -504,13 +505,13 @@ async function main() {
                 errors.push(...strayPixi(state.pixi, versions));
                 announced = true;
                 console.log(`  ${job.title}`);
-                // what a scene that looks for a limit runs into is a finding. It fails nothing
+                // a scene that looks for a limit: a difference it runs into is a finding, but every
+                // mode must draw it. A page that fails fails the check
                 const limit = job.plan.limit === true;
 
                 if (crash || state.error) {
-                    console.log(`    ${limit ? 'FOUND' : 'FAIL'} the page failed: ${crash ?? state.error}`);
-                    if (limit) reporter.findings.push(`${job.plan.id}: the page failed`);
-                    else failed++;
+                    console.log(`    FAIL the page failed: ${crash ?? state.error}`);
+                    failed++;
                 }
                 if (report) {
                     if (job.plan.lazy) report.cases.push(meshChunkCase(job.plan, ran.requested, mesh));
