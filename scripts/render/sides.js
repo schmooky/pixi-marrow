@@ -220,9 +220,12 @@ export function oursSide(PIXI, lib, skinning = null) {
     return {
         name: 'ours',
         async create({ skeleton, atlas, cuts = 'default', mode, preload = true, idle = false, bake, instancing }) {
+            // outlines are off by default: the check asks for the scan, so that the cuts of
+            // overdraw are part of every comparison with the official runtime
             const asset = await lib.MarrowAsset.load({
                 skeleton,
                 atlas,
+                outlines: 'auto',
                 ...(mode === 'mesh' && preload ? { renderMode: 'mesh' } : {}),
             });
 
@@ -239,7 +242,9 @@ export function oursSide(PIXI, lib, skinning = null) {
                 ...(idle ? { idleCache: 'auto' } : {}),
                 ...(skinning ? { skinning } : {}),
                 ...(bake ? { bake } : {}),
-                ...(instancing ? { instancing } : {}),
+                // instancing is in no preset: a side with skinning on the GPU names it, as it was the
+                // default when the check was written, and a side that draws alone turns it off
+                ...(instancing ? { instancing } : skinning === 'gpu' ? { instancing: 'auto' } : {}),
             });
 
             for (let tries = 0; bake && spine.engine.source === null; tries++) {

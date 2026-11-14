@@ -11,7 +11,7 @@ import source from '../snippets/good-to-know.ts?raw';
 
 - **Skeletons share draw calls.** Skeletons of up to 1024 vertices are batched: 200 instances of a small rig draw in one call. A Pixi object between two skeletons in the draw order ends a batch, so keep skeletons next to each other in the display list.
 - **A skeleton at rest costs close to nothing.** When its animation ended, or it never played one, no timeline runs and nothing is uploaded. It wakes with the next `play`.
-- **Less overdraw.** After a load the page images are read in idle time. From then on a region without a visible pixel is not drawn, and a slot behind the opaque part of a later slot is skipped. The picture stays the same.
+- **Less overdraw, with outlines.** Write the outlines of an atlas at build time with `pixi-marrow outlines` and pass the file as `outlines`. A region without a visible pixel is then not drawn, and a slot behind the opaque part of a later slot is skipped. The picture stays the same. Outlines are off by default.
 
 ## Render mode
 
@@ -36,7 +36,7 @@ The report lists what the runtime decided for this instance and why: draw calls,
 | What | Supported |
 |---|---|
 | Spine | Exports of 4.1, 4.2 and 4.3, as `.json` or `.skel` |
-| PixiJS | Version 8, from 8.16 |
+| PixiJS | Version 8, from 8.21 |
 | Renderer | WebGL2 and WebGPU |
 
 Every constraint is solved: IK, transform, path, physics and sliders. Clipping works.

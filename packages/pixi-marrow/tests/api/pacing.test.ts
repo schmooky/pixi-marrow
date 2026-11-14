@@ -42,7 +42,17 @@ describe('the perf presets', () => {
         expect([...mixed.given].sort()).toEqual(['lod', 'offscreen']);
         expect(resolvePerf('fast').given.size).toBe(0);
         // an option left undefined takes the preset
-        expect(resolvePerf('balanced', { tightMesh: undefined }).tightMesh).toBe('on');
+        expect(resolvePerf('fast', { updateRate: undefined }).updateRate).toBe(30);
+        // the presets set when a skeleton updates, and nothing that costs memory or vertices
+        for (const preset of ['balanced', 'fast'] as const) {
+            expect(resolvePerf(preset)).toMatchObject({
+                tightMesh: 'auto',
+                bake: 'off',
+                idleCache: 'off',
+                lod: 'off',
+                instancing: 'off',
+            });
+        }
     });
 
     it('throw for a preset or a value that does not exist, with the closest name', () => {

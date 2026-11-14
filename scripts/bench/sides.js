@@ -36,7 +36,13 @@ export function oursSide(lib) {
             // The code of the mesh mode loads on demand. A page whose instances ask for that mode
             // by name loads its asset for it, which waits for the code. Without that they would
             // draw in a batch until it arrives
-            const asset = await lib.MarrowAsset.load({ skeleton, atlas, ...(mesh ? { renderMode: 'mesh' } : {}) });
+            // the outlines are read as in the earlier benches, where the scan was the default
+            const asset = await lib.MarrowAsset.load({
+                skeleton,
+                atlas,
+                outlines: 'auto',
+                ...(mesh ? { renderMode: 'mesh' } : {}),
+            });
 
             // the outlines are read in idle time after the load. The cuts of overdraw need them
             await asset.optimized;

@@ -8,7 +8,7 @@
  *                      [--render-mode=auto|mesh|batched] [--mesh=verdict|all|none]
  *                      [--rigs=4.2/tank-pro,raptor] [--instances=1,50,200] [--renderer=webgl|webgpu|both]
  *                      [--runs=3] [--frames=200] [--warmup=40] [--size=1280x720] [--out=.bench]
- *                      [--memory=all|off] [--dist=<folder>] [--pixi=8.16] [--baseline=<file>]
+ *                      [--memory=all|off] [--dist=<folder>] [--pixi=8.21] [--baseline=<file>]
  *                      [--write-baseline] [--check] [--idle-cache=off|compare] [--skinning=gpu] [--bake]
  *                      [--instancing=compare]
  *

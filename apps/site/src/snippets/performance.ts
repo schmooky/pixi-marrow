@@ -5,6 +5,7 @@ import { addBakedClips, decodeBakedClips } from 'pixi-marrow/bake';
 const coin = await MarrowSpine.load({ skeleton: 'coin.skel', atlas: 'coin.atlas', perf: 'balanced' });
 
 console.log(coin.perfSettings.offscreen); // 'throttle'
+console.log(coin.perfSettings.bake); // 'off': no preset bakes
 // #endregion
 
 // #region settings

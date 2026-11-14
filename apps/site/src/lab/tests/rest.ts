@@ -23,7 +23,7 @@ export default defineTest({
     sides: [
         { name: 'live', options: {} },
         { name: 'idle cache', options: { idleCache: 'auto' } },
-        { name: 'balanced', options: { perf: 'balanced' } },
+        { name: 'bake', options: { bake: 'auto' } },
     ],
     build(context) {
         const rigs = Array.from({ length: context.count }, (_, index) => RIGS[index % RIGS.length] ?? 'animation_a');

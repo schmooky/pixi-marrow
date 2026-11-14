@@ -35,10 +35,14 @@ export interface MarrowLoadOptions {
      * is skipped and a region without a visible pixel is not drawn. The picture stays the same.
      * `tightMesh: 'on'` of a display object also needs them.
      *
-     * - `auto` (the default) reads the page images in idle time after the load. See `MarrowAsset.optimized`.
-     * - `off` loads none: every region stays a quad and every slot is drawn.
+     * - `off` (the default) loads none: every region stays a quad and every slot is drawn.
      * - A string is the URL of the file that `pixi-marrow outlines` wrote. It is fetched during the load.
+     *   This is the way for a game: the outlines are read once at build time.
      * - An object is the parsed content of such a file.
+     * - `auto` reads the page images in idle time after the load. See `MarrowAsset.optimized`.
+     *   Each page is drawn into a canvas to read its pixels, which takes 8 bytes per pixel of
+     *   the page for a moment, 32 MB for a page of 2048 by 2048. A phone with little memory can
+     *   fail or stall on that, so it is set by name.
      *
      * A file or an object that does not fit the atlas throws.
      */
@@ -60,8 +64,8 @@ export interface MarrowAssetData {
     /** One texture per atlas page, in page order. */
     textures: readonly Texture[];
     /**
-     * Where the outlines of the atlas regions come from: `auto` (the default) reads the page
-     * textures in idle time, `off` uses none, an object is checked against the atlas and used.
+     * Where the outlines of the atlas regions come from: `off` (the default) uses none, an object
+     * is checked against the atlas and used, `auto` reads the page textures in idle time.
      */
     outlines?: 'auto' | 'off' | AtlasOutlines;
     /** The render mode the display objects will ask for, see `MarrowLoadOptions.renderMode`. Default `auto`. */
@@ -96,7 +100,7 @@ let nextOutlineId = 1;
 
 /** How the outlines option reads in the key of a load. Two objects are two keys. */
 function outlinesKey(outlines: MarrowLoadOptions['outlines']): string {
-    if (outlines === undefined || typeof outlines === 'string') return outlines ?? 'auto';
+    if (outlines === undefined || typeof outlines === 'string') return outlines ?? 'off';
     let id = outlineIds.get(outlines);
 
     if (id === undefined) {
@@ -150,7 +154,7 @@ async function readSkeleton(
 
 /** The parsed outlines file of a load, or what the option says when it names no file. */
 async function readOutlines(outlines: MarrowLoadOptions['outlines']): Promise<unknown> {
-    if (typeof outlines !== 'string' || outlines === 'auto' || outlines === 'off') return outlines ?? 'auto';
+    if (typeof outlines !== 'string' || outlines === 'auto' || outlines === 'off') return outlines ?? 'off';
     const response = await fetchFile(outlines, 'outlines file');
 
     try {
@@ -170,8 +174,8 @@ async function readOutlines(outlines: MarrowLoadOptions['outlines']): Promise<un
  * demand, so a load without outlines does not pay for either.
  */
 async function checkOutlines(outlines: unknown, atlas: AtlasModel): Promise<AtlasOutlines | 'auto' | undefined> {
-    if (outlines === 'off') return undefined;
-    if (outlines === undefined || outlines === 'auto') return 'auto';
+    if (outlines === undefined || outlines === 'off') return undefined;
+    if (outlines === 'auto') return 'auto';
     const [{ readAtlasOutlines }] = await Promise.all([import('../geometry/outlines'), loadCutCode()]);
 
     return readAtlasOutlines(outlines, atlas);

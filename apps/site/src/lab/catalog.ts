@@ -10,7 +10,7 @@ export const CATALOG: readonly LabInfo[] = [
     {
         name: 'grid',
         title: 'Slot grid',
-        question: 'Which settings draw a grid of slot symbols fastest on this device?',
+        question: 'Which options draw a grid of slot symbols fastest on this device?',
         scene: (count) =>
             `A grid of ${count} Bzzz symbols spins, lands and shows two line wins, again and again, as the reels of a slot game do.`,
         count: 15,

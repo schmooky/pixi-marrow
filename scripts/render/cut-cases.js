@@ -121,6 +121,7 @@ export async function premultipliedReadingCase(env, core) {
             model: await core.importSkeleton(SPOT_SKELETON),
             atlas: core.importAtlas(SPOT_ATLAS.join('\n')),
             textures: [texture],
+            outlines: 'auto',
         });
 
         await asset.optimized;
@@ -181,6 +182,7 @@ export async function multisampledCase(env, plan, mode = 'mesh') {
         const asset = await lib.MarrowAsset.load({
             skeleton: url(plan.files.skel),
             atlas: url(plan.files.atlas),
+            outlines: 'auto',
             ...modeOptions(mode),
         });
 

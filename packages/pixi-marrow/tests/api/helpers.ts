@@ -42,10 +42,10 @@ export function blankTexture(): Texture {
 }
 
 /** An asset from a fixture, with a blank texture per atlas page. */
-export async function fixtureAsset(id: string): Promise<MarrowAsset> {
+export async function fixtureAsset(id: string, options: { outlines?: 'auto' | 'off' } = {}): Promise<MarrowAsset> {
     const { model, atlas } = await importRig(id);
 
-    return MarrowAsset.from({ model, atlas, textures: atlas.pages.map(() => Texture.WHITE) });
+    return MarrowAsset.from({ model, atlas, textures: atlas.pages.map(() => Texture.WHITE), ...options });
 }
 
 /**

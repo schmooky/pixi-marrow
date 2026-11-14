@@ -94,7 +94,8 @@ async function runtimeOf(kit, job) {
             async create(names) {
                 const spine = lib.MarrowSpine.from({ ...names, autoUpdate: false });
 
-                // the main check draws ours with its outlines, so this page does too
+                // an asset of Pixi's loader has no outlines, the default. The cuts change no pixel,
+                // so the picture is the one the main check draws with them
                 await spine.asset.optimized;
 
                 return spine;

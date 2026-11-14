@@ -30,7 +30,8 @@ export async function boyAsset(options: { outlines?: 'auto' | 'off' | AtlasOutli
 }> {
     const { model } = await importRig('4.2/spineboy-pro.skel');
     const { atlas, pages, textures } = await pixelPages('4.2/spineboy.atlas');
-    const asset = await MarrowAsset.from({ model, atlas, textures, ...options });
+    // a scan of the page images, which is what the tests of outlines look at, unless they say otherwise
+    const asset = await MarrowAsset.from({ model, atlas, textures, outlines: 'auto', ...options });
 
     return { asset, built: buildAtlasOutlines(atlas, pages), textures };
 }

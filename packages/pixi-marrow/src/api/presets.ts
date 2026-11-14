@@ -24,18 +24,25 @@ export interface PerfSettings {
     /**
      * `auto` draws the instances that follow each other in Pixi's render order and share a layout
      * as one instanced draw, where the vertex shader places their vertices: the mesh mode with
-     * `skinning: 'gpu'`. The picture is the same to the bit. `off` draws each instance alone.
+     * `skinning: 'gpu'`. The picture is the same to the bit. It pays for many copies of one rig
+     * next to each other, and not for a grid of different skeletons. No preset sets it. `off`
+     * (the default) draws each instance alone.
      */
     instancing: 'auto' | 'off';
     /**
      * `auto` plays an animation from frames baked at load time, where it can be: one track, no
      * mix, no physics, no handle that writes a bone. The pose equals the played one at the
-     * baked frames. A list bakes the named animations only. `off` (the `exact` default) bakes nothing.
+     * baked frames. A list bakes the named animations only. A baked clip keeps 23 KB to 0.9 MB per
+     * animation and skin for the life of the asset, so it is set by name. `off` (the default)
+     * bakes nothing.
      */
     bake: BakeMode;
     /**
      * `auto` draws a skeleton that rests as one image, taken once it has rested a moment, until
-     * it changes. It costs texture memory. `off` (the `exact` default) always draws the skeleton.
+     * it changes. No preset sets it. Each image is a texture of its own, of 4 bytes per pixel of
+     * its box, so many images take memory and split a batch into more draw calls. A small
+     * skeleton at rest costs little to draw live, so the cache can make a frame slower. `off`
+     * (the default) always draws the skeleton.
      */
     idleCache: 'off' | 'auto';
     /**
@@ -52,7 +59,8 @@ export interface PerfSettings {
     /**
      * `auto` leaves physics and deform out while the skeleton is drawn smaller than 96 pixels
      * across. The bones keep the pose of the animations, and every mesh shows its setup vertices.
-     * Both come back at 120 pixels, physics with a reset. `off` (the `exact` default) always runs them.
+     * Both come back at 120 pixels, physics with a reset. No preset sets it. `off` (the default)
+     * always runs them.
      */
     lod: 'off' | 'auto';
 }
@@ -65,12 +73,17 @@ export interface PerfOptions extends Partial<PerfSettings> {
     preset?: PerfPreset;
 }
 
-/** What each preset sets. `fast` sets an update rate of 30 for skeletons that the batched mode draws. */
+/**
+ * What each preset sets: when a skeleton updates. `fast` sets an update rate of 30 for skeletons
+ * that the batched mode draws. No preset sets `tightMesh: 'on'`, `bake`, `idleCache`, `lod` or
+ * `instancing`. Each costs memory, vertices or draw calls in a way that depends on the device and
+ * the scene, so each one is set by its own name.
+ */
 export const PERF_PRESETS: Readonly<Record<PerfPreset, Readonly<PerfSettings>>> = Object.freeze({
     exact: Object.freeze({
         tightMesh: 'auto',
         skinning: 'auto',
-        instancing: 'auto',
+        instancing: 'off',
         bake: 'off',
         idleCache: 'off',
         offscreen: 'update',
@@ -78,24 +91,24 @@ export const PERF_PRESETS: Readonly<Record<PerfPreset, Readonly<PerfSettings>>> 
         lod: 'off',
     }),
     balanced: Object.freeze({
-        tightMesh: 'on',
+        tightMesh: 'auto',
         skinning: 'auto',
-        instancing: 'auto',
-        bake: 'auto',
-        idleCache: 'auto',
+        instancing: 'off',
+        bake: 'off',
+        idleCache: 'off',
         offscreen: 'throttle',
         updateRate: 'display',
         lod: 'off',
     }),
     fast: Object.freeze({
-        tightMesh: 'on',
+        tightMesh: 'auto',
         skinning: 'auto',
-        instancing: 'auto',
-        bake: 'auto',
-        idleCache: 'auto',
+        instancing: 'off',
+        bake: 'off',
+        idleCache: 'off',
         offscreen: 'pause',
         updateRate: 30,
-        lod: 'auto',
+        lod: 'off',
     }),
 });
 

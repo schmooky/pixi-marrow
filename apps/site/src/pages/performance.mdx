@@ -17,13 +17,16 @@ Most of the speed of pixi-marrow needs no option. See [what is automatic](/good-
 
 | Setting | `exact` | `balanced` | `fast` |
 |---|---|---|---|
-| `tightMesh` | `auto` | `on` | `on` |
-| `bake` | `off` | `auto` | `auto` |
-| `idleCache` | `off` | `auto` | `auto` |
+| `tightMesh` | `auto` | `auto` | `auto` |
+| `bake` | `off` | `off` | `off` |
+| `idleCache` | `off` | `off` | `off` |
 | `offscreen` | `update` | `throttle` | `pause` |
 | `updateRate` | `display` | `display` | 30 for batched skeletons |
-| `lod` | `off` | `off` | `auto` |
+| `lod` | `off` | `off` | `off` |
 | `skinning` | `auto` | `auto` | `auto` |
+| `instancing` | `off` | `off` | `off` |
+
+The presets set when a skeleton updates, and nothing else. `tightMesh: 'on'`, `bake`, `idleCache`, `lod` and `instancing` cost memory, vertices or draw calls in a way that depends on the device and the scene, so set each by name where it pays.
 
 ## Change one setting
 
@@ -36,10 +39,10 @@ A `perf` object starts from its `preset` and changes the settings it names. An o
 - **`offscreen`.** A skeleton is off the screen when its bounds lie outside the screen, or when no render reached it for a tenth of a second. `throttle` updates it 4 times a second with the time that passed, so events fire late. `pause` stops its time until it is back.
 - **`updateRate`.** A number poses the skeleton at most that many times a second, with the time of the frames in between. Motion steps at low rates. The rate of `fast` applies to batched skeletons only, unless you set it by name.
 - **`lod`.** `auto` leaves physics and deform out while the skeleton is drawn smaller than 96 pixels across. Meshes then show their setup shape. Both come back at 120 pixels, physics with a reset, so nothing jumps.
-- **`idleCache`.** `auto` draws a skeleton that rested for 30 updates as one image, until its pose or its place changes. The image takes 4 bytes per pixel of its box on the screen. A slot that multiplies or screens keeps the skeleton live.
-- **`tightMesh`.** `on` draws every region as the polygon around its visible pixels. Some pixels move by 1 of 255 levels.
-- **`bake`.** `auto` plays an animation from frames baked once, while it plays alone on track 0. The engine still runs the tracks and fires the events. Between two frames, 60 a second, the frame before is shown. A skin with physics or a slider is never baked.
-- **`skinning`.** `gpu` places the vertices of the mesh mode in the vertex shader from the bones, so a moving skeleton uploads its bones and not its vertices. Copies of one rig that follow each other in the display list then draw in one instanced call, which `instancing: 'off'` turns off. That pays for many copies of one rig. A grid of different symbols draws in fewer calls in the batched mode, so `auto` stays `cpu`.
+- **`idleCache`.** `auto` draws a skeleton that rested for 30 updates as one image, until its pose or its place changes. The image takes 4 bytes per pixel of its box on the screen. A slot that multiplies or screens keeps the skeleton live. Every image is a texture of its own, so many images split a batch into more draw calls. On a low-end phone 120 small resting symbols drew slower with the cache than without.
+- **`tightMesh`.** `on` draws every region as the polygon around its visible pixels. Some pixels move by 1 of 255 levels. It needs the outlines of the atlas, and adds 13 to 94 percent vertices on the rigs of the bench.
+- **`bake`.** `auto` plays an animation from frames baked once, while it plays alone on track 0. A clip keeps 23 KB to 0.9 MB per animation and skin. The engine still runs the tracks and fires the events. Between two frames, 60 a second, the frame before is shown. A skin with physics or a slider is never baked.
+- **`skinning`.** `gpu` places the vertices of the mesh mode in the vertex shader from the bones, so a moving skeleton uploads its bones and not its vertices. With `instancing: 'auto'` copies of one rig that follow each other in the display list then draw in one instanced call. That pays for many copies of one rig. A grid of different symbols draws in fewer calls in the batched mode, so `auto` stays `cpu`.
 
 ## Bake at build time
 

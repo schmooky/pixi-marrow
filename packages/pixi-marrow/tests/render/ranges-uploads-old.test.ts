@@ -9,7 +9,7 @@ import { drawPose, loadRig, meshes, play, type Rig, slotIndex, step } from './ri
  * 8.16.0, and the uploads are followed as that Pixi makes them.
  */
 
-vi.mock('pixi.js', async (original) => ({ ...(await original<typeof import('pixi.js')>()), VERSION: '8.16.0' }));
+vi.mock('pixi.js', async (original) => ({ ...(await original<typeof import('pixi.js')>()), VERSION: '8.21.0' }));
 
 const skinOf = (rig: Rig, name: string): number => rig.model.skins.findIndex((skin) => skin.name === name);
 
