@@ -66,6 +66,7 @@ export const definePreview = (preview: Preview): Preview => preview;
 const PREVIEWS: Record<string, Loader> = {
     play: () => import('./play'),
     anatomy: () => import('./anatomy'),
+    timeline: () => import('./timeline'),
     placeholders: () => import('./placeholders'),
     debug: () => import('./debug'),
     reels: () => import('./reels'),
