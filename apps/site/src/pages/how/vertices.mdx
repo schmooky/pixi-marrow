@@ -48,7 +48,7 @@ An animation can move the vertices of a mesh directly too, with deform keys. The
 
 A region costs 4 vertices, however it moves. A mesh costs as many vertices as it has, and a weighted vertex costs work for every bone it follows. The attachments of the bee add up to 161 vertices: 21 regions of 4, and 6 meshes with 77.
 
-A skeleton of up to 1024 vertices is batched with the skeletons around it, so the bee and every symbol of the set share draw calls. A larger one gets meshes of its own.
+A skeleton of up to 1024 vertices is batched with the skeletons around it, so the bee and the other skeletons of its set share draw calls. A larger one gets meshes of its own.
 
 ## What pixi-marrow does
 

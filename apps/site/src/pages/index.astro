@@ -3,7 +3,7 @@ import CopyCommand from '../components/CopyCommand.astro';
 import Preview from '../components/Preview.astro';
 import Snippet from '../components/Snippet.astro';
 import Base from '../layouts/Base.astro';
-import { PAGES, SITE } from '../lib/site';
+import { pagesOf, SECTIONS, SITE } from '../lib/site';
 import source from '../previews/play.ts?raw';
 
 const arrow = 'M5 12h14M13 6l6 6-6 6';
@@ -23,7 +23,7 @@ const arrow = 'M5 12h14M13 6l6 6-6 6';
                 </a>
                 <CopyCommand command={SITE.install} />
             </div>
-            <p class="hero-note">The package is a pre-release and is not on npm yet.</p>
+            <p class="hero-note">The package is a pre-release, so its API can still change.</p>
         </div>
         <div class="container-page home-demo">
             <Preview name="play" height={400} caption="The bee of the slot game Bzzz, a rig of Spine 4.2. The Animation row lists what the rig that shows can play. The big bee flies across the reels, so it is shown from further away." />
@@ -33,12 +33,17 @@ const arrow = 'M5 12h14M13 6l6 6-6 6';
             </div>
         </div>
     </section>
-    <section class="container-page home-pages">
-        {PAGES.map((page) => (
-            <a href={page.href} class="card-link">
-                <strong>{page.title}</strong>
-                <span>{page.description}</span>
-            </a>
-        ))}
-    </section>
+    {SECTIONS.map((section) => (
+        <section class="container-page home-part">
+            <h2 class="home-part-title">{section}</h2>
+            <div class="home-pages">
+                {pagesOf(section).map((page) => (
+                    <a href={page.href} class="card-link">
+                        <strong>{page.title}</strong>
+                        <span>{page.description}</span>
+                    </a>
+                ))}
+            </div>
+        </section>
+    ))}
 </Base>

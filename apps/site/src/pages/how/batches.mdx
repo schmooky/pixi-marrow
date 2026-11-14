@@ -1,7 +1,7 @@
 ---
 layout: ../../layouts/Docs.astro
 title: Draw order and batches
-description: The vertices are ready, and the GPU has to be told to draw them. See how 15 symbols draw in one call, and what makes them take more.
+description: The vertices are ready, and the GPU has to be told to draw them. See how 15 skeletons draw in one call, and what makes them take more.
 ---
 
 import Preview from '../../components/Preview.astro';
@@ -18,7 +18,7 @@ Every two seconds a symbol wins in the preview. It grows a little, so it has to 
 
 The GPU draws when the CPU asks it to, with a draw call. A draw call names a shader, the textures to sample and how to blend the result over what is there. Each call costs time on the CPU and in the graphics driver, whatever it draws, and a phone has less of that time than a desktop.
 
-So the fewer calls a frame takes, the more of the frame is left for the game. A reel of symbols drawn in one call is the goal.
+So the fewer calls a frame takes, the more of the frame is left for the game. Many skeletons drawn in one call is the goal.
 
 ## A batch
 
@@ -38,7 +38,7 @@ Turn the switches on one at a time:
 - **multiply** makes one symbol multiply what is under it. That needs another blend state, so the frame takes 3 calls again. A slot that multiplies or screens inside a skeleton ends the batch the same way. Additive slots do not.
 - **meshes** switches every symbol to the mesh mode, where a skeleton draws its own mesh. The frame takes 15 calls. `renderMode: 'auto'` picks that mode for a skeleton of more than 1024 vertices, and the batched mode for every smaller one.
 
-A batch also ends when its skeletons need more than 16 atlas pages. So a symbol set on a few pages keeps its batches long.
+A batch also ends when its skeletons need more than 16 atlas pages. So a set of skeletons on a few pages keeps its batches long.
 
 ## Uploads
 

@@ -1,0 +1,50 @@
+---
+layout: ../../layouts/Docs.astro
+title: Mix and queue
+description: Play animations one after the other, blend one into the next, and layer them on tracks.
+---
+
+import Snippet from '../../components/Snippet.astro';
+import source from '../../snippets/guide-mix.ts?raw';
+
+## Queue
+
+<Snippet source={source} regions="queue" />
+
+`queue` plays an animation after what the track holds now, with no gap between them. On an empty track it plays at once. A short animation that ends in a loop is the common case: a bounce and then rest, a hit and then idle.
+
+<Snippet source={source} regions="delay" />
+
+`delay` above 0 starts the queued animation that many seconds after the one before it started. At 0 or below it counts from the end of the one before, less the mix, so a negative delay starts it a little early.
+
+## Mix
+
+When one animation replaces another, the pose would jump from one to the other. A mix blends them over some time instead: the outgoing animation fades while the incoming one grows.
+
+<Snippet source={source} regions="mix" />
+
+The mix comes from three places, and the most specific wins:
+
+- `mix` of `play` or `queue` holds for that one call.
+- `setMix` holds for one pair of animations.
+- `defaultMix` holds for every other pair. It is 0 unless you set it.
+
+`mix: 0` cuts at once. Use it where the change has to happen on a beat, such as a bounce that must start the moment something lands.
+
+A mix blends what moves: bones, colors and deforms. The image a slot shows does not fade. By default it switches when the mix starts, and the entry field `mixAttachmentThreshold` moves that point.
+
+## Layers
+
+<Snippet source={source} regions="layers" />
+
+Each track holds one animation, and a higher track applies over the lower ones. An animation on track 1 sets the bones and slots it keys, and the others keep what track 0 gives them. So an overlay can wave a hand while the legs keep walking.
+
+`alpha` applies a track part of the way. At 0.5 every value it keys sits half way between track 0 and track 1. `additive: true` adds what a track keys to the pose below it, instead of replacing it.
+
+<Snippet source={source} regions="fade" />
+
+`stop` with a mix fades a track out. A higher track fades back to what the tracks below it show.
+
+## What a mix costs
+
+During a mix both animations apply in every update, so a mix costs about two animations for its length. A track costs what its animation keys. [An animation](/how/animation/) shows how a time becomes a pose.

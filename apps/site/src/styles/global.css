@@ -194,6 +194,27 @@ pre {
 .nav-links a[aria-current="page"] {
     color: hsl(var(--foreground));
 }
+@media (max-width: 640px) {
+    /* on a phone the links take a second row of their own, so that none of them is cut */
+    .nav-row {
+        height: auto;
+        flex-wrap: wrap;
+        padding-top: 0.6rem;
+    }
+    .nav-brand {
+        flex: 1;
+    }
+    .nav-links {
+        order: 3;
+        height: 2.6rem;
+        flex-basis: 100%;
+        margin-inline: -0.5rem;
+    }
+    .nav-links a {
+        padding-inline: 0.5rem;
+        font-size: 0.82rem;
+    }
+}
 .nav-links a[aria-current="page"]::after {
     content: "";
     position: absolute;
@@ -621,10 +642,18 @@ pre {
     font-size: 13px;
     line-height: 1.7;
 }
+.home-part {
+    padding-top: 3.5rem;
+}
+.home-part-title {
+    margin-bottom: 1rem;
+    font-size: 1.15rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
 .home-pages {
     display: grid;
     gap: 1rem;
-    padding-top: 4rem;
 }
 @media (min-width: 720px) {
     .home-pages {
@@ -684,6 +713,27 @@ pre {
 .docs-header {
     margin-bottom: 2rem;
 }
+/* the pages of the part, for a screen too narrow for the side bar */
+.docs-part {
+    margin-top: 1.25rem;
+    border-width: 1px;
+    border-radius: 0.6rem;
+    padding: 0.6rem 0.85rem;
+    font-size: 0.9rem;
+}
+.docs-part summary {
+    cursor: pointer;
+    color: hsl(var(--muted-foreground));
+}
+.docs-part ol {
+    margin: 0.5rem 0 0.2rem;
+    padding-left: 1.4rem;
+    line-height: 1.9;
+}
+.docs-part li a[aria-current="page"] {
+    font-weight: 600;
+    color: hsl(var(--marrow-text));
+}
 .docs-header .display-3 {
     margin-top: 0.75rem;
 }
@@ -694,6 +744,9 @@ pre {
     .docs {
         grid-template-columns: 216px minmax(0, 1fr);
         padding-top: 0;
+    }
+    .docs-part {
+        display: none;
     }
     .docs-side {
         position: sticky;

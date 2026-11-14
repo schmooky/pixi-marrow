@@ -1,6 +1,6 @@
 ---
 import type { MarkdownHeading } from 'astro';
-import { type DocsSection, PAGES, pagesOf, SITE } from '../lib/site';
+import { PAGES, pagesOf, SECTIONS, SITE } from '../lib/site';
 import Base from './Base.astro';
 
 interface Props {
@@ -14,7 +14,6 @@ const index = PAGES.findIndex((page) => page.href === path);
 const previous = index > 0 ? PAGES[index - 1] : undefined;
 const next = index >= 0 ? PAGES[index + 1] : undefined;
 const sections = headings.filter((heading) => heading.depth === 2);
-const parts: DocsSection[] = ['Start', 'Slot guide', 'How it works', 'Reference'];
 const page = index >= 0 ? PAGES[index] : undefined;
 ---
 
@@ -22,9 +21,9 @@ const page = index >= 0 ? PAGES[index] : undefined;
     <div class="container-page docs">
         <aside class="docs-side">
             <nav aria-label="Docs">
-                {parts.map((part) => (
+                {SECTIONS.map((part) => (
                     <div class="docs-side-part">
-                        <div class="eyebrow">{part === 'Start' ? 'Docs' : part}</div>
+                        <div class="eyebrow">{part}</div>
                         <div>
                             {pagesOf(part).map((item) => (
                                 <a href={item.href} aria-current={item.href === path ? 'page' : undefined}>{item.title}</a>
@@ -36,9 +35,19 @@ const page = index >= 0 ? PAGES[index] : undefined;
         </aside>
         <article class="docs-article prose-docs">
             <header class="docs-header">
-                <div class="eyebrow">{page?.section === 'Slot guide' || page?.section === 'How it works' ? `${page.section}, step ${pagesOf(page.section).indexOf(page) + 1}` : 'Docs'}</div>
+                <div class="eyebrow">{page === undefined ? 'Docs' : page.section === 'Reference' ? 'Reference' : `${page.section}, step ${pagesOf(page.section).indexOf(page) + 1}`}</div>
                 <h1 class="display-3">{frontmatter.title}</h1>
                 <p class="lead">{frontmatter.description}</p>
+                {page && (
+                    <details class="docs-part">
+                        <summary>{page.section}: {pagesOf(page.section).length} pages</summary>
+                        <ol>
+                            {pagesOf(page.section).map((item) => (
+                                <li><a href={item.href} aria-current={item.href === path ? 'page' : undefined}>{item.title}</a></li>
+                            ))}
+                        </ol>
+                    </details>
+                )}
             </header>
             <slot />
             <nav aria-label="Previous and next page" class="pager">

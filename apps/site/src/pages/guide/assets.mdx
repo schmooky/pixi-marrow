@@ -1,0 +1,44 @@
+---
+layout: ../../layouts/Docs.astro
+title: Assets and copies
+description: A skeleton is loaded once and shown as often as a scene needs. Load with pixi-marrow or with Pixi Assets, and keep copies at hand.
+---
+
+import Snippet from '../../components/Snippet.astro';
+import source from '../../snippets/guide-assets.ts?raw';
+
+## An asset and its copies
+
+A game often shows one skeleton many times: a crowd, a row of coins, the symbols of a reel. pixi-marrow splits what all of them share from what each one keeps.
+
+<Snippet source={source} regions="load" />
+
+`MarrowAsset.load` reads a skeleton and its atlas into an asset. The asset holds the skeleton data, the atlas, one texture per atlas page and the code that poses the skeleton. Assets that name the same atlas share its pages, so a set of skeletons on one atlas loads its images once.
+
+A second load of the same files with the same options returns the same asset. So two parts of a game can load a skeleton without knowing about each other.
+
+## Make copies
+
+<Snippet source={source} regions="copies" />
+
+`new MarrowSpine(asset)` makes a copy that plays on its own. A copy keeps its pose, its tracks and its draw buffers, and shares everything else. It is a Pixi `Container`, so it goes into any container like other display objects.
+
+`MarrowSpine.load` from [Start](/start/) does both at once: it loads the asset, or takes the one loaded before, and makes a copy.
+
+## Load with Pixi Assets
+
+<Snippet source={source} regions="assets" />
+
+`registerMarrowAssets` teaches Pixi `Assets` the Spine files: `.skel`, Spine `.json` and `.atlas`. Call it once, before the first load. Aliases, manifests and bundles then load them, also as AssetPack writes them. `MarrowAsset.get` returns the asset of files that `Assets` loaded, at once.
+
+An atlas named like `hero@0.5x.webp.atlas` counts as resolution 0.5 in WebP, so `texturePreference` picks among its variants. Unloading an atlas destroys the assets made from it, so destroy their copies first.
+
+## Keep copies in a pool
+
+<Snippet source={source} regions="pool" />
+
+Making a copy allocates its pose and its buffers, and destroying it frees them. A scene that shows and hides copies often, such as a reel that brings in a new symbol many times a spin, is better off with a pool. A copy from the pool still holds its last pose, so stop it and set its setup pose before it shows again.
+
+## Keep copies together
+
+Copies that follow each other in the display list share draw calls, when each has up to 1024 vertices. Any other Pixi object between two of them ends that batch. So put the skeletons of a scene into one container, and texts, frames and effects above or below it. [Draw order and batches](/how/batches/) shows why.

@@ -1,0 +1,42 @@
+---
+layout: ../../layouts/Docs.astro
+title: Events
+description: React to moments that the animator marked in an animation, and to the life of each track, without guessing times in code.
+---
+
+import Snippet from '../../components/Snippet.astro';
+import source from '../../snippets/guide-events.ts?raw';
+
+## Keys the animator placed
+
+An animator marks moments in an animation with event keys: a footstep, a hit, the moment a coin is collected. The game listens for them instead of guessing the time in code, so a change to the animation keeps the sound on its beat.
+
+<Snippet source={source} regions="keys" />
+
+The coin of Bzzz fires `onCollect` 0.23 seconds into its `collect`, and `onSound` 0.53 seconds into its `second_chance`. The bee fires `onBeeWow` 0.33 seconds into its `win`.
+
+An event carries a name and the values the animator set: `int`, `float`, `string`, and `volume` and `balance` for an event with audio. It also carries `time`, where it sits in the animation. The listener gets the `Track` of the animation as well.
+
+An event fires in the update in which the time of its animation passes it. An animation that mixes out fires none, unless its `eventThreshold` lets it.
+
+## The life of a track
+
+<Snippet source={source} regions="life" />
+
+Each animation on a track goes through these, in order:
+
+- `start` when it begins to play.
+- `complete` each time it reaches its end. A loop completes once per loop.
+- `interrupt` when another animation replaces it, before its mix out.
+- `end` when it leaves the track, after its mix out.
+- `dispose` when the runtime drops it, after `end`.
+
+## Waiting for an animation
+
+<Snippet source={source} regions="cut" />
+
+`finished` resolves when an animation that does not loop has played to its end, or when it leaves the track for any other reason. To know which it was, listen for `interrupt` and compare its `Track` with the one `play` returned. That keeps a sequence from going on after something else took over the skeleton.
+
+## Cost
+
+An event key costs nothing while nobody listens for `event`. The runtime collects the events of an update and emits them after it, so a listener can call `play` safely.

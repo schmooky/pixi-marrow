@@ -1,0 +1,48 @@
+---
+layout: ../../layouts/Docs.astro
+title: Size and units
+description: The animator drew in units of the Spine editor, and the screen has pixels. Fit a skeleton to a place on the screen, and know what its scale changes.
+---
+
+import Snippet from '../../components/Snippet.astro';
+import source from '../../snippets/guide-size.ts?raw';
+
+## Skeleton units are not pixels
+
+The animator draws in the units of the Spine editor. A skeleton 300 units wide shows 300 pixels wide at scale 1. The layout of a game has its own sizes, so most skeletons need a scale.
+
+The origin of a skeleton is where the animator put the root bone. That can be its middle, its feet or a corner. So place a skeleton by its box, not by its origin.
+
+## Measure the setup pose once
+
+<Snippet source={source} regions="measure" />
+
+Measure the setup pose, not the current frame. A glow grows and a jump goes up, so the box of a playing skeleton changes every frame, and anything fitted to it would jump. Measure once per asset and keep the box with it.
+
+## Fit a box
+
+<Snippet source={source} regions="fit" />
+
+Fitted each by its own box, a small skeleton grows and a large one shrinks. Within a set of skeletons that belong together, that changes the sizes the designer chose.
+
+## Or use the design frame
+
+<Snippet source={source} regions="design" />
+
+Skeletons that belong together are often drawn on one frame, such as the symbols of a slot game on 256 by 256 units. Ask the animator for that frame. One scale for the whole set keeps the sizes as designed, and a glow may reach beyond the frame as intended.
+
+## What the scale changes
+
+The scale of the container scales the picture. The skeleton inside keeps its units, so what you read from it is in skeleton units, in the space of the display object:
+
+- `bone(name).worldX` and `worldY`, and the points of `localToWorld`.
+- `getLocalBounds()`.
+- `physicsTranslate`, which takes the distance the skeleton moved. Moved 20 pixels on the stage, it moved `20 / scale` units.
+
+<Snippet source={source} regions="units" />
+
+`toGlobal` turns a point of the skeleton into a point of the stage, with its scale and place. A container that `follow` or `attach` puts into the skeleton is scaled with it.
+
+The scale is also the one a game tweens. A pop to 1.2 times the size multiplies the base scale, and goes back to it.
+
+The official runtime can also scale a skeleton while it loads, so that bones and bounds come out in pixels. pixi-marrow scales with the container only.

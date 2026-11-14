@@ -30,7 +30,7 @@ In the win, 95 moves between keys are bezier, 87 stepped and 13 linear. The keys
 
 The rows that start with `slot` change slots. A white square swaps the image a slot shows: the hands of the bee come out and the open smile takes the place of the joy face. The pink dots change the color of the closed eyes, which fade in and out.
 
-This is how a symbol turns blurred and dims as well. Its `blur_in` swaps images and its `disable` changes colors. Pick `blur_in` to see it.
+This is how the bee turns blurred and dims as well. Its `blur_in` swaps images and its `disable` changes colors. Pick `blur_in` to see it.
 
 ## Events
 
@@ -49,4 +49,4 @@ pixi-marrow computes every value with the same arithmetic as the official runtim
 What it skips is work that cannot change the picture:
 
 - An animation that would apply the same values as in the update before is left out. That is an animation past its end, or one whose timelines all hold one value, such as `disable`.
-- A bone is posed again only when its own values, its parent or the place of the skeleton changed. A symbol at rest so costs close to nothing.
+- A bone is posed again only when its own values, its parent or the place of the skeleton changed. A skeleton at rest so costs close to nothing.

@@ -724,6 +724,14 @@ Measured on pixi-silk today. Docs: 33 guide pages with 27,700 words, `llms-full.
 
 Budget: at most 10 guide pages and 6,000 words in total. Each page has one runnable example and at most one table.
 
+Change after M9: the user asked for docs that guide and explain, not only list the API. So the site has three parts, and the budget above no longer holds. On 2026-11-14 they were 18 pages and about 8,000 words:
+
+- **Guide**, 8 pages: start, assets and copies, size and units, play, mix and queue, events, skins and slots, bones and attachments. It is about animation in general. Its examples use the Bzzz slot symbols, because most users come from slot games.
+- **How it works**, 6 pages: anatomy of a skeleton, an animation, the pose, vertices, draw order and batches, why it is fast. Each has a live preview that takes the runtime apart on the Bzzz rigs. They explain why the runtime does what it does, and what makes a scene slow.
+- **Reference**, 4 pages: performance, debug overlays, good to know, an example with reels.
+
+The top bar names the three parts, the playground and the lab. The sidebar lists the pages of each part.
+
 1. Start: install, load, play
 2. Animations: tracks, queue, mix, events
 3. Skins and attachments
