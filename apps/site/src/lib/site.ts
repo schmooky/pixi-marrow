@@ -8,10 +8,14 @@ export const SITE = {
 };
 
 /**
- * The parts of the docs, in reading order. The slot guide builds a slot game step by step. How
- * it works takes the runtime apart, so that the reader sees why it does what it does.
+ * The parts of the docs, in reading order. The guide shows how to load, play and control
+ * animations, one step at a time. How it works takes the runtime apart, so that the reader sees
+ * why it does what it does. The reference holds what a game looks up.
  */
-export type DocsSection = 'Start' | 'Slot guide' | 'How it works' | 'Reference';
+export type DocsSection = 'Guide' | 'How it works' | 'Reference';
+
+/** The parts in the order the navigation shows them. */
+export const SECTIONS: readonly DocsSection[] = ['Guide', 'How it works', 'Reference'];
 
 /** A page of the docs, as the navigation lists it. */
 export interface DocsPage {
@@ -27,79 +31,91 @@ export const PAGES: readonly DocsPage[] = [
     {
         href: '/start/',
         title: 'Start',
-        description: 'Install, load, play, queue, mix, events and skins.',
-        section: 'Start',
+        description: 'Install, load a skeleton and play an animation.',
+        section: 'Guide',
     },
     {
-        href: '/guide/symbol-set/',
-        title: 'A symbol set',
-        description: 'Load each symbol once and make as many copies as the reels show.',
-        section: 'Slot guide',
+        href: '/guide/assets/',
+        title: 'Assets and copies',
+        description: 'Load a skeleton once, show it many times, and load with Pixi Assets.',
+        section: 'Guide',
     },
     {
-        href: '/guide/cell/',
-        title: 'A symbol in its cell',
-        description: 'Size a symbol for the cells of the reels, and what its scale changes.',
-        section: 'Slot guide',
+        href: '/guide/size/',
+        title: 'Size and units',
+        description: 'Fit a skeleton to a place on the screen, and what its scale changes.',
+        section: 'Guide',
     },
     {
-        href: '/guide/states/',
-        title: 'Symbol states',
-        description: 'Idle, landing, win, dimmed and blurred, and how a symbol moves between them.',
-        section: 'Slot guide',
+        href: '/guide/play/',
+        title: 'Play',
+        description: 'Loops, speed, stopping, poses that hold, and knowing when an animation ends.',
+        section: 'Guide',
+    },
+    {
+        href: '/guide/mix/',
+        title: 'Mix and queue',
+        description: 'Blend one animation into the next, queue them, and layer them on tracks.',
+        section: 'Guide',
+    },
+    {
+        href: '/guide/events/',
+        title: 'Events',
+        description: 'Keys that the animator placed, and the life of a track.',
+        section: 'Guide',
+    },
+    {
+        href: '/skins-and-slots/',
+        title: 'Skins and slots',
+        description: 'Several skins at once, slot images and colors, and the setup pose.',
+        section: 'Guide',
+    },
+    {
+        href: '/bones-and-placeholders/',
+        title: 'Bones and attachments',
+        description: 'Read a bone, follow it, and put your own Pixi objects into a skeleton.',
+        section: 'Guide',
     },
     {
         href: '/how/anatomy/',
-        title: 'Anatomy of a symbol',
-        description: 'Bones, slots, attachments, skins and the atlas, taken apart on the Bzzz symbols.',
+        title: 'Anatomy of a skeleton',
+        description: 'Bones, slots, attachments, skins and the atlas, taken apart live.',
         section: 'How it works',
     },
     {
         href: '/how/animation/',
         title: 'An animation',
-        description: 'Timelines, keys, curves and events, on the win of the bee, and how a time becomes a pose.',
+        description: 'Timelines, keys, curves and events, and how a time becomes a pose.',
         section: 'How it works',
     },
     {
         href: '/how/pose/',
         title: 'The pose',
-        description: 'Local and world transforms, what follows a bone, constraints, and what pixi-marrow skips.',
+        description: 'Local and world transforms, what follows a bone, constraints, and what is skipped.',
         section: 'How it works',
     },
     {
         href: '/how/vertices/',
         title: 'Vertices',
-        description: 'Regions and weighted meshes become triangles, and each vertex takes its pixels from the atlas.',
+        description: 'Regions and weighted meshes become triangles that take their pixels from the atlas.',
         section: 'How it works',
     },
     {
         href: '/how/batches/',
         title: 'Draw order and batches',
-        description: 'How 15 symbols draw in one call, why additive slots stay in it, and what ends a batch.',
+        description: 'How many skeletons draw in one call, and what ends a batch.',
         section: 'How it works',
     },
     {
-        href: '/bones-and-placeholders/',
-        title: 'Bones and placeholders',
-        description: 'Read a bone and put your own Pixi objects into a rig.',
-        section: 'Reference',
-    },
-    {
-        href: '/skins-and-slots/',
-        title: 'Skins and slots',
-        description: 'Several skins at once, slot attachments and colors, and the setup pose.',
-        section: 'Reference',
-    },
-    {
-        href: '/reels/',
-        title: 'Reels',
-        description: 'The reels of a slot game, spun by pixi-reels and drawn by pixi-marrow, with line wins.',
-        section: 'Reference',
+        href: '/how/fast/',
+        title: 'Why it is fast',
+        description: 'What a frame leaves out, shown live, and what still makes a scene slow.',
+        section: 'How it works',
     },
     {
         href: '/performance/',
         title: 'Performance',
-        description: 'Presets, pacing, the idle cache, baking and GPU skinning, and the report of what is in effect.',
+        description: 'Presets, pacing and the options with a cost, and the report of what is in effect.',
         section: 'Reference',
     },
     {
@@ -114,7 +130,36 @@ export const PAGES: readonly DocsPage[] = [
         description: 'What is automatic, the options, the versions and the limits.',
         section: 'Reference',
     },
+    {
+        href: '/reels/',
+        title: 'Example: reels',
+        description: 'The reels of a slot game, spun by pixi-reels and drawn by pixi-marrow.',
+        section: 'Reference',
+    },
 ];
 
 /** The pages of a part of the docs, in reading order. */
 export const pagesOf = (section: DocsSection): DocsPage[] => PAGES.filter((page) => page.section === section);
+
+/** A link of the bar at the top of every page. */
+export interface TopLink {
+    href: string;
+    title: string;
+    /** True when the page at `path` belongs to this link. */
+    current(path: string): boolean;
+}
+
+/** The bar at the top: one link per part of the docs, then the playground and the lab. */
+export const TOP_LINKS: readonly TopLink[] = [
+    ...SECTIONS.map((section) => {
+        const pages = pagesOf(section);
+
+        return {
+            href: pages[0]?.href ?? '/',
+            title: section,
+            current: (path: string) => pages.some((page) => page.href === path),
+        };
+    }),
+    { href: '/playground/', title: 'Playground', current: (path: string) => path.startsWith('/playground') },
+    { href: '/lab/', title: 'Lab', current: (path: string) => path.startsWith('/lab') },
+];

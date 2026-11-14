@@ -1,0 +1,57 @@
+---
+layout: ../../layouts/Docs.astro
+title: Why it is fast
+description: The pages before took one frame apart. This one puts together what pixi-marrow leaves out of a frame, shows it live, and lists what still makes a scene slow.
+---
+
+import Preview from '../../components/Preview.astro';
+
+<Preview name="fast" height={470} rows={4} caption="Sixty symbols of the slot game Bzzz. The preview updates them itself and times that update, counts the skeletons that wrote new vertices in the last frame, and counts the draw calls." />
+
+## Work follows change
+
+Pick **all play**, then **few play**, then **all rest**, and watch the numbers. The times depend on the device, so compare them with each other.
+
+- With all 60 skeletons moving, every one of them poses its bones and writes its vertices in every frame.
+- With a few moving, only those few do. The others run no timeline, pose no bone, write no vertex and upload nothing.
+- With all at rest, nothing is written, and the update shrinks to the small cost of asking each skeleton whether anything changed.
+
+Most scenes are mostly at rest: a menu, a map with idle characters, the symbols of a slot between two spins. So the cost of a frame follows what moves in it, not how many skeletons it holds. [The pose](/how/pose/) and [an animation](/how/animation/) show where that is decided.
+
+## One draw call
+
+The draw calls stay at one in all three scenes. The 60 skeletons follow each other in one container and use one atlas page, so they share one batch. [Draw order and batches](/how/batches/) shows what keeps a batch whole.
+
+## No garbage
+
+After the first frames, an update that fires no event allocates nothing, and a test proves it. The official cores allocate 17 bytes to 8 kB per update on the same rigs. A browser stops the page now and then to collect garbage, and on a phone such a stop can cost a frame. A runtime that allocates nothing gives it nothing to collect.
+
+## Plain arrays
+
+The pose of every skeleton lives in typed arrays: the local and world values of the bones, the colors of the slots, the draw order. The render step reads them where they are, with no copy step, and the vertex math runs over them in tight loops.
+
+## Code on demand
+
+A game that imports `MarrowSpine` loads about 32 kB of code, gzipped. The mesh mode, clipping and the cuts of overdraw load the first time a skeleton needs them. A game that never clips never loads the clipper.
+
+## Less overdraw
+
+The GPU paints every pixel of every triangle it draws, also where the image is transparent and where a later slot covers it. With outlines, a region without a visible pixel is not drawn, and a slot behind the opaque part of a later one is skipped. The picture stays the same. The overdraw layer of the [debug overlays](/debug/) shows where the GPU paints a pixel more than once.
+
+## What it does not trade
+
+The poses equal the official runtime to the bit, and the picture matches it. pixi-marrow leaves out work that cannot change the picture, and nothing more.
+
+Some optimizations do trade something: memory, vertices or draw calls, in a way that depends on the device and the scene. The idle cache, baked animations, instancing, GPU skinning, tight meshes and level of detail are all off until a game names them. [Performance](/performance/) says what each costs and when it pays.
+
+## What makes a scene slow
+
+The previews of this part show where the time goes, so they also show what costs it:
+
+- **Many moving skeletons.** The update grows with every skeleton that moves, and a skeleton with physics keeps moving at rest.
+- **Big weighted meshes.** A vertex costs work for every bone it follows, in every frame its bones move.
+- **Breaks in the batch.** A Pixi object between skeletons, a slot that multiplies or screens, or more than 16 atlas pages each cost a draw call.
+- **Clipping.** In the batched mode a clipping attachment cuts the triangles after it on the CPU, in every frame they move. In the mesh mode it draws a stencil mask, which costs two more draw calls.
+- **Overdraw.** Large transparent areas and layers that cover each other cost GPU time, which a phone has little of.
+
+`perf.report()` of a skeleton lists what it costs and why, in plain words.

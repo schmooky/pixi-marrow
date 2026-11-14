@@ -70,6 +70,7 @@ const PREVIEWS: Record<string, Loader> = {
     pose: () => import('./pose'),
     vertices: () => import('./vertices'),
     batches: () => import('./batches'),
+    fast: () => import('./fast'),
     placeholders: () => import('./placeholders'),
     debug: () => import('./debug'),
     reels: () => import('./reels'),

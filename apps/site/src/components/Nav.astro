@@ -1,30 +1,15 @@
 ---
-import { type DocsSection, PAGES, pagesOf, SITE } from '../lib/site';
+import { SITE, TOP_LINKS } from '../lib/site';
 
 const path = Astro.url.pathname;
-/** The parts of the docs that the bar shows as one link each, to their first page, with the folder of their pages. */
-const grouped: Partial<Record<DocsSection, string>> = { 'Slot guide': '/guide/', 'How it works': '/how/' };
-const links = PAGES.filter((page) => {
-    const folder = grouped[page.section];
-
-    return folder === undefined || page === pagesOf(page.section)[0];
-}).map((page) => {
-    const folder = grouped[page.section];
-
-    return {
-        href: page.href,
-        title: folder === undefined ? page.title : page.section,
-        current: folder === undefined ? page.href === path : path.startsWith(folder),
-    };
-});
 ---
 
 <header class="nav">
     <div class="container-page nav-row">
         <a href="/" class="nav-brand">pixi-<span class="marrow-text">marrow</span></a>
         <nav aria-label="Main" class="nav-links">
-            {links.map((link) => (
-                <a href={link.href} aria-current={link.current ? 'page' : undefined}>{link.title}</a>
+            {TOP_LINKS.map((link) => (
+                <a href={link.href} aria-current={link.current(path) ? 'page' : undefined}>{link.title}</a>
             ))}
         </nav>
         <a href={SITE.repository} class="nav-repo">

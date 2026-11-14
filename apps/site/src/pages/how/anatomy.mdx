@@ -1,18 +1,18 @@
 ---
 layout: ../../layouts/Docs.astro
-title: Anatomy of a symbol
-description: A Spine skeleton is bones, slots, attachments and an atlas. Take a symbol apart to see each, and why the runtime keeps them the way it does.
+title: Anatomy of a skeleton
+description: A Spine skeleton is bones, slots, attachments and an atlas. Take a skeleton apart to see each, and why the runtime keeps them the way it does.
 ---
 
 import Preview from '../../components/Preview.astro';
 
 <Preview name="anatomy" height={440} rows={4} caption="Three symbols of the slot game Bzzz. Pick a view to take one apart: its bones, its slots in the order they are drawn, and the shapes of its images." />
 
-This part of the docs explains how a Spine animation becomes a picture, step by step, on the symbols of the slot game Bzzz. You need no Spine editor to follow it. Each page takes one stage of the work apart in a live preview.
+This part of the docs explains how a Spine animation becomes a picture, step by step. Its previews take apart the symbols of the slot game Bzzz, which ship with this site. You need no Spine editor to follow it. Each page takes one stage of the work apart in a live preview.
 
 ## Bones
 
-Pick **bones**. The lines are the bones of the symbol, and they form a tree. Each bone stores where it stands relative to its parent: a position, a rotation, a scale and a shear. The root bone has no parent.
+Pick **bones**. The lines are the bones of the skeleton, and they form a tree. Each bone stores where it stands relative to its parent: a position, a rotation, a scale and a shear. The root bone has no parent.
 
 The animator moves bones, not pictures. Turn the root, and the whole tree turns with it. Bend the bone of a wing, and only the wing follows. So an animation is small: the bee of Bzzz has 27 bones, and its idle loop keys 20 rotations, positions and scales of them.
 
@@ -22,7 +22,7 @@ The letter `A` has 3 bones, the coin 8 and the bee 27. A bone is cheap, but ever
 
 Pick **slots**. The bee builds up from the back to the front, one slot at a time. A slot is a place in the draw order that belongs to one bone. It shows at most one image at a time, the attachment, and it has a color and a blend mode.
 
-The order of the slots is the order of drawing. Each slot paints over the ones before it, so the wings come before the body and the eyes after it. An animation can change the attachment of a slot, which is how a symbol turns blurred, and its color, which is how it dims.
+The order of the slots is the order of drawing. Each slot paints over the ones before it, so the wings come before the body and the eyes after it. An animation can change the attachment of a slot, which is how the bee turns blurred, and its color, which is how it dims.
 
 A slot can be empty in the setup pose and get its image from an animation. The closed eyes and the yawn of the bee wait in empty slots. The coin shows one image in its setup pose, and its animations fill its other slots.
 
@@ -41,7 +41,7 @@ Slots can also hold attachments that draw nothing: bounding boxes for hit tests,
 
 ## Skins
 
-A skin is a set of attachments by slot and name. Swapping the skin swaps the images and keeps the bones and the animations. A game uses skins for versions of one symbol, such as a gold coin and a silver one. The Bzzz symbols use one skin each. [Skins and slots](/skins-and-slots/) shows how to show several at once.
+A skin is a set of attachments by slot and name. Swapping the skin swaps the images and keeps the bones and the animations. A game uses skins for versions of one character or object, such as a gold coin and a silver one. The Bzzz symbols use one skin each. [Skins and slots](/skins-and-slots/) shows how to show several at once.
 
 ## The atlas
 
@@ -51,4 +51,4 @@ One page matters for speed. The GPU draws everything that uses the same textures
 
 ## What pixi-marrow keeps
 
-A loaded skeleton becomes a model of plain tables. The bones are arrays of names, parents and setup values, the slots arrays of bones, colors and blend modes. Every copy of a symbol shares that model, its atlas and the code that poses it. A copy keeps only its own pose, which is why a reel can hold many copies of one symbol.
+A loaded skeleton becomes a model of plain tables. The bones are arrays of names, parents and setup values, the slots arrays of bones, colors and blend modes. Every copy of a skeleton shares that model, its atlas and the code that poses it. A copy keeps only its own pose, which is why a scene can hold many copies of one skeleton.

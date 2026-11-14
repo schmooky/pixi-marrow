@@ -42,10 +42,10 @@ Some bones are not animated by keys alone. A constraint changes bones during the
 
 The animator sets the order in which bones and constraints update. The runtime turns it into one list for each skin, the update cache of the official runtime. This runtime builds that list once per skin and shares it between every copy that wears the skin.
 
-The Bzzz symbols have no constraints. Big characters of a feature often do. A physics constraint keeps moving while the skeleton rests, and it does not see the Pixi position change on its own. [Good to know](/good-to-know/) shows how to tell it.
+The Bzzz symbols have no constraints. Characters and props with hair, chains or cloth often do. A physics constraint keeps moving while the skeleton rests, and it does not see the Pixi position change on its own. [Good to know](/good-to-know/) shows how to tell it.
 
 ## What pixi-marrow skips
 
 The official runtime computes every bone in every frame. pixi-marrow computes a bone again only when its local values, its parent or the place of the skeleton changed. The line under the preview counts them: turning the neck poses 23 bones again each frame, turning a wing poses one.
 
-So the cost of a frame follows what moves, not the size of the skeleton. A symbol whose animation ended poses no bone at all. A path constraint is also left out while nothing it reads changed. Every world transform still equals the official one to the bit.
+So the cost of a frame follows what moves, not the size of the skeleton. A skeleton whose animation ended poses no bone at all. A path constraint is also left out while nothing it reads changed. Every world transform still equals the official one to the bit.

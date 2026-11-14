@@ -1,5 +1,6 @@
 import { Container, Text, type Ticker } from 'pixi.js';
 import { MarrowAsset, MarrowSpine } from 'pixi-marrow';
+import { countDraws } from './draws';
 import { definePreview } from './runtime';
 
 /*
@@ -37,25 +38,6 @@ const WIN_SCALE = 1.18;
 /** The symbol that multiplies when its switch is on, and the place of the text in the container. */
 const MULTIPLIED = 6;
 const TEXT_AFTER = 7;
-
-/** The draw methods of WebGL2 that the preview counts. */
-const DRAWS = ['drawElements', 'drawArrays', 'drawElementsInstanced', 'drawArraysInstanced'] as const;
-
-/** Counts the draw calls of one WebGL context, by wrapping its methods. */
-function countDraws(gl: WebGL2RenderingContext): { count: number } {
-    const counter = { count: 0 };
-
-    for (const name of DRAWS) {
-        const original = gl[name].bind(gl) as (...args: unknown[]) => void;
-
-        Reflect.set(gl, name, (...args: unknown[]) => {
-            counter.count++;
-            original(...args);
-        });
-    }
-
-    return counter;
-}
 
 /** A symbol in its cell, with the scale that fits it. */
 interface Cell {

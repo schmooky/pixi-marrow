@@ -1,0 +1,60 @@
+---
+layout: ../../layouts/Docs.astro
+title: Play
+description: Start an animation, loop it, change its speed, stop it, hold a pose, and know when it ends.
+---
+
+import Preview from '../../components/Preview.astro';
+import Snippet from '../../components/Snippet.astro';
+import source from '../../snippets/guide-play.ts?raw';
+
+<Preview name="play" height={400} caption="The bee of the slot game Bzzz. Press an animation to play it, and the runtime mixes into it from the one before." />
+
+## Know the names
+
+An animator gives each animation a name, and a game plays them by name. Names differ between studios, so read them from the files.
+
+<Snippet source={source} regions="names" />
+
+`info` lists the animations, skins, bones, slots and events of a skeleton, with the length of each animation. For names that TypeScript checks, `pixi-marrow typegen` writes them as types at build time.
+
+A skeleton usually has one animation per state it can be in. The symbols of Bzzz are an example:
+
+| Animation | What it shows | Length |
+|---|---|---|
+| `idle` | Rest. It loops. | 1.33 s |
+| `blur_in` | Turns blurred, and stays so. | 0.27 s |
+| `blur_out` | Turns sharp again. | 0.27 s |
+| `landing` | A short bounce. | 0.33 s |
+| `win` | A celebration. | 1.33 s |
+| `disable` | A dimmed pose. | 0 s |
+
+## Play and loop
+
+<Snippet source={source} regions="loop" />
+
+`play` starts an animation now, on track 0 unless you name another. It replaces what the track played, with a mix if one is set. `loop: true` plays it again from its start each time it ends, until the track plays something else.
+
+## Speed and part of an animation
+
+<Snippet source={source} regions="speed" />
+
+`speed` changes how fast one animation plays, and `timeScale` how fast the whole skeleton does. `start` and `end` play part of an animation, and a loop repeats that part. `reverse` plays it backwards.
+
+## Stop
+
+<Snippet source={source} regions="stop" />
+
+`stop` clears one track, or all of them when you name none. Without a mix the pose stays as the track left it. With a mix the track fades back to the setup pose over that time.
+
+## Hold a pose
+
+<Snippet source={source} regions="hold" />
+
+An animation that does not loop holds its last frame until the track plays something else. An animation of 0 seconds is a pose: `disable` dims the bee and keeps it dimmed. Animators use that for states that do not move, such as dimmed, highlighted or disabled.
+
+## Know when it ends
+
+<Snippet source={source} regions="finished" />
+
+`play` returns a `Track`, the handle on that animation. `finished` resolves when an animation that does not loop has played to its end. It also resolves when something replaces the animation first, so a game that waits on it must check whether it was cut short. [Events](/guide/events/) shows how.
