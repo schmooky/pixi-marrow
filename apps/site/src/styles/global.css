@@ -167,18 +167,44 @@ pre {
     gap: 0.25rem;
 }
 .nav-brand {
-    margin-right: 0.75rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
     font-size: 15px;
     font-weight: 700;
     letter-spacing: -0.02em;
 }
+.nav-mark {
+    width: 1.5rem;
+    height: 1.5rem;
+    flex-shrink: 0;
+}
+/* the version links to the package on npm */
+.nav-version {
+    margin: 0 1rem 0 0.5rem;
+    border: 1px solid hsl(var(--border));
+    border-radius: 0.35rem;
+    padding: 0.05rem 0.4rem;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.6;
+    white-space: nowrap;
+    color: hsl(var(--muted-foreground));
+    transition:
+        color 0.15s,
+        border-color 0.15s;
+}
+.nav-version:hover {
+    border-color: hsl(var(--muted-foreground) / 0.5);
+    color: hsl(var(--foreground));
+}
+/* the parts of the docs are tabs, and the one the page belongs to is underlined */
 .nav-links {
     display: flex;
     height: 100%;
     min-width: 0;
     flex: 1;
     align-items: stretch;
-    overflow-x: auto;
 }
 .nav-links a {
     position: relative;
@@ -194,52 +220,142 @@ pre {
 .nav-links a[aria-current="page"] {
     color: hsl(var(--foreground));
 }
-@media (max-width: 640px) {
-    /* on a phone the links take a second row of their own, so that none of them is cut */
-    .nav-row {
-        height: auto;
-        flex-wrap: wrap;
-        padding-top: 0.6rem;
-    }
-    .nav-brand {
-        flex: 1;
-    }
-    .nav-links {
-        order: 3;
-        height: 2.6rem;
-        flex-basis: 100%;
-        margin-inline: -0.5rem;
-    }
-    .nav-links a {
-        padding-inline: 0.34rem;
-        font-size: 0.77rem;
-    }
-}
 .nav-links a[aria-current="page"]::after {
     content: "";
     position: absolute;
     inset: auto 0.65rem 0;
     height: 2px;
-    border-radius: 999px;
+    border-radius: 2px;
     background: hsl(var(--marrow));
 }
-.nav-repo {
+/* the tools open pages of their own, so they stand apart, with an icon each */
+.nav-tools {
+    display: flex;
+    align-items: center;
+    gap: 0.125rem;
+    margin-right: 0.5rem;
+    border-right: 1px solid hsl(var(--border));
+    padding-right: 0.5rem;
+}
+.nav-tools a {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    border-radius: 0.4rem;
+    padding: 0.4rem 0.6rem;
+    font-size: 0.875rem;
+    white-space: nowrap;
+    color: hsl(var(--muted-foreground));
+    transition:
+        color 0.15s,
+        background-color 0.15s;
+}
+.nav-tools a:hover {
+    background: hsl(var(--accent));
+    color: hsl(var(--foreground));
+}
+.nav-tools svg {
+    width: 0.95rem;
+    height: 0.95rem;
+}
+.nav-icon {
     display: inline-flex;
     width: 2.25rem;
     height: 2.25rem;
     flex-shrink: 0;
     align-items: center;
     justify-content: center;
+    border: 0;
     border-radius: 0.4rem;
+    padding: 0;
+    background: none;
     color: hsl(var(--muted-foreground));
+    cursor: pointer;
 }
-.nav-repo:hover {
+.nav-icon:hover {
     background: hsl(var(--accent));
     color: hsl(var(--foreground));
 }
-.nav-repo svg {
+.nav-icon svg {
     width: 1rem;
     height: 1rem;
+}
+.nav-menu-button svg {
+    width: 1.15rem;
+    height: 1.15rem;
+}
+.nav-menu-button,
+.nav-menu-close,
+.nav:has(.nav-menu:popover-open) .nav-menu-open {
+    display: none;
+}
+.nav:has(.nav-menu:popover-open) .nav-menu-close {
+    display: block;
+}
+/* on a phone the parts and the tools move into a menu that opens under the bar */
+.nav-menu {
+    position: fixed;
+    inset: 3.5rem 0 auto;
+    width: auto;
+    max-height: calc(100dvh - 3.5rem);
+    margin: 0;
+    overflow-y: auto;
+    border: 0;
+    border-bottom: 1px solid hsl(var(--border));
+    padding: 0.25rem 0 1rem;
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+}
+.nav-menu::backdrop {
+    top: 3.5rem;
+    background: hsl(240 10% 2% / 0.6);
+}
+.nav-menu ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.nav-menu-label {
+    margin: 0.9rem 0 0.25rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: hsl(var(--muted-foreground));
+}
+.nav-menu a {
+    display: grid;
+    gap: 0.1rem;
+    margin-inline: -0.75rem;
+    border-radius: 0.5rem;
+    padding: 0.55rem 0.75rem;
+}
+.nav-menu a:hover,
+.nav-menu a[aria-current="page"] {
+    background: hsl(var(--accent));
+}
+.nav-menu-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+[aria-current="page"] > .nav-menu-title {
+    color: hsl(var(--marrow-text));
+}
+.nav-menu-note {
+    font-size: 0.8125rem;
+    color: hsl(var(--muted-foreground));
+}
+@media (max-width: 959px) {
+    .nav-links,
+    .nav-tools {
+        display: none;
+    }
+    .nav-repo {
+        margin-left: auto;
+    }
+    .nav-menu-button {
+        display: inline-flex;
+    }
 }
 .sr-only {
     position: absolute;
