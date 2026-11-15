@@ -31,7 +31,7 @@
     "node": "22.12"
   },
   "size": {
-    "root": 31,
+    "root": 32,
     "readers": {
       "json42": 8.9,
       "binary42": 9.1,

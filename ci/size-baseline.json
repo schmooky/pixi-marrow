@@ -1,9 +1,9 @@
 {
   "everything": {
-    "gzip": 37154
+    "gzip": 37661
   },
   "root (MarrowSpine)": {
-    "gzip": 32183
+    "gzip": 32655
   },
   "core (everything)": {
     "gzip": 6468
@@ -24,13 +24,13 @@
     "gzip": 546
   },
   "perf (createProbe)": {
-    "gzip": 1066
+    "gzip": 1070
   },
   "debug (MarrowDebug)": {
-    "gzip": 5032
+    "gzip": 5036
   },
   "bake (bakeAnimation)": {
-    "gzip": 3784
+    "gzip": 3783
   },
   "on demand (reader of 4.1 and 4.2 JSON)": {
     "gzip": 9074
@@ -45,13 +45,13 @@
     "gzip": 8767
   },
   "on demand (pose engine of 4.1 and 4.2)": {
-    "gzip": 32517
+    "gzip": 32540
   },
   "on demand (pose engine of 4.3)": {
-    "gzip": 34324
+    "gzip": 34338
   },
   "on demand (mesh mode)": {
-    "gzip": 18136
+    "gzip": 18388
   },
   "on demand (clipping)": {
     "gzip": 7589
