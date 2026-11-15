@@ -40,6 +40,11 @@ export interface PosePass {
     all: boolean;
     /** True when the list of visible entries was made again for the pose, or {@link all} is set: an entry can be new. */
     listed: boolean;
+    /**
+     * True while a slot is left out because a later slot covers it. The CPU then keeps the
+     * positions of every entry in line with each pose, also with `skinning: 'gpu'`.
+     */
+    tracked: boolean;
     /** Entries whose vertices were placed on the CPU and go to the GPU. */
     placed: number;
     /** Bones whose world transform went to the GPU, for a vertex shader that places vertices. 0 elsewhere. */
@@ -77,6 +82,7 @@ export function createPosePass(): PosePass {
         skipped: false,
         all: true,
         listed: true,
+        tracked: false,
         placed: 0,
         skinned: 0,
         from: 0,

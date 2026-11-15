@@ -15,6 +15,7 @@ import type { ClipShape } from './clip-shape';
 import type { MeasuredGeometry } from './measured-geometry';
 import { createRangeMesh, followSkin, type VertexBuffers } from './range-mesh';
 import { u8, u16 } from './read';
+import { sent } from './sent';
 import { createMaskShader, createViewShader, releaseShader } from './shader';
 import { MAX_PAGES, type Template } from './template';
 import { NO_CLIP, type VisibleList } from './visible';
@@ -393,6 +394,7 @@ export class DrawRanges {
         // Pixi draws this many indices. A Pixi without `indexCount` draws all, and the rest is zero.
         range.mesh.geometry.indexCount = drawn;
         range.buffer.update(changed * range.indices.BYTES_PER_ELEMENT);
+        sent.indices += changed * range.indices.BYTES_PER_ELEMENT;
         // an upload that waits for a draw can be replaced by the next one, which must then reach as far
         range.held = AT_ONCE ? written : Math.max(written, range.held);
         range.mesh.visible = true;

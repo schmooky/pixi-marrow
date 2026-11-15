@@ -54,7 +54,10 @@ export interface ViewStats {
     positionUploads: number;
     /** How often vertex colors were handed on. With `skinning: 'gpu'` that is the palette of the slots. */
     colorUploads: number;
-    /** How often bone matrices were uploaded, for a vertex shader that places vertices: `skinning: 'gpu'`. */
+    /**
+     * Updates that wrote bone matrices for a vertex shader that places vertices: `skinning: 'gpu'`.
+     * They upload once per frame, before Pixi draws the view, and not while the view is hidden.
+     */
     boneUploads: number;
     /** How often texture coordinates were handed on after the build: when a sequence showed another region. */
     uvUploads: number;

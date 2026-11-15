@@ -22,7 +22,7 @@ import { pageSources } from './pages';
 import { ViewPaints } from './paints';
 import { clipsMoved, createPosePass, notePass, type PosePass, poseEntries } from './pose-pass';
 import { u8 } from './read';
-import { createViewStats, type ViewStats } from './stats';
+import { createViewStats, restBytes, type ViewStats } from './stats';
 import { buildTemplate, type Template, templateBytes } from './template';
 import { VisibleList } from './visible';
 
@@ -205,6 +205,7 @@ export class SkeletonView implements DrawGate {
         const arrived = paints.waits && meshCode() !== undefined;
 
         if (same && !stale && !this.restyle && !this.cover.owes && !arrived) {
+            if (paints.mode === 'mesh') restBytes(this.stats.frameBytes);
             this.stats.skips++;
             pass.skipped = true;
 
@@ -302,7 +303,6 @@ export class SkeletonView implements DrawGate {
         this.seen.reset();
         this.last = undefined;
         const none = { drawCalls: 0, maskDraws: 0, clips: 0, indices: 0, vertices: 0, bufferBytes: 0 };
-
         Object.assign(this.stats, none, { tightRanges: 0, coveredSlots: 0 });
     }
 
@@ -398,6 +398,7 @@ export class SkeletonView implements DrawGate {
         const { mesh, element } = this.paints;
 
         pass.listed = listed || pass.all;
+        pass.tracked = cover.covered > 0;
         if (element === undefined && mesh !== undefined) mesh.pose(pass, template, state, seen);
         else poseEntries(pass, template, state, bones, hasDark, seen, element);
         notePass(stats, pass, element === undefined && mesh?.instanced !== undefined);
@@ -409,7 +410,9 @@ export class SkeletonView implements DrawGate {
         // the slots that can hide others are chosen again when the list or their alpha changed
         const relisted = seen.dirty || pass.recolored || pass.all;
 
-        if (cover.follow(template, seen, state.world, bones, this.container, moved, relisted)) seen.dirty = true;
+        const settles = element ? undefined : mesh;
+
+        if (cover.follow(template, seen, state, bones, this.container, moved, relisted, settles)) seen.dirty = true;
         stats.coveredSlots = cover.covered;
         const indexed = seen.dirty;
 
@@ -456,14 +459,16 @@ export class SkeletonView implements DrawGate {
         }
         if (element !== undefined) {
             const runs = element.plan();
-            // A skeleton that shows nothing leaves the batch, so that it breaks no batch of others.
             // One that no renderer can batch draws nothing while it waits for the code of the mesh mode
-            const shows = count > 0 && !(this.refused && this.paints.waits);
+            const { body } = this.paints;
+            const shows = count > 0 && !(this.refused && this.paints.waits) && body?.blind !== true;
 
-            if (this.paints.body !== undefined) this.paints.body.visible = shows;
+            // A skeleton that shows nothing joins no batch. One that is in a batch stays there with
+            // triangles without area: to leave would make Pixi build the instructions again
+            if (body !== undefined) body.visible = shows || (count === 0 && body.visible && element.placed);
             stats.drawCalls = shows ? runs : 0;
             stats.maskDraws = 0;
-            stats.indices = indices;
+            stats.indices = shows ? indices : 0;
             stats.bufferBytes = templateBytes(template) + element.bytes;
         } else mesh?.reindex(template, seen, skipped, indices, stats);
         seen.dirty = false;

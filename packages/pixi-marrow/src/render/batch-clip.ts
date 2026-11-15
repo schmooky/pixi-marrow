@@ -75,7 +75,7 @@ const rooms = new WeakMap<SkeletonModel, ClipRoom>();
  * The indices of a skeleton are whole triangles, so their step is a multiple of 3. The skeleton
  * behind it in the batch would draw from the wrong corners otherwise.
  */
-const withMargin = (count: number, step: number): number => Math.ceil((count + (count >> 2)) / step) * step;
+const withMargin = (count: number, step: number): number => Math.ceil((count * 1.25) / step) * step;
 const VERTEX_STEP = 8;
 const INDEX_STEP = 12;
 
@@ -411,9 +411,10 @@ export const batchClip: ClipCode = {
 
         clipEntries(element);
         if (cut.vertexCount <= room.vertices && cut.indexCount <= room.indices) return;
-        // both grow at once: a pose that needs more vertices needs more indices soon
-        room.vertices = Math.max(room.vertices, withMargin(cut.vertexCount, VERTEX_STEP));
-        room.indices = Math.max(room.indices, withMargin(cut.indexCount, INDEX_STEP));
+        // Both grow at once: a pose that needs more vertices needs more indices soon. Room that
+        // was too small doubles, so that a loop builds the instructions a few times at most
+        room.vertices = withMargin(Math.max(cut.vertexCount, room.vertices * 1.6), VERTEX_STEP);
+        room.indices = withMargin(Math.max(cut.indexCount, room.indices * 1.6), INDEX_STEP);
     },
     fill(element: BatchElement, home: BatchHome, mark: boolean): boolean {
         clipEntries(element);

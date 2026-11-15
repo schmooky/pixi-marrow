@@ -65,7 +65,7 @@ export function uploadMode(update: Buffer['update'], version: string, webgpu: bo
 
 /**
  * Uploads the items of a buffer from `from` up to `to`, or the whole buffer where Pixi cannot
- * upload a stretch on its own. Does nothing for an empty stretch.
+ * upload a stretch on its own. Does nothing for an empty stretch. Returns the bytes it uploaded.
  *
  * @param ranged What {@link uploadsStretch} says about this Pixi.
  * @param itemBytes The bytes of one item.
@@ -73,10 +73,12 @@ export function uploadMode(update: Buffer['update'], version: string, webgpu: bo
  * @example
  * uploadStretch(positions, ranged, pass.from, pass.to, 8);
  */
-export function uploadStretch(buffer: Buffer, ranged: boolean, from: number, to: number, itemBytes: number): void {
-    if (to <= from) return;
+export function uploadStretch(buffer: Buffer, ranged: boolean, from: number, to: number, itemBytes: number): number {
+    if (to <= from) return 0;
     if (ranged) buffer.update((to - from) * itemBytes, from * itemBytes);
     else buffer.update();
+
+    return ranged ? (to - from) * itemBytes : buffer.data.byteLength;
 }
 
 /**

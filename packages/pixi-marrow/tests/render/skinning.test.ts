@@ -95,6 +95,11 @@ describe('skinning on the GPU', () => {
         expect(sequences).toBeGreaterThan(0);
         for (let frame = 0; frame < 10; frame++) {
             step(rig);
+            // a second update before the draw: the textures still upload once
+            touchPose(rig.engine.state);
+            rig.view.update(rig.engine.state);
+            expect(bones).toHaveLength(frame);
+            rig.view.parts.paints.mesh?.flush();
             expectSkinned(rig);
             expect(stats.placedSlots).toBeLessThanOrEqual(sequences);
         }
@@ -117,11 +122,23 @@ describe('skinning on the GPU', () => {
 
         for (let frame = 0; frame < 20; frame++) {
             step(rig);
+            rig.view.parts.paints.mesh?.flush();
             expect(stats.placedSlots).toBe(0);
         }
         expectSkinned(rig);
         expect(positions).toEqual([]);
         expect(bones.length).toBeGreaterThan(10);
+        expect(stats.boneUploads - before.boneUploads).toBe(bones.length);
+        // the bytes of the bones are counted where they upload
+        expect(stats.uploadBytes.bones).toBeGreaterThan(0);
+        expect(stats.uploadBytes.positions).toBe(before.uploadBytes.positions);
+        // a hidden view uploads nothing, until Pixi draws it again
+        rig.view.container.visible = false;
+        step(rig);
+        rig.view.parts.paints.mesh?.flush();
+        expect(stats.boneUploads - before.boneUploads).toBe(bones.length + 1);
+        rig.view.container.visible = true;
+        rig.view.parts.paints.mesh?.flush();
         expect(stats.boneUploads - before.boneUploads).toBe(bones.length);
         expect(stats.positionUploads).toBe(before.positionUploads);
     });
@@ -132,6 +149,7 @@ describe('skinning on the GPU', () => {
         const head = slotIndex(rig, 'head');
 
         step(rig, 0);
+        rig.view.parts.paints.mesh?.flush();
         const data = skinData(rig);
         const palette = watchUpdates(data.sources.palette);
         const bones = watchUpdates(data.sources.bones);
@@ -141,6 +159,9 @@ describe('skinning on the GPU', () => {
         state.version = nextVersion(state.version);
         state.slotStamps[head] = state.version;
         rig.view.update(state);
+        // the palette uploads when Pixi is about to draw
+        expect(palette).toEqual([]);
+        rig.view.parts.paints.mesh?.flush();
         expect(palette).toEqual([[head * 2, head * 2 + 2]]);
         expect(bones).toEqual([]);
         expect(positions).toEqual([]);
@@ -150,6 +171,7 @@ describe('skinning on the GPU', () => {
         // the same bytes again: nothing to write
         touchPose(state);
         rig.view.update(state);
+        rig.view.parts.paints.mesh?.flush();
         expect(palette).toHaveLength(1);
     });
 
