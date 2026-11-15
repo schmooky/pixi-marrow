@@ -47,6 +47,9 @@ import {
  * The images of all display objects together hold at most {@link IDLE_BUDGET} bytes. A skeleton
  * whose image would pass that draws live and asks again after the wait.
  *
+ * At most {@link IDLE_CAPTURES} images are drawn between two renders, over all display objects.
+ * A skeleton past that draws live for one more frame and asks again.
+ *
  * A multisampled target keeps the skeleton live. Its image would hold 4 samples a pixel, five
  * times the memory, and samples on the edge of a triangle tie far more often than pixel centers.
  *
@@ -70,6 +73,11 @@ export const IDLE_MAX_SIDE = 2048;
  * four images of the largest size. A skeleton whose image would pass it draws live.
  */
 export const IDLE_BUDGET: number = 64 * 1024 * 1024;
+/**
+ * The most images drawn between two renders, over all display objects. Each one is a render
+ * pass of its own, so 200 symbols that come to rest in one frame take 50 frames to draw theirs.
+ */
+export const IDLE_CAPTURES = 4;
 /** Pixels added around the bounds of the skeleton, for an edge the rasterizer rounds outward. */
 const MARGIN = 1;
 const CLEAR: [number, number, number, number] = [0, 0, 0, 0];
@@ -81,6 +89,8 @@ const IDLE_LABEL = 'marrow-idle';
 let studio: Container | undefined;
 /** The bytes of the images that show at the moment, of all display objects. */
 let imageBytes = 0;
+/** The images drawn since the last render that told an idle cache where its skeleton is. */
+let captures = 0;
 const bounds = new Bounds();
 const matrix = new Matrix();
 
@@ -228,7 +238,8 @@ class IdleImage implements IdleCache {
         const due = this.rest >= IDLE_WAIT && !this.refused;
 
         this.watch(due);
-        if (due && this.ready !== null) this.capture(this.ready);
+        // past the images of this frame the renderer stays ready, and the next update asks again
+        if (due && this.ready !== null && captures < IDLE_CAPTURES) this.capture(this.ready);
     }
 
     destroy(): void {
@@ -309,6 +320,7 @@ class IdleImage implements IdleCache {
 
         const multisampled = target.colorTextures[0]?.antialias === true;
 
+        captures = 0;
         placeOf(owner, target.resolution, now);
         if (image !== null) {
             const kept =
@@ -376,6 +388,7 @@ class IdleImage implements IdleCache {
         studio ??= new Container({ isRenderGroup: true, label: 'marrow-idle-studio' });
         matrix.set(...spaceToImage(last, box.x, box.y));
         studio.addChild(container);
+        captures++;
         try {
             renderer.render({ container: studio, target: texture, clear: true, clearColor: CLEAR, transform: matrix });
         } catch (error) {
