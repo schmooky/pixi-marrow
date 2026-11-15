@@ -8,9 +8,11 @@ on:
 permissions:
   contents: read
 
+# A new push to a pull request cancels its older run. Every push to main runs to the end: its group
+# is its commit, so a later merge neither cancels it nor replaces it while it waits.
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   ci:
@@ -36,7 +38,6 @@ jobs:
 
       - name: Commit message lint
         if: github.event_name == 'pull_request'
-        continue-on-error: true
         run: pnpm exec commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }} --verbose
 
       - name: Typecheck
@@ -74,6 +75,44 @@ jobs:
       - name: Dead code
         run: pnpm check:dead
 
+  pixi-floor:
+    # The peer range starts at pixi.js 8.21.0 and pixi-silk 1.0.1, but the dev dependencies resolve
+    # newer versions. This job installs the lowest ones into the package on the runner, where the
+    # changed manifest and lockfile stay, and runs the typecheck and the unit tests on them.
+    #
+    # Not a gate yet. On 2026-11-15 the typecheck failed in src/render, where TextureSource.update
+    # takes a stretch only from pixi.js 8.23, and 11 unit tests expected what 8.23 does. Remove
+    # continue-on-error once the job passes.
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Install the lowest peers
+        # the floors are the starts of the peer ranges in packages/pixi-marrow/package.json
+        run: |
+          pnpm --filter pixi-marrow add --save-dev $(node scripts/peer-floor.mjs)
+          node scripts/peer-floor.mjs --check
+
+      - name: Fixture cache
+        uses: actions/cache@v6
+        with:
+          path: fixtures/.cache
+          key: fixtures-${{ hashFiles('fixtures/manifest.json') }}
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit tests
+        # downloads missing fixtures first, then runs unit tests and the parity suite
+        run: pnpm test
+
   changeset-gate:
     # Library source changed but no changeset added. Escape hatch: the `skip-changeset` label.
     if: >-
@@ -90,9 +129,18 @@ jobs:
           base="${{ github.event.pull_request.base.sha }}"
           head="${{ github.event.pull_request.head.sha }}"
           if git diff --name-only "$base" "$head" -- 'packages/pixi-marrow/src/**' 'packages/pixi-marrow/package.json' | grep -q .; then
-            # a release moves the changesets into .changeset/pre/ in pre mode, which counts as adding them
-            added=$(git diff --name-only --no-renames --diff-filter=A "$base" "$head" -- '.changeset/*.md' | grep -vE '(^|/)README\.md$' || true)
-            if [ -z "$added" ]; then
+            # In a git pathspec `*` matches `/` too, so `.changeset/*.md` would count a file added
+            # to .changeset/pre/. The glob form matches the top folder only.
+            added=$(git diff --name-only --no-renames --diff-filter=A "$base" "$head" -- ':(glob).changeset/*.md' | grep -vE '(^|/)README\.md$' || true)
+            # A release in pre mode moves the changesets from .changeset/ into .changeset/pre/. Only
+            # such a move counts, not a file that is added to .changeset/pre/ alone.
+            moved=""
+            for file in $(git diff --name-only --no-renames --diff-filter=D "$base" "$head" -- ':(glob).changeset/*.md'); do
+              if git diff --name-only --no-renames --diff-filter=A "$base" "$head" -- ".changeset/pre/${file#.changeset/}" | grep -q .; then
+                moved="$moved $file"
+              fi
+            done
+            if [ -z "$added" ] && [ -z "$moved" ]; then
               echo "::error::This PR changes packages/pixi-marrow but adds no .changeset/*.md. Run 'pnpm changeset' or add the 'skip-changeset' label."
               exit 1
             fi

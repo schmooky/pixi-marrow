@@ -103,8 +103,9 @@ Every constraint is solved: IK, transform, path, physics and sliders. A slider o
 | Add an official fixture | Add the rig name to `rigs` in `fixtures/manifest.json`, then run `pnpm fixtures:refresh`. |
 | Add your own fixture | Put the skeleton and its atlas into `fixtures/local/`. |
 | Add an error code | Extend `MarrowErrorCode` in `src/base/errors.ts` and throw it with a `fix`. |
-| Accept a size change | Run `pnpm size:update`. |
+| Accept a size change | Run `pnpm size:update`. The root import also has a fixed limit in `scripts/size-limit.mjs`, which `pnpm size:check` enforces. Raise it only in a commit of its own that says why. |
 | Accept a change in bytes per instance | Run `pnpm memory:update`. |
+| Release a version | Follow section 8. |
 
 ## 6. Before you say done
 
@@ -112,7 +113,7 @@ Every constraint is solved: IK, transform, path, physics and sliders. A slider o
 pnpm check
 ```
 
-It runs every gate. First lint, the prose check, typecheck, the source rules and the facts check. Then tests with coverage, the build, the API snapshot, the publish contents check, the size check and the dead code check. CI runs the same steps.
+It runs every gate. First lint, the prose check, typecheck, the source rules and the facts check. Then tests with coverage, the build, the API snapshot, the publish contents check, the size check and the dead code check. CI runs the same steps. It also lints the commit messages of a pull request and runs the typecheck and the unit tests on the lowest peers the package allows.
 
 A change to `src/render`, `src/api` or the shaders also needs the pixel check, which is not part of `pnpm check` because it needs Google Chrome:
 
@@ -120,7 +121,7 @@ A change to `src/render`, `src/api` or the shaders also needs the pixel check, w
 pnpm check:render
 ```
 
-It draws rigs with pixi-marrow and with the official Pixi runtime in headless Chrome, on WebGL2 and WebGPU, and compares the pixels. It also compares pixi-marrow with its overdraw cuts on and off. Images of failing cases land in `.shots/render/`.
+It draws rigs with pixi-marrow and with the official Pixi runtime in headless Chrome, on WebGL2 and WebGPU, and compares the pixels. CI does not run it, because its runners have no GPU. Run it on your own machine. It also compares pixi-marrow with its overdraw cuts on and off. Images of failing cases land in `.shots/render/`.
 
 A frame that fails against the official runtime is drawn again, moved by a fraction of a pixel, and fails only when it fails at both places. The two runtimes place vertices in different code, so a vertex on a subpixel boundary can round two ways. A defect stays wrong after the move.
 
@@ -146,3 +147,16 @@ Library changes need a changeset. Run `pnpm changeset`.
 - A performance claim in the docs names its measurement and its machine. Numbers for phones wait for spine-benchmark.
 - In code that runs every update, pass indices into typed arrays, not numbers. V8 puts a double on the heap when it crosses a call that is not inlined.
 - Commit messages follow Conventional Commits.
+
+## 8. Releases
+
+Changesets runs in pre mode with the tag `next`, so a release is `0.1.0-next.N`. CI publishes nothing. The owner publishes from a terminal, because npm asks for a second factor.
+
+1. Merge the pull requests of the release. Each change to the library brings its changeset in `.changeset/`.
+2. On a branch from an up-to-date `main`, run `GITHUB_TOKEN="$(gh auth token)" pnpm version-packages`. The changelog plugin needs the token to link pull requests and authors.
+3. Read the new section of `packages/pixi-marrow/CHANGELOG.md`. The version in `packages/pixi-marrow/package.json` moved, and the changesets moved into `.changeset/pre/`.
+4. Commit it as `chore: release pixi-marrow <version>` and open the release pull request. Merge it when CI passes, then wait for the CI run of the merge commit.
+5. On `main` at that commit, with a clean working tree, run `pnpm install --frozen-lockfile` and `pnpm changeset publish`.
+6. `prepublishOnly` of the package runs `pnpm build` before the tarball is made, so the tarball never holds an old `dist`. `prepack` copies README and LICENSE into the package, and `postpack` removes them.
+7. Push the tag that `changeset publish` made: `git push --follow-tags`.
+8. Until 1.0, `latest` points at the newest pre-release too: `npm dist-tag add pixi-marrow@<version> latest`. A new version can take some minutes to show in `npm view pixi-marrow dist-tags`.

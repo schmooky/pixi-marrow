@@ -20,11 +20,19 @@ const QUIET = 2048;
  * of this package does. A window then starts with an empty young generation, so a collection
  * inside it means the run allocated. Without that, a slow runner under coverage can make a
  * collection in nearly every window and never see three quiet ones, though nothing allocates.
+ * So on CI, where `process.env.CI` is set, a missing `gc` is an error and not a quiet fallback.
  */
 export function settle(run: (i: number) => void, limit = 150): number {
     let quiet = 0;
 
     const collect: unknown = Reflect.get(globalThis, 'gc');
+
+    if (typeof collect !== 'function' && process.env.CI) {
+        throw new Error(
+            'settle: gc() is not exposed, so a collection a busy runner makes can spoil a window. ' +
+                'Run the tests with the config of the package, whose execArgv has --expose-gc.',
+        );
+    }
 
     for (let window = 0, i = 0; window < limit; window++) {
         if (typeof collect === 'function') collect();

@@ -52,12 +52,13 @@
     "parity:ref": "node ../../scripts/fixtures.mjs && vitest run --config vitest.report.config.ts",
     "memory:update": "node ../../scripts/fixtures.mjs && vitest run --config vitest.memory.config.ts",
     "typecheck": "tsc && tsc -p tsconfig.tests.json && tsc -p tsconfig.build.json",
+    "prepublishOnly": "pnpm run build",
     "prepack": "node ../../scripts/stage-package-files.mjs",
     "postpack": "node ../../scripts/stage-package-files.mjs --clean"
   },
   "peerDependencies": {
     "pixi.js": "^8.21.0",
-    "pixi-silk": "^1.0.2"
+    "pixi-silk": "^1.0.1"
   },
   "devDependencies": {
     "@arethetypeswrong/core": "^0.18.5",
