@@ -26,7 +26,8 @@ import type { Renderer } from 'pixi.js';
  *
  * A renderer of WebGL1 counts as lost for good, and says so once with `console.warn`. Every
  * program of this library is GLSL 3.00, which WebGL1 cannot compile, and Pixi falls back to
- * WebGL1 where a browser has no WebGL2. The skeletons draw nothing there, and the rest of the
+ * WebGL1 where a browser has no WebGL2. The same holds for a renderer that is neither WebGL nor
+ * WebGPU, as the Canvas renderer of Pixi. The skeletons draw nothing there, and the rest of the
  * app goes on. An error thrown in a render would stop the ticker of Pixi, and with it the whole
  * app. The words of the warning are short: this is in the root import, which is near its limit.
  */
@@ -49,12 +50,25 @@ export function contextLost(): boolean {
 }
 
 /**
+ * Whether a renderer can draw no skeleton at all: one of WebGL1, or one that is neither WebGL
+ * nor WebGPU, as the Canvas renderer of Pixi.
+ *
+ * @example
+ * if (drawsNothing(renderer)) stats.drawCalls = 0;
+ */
+export function drawsNothing(renderer: Renderer): boolean {
+    // the types of Pixi are bits: 1 is WebGL and 2 is WebGPU. A renderer of a test has none
+    return ('gl' in renderer && renderer.context?.webGLVersion === 1) || renderer.type > 2;
+}
+
+/**
  * Makes a renderer say before each of its renders whether its WebGL context is lost. The first
  * call for a renderer adds one listener to it, later calls do nothing. Call it before the
  * renderer first draws a skeleton: the answer for the render that is under way is set at once.
  *
  * A renderer without a WebGL context, as the one of WebGPU, never counts as lost. A renderer of
- * WebGL1 always counts as lost, and warns once.
+ * WebGL1 always counts as lost, and warns once. So does a renderer whose `type` names neither
+ * WebGL nor WebGPU.
  *
  * @example
  * watchContext(renderer);
@@ -63,9 +77,9 @@ export function contextLost(): boolean {
 export function watchContext(renderer: Renderer): void {
     if (watched.has(renderer)) return;
     watched.add(renderer);
-    const old = 'gl' in renderer && renderer.context?.webGLVersion === 1;
+    const old = drawsNothing(renderer);
 
-    if (old) console.warn('pixi-marrow: WebGL1 found, so no skeleton draws. Use WebGL2 or WebGPU.');
+    if (old) console.warn('pixi-marrow: this renderer draws no skeleton. Use WebGL2 or WebGPU.');
     // every renderer that draws skeletons answers, so the answer of another one never stays
     const watch = {
         prerender(): void {

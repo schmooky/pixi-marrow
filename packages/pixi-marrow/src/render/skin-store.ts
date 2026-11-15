@@ -1,4 +1,4 @@
-import type { BufferImageSource } from 'pixi.js';
+import { type BufferImageSource, VERSION } from 'pixi.js';
 import type { SkeletonModel } from '../model/model';
 import { WORLD_STRIDE } from '../pose/state';
 import { dataRoom, dataTexture, uploadTexels } from './skin-layout';
@@ -13,6 +13,9 @@ import type { Template } from './template';
 
 /** The bytes of one slot in the palette of a view that draws alone: the light color, then the dark color and the flag. */
 const PALETTE_STRIDE = 8;
+
+/** Whether a data texture of this Pixi uploads a range of its texels, see `uploadTexels`: from pixi.js 8.23 on. */
+const RANGED = Number(VERSION.split('.')[1]) > 22 || !VERSION.startsWith('8.');
 
 /** The arrays a `SkinPose` writes, and what it tells about what it wrote. */
 export interface SkinStore {
@@ -34,8 +37,9 @@ export interface SkinStore {
 }
 
 /**
- * The bone and palette textures of one view that draws alone. Each write uploads the stretch it
- * names.
+ * The bone and palette textures of one view that draws alone. A write notes the stretch it
+ * names, and {@link flush} uploads what was noted, once per frame and only for a view that Pixi
+ * draws.
  *
  * @example
  * const store = new TextureStore(model);
@@ -50,6 +54,11 @@ export class TextureStore implements SkinStore {
     readonly boneTexture: BufferImageSource;
     /** Two texels a slot. */
     readonly palette: BufferImageSource;
+    /** The texels of each texture that wait for {@link flush}: the first one and the one behind the last. */
+    private boneLow = 0;
+    private boneHigh = 0;
+    private colorLow = 0;
+    private colorHigh = 0;
 
     constructor(model: SkeletonModel) {
         const boneTexels = Math.ceil((model.bones.count * WORLD_STRIDE) / 4);
@@ -68,11 +77,36 @@ export class TextureStore implements SkinStore {
 
     bonesWritten(low: number, high: number): void {
         // 6 numbers a bone are 1.5 texels: the stretch starts and ends at a whole texel
-        uploadTexels(this.boneTexture, Math.floor((low * 3) / 2), Math.ceil(((high + 1) * 3) / 2));
+        this.boneLow = Math.min(this.boneLow, Math.floor((low * 3) / 2));
+        this.boneHigh = Math.max(this.boneHigh, Math.ceil(((high + 1) * 3) / 2));
     }
 
     colorsWritten(low: number, high: number): void {
-        uploadTexels(this.palette, low * 2, high * 2 + 2);
+        this.colorLow = Math.min(this.colorLow, low * 2);
+        this.colorHigh = Math.max(this.colorHigh, high * 2 + 2);
+    }
+
+    /**
+     * Uploads the texels that were written since the last call: one stretch per texture. The
+     * paint of the view calls it before Pixi draws the view. Returns the bytes it uploaded.
+     */
+    flush(): number {
+        let bytes = 0;
+
+        if (this.boneHigh > 0) {
+            uploadTexels(this.boneTexture, this.boneLow, this.boneHigh);
+            bytes += RANGED ? (this.boneHigh - this.boneLow) * 16 : this.bones.byteLength;
+            this.boneLow = this.bones.length;
+            this.boneHigh = 0;
+        }
+        if (this.colorHigh > 0) {
+            uploadTexels(this.palette, this.colorLow, this.colorHigh);
+            bytes += RANGED ? (this.colorHigh - this.colorLow) * 4 : this.colors.byteLength;
+            this.colorLow = this.colors.length;
+            this.colorHigh = 0;
+        }
+
+        return bytes;
     }
 
     /** Frees the two textures. */

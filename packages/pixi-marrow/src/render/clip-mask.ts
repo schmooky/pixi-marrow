@@ -3,6 +3,7 @@ import { f64, i32 } from '../geometry/read';
 import type { ClipShape } from './clip-shape';
 import { MeasuredGeometry } from './measured-geometry';
 import { RangeMesh } from './range-mesh';
+import { sent } from './sent';
 
 /** Room for one triangle, so that the GPU buffers are never empty. */
 const MIN_VERTICES = 3;
@@ -96,6 +97,7 @@ export class ClipMask {
 
         for (let i = 0; i < floats; i++) positions[i] = f64(shape.polygon, i);
         this.positionBuffer.update();
+        sent.masks += positions.byteLength;
         const { fixedIndices } = shape;
         const rewritten =
             fixedIndices === null ? this.triangulate(shape) : this.show(fixedIndices, shape.indexCount, false);
@@ -175,6 +177,7 @@ export class ClipMask {
             // the whole array: a part would leave old triangles on the GPU when two calls share a frame
             buffer.update();
         } else return false;
+        sent.masks += indices.byteLength;
         // Pixi draws this many indices. With 0 it draws the whole array, which is zero then
         this.mesh.geometry.indexCount = count;
 

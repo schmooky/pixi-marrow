@@ -5,7 +5,7 @@ import { nextVersion, touchPose } from '../../src/pose/state';
 import { inspectView, layoutArrayBytes } from '../../src/render/inspect';
 import { SkeletonView } from '../../src/render/skeleton-view';
 import { listFixtures } from '../parity/fixtures';
-import { type CoverSlot, coverRig, moveSlot } from './cover-rig';
+import { type CoverSlot, coverRig, framesUntilCovered, moveSlot } from './cover-rig';
 import {
     createRig,
     drawPose,
@@ -95,6 +95,11 @@ describe('skinning on the GPU', () => {
         expect(sequences).toBeGreaterThan(0);
         for (let frame = 0; frame < 10; frame++) {
             step(rig);
+            // a second update before the draw: the textures still upload once
+            touchPose(rig.engine.state);
+            rig.view.update(rig.engine.state);
+            expect(bones).toHaveLength(frame);
+            rig.view.parts.paints.mesh?.flush();
             expectSkinned(rig);
             expect(stats.placedSlots).toBeLessThanOrEqual(sequences);
         }
@@ -117,11 +122,23 @@ describe('skinning on the GPU', () => {
 
         for (let frame = 0; frame < 20; frame++) {
             step(rig);
+            rig.view.parts.paints.mesh?.flush();
             expect(stats.placedSlots).toBe(0);
         }
         expectSkinned(rig);
         expect(positions).toEqual([]);
         expect(bones.length).toBeGreaterThan(10);
+        expect(stats.boneUploads - before.boneUploads).toBe(bones.length);
+        // the bytes of the bones are counted where they upload
+        expect(stats.uploadBytes.bones).toBeGreaterThan(0);
+        expect(stats.uploadBytes.positions).toBe(before.uploadBytes.positions);
+        // a hidden view uploads nothing, until Pixi draws it again
+        rig.view.container.visible = false;
+        step(rig);
+        rig.view.parts.paints.mesh?.flush();
+        expect(stats.boneUploads - before.boneUploads).toBe(bones.length + 1);
+        rig.view.container.visible = true;
+        rig.view.parts.paints.mesh?.flush();
         expect(stats.boneUploads - before.boneUploads).toBe(bones.length);
         expect(stats.positionUploads).toBe(before.positionUploads);
     });
@@ -132,6 +149,7 @@ describe('skinning on the GPU', () => {
         const head = slotIndex(rig, 'head');
 
         step(rig, 0);
+        rig.view.parts.paints.mesh?.flush();
         const data = skinData(rig);
         const palette = watchUpdates(data.sources.palette);
         const bones = watchUpdates(data.sources.bones);
@@ -141,6 +159,9 @@ describe('skinning on the GPU', () => {
         state.version = nextVersion(state.version);
         state.slotStamps[head] = state.version;
         rig.view.update(state);
+        // the palette uploads when Pixi is about to draw
+        expect(palette).toEqual([]);
+        rig.view.parts.paints.mesh?.flush();
         expect(palette).toEqual([[head * 2, head * 2 + 2]]);
         expect(bones).toEqual([]);
         expect(positions).toEqual([]);
@@ -150,6 +171,7 @@ describe('skinning on the GPU', () => {
         // the same bytes again: nothing to write
         touchPose(state);
         rig.view.update(state);
+        rig.view.parts.paints.mesh?.flush();
         expect(palette).toHaveLength(1);
     });
 
@@ -374,5 +396,44 @@ describe('skinning on the GPU', () => {
         expect(rig.view.stats.coveredSlots).toBe(0);
         expect(positions).toEqual([]);
         expect(expectSkinned(rig).map((item) => item.cpu)).toEqual([false, false]);
+    });
+
+    it('places on the CPU only for a search while nothing is covered, and still finds what goes behind', async () => {
+        const apart: readonly CoverSlot[] = [
+            { name: 'small', shows: 'small', at: [300, 0] },
+            { name: 'big', shows: 'big' },
+        ];
+        const rig = await coverRig(apart, { skinning: 'gpu', instancing: 'off' });
+        const { state } = rig.engine;
+        const { template } = rig.view.parts;
+        const first = (template.first[0] ?? 0) * 2;
+        let placed = 0;
+        let last = template.positions[first];
+
+        redraw(rig);
+        expect(rig.view.stats.coveredSlots).toBe(0);
+        // the small slot moves in every frame, far from the big one: the shader places it
+        for (let frame = 0; frame < 64; frame++) {
+            moveSlot(rig, 'small', 300 + frame, 0);
+            drawPose(rig.view, state);
+            if (template.positions[first] !== last) placed++;
+            last = template.positions[first];
+        }
+        // the CPU placed it for the searches alone, which come once in 4 to 64 updates
+        expect(placed).toBeGreaterThan(0);
+        expect(placed).toBeLessThan(12);
+        expect(rig.view.stats.coveredSlots).toBe(0);
+        // it goes behind the big slot: a search places it, and finds it covered
+        moveSlot(rig, 'small', 0, 0);
+        expect(framesUntilCovered(rig, 1, () => drawPose(rig.view, state))).toBeLessThanOrEqual(64);
+        // from then on every pose is tested, so the CPU follows every move
+        moveSlot(rig, 'small', 2, 0);
+        drawPose(rig.view, state);
+        const moved = template.positions[first];
+
+        moveSlot(rig, 'small', 4, 0);
+        drawPose(rig.view, state);
+        expect(template.positions[first]).not.toBe(moved);
+        expect(rig.view.stats.coveredSlots).toBe(1);
     });
 });

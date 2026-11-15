@@ -73,11 +73,20 @@ interface OwnUniforms {
 
 const owned = new WeakMap<RangeMesh, OwnUniforms>();
 
+/** Pixi's batch of uniforms, as far as this file reads it. */
+interface UniformBatch {
+    /** The bytes the draws of the frame took so far. */
+    byteIndex: number;
+    data: Float32Array;
+    _minUniformOffsetAlignment?: unknown;
+}
+
 /**
- * The slots still free in Pixi's batch of uniforms this frame, or 0 where they cannot be read.
- * Then every mesh of ours binds a buffer of its own, which draws the same picture.
+ * Pixi's batch of uniforms of a renderer, or null where it cannot be read. Then every mesh of
+ * ours binds a buffer of its own, which draws the same picture. Pixi makes the batch once with
+ * its pipe, so it is looked up once per renderer, not per mesh.
  */
-function batchSlots(renderer: Renderer): number {
+function findBatch(renderer: Renderer): UniformBatch | null {
     const pipe: unknown = Reflect.get(renderer.renderPipes, 'uniformBatch');
     const batch: unknown = typeof pipe === 'object' && pipe !== null ? Reflect.get(pipe, '_batchBuffer') : null;
     const used: unknown = typeof batch === 'object' && batch !== null ? Reflect.get(batch, 'byteIndex') : null;
@@ -89,11 +98,20 @@ function batchSlots(renderer: Renderer): number {
             'Every mesh of the mesh mode binds a uniform buffer of its own on WebGPU, which costs an upload where it moves.',
         );
 
-        return 0;
+        return null;
     }
-    const slot: unknown = Reflect.get(batch as object, '_minUniformOffsetAlignment');
 
-    return Math.floor((data.byteLength - used) / (typeof slot === 'number' && slot > 0 ? slot : SLOT_BYTES));
+    return batch as UniformBatch;
+}
+
+/** The slots still free in Pixi's batch of uniforms this frame, or 0 without a batch. */
+function batchSlots(batch: UniformBatch | null): number {
+    if (batch === null) return 0;
+    const slot = batch._minUniformOffsetAlignment;
+
+    return Math.floor(
+        (batch.data.byteLength - batch.byteIndex) / (typeof slot === 'number' && slot > 0 ? slot : SLOT_BYTES),
+    );
 }
 
 /** The uniform buffer of a mesh, made the first time the mesh needs it and freed with it. */
@@ -195,6 +213,8 @@ export function watchUniformBatch(renderer: Renderer): void {
     }
     if (Reflect.get(inner, WRAPPED) === true) return;
     const adaptor = inner as MeshAdaptor;
+    /** The batch of uniforms of the renderer, looked up at the first mesh of ours. */
+    let batch: UniformBatch | null | undefined;
     const wrapped: MeshAdaptor & { [WRAPPED]: true } = {
         [WRAPPED]: true,
         // Pixi's adaptor was set up when the pipe was made
@@ -202,7 +222,8 @@ export function watchUniformBatch(renderer: Renderer): void {
         execute(meshPipe: MeshPipe, mesh: Mesh): void {
             const ours = mesh instanceof RangeMesh && mesh.shader?.gpuProgram?.autoAssignLocalUniforms === true;
 
-            if (ours && batchSlots(renderer) < RESERVE_SLOTS) drawOwn(renderer as WebGPURenderer, meshPipe, mesh);
+            if (ours && batch === undefined) batch = findBatch(renderer);
+            if (ours && batchSlots(batch ?? null) < RESERVE_SLOTS) drawOwn(renderer as WebGPURenderer, meshPipe, mesh);
             else adaptor.execute(meshPipe, mesh);
         },
         destroy: () => adaptor.destroy(),

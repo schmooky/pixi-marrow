@@ -1,5 +1,6 @@
 import type { Container } from 'pixi.js';
-import type { CoverSearch } from './cover-search';
+import type { PoseState } from '../pose/state';
+import type { CoverSearch, Settles } from './cover-search';
 import { cutCode } from './cut-code';
 import type { Template } from './template';
 import type { VisibleList } from './visible';
@@ -20,7 +21,7 @@ import type { VisibleList } from './visible';
  *
  * @example
  * const cover = new CoverTest(model.slots.count);
- * if (cover.follow(template, seen, state.world, bones, view.container, moved, relisted)) {
+ * if (cover.follow(template, seen, state, bones, view.container, moved, relisted)) {
  *     ranges.build(template, seen.list, seen.clips, cover.skipped, seen.count);
  * }
  */
@@ -50,7 +51,7 @@ export class CoverTest {
     /**
      * Brings the marks in line with a pose that a view is about to draw. Most frames have no
      * work, see `CoverSearch.follow`. Returns whether a mark changed, which asks for new index
-     * buffers.
+     * buffers. Before a search, `paint` places on the CPU the vertices that a vertex shader places.
      *
      * @param container The container of the view. Asked about only when there is work.
      * @param moved Whether a vertex moved or the list changed.
@@ -59,11 +60,12 @@ export class CoverTest {
     follow(
         template: Template,
         visible: VisibleList,
-        world: Float64Array,
+        state: PoseState,
         bones: Int16Array,
         container: Container,
         moved: boolean,
         relisted: boolean,
+        paint?: Settles,
     ): boolean {
         // a layout without an opaque rectangle has nothing to test with
         if (template.opaqueCount === 0) {
@@ -74,7 +76,7 @@ export class CoverTest {
         // the code that gave the layout its rectangles is the code that searches
         this.search ??= cutCode()?.createSearch(this.skipped);
 
-        return this.note(this.search?.follow(template, visible, world, bones, container, moved, relisted));
+        return this.note(this.search?.follow(template, visible, state, bones, container, moved, relisted, paint));
     }
 
     /**

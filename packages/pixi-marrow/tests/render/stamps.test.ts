@@ -77,7 +77,9 @@ describe('a pose that did not change', () => {
         const positions = Float32Array.from(rig.view.parts.template.positions);
 
         for (let frame = 0; frame < 5; frame++) rig.view.update(state);
-        expect(rig.view.stats).toEqual({ ...before, skips: before.skips + 5 });
+        // the update before handed bytes to the GPU, and these hand on none
+        expect(before.frameBytes).toBeGreaterThan(0);
+        expect(rig.view.stats).toEqual({ ...before, skips: before.skips + 5, frameBytes: 0 });
         expect(uploads).toEqual({ positions: 0, colors: 0, uvs: 0 });
         expect(rig.view.parts.template.positions).toEqual(positions);
         expectKernel(rig);
@@ -134,8 +136,8 @@ describe('a pose that did not change', () => {
         stage.render();
         // Pixi asked the pipe, which packed this skeleton alone: one stretch of the positions
         expect(uploads).toMatchObject({ positions: 1, statics: 0, indices: 0 });
-        // before pixi.js 8.23 the position buffer uploads whole
-        if (RANGED_UPLOADS) expect(uploads.positionBytes).toBe(element.attributeSize * 8);
+        // on every pixi.js: one stretch is what a WebGL buffer before 8.23 keeps
+        expect(uploads.positionBytes).toBe(element.attributeSize * 8);
         expect(rig.view.stats).toMatchObject({ positionUploads, placedSlots });
         expect(rig.view.parts.template.positions).toEqual(inSkeleton);
         for (const item of rigs) expectBatch(item);

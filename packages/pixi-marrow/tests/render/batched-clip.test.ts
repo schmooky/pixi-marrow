@@ -245,6 +245,59 @@ describe('what a clip cuts in a batch', () => {
         expectClippedBatch(rig);
         expectClippedBatch(next);
     });
+
+    it('is placed again, not cut again, when the display object moves and the pose rests', async () => {
+        const stage = createStage();
+        const family = await loadFamily('4.2/coin-pro.skel');
+        const rigs = await populate(stage, family, 3);
+        const [rig] = rigs;
+        const code = clipCode();
+
+        if (rig === undefined || code === undefined) throw new Error('no rig');
+        for (const item of rigs) play(item, 'animation');
+        for (let frame = 0; frame < 30; frame++) {
+            for (const item of rigs) step(item, 0.05);
+            stage.render();
+        }
+        expect(expectClippedBatch(rig).cut).toBeGreaterThan(0);
+        const { fill } = code;
+        const { builds } = stage.counts;
+        let fills = 0;
+
+        code.fill = (...args) => {
+            fills++;
+
+            return fill(...args);
+        };
+        try {
+            for (let frame = 0; frame < 5; frame++) {
+                for (const item of rigs) {
+                    item.view.container.position.set(13 * frame + 7, -9 * frame);
+                    item.view.container.scale.set(1 + frame / 4);
+                    item.view.update(item.engine.state);
+                }
+                stage.render();
+                // what the official clipper leaves, under the new transform, to the bit
+                for (const item of rigs) expectClippedBatch(item);
+            }
+            expect(fills).toBe(0);
+            expect(rig.view.stats.transformReplaces).toBe(5);
+            // a color of a slot is in every cut vertex: that is cut again
+            rig.view.container.tint = 0x80ff80;
+            stage.render();
+            expect(fills).toBe(1);
+            expectClippedBatch(rig);
+            // and so is a pose that moved on
+            step(rig, 0.05);
+            rig.view.container.x += 3;
+            stage.render();
+            expect(fills).toBe(2);
+            expectClippedBatch(rig);
+        } finally {
+            code.fill = fill;
+        }
+        expect(stage.counts.builds).toBe(builds);
+    });
 });
 
 /** The area of triangles given corner by corner. */

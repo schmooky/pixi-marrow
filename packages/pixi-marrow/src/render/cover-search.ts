@@ -2,6 +2,7 @@ import type { Container } from 'pixi.js';
 import { pointsInsideQuad } from '../geometry/occlusion';
 import { f32, f64, i16, i32 } from '../geometry/read';
 import { transformPoints } from '../geometry/vertices';
+import type { PoseState } from '../pose/state';
 import { drawsPlain } from './gate';
 import { u8 } from './read';
 import type { Template } from './template';
@@ -42,6 +43,11 @@ import { NO_CLIP, type VisibleList } from './visible';
  *   of its vertices are.
  * - A frame with skipped slots tests those slots only, against the rectangles above them.
  */
+
+/** What places on the CPU the vertices that a vertex shader places: the paint of the mesh mode. */
+export interface Settles {
+    settle(template: Template, state: PoseState, visible: VisibleList): void;
+}
 
 /** The most slots that can hide other slots in one frame. */
 export const MAX_OCCLUDERS = 4;
@@ -158,7 +164,8 @@ export class CoverSearch {
      *
      * Nothing is covered while Pixi does not draw the skeleton as its vertices say, see
      * `drawsPlain`. A pose that moved can cover other slots, and a search finds them some updates
-     * later: {@link owes} says that it is still to come.
+     * later: {@link owes} says that it is still to come. Before a search, `paint` places on the
+     * CPU the vertices that a vertex shader places.
      *
      * @param container The container of the view. `drawsPlain` is asked about it only when there is work.
      * @param moved Whether a vertex moved or the list changed since the call before.
@@ -167,18 +174,24 @@ export class CoverSearch {
     follow(
         template: Template,
         visible: VisibleList,
-        world: Float64Array,
+        state: PoseState,
         bones: Int16Array,
         container: Container,
         moved: boolean,
         relisted: boolean,
+        paint?: Settles,
     ): boolean {
         // a layout without an opaque rectangle has nothing to test with
         this.owes = template.opaqueCount > 0 && (this.owes || moved || relisted);
         if (!this.owes || !this.begin(relisted)) return false;
         this.cuts = visible.cuts;
         this.cutCount = visible.cutCount;
-        if (drawsPlain(container)) return this.run(template, visible.list, visible.clips, visible.count, world, bones);
+        if (drawsPlain(container)) {
+            // the positions a vertex shader places are placed on the CPU now, for this search alone
+            paint?.settle(template, state, visible);
+
+            return this.run(template, visible.list, visible.clips, visible.count, state.world, bones);
+        }
         this.rest(false);
 
         return this.clear();

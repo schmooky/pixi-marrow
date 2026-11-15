@@ -1,7 +1,7 @@
 import {
     type BLEND_MODES,
     type Bounds,
-    Buffer,
+    type Buffer,
     Container,
     type Mesh,
     type Shader,
@@ -15,6 +15,7 @@ import type { ClipShape } from './clip-shape';
 import type { MeasuredGeometry } from './measured-geometry';
 import { createRangeMesh, followSkin, type VertexBuffers } from './range-mesh';
 import { u8, u16 } from './read';
+import { sent } from './sent';
 import { createMaskShader, createViewShader, releaseShader } from './shader';
 import { MAX_PAGES, type Template } from './template';
 import { NO_CLIP, type VisibleList } from './visible';
@@ -43,7 +44,7 @@ import { NO_CLIP, type VisibleList } from './visible';
  */
 
 /** Whether a buffer of this Pixi uploads at once when it is told that it changed, see `uploadsStretch`. */
-const AT_ONCE = uploadsStretch(Buffer.prototype.update, VERSION);
+const AT_ONCE = uploadsStretch(VERSION);
 
 /** What {@link DrawRanges} draws with. */
 export interface DrawRangesOptions {
@@ -393,10 +394,10 @@ export class DrawRanges {
         // Pixi draws this many indices. A Pixi without `indexCount` draws all, and the rest is zero.
         range.mesh.geometry.indexCount = drawn;
         range.buffer.update(changed * range.indices.BYTES_PER_ELEMENT);
+        sent.indices += changed * range.indices.BYTES_PER_ELEMENT;
         // an upload that waits for a draw can be replaced by the next one, which must then reach as far
         range.held = AT_ONCE ? written : Math.max(written, range.held);
         range.mesh.visible = true;
-
         return drawn;
     }
 

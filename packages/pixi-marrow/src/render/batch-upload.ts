@@ -1,4 +1,4 @@
-import type { Buffer } from 'pixi.js';
+import { type Buffer, VERSION } from 'pixi.js';
 
 /*
  * What a batch buffer has to upload before the next draw. Skeletons change their static vertex
@@ -8,8 +8,8 @@ import type { Buffer } from 'pixi.js';
  * frame are kept, and the cheaper of the two is done when the batch is about to draw.
  */
 
-/** The most stretches that are kept. One more makes the upload whole. */
-const MAX_STRETCHES = 32;
+/** The most stretches that are kept. One more makes one stretch of all that are kept. */
+const MAX_STRETCHES = 256;
 
 /** What one more upload call costs, in bytes of a copy. A guess that errs on the side of fewer calls. */
 const CALL_BYTES = 8192;
@@ -18,106 +18,102 @@ const CALL_BYTES = 8192;
 const AT_ONCE_MINOR = 23;
 
 /**
- * Whether a Pixi can upload the stretches of a buffer one by one. Two things are needed, and
- * pixi.js has both from 8.23 on:
- *
- * - `Buffer.update` takes an offset. pixi.js 8.16 to 8.19 has none: every change uploads the
- *   buffer from its start.
- * - A buffer uploads at once when it is told that it changed. Up to 8.22 a WebGL buffer waits
- *   until its geometry is bound, and keeps the one stretch it was told last. A second stretch
- *   before that would replace the first.
+ * Whether a WebGL buffer of a Pixi uploads at once when it is told that a stretch of it changed:
+ * from pixi.js 8.23 on. Up to 8.22 a WebGL buffer waits until its geometry is bound, and keeps
+ * the one stretch it was told last. A second stretch before that would replace the first. A
+ * buffer of WebGPU writes at once in every pixi.js the package allows.
  *
  * @param version The version of Pixi, as its `VERSION` says.
  *
  * @example
- * const pending = new PendingUpload(uploadsStretch(Buffer.prototype.update, VERSION));
+ * const each = uploadsStretch(VERSION) || 'gpu' in renderer;
  */
-export function uploadsStretch(update: Buffer['update'], version: string): boolean {
+export function uploadsStretch(version: string): boolean {
     const [major = 0, minor = 0] = version.split('.').map(Number);
 
-    return update.length > 1 && (major > 8 || (major === 8 && minor >= AT_ONCE_MINOR));
+    return major > 8 || (major === 8 && minor >= AT_ONCE_MINOR);
 }
 
-/**
- * Uploads the items of a buffer from `from` up to `to`, or the whole buffer where Pixi cannot
- * upload a stretch on its own. Does nothing for an empty stretch.
- *
- * @param ranged What {@link uploadsStretch} says about this Pixi.
- * @param itemBytes The bytes of one item.
- *
- * @example
- * uploadStretch(positions, ranged, pass.from, pass.to, 8);
- */
-export function uploadStretch(buffer: Buffer, ranged: boolean, from: number, to: number, itemBytes: number): void {
-    if (to <= from) return;
-    if (ranged) buffer.update((to - from) * itemBytes, from * itemBytes);
-    else buffer.update();
-}
+/** What {@link uploadsStretch} says about the Pixi that is installed. */
+export const AT_ONCE: boolean = uploadsStretch(VERSION);
 
 /**
  * The stretches of one buffer that changed since its last upload.
  *
  * @example
- * const pending = new PendingUpload(uploadsStretch(Buffer.prototype.update, VERSION));
+ * const pending = new PendingUpload();
  * pending.add(120, 40);
- * pending.flush(buffer, 4, used);
+ * pending.flush(buffer, 4, used, true);
  */
 export class PendingUpload {
     /** True when the whole buffer must upload. */
     whole = false;
     /** How many stretches are kept. */
     count = 0;
-    /** Per stretch: its first item and how many items it has. */
+    /** Per stretch: its first item and the item behind its last. */
     private readonly stretches = new Int32Array(MAX_STRETCHES * 2);
-    private readonly ranged: boolean;
-
-    /** @param ranged Whether Pixi can upload a stretch that does not start at the beginning of a buffer. */
-    constructor(ranged: boolean) {
-        this.ranged = ranged;
-    }
 
     /** Notes that `size` items from item `from` on changed. */
     add(from: number, size: number): void {
         // an upload of no bytes is one of the whole buffer to Pixi
         if (this.whole || size <= 0) return;
-        if (!this.ranged || this.count === MAX_STRETCHES) {
-            this.whole = true;
-
-            return;
-        }
+        if (this.count === MAX_STRETCHES) this.span();
         this.stretches[this.count * 2] = from;
-        this.stretches[this.count * 2 + 1] = size;
-        this.count++;
+        this.stretches[this.count++ * 2 + 1] = from + size;
     }
 
-    /** Forgets what was noted: the buffer was uploaded by other means. */
-    clear(): void {
-        this.whole = false;
+    /**
+     * Forgets what was noted: the buffer was uploaded by other means, or it uploads whole.
+     *
+     * @param whole Whether the whole buffer must upload.
+     */
+    clear(whole: boolean = false): void {
+        this.whole = whole;
         this.count = 0;
     }
 
     /**
-     * Uploads what changed: the stretches one by one, or the first `used` items of the buffer
-     * when that is less work. Returns the bytes it uploaded.
+     * Uploads what changed, the cheaper way: the stretches one by one, or the first `used` items
+     * of the buffer. Returns the bytes it uploaded.
+     *
+     * With `each` false the upload is one stretch from the first change to the last. That is for
+     * a buffer that keeps one stretch until it is bound, see {@link uploadsStretch}.
      *
      * @param itemBytes The bytes of one item.
      */
-    flush(buffer: Buffer, itemBytes: number, used: number): number {
-        const { stretches, count } = this;
+    flush(buffer: Buffer, itemBytes: number, used: number, each: boolean): number {
+        const { stretches } = this;
+        const whole = used * itemBytes;
         let bytes = 0;
 
-        if (!this.whole && count === 0) return 0;
-        for (let i = 0; i < count; i++) bytes += Number(stretches[i * 2 + 1]) * itemBytes;
-        if (this.whole || bytes + count * CALL_BYTES >= used * itemBytes) {
-            bytes = used * itemBytes;
+        if (!this.whole && this.count === 0) return 0;
+        if (!each) this.span();
+        for (let i = 0; i < this.count; i++) {
+            bytes += (Number(stretches[i * 2 + 1]) - Number(stretches[i * 2])) * itemBytes;
+        }
+        if (this.whole || bytes + this.count * CALL_BYTES >= whole) {
+            bytes = whole;
             buffer.update(bytes);
         } else {
-            for (let i = 0; i < count; i++) {
-                buffer.update(Number(stretches[i * 2 + 1]) * itemBytes, Number(stretches[i * 2]) * itemBytes);
+            for (let i = 0; i < this.count; i++) {
+                const from = Number(stretches[i * 2]);
+
+                buffer.update((Number(stretches[i * 2 + 1]) - from) * itemBytes, from * itemBytes);
             }
         }
         this.clear();
 
         return bytes;
+    }
+
+    /** Makes one stretch of all that are kept: from the first item that changed to the last. */
+    private span(): void {
+        const { stretches } = this;
+
+        for (let i = 1; i < this.count; i++) {
+            stretches[0] = Math.min(Number(stretches[0]), Number(stretches[i * 2]));
+            stretches[1] = Math.max(Number(stretches[1]), Number(stretches[i * 2 + 1]));
+        }
+        this.count = Math.min(this.count, 1);
     }
 }

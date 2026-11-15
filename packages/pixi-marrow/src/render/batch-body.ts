@@ -2,6 +2,7 @@ import { type Bounds, type Renderer, ViewContainer } from 'pixi.js';
 import { BatchElement, type BatchElementOptions, PIPE_ID } from './batch-element';
 import { GROUP_PAGES } from './batch-layout';
 import { linkRenderer } from './batch-pipe';
+import { drawsNothing } from './context-watch';
 import type { DrawGate } from './gate';
 
 /** What a {@link BatchBody} is created with: what its element needs, and its bounds. */
@@ -14,6 +15,15 @@ export interface BatchBodyOptions extends Omit<BatchElementOptions, 'place'> {
 function link(this: BatchBody, renderer: Renderer): void {
     if (renderer === this.linked) return;
     linkRenderer(renderer);
+    // a renderer that draws no skeleton, in every frame: the body leaves the batch and the view counts no draw
+    if (drawsNothing(renderer)) {
+        const { stats } = this.element;
+
+        this.visible = false;
+        stats.drawCalls = stats.indices = 0;
+
+        return;
+    }
     this.linked = renderer;
     // a GPU that cannot sample the pages of one run in a batch: the view goes back to meshes before Pixi collects it
     if (renderer.limits.maxBatchableTextures < Math.min(this.element.pages.length, GROUP_PAGES)) {

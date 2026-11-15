@@ -118,9 +118,17 @@ export class MeshSkin {
         this.template = template;
     }
 
-    /** See `SkinPose.pose`. The search for covered slots needs every position on the CPU. */
+    /**
+     * See `SkinPose.pose`. While a slot is covered, every pose is tested, so the CPU places what
+     * moved. A search for covered slots at any other time asks for the positions with {@link settle}.
+     */
     pose(pass: PosePass, template: Template, state: PoseState, visible: VisibleList): void {
-        this.textures.pose(pass, template, this.layout, state, visible, template.opaqueCount > 0);
+        this.textures.pose(pass, template, this.layout, state, visible, pass.tracked);
+    }
+
+    /** Uploads what the passes wrote into the textures of the view since the last call. Returns the bytes. */
+    flush(): number {
+        return this.own?.flush() ?? 0;
     }
 
     /**

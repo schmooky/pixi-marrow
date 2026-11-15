@@ -8,9 +8,10 @@ import { buildTemplate } from './template';
 
 /*
  * Which of the two render modes a view draws in. The mesh mode gives a skeleton meshes of its
- * own: one draw call per instance, and the vertex shader places the vertices. The batched mode
- * writes the skeleton into the batch of its render group: instances share draw calls, and the
- * CPU places the vertices that moved and copies them.
+ * own: one draw call per instance. The CPU places the vertices that moved and uploads them. Only
+ * with `skinning: 'gpu'` the vertex shader places them. The batched mode writes the skeleton
+ * into the batch of its render group: instances share draw calls, and the CPU places the
+ * vertices that moved and copies them.
  *
  * The code of the mesh mode loads on demand, see `mesh-code.ts`. A view that should draw with
  * meshes draws in a batch until that code is there.
@@ -39,7 +40,11 @@ export type ModeReason = 'option' | 'small' | 'large' | 'limit';
  * 474 vertices and 1.02 to 1.03 times at 667 vertices. There the batch saves about 2.7
  * microseconds per instance and costs about 5 nanoseconds per vertex, which meet near 570
  * vertices. At this limit that model gives a frame that is 7 percent longer on WebGL2. A larger
- * skeleton is seldom drawn by the hundred, and the GPU places its vertices in the mesh mode.
+ * skeleton is seldom drawn by the hundred.
+ *
+ * Both sides of that measurement placed their vertices on the CPU: the mesh mode does so unless
+ * `skinning: 'gpu'` is set. So the numbers compare a copy into the batch with a draw call of
+ * its own, and they hold for the default.
  */
 export const AUTO_BATCH_VERTICES = 1024;
 

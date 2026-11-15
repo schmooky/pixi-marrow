@@ -24,10 +24,10 @@ import { NO_CLIP, type VisibleList } from './visible';
  * - The CPU places the vertices it is in charge of, when the slot or one of their bones is newer.
  *   Only those go to the GPU as positions.
  *
- * Code that reads the positions on the CPU, the bounds and the debug overlays, asks for them with
- * `settle`. The search for covered slots needs them for every pose, so a layout with an opaque
- * rectangle has all of its vertices placed on the CPU, and uploads only the ones the CPU is in
- * charge of.
+ * Code that reads the positions on the CPU asks for them with `settle`: the bounds, the debug
+ * overlays, and a search for covered slots, which runs once in 4 to 64 updates. While a slot is
+ * covered, every pose is tested. The CPU then places the vertices that moved in every pass, and
+ * uploads only the ones it is in charge of.
  */
 
 /** The flag of the palette for a slot whose vertices the CPU places. */
@@ -73,7 +73,7 @@ export class SkinPose {
      * pass says what changed, as after `poseEntries`: `placed` counts the entries whose
      * positions go to the GPU, `skinned` the bones.
      *
-     * @param place Whether the CPU also places the vertices the shader places, for the search of covered slots.
+     * @param place Whether the CPU also places the vertices the shader places: a slot is covered, and every pose is tested.
      */
     pose(
         pass: PosePass,
@@ -87,6 +87,8 @@ export class SkinPose {
         const { slotStamps, deformLengths } = state;
         const { seen, all } = pass;
         const { bones } = this.model.slots;
+        // the CPU left out poses of the vertices the shader places: it places all of them now
+        const late = place && this.stale;
         let from = template.vertexCount;
         let to = 0;
         let placed = 0;
@@ -107,7 +109,13 @@ export class SkinPose {
             if (i32(template.counts, entry) === 0) continue;
             if (newer) this.refresh(pass, template, state, entry, slot, gpu);
             if (gpu && !place) continue;
-            if (!newer && !bonesMoved(state, template.weights[entry] ?? null, i16(bones, slot), seen)) continue;
+            if (
+                !newer &&
+                !(gpu && late) &&
+                !bonesMoved(state, template.weights[entry] ?? null, i16(bones, slot), seen)
+            ) {
+                continue;
+            }
             placeEntry(template, state, bones, entry, slot);
             // placed for the search of covered slots alone: the shader places it from the bones
             if (gpu) continue;
@@ -146,7 +154,7 @@ export class SkinPose {
         // the palette is what goes to the GPU of the colors
         pass.colored = this.painted;
         pass.skinned = layout.count > 0 ? this.poseBones(state, pass.seen, pass.all) : 0;
-        if (!place) this.stale = true;
+        this.stale = !place;
         if (this.high >= 0) this.store.colorsWritten(this.low, this.high);
     }
 

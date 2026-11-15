@@ -143,7 +143,18 @@ export class ViewPaints {
         if (this.mesh !== undefined) this.mesh.wake(template);
         // the view enters the mesh mode only once its code is loaded
         else {
-            const paint = { container, template, pages, dark, model, measure, gpu, instancing, gate };
+            const paint = {
+                container,
+                template,
+                pages,
+                dark,
+                model,
+                measure,
+                gpu,
+                instancing,
+                gate,
+                stats: options.stats,
+            };
 
             this.mesh = meshCode()?.createPaint(paint);
         }
