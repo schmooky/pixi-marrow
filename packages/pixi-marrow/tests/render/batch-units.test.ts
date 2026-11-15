@@ -1,13 +1,11 @@
-import { Buffer, BufferUsage, type Renderer, Shader, VERSION } from 'pixi.js';
+import { Buffer, BufferUsage, Shader } from 'pixi.js';
 import { describe, expect, it } from 'vitest';
 import { holdsLayout, layoutSlots } from '../../src/render/batch-layout';
 import { createBatchShader } from '../../src/render/batch-shader';
-import { PendingUpload, uploadsStretch } from '../../src/render/batch-upload';
+import { PendingUpload } from '../../src/render/batch-upload';
 import { CoverTest } from '../../src/render/cover';
-import { batcherOf, createStage } from './batch-stage';
 import { type CoverSlot, coverRig } from './cover-rig';
 import { PENTAGON, setPolygon } from './cuts';
-import { outputMask, RANGED_UPLOADS, STATES_OUTPUTS } from './pixi-version';
 import { loadRig, step } from './rig';
 
 /** A buffer that notes what it is told to upload, as byte offset and byte count. */
@@ -103,22 +101,22 @@ describe('what a batch buffer uploads', () => {
         const { buffer, uploads } = noting(100_000);
         const pending = new PendingUpload();
 
-        expect(pending.flush(buffer, 4, 100_000, true)).toBe(0);
+        expect(pending.flush(buffer, 4, 100_000)).toBe(0);
         pending.add(100, 50);
         pending.add(4000, 10);
         expect(pending.count).toBe(2);
-        expect(pending.flush(buffer, 4, 100_000, true)).toBe(240);
+        expect(pending.flush(buffer, 4, 100_000)).toBe(240);
         expect(uploads).toEqual([
             [400, 200],
             [16_000, 40],
         ]);
         // nothing is left for the next draw
-        expect(pending.flush(buffer, 4, 100_000, true)).toBe(0);
+        expect(pending.flush(buffer, 4, 100_000)).toBe(0);
         expect(uploads).toHaveLength(2);
         // a stretch without an item is no upload: Pixi takes a size of 0 for the whole buffer
         pending.add(500, 0);
         expect(pending.count).toBe(0);
-        expect(pending.flush(buffer, 4, 100_000, true)).toBe(0);
+        expect(pending.flush(buffer, 4, 100_000)).toBe(0);
         expect(uploads).toHaveLength(2);
     });
 
@@ -130,7 +128,7 @@ describe('what a batch buffer uploads', () => {
         pending.add(100, 50);
         pending.add(20_000, 8);
         expect(pending.count).toBe(3);
-        expect(pending.flush(buffer, 4, 100_000, true)).toBe(66 * 4);
+        expect(pending.flush(buffer, 4, 100_000)).toBe(66 * 4);
         expect(uploads).toEqual([
             [200_000, 32],
             [400, 200],
@@ -146,7 +144,7 @@ describe('what a batch buffer uploads', () => {
         for (let i = 299; i >= 0; i--) pending.add(i * 5000 + 1_000_000, 20);
         expect(pending.whole).toBe(false);
         expect(pending.count).toBeLessThanOrEqual(256);
-        const bytes = pending.flush(buffer, 4, 3_000_000, true);
+        const bytes = pending.flush(buffer, 4, 3_000_000);
 
         // every change is inside an upload, and the uploads are less than the buffer
         expect(bytes).toBeLessThan(3_000_000 * 4);
@@ -165,14 +163,14 @@ describe('what a batch buffer uploads', () => {
         // long: the calls cost more than the whole
         pending.add(0, 43_000);
         pending.add(47_000, 43_000);
-        expect(pending.flush(buffer, 4, 90_000, true)).toBe(360_000);
+        expect(pending.flush(buffer, 4, 90_000)).toBe(360_000);
         // a small buffer: one call for all of it is the least work
         pending.add(3, 2);
         pending.add(60, 2);
-        expect(pending.flush(buffer, 2, 100, true)).toBe(200);
+        expect(pending.flush(buffer, 2, 100)).toBe(200);
         // after a build the whole buffer is new
         pending.whole = true;
-        expect(pending.flush(buffer, 4, 10, true)).toBe(40);
+        expect(pending.flush(buffer, 4, 10)).toBe(40);
         expect(uploads).toEqual([
             [0, 360_000],
             [0, 200],
@@ -180,62 +178,7 @@ describe('what a batch buffer uploads', () => {
         ]);
         pending.add(1, 1);
         pending.clear();
-        expect(pending.flush(buffer, 4, 10, true)).toBe(0);
-    });
-
-    it('is one stretch around all changes where a buffer keeps one stretch until it is bound', () => {
-        const { buffer, uploads } = noting(100_000);
-        const pending = new PendingUpload();
-
-        pending.add(90_000, 4);
-        pending.add(100, 50);
-        pending.add(4000, 10);
-        expect(pending.flush(buffer, 4, 95_000, false)).toBe((90_004 - 100) * 4);
-        pending.add(7, 3);
-        expect(pending.flush(buffer, 2, 95_000, false)).toBe(6);
-        pending.whole = true;
-        expect(pending.flush(buffer, 4, 95_000, false)).toBe(380_000);
-        expect(uploads).toEqual([
-            [400, (90_004 - 100) * 4],
-            [14, 6],
-            [0, 380_000],
-        ]);
-    });
-
-    it('knows by the version of Pixi whether a WebGL buffer uploads every stretch at once', () => {
-        // the version under test decides for WebGL: every stretch from pixi.js 8.23 on, one stretch before
-        expect(uploadsStretch(VERSION)).toBe(RANGED_UPLOADS);
-        // pixi.js 8.20 to 8.22 takes an offset, and its WebGL buffers upload when they are bound:
-        // a second stretch before that would replace the first. WebGPU writes at once
-        for (const [version, ranged] of [
-            ['8.16.0', false],
-            ['8.20.0', false],
-            ['8.22.3', false],
-            ['8.23.0', true],
-            ['8.30.1', true],
-            ['9.0.0', true],
-        ] as const) {
-            expect(uploadsStretch(version), version).toBe(ranged);
-        }
-    });
-
-    it('is pushed by hand for a Pixi that uploads a buffer when its geometry is bound', async () => {
-        const stage = createStage();
-        const rig = await coverRig([{ name: 'small', shows: 'small' }], { renderMode: 'batched' });
-
-        stage.root.addChild(rig.view.container);
-        step(rig, 0);
-        stage.render();
-        const batcher = batcherOf(rig.view);
-        const pushed: unknown[] = [];
-        // a renderer as far as a push looks at it: the system that uploads a buffer now
-        const renderer = { buffer: { updateBuffer: (buffer: Buffer) => pushed.push(buffer) } } as unknown as Renderer;
-
-        batcher.push(renderer);
-        expect(pushed).toEqual([batcher.geometry.buffers[0], batcher.staticBuffer, batcher.geometry.indexBuffer]);
-        // a renderer without a GPU has no such system, and nothing to upload
-        batcher.push({} as unknown as Renderer);
-        expect(pushed).toHaveLength(3);
+        expect(pending.flush(buffer, 4, 10)).toBe(0);
     });
 });
 
@@ -275,7 +218,7 @@ describe('createBatchShader', () => {
             expect(glProgram.vertex).not.toContain(name);
             expect(gpuProgram.vertex?.source).not.toContain(name);
         }
-        expect(outputMask(gpuProgram)).toBe(STATES_OUTPUTS ? 1 : undefined);
+        expect(gpuProgram.fragmentOutputMask).toBe(1);
     });
 
     it('writes the colors of the mesh mode, with the tint as an attribute', () => {

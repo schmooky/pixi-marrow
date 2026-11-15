@@ -228,7 +228,7 @@ export class InstancePipe {
         return end;
     }
 
-    /** Pixi calls this when an instruction set is destroyed, from pixi.js 8.23. */
+    /** Pixi calls this when an instruction set is destroyed. */
     destroyInstructionSet(set: InstructionSet): void {
         const book = this.books.get(set);
 

@@ -1,7 +1,7 @@
-import { type BufferImageSource, VERSION } from 'pixi.js';
+import type { BufferImageSource } from 'pixi.js';
 import type { SkeletonModel } from '../model/model';
 import { WORLD_STRIDE } from '../pose/state';
-import { dataRoom, dataTexture, uploadTexels } from './skin-layout';
+import { dataRoom, dataTexture } from './skin-layout';
 import type { Template } from './template';
 
 /*
@@ -13,9 +13,6 @@ import type { Template } from './template';
 
 /** The bytes of one slot in the palette of a view that draws alone: the light color, then the dark color and the flag. */
 const PALETTE_STRIDE = 8;
-
-/** Whether a data texture of this Pixi uploads a range of its texels, see `uploadTexels`: from pixi.js 8.23 on. */
-const RANGED = Number(VERSION.split('.')[1]) > 22 || !VERSION.startsWith('8.');
 
 /** The arrays a `SkinPose` writes, and what it tells about what it wrote. */
 export interface SkinStore {
@@ -94,14 +91,14 @@ export class TextureStore implements SkinStore {
         let bytes = 0;
 
         if (this.boneHigh > 0) {
-            uploadTexels(this.boneTexture, this.boneLow, this.boneHigh);
-            bytes += RANGED ? (this.boneHigh - this.boneLow) * 16 : this.bones.byteLength;
+            this.boneTexture.update(this.boneLow, this.boneHigh);
+            bytes += (this.boneHigh - this.boneLow) * 16;
             this.boneLow = this.bones.length;
             this.boneHigh = 0;
         }
         if (this.colorHigh > 0) {
-            uploadTexels(this.palette, this.colorLow, this.colorHigh);
-            bytes += RANGED ? (this.colorHigh - this.colorLow) * 4 : this.colors.byteLength;
+            this.palette.update(this.colorLow, this.colorHigh);
+            bytes += (this.colorHigh - this.colorLow) * 4;
             this.colorLow = this.colors.length;
             this.colorHigh = 0;
         }

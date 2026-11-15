@@ -1,4 +1,4 @@
-import { type Buffer, VERSION } from 'pixi.js';
+import type { Buffer } from 'pixi.js';
 
 /*
  * What a batch buffer has to upload before the next draw. Skeletons change their static vertex
@@ -14,36 +14,13 @@ const MAX_STRETCHES = 256;
 /** What one more upload call costs, in bytes of a copy. A guess that errs on the side of fewer calls. */
 const CALL_BYTES = 8192;
 
-/** The first pixi.js 8 minor whose buffers upload at once, on WebGL too, when they are told that they changed. */
-const AT_ONCE_MINOR = 23;
-
-/**
- * Whether a WebGL buffer of a Pixi uploads at once when it is told that a stretch of it changed:
- * from pixi.js 8.23 on. Up to 8.22 a WebGL buffer waits until its geometry is bound, and keeps
- * the one stretch it was told last. A second stretch before that would replace the first. A
- * buffer of WebGPU writes at once in every pixi.js the package allows.
- *
- * @param version The version of Pixi, as its `VERSION` says.
- *
- * @example
- * const each = uploadsStretch(VERSION) || 'gpu' in renderer;
- */
-export function uploadsStretch(version: string): boolean {
-    const [major = 0, minor = 0] = version.split('.').map(Number);
-
-    return major > 8 || (major === 8 && minor >= AT_ONCE_MINOR);
-}
-
-/** What {@link uploadsStretch} says about the Pixi that is installed. */
-export const AT_ONCE: boolean = uploadsStretch(VERSION);
-
 /**
  * The stretches of one buffer that changed since its last upload.
  *
  * @example
  * const pending = new PendingUpload();
  * pending.add(120, 40);
- * pending.flush(buffer, 4, used, true);
+ * pending.flush(buffer, 4, used);
  */
 export class PendingUpload {
     /** True when the whole buffer must upload. */
@@ -62,32 +39,25 @@ export class PendingUpload {
         this.stretches[this.count++ * 2 + 1] = from + size;
     }
 
-    /**
-     * Forgets what was noted: the buffer was uploaded by other means, or it uploads whole.
-     *
-     * @param whole Whether the whole buffer must upload.
-     */
-    clear(whole: boolean = false): void {
-        this.whole = whole;
+    /** Forgets what was noted: the buffer was uploaded by other means. */
+    clear(): void {
+        this.whole = false;
         this.count = 0;
     }
 
     /**
      * Uploads what changed, the cheaper way: the stretches one by one, or the first `used` items
-     * of the buffer. Returns the bytes it uploaded.
-     *
-     * With `each` false the upload is one stretch from the first change to the last. That is for
-     * a buffer that keeps one stretch until it is bound, see {@link uploadsStretch}.
+     * of the buffer. Returns the bytes it uploaded. A buffer uploads at once when it is told that
+     * a stretch changed, on WebGL and on WebGPU, so every stretch can go on its own.
      *
      * @param itemBytes The bytes of one item.
      */
-    flush(buffer: Buffer, itemBytes: number, used: number, each: boolean): number {
+    flush(buffer: Buffer, itemBytes: number, used: number): number {
         const { stretches } = this;
         const whole = used * itemBytes;
         let bytes = 0;
 
         if (!this.whole && this.count === 0) return 0;
-        if (!each) this.span();
         for (let i = 0; i < this.count; i++) {
             bytes += (Number(stretches[i * 2 + 1]) - Number(stretches[i * 2])) * itemBytes;
         }

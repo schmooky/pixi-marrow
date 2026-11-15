@@ -5,7 +5,6 @@ import { POSITIONS_CHANGED } from '../../src/render/batch-pack';
 import { loadMeshCode } from '../../src/render/mesh-code';
 import { expectBatch, loadFamily } from './batch-check';
 import { batcherOf, createStage, elementOf, watchUploads } from './batch-stage';
-import { RANGED_UPLOADS } from './pixi-version';
 import { play, type Rig, step } from './rig';
 
 /*
@@ -192,7 +191,7 @@ describe('what a batch uploads for small changes', () => {
         expect(rig.view.stats).toMatchObject({ placedSlots: 0, coloredSlots: 1 });
         expect(rig.view.parts.template.positions).toEqual(positions);
         expect(uploads).toMatchObject({ positions: 0, statics: 1, indices: 0 });
-        // one slot, not the skeleton: on every pixi.js, since one stretch is all there is
+        // one slot, not the skeleton
         expect(uploads.staticBytes).toBeLessThan(element.attributeSize * element.staticWords);
         expect(rig.view.stats.frameBytes).toBe(uploads.staticBytes);
         expect(stage.counts.builds).toBe(1);
@@ -212,16 +211,10 @@ describe('what a batch uploads for small changes', () => {
         stage.render();
         for (const item of rigs) expectBatch(item);
         expect(uploads.positions).toBe(0);
-        if (RANGED_UPLOADS) {
-            // a stretch per skeleton
-            expect(uploads.statics).toBe(40);
-            expect(uploads.staticBytes).toBeLessThan(whole / 50);
-        } else {
-            // a WebGL buffer of pixi.js before 8.23 keeps one stretch: from the first change to the last
-            expect(uploads.statics).toBe(1);
-            expect(uploads.staticBytes).toBeLessThan(whole);
-        }
-        // one skeleton of many that walks: its vertices alone, on every pixi.js
+        // a stretch per skeleton
+        expect(uploads.statics).toBe(40);
+        expect(uploads.staticBytes).toBeLessThan(whole / 50);
+        // one skeleton of many that walks: its vertices alone
         play(rig, 'walk');
         step(rig, 0.1);
         stage.render();
@@ -233,7 +226,7 @@ describe('what a batch uploads for small changes', () => {
         expect(uploads.positionBytes).toBeLessThanOrEqual(elementOf(rig.view).attributeSize * 8);
     });
 
-    it('uploads a buffer whole after a build, also when a skeleton writes a stretch before it is bound', async () => {
+    it('uploads a buffer whole after a build, also when a skeleton writes a stretch in the same frame', async () => {
         const { stage, rigs } = await crowd(4);
         const rig = rigs[1];
 
@@ -265,9 +258,7 @@ describe('what a batch uploads for small changes', () => {
         stage.render();
         rig.view.beforeDraw = beforeDraw;
         expect(stage.counts.builds).toBe(2);
-        // A WebGL buffer before pixi.js 8.23 keeps the last stretch it was told until it is bound:
-        // that must be all of the buffer, or the skeletons the build moved would keep old vertices
-        if (!RANGED_UPLOADS) expect(told.at(-1)).toEqual([0, batcher.attributeSize * 4]);
+        // the build uploads all of the buffer, or the skeletons the build moved would keep old vertices
         expect(told.some(([from, size]) => from === 0 && size === batcher.attributeSize * 4)).toBe(true);
     });
 

@@ -1,4 +1,4 @@
-import type { Buffer, Renderer } from 'pixi.js';
+import type { Buffer } from 'pixi.js';
 import { i32 } from '../geometry/read';
 
 /*
@@ -23,19 +23,11 @@ export const sent = { indices: 0, masks: 0 };
  * empty stretch uploads nothing. Returns the bytes it uploaded.
  *
  * @param itemBytes The bytes of one vertex in the buffer.
- * @param push A renderer whose buffers keep a stretch until they are bound, which uploads it
- * now, or null. That is WebGL before pixi.js 8.23, see `uploadsStretch`.
  *
  * @example
- * stats.uploadBytes.positions += uploadWaiting(positions, waiting, 0, 8, null);
+ * stats.uploadBytes.positions += uploadWaiting(positions, waiting, 0, 8);
  */
-export function uploadWaiting(
-    buffer: Buffer,
-    waiting: Int32Array,
-    at: number,
-    itemBytes: number,
-    push: Renderer | null,
-): number {
+export function uploadWaiting(buffer: Buffer, waiting: Int32Array, at: number, itemBytes: number): number {
     const from = i32(waiting, at);
     const bytes = (i32(waiting, at + 1) - from) * itemBytes;
 
@@ -43,8 +35,6 @@ export function uploadWaiting(
     waiting[at] = 0;
     waiting[at + 1] = 0;
     buffer.update(bytes, from * itemBytes);
-    // a renderer without a GPU has no buffer to upload
-    if (push !== null && 'buffer' in push) push.buffer.updateBuffer(buffer);
 
     return bytes;
 }

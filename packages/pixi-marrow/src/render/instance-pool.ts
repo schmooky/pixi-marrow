@@ -2,7 +2,7 @@ import type { BufferImageSource } from 'pixi.js';
 import { f32, i32 } from '../geometry/read';
 import { WORLD_STRIDE } from '../pose/state';
 import { u8 } from './read';
-import { dataRoom, dataTexture, uploadTexels } from './skin-layout';
+import { dataRoom, dataTexture } from './skin-layout';
 import type { SkinStore } from './skin-store';
 import { STATIC_STRIDE, type Template } from './template';
 
@@ -15,8 +15,7 @@ import { STATIC_STRIDE, type Template } from './template';
  *   color, the dark color with the flag of the CPU, and the entry the slot shows with its page.
  *
  * A view writes into its slot and notes the stretch it wrote. A frame uploads each texture once,
- * with the stretch from the first texel written to the last. pixi.js before 8.23 uploads a
- * texture whole. A pool grows by doubling: it takes new arrays and textures, and the old textures
+ * with the stretch from the first texel written to the last. A pool grows by doubling: it takes new arrays and textures, and the old textures
  * wait in {@link InstancePool.retired} until the layout has pointed its shaders at the new ones.
  */
 
@@ -149,11 +148,11 @@ export class InstancePool {
         let uploads = 0;
 
         if (this.poseLow < this.poseHigh) {
-            uploadTexels(this.pose, this.poseLow, this.poseHigh);
+            this.pose.update(this.poseLow, this.poseHigh);
             uploads++;
         }
         if (this.paletteLow < this.paletteHigh) {
-            uploadTexels(this.palette, this.paletteLow, this.paletteHigh);
+            this.palette.update(this.paletteLow, this.paletteHigh);
             uploads++;
         }
         this.poseLow = this.paletteLow = Number.POSITIVE_INFINITY;
