@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { createPoseEngine, type SkeletonModel } from '../../src/core';
+import { createPoseEngine, importSkeleton, type PoseEngine, type SkeletonModel } from '../../src/core';
 import { MarrowSpine } from '../../src/index';
 import { rigOf } from '../../src/pose/legacy/rig';
 import { combineSkins, KEPT_SKINS } from '../../src/pose/shared/combine-skins';
 import { createAttachmentLookup } from '../../src/pose/shared/lookup';
-import { fixtureAsset, importRig } from '../api/helpers';
+import { fixtureAsset, fixtureFiles, importRig } from '../api/helpers';
 
 /*
  * How long a combined skin lives. It stays while an engine shows it, waits with the last few that
@@ -52,12 +52,91 @@ describe.each(['4.2', '4.3'])('combined skins of Spine %s', (version) => {
         // the one shown and the last that wait
         expect(live).toHaveLength(KEPT_SKINS + 1);
         expect(live).toContain(engine.state.skin);
-        expect(createAttachmentLookup(model).skin(first)).toBeUndefined();
-        // a freed skin cannot be shown, and its list makes a new one
-        expect(() => engine.setSkin(first)).toThrow(/no skin/);
+        // the index of the first skin went to a later list
+        expect(createAttachmentLookup(model).parts(first)).not.toEqual(lists[0]);
+        // a freed index waits for the next new skin and cannot be shown
+        const lookup = createAttachmentLookup(model);
+        const freed = [...Array(lookup.skinCount).keys()].find(
+            (index) => index >= model.skins.length && lookup.skin(index) === undefined,
+        );
+
+        expect(freed).toBeDefined();
+        expect(() => engine.setSkin(freed ?? -1)).toThrow(/no skin/);
+        // the list of a freed skin makes a new one
         engine.setSkins(lists[0] ?? []);
-        expect(engine.state.skin).not.toBe(first);
         expect(engine.skins).toEqual(lists[0]);
+        expect(engine.state.skin).toBe(freed);
+    });
+
+    it('uses freed indices again, so the count of skins stays bounded', async () => {
+        const { model } = await importRig(`${version}/mix-and-match-pro.skel`);
+        const lookup = createAttachmentLookup(model);
+        const engine = await createPoseEngine(model);
+        const lists = pairs(model, 60);
+
+        expect(lists).toHaveLength(60);
+        for (const list of lists) engine.setSkins(list);
+        // the skin shown, the ones that wait, and one freed index that waits for the next skin
+        expect(lookup.skinCount).toBeLessThanOrEqual(model.skins.length + KEPT_SKINS + 2);
+        expect(liveCombined(model)).toHaveLength(KEPT_SKINS + 1);
+        engine.setSkin(-1);
+    });
+
+    it('poses a skin at a used index again as a model that never freed a skin does', async () => {
+        const { model } = await importRig(`${version}/mix-and-match-pro.skel`);
+        const fresh = await importSkeleton(fixtureFiles(`${version}/mix-and-match-pro.skel`).skeleton);
+        const lookup = createAttachmentLookup(model);
+        const play = (pose: PoseEngine, list: readonly number[], animation: number): void => {
+            pose.clearTracks();
+            pose.setSkins(list);
+            pose.setupPose();
+            pose.setAnimation(0, animation, true);
+            for (let i = 0; i < 40; i++) pose.update(1 / 60);
+        };
+        const playAll = (pose: PoseEngine, list: readonly number[]): void => {
+            for (let animation = 0; animation < model.animations.length; animation++) play(pose, list, animation);
+        };
+        const expectSame = (actual: PoseEngine, expected: PoseEngine): void => {
+            const shown = (pose: PoseEngine) => pose.state.attachments.map((attachment) => attachment?.name ?? null);
+
+            expect(shown(actual)).toEqual(shown(expected));
+            expect([...actual.state.world]).toEqual([...expected.state.world]);
+            expect([...actual.state.active]).toEqual([...expected.state.active]);
+            expect([...actual.state.deformLengths]).toEqual([...expected.state.deformLengths]);
+        };
+        const lists = pairs(model, 3 * KEPT_SKINS);
+        const old = lists[0] ?? [];
+        // a list no test made before, which takes the freed index
+        const next = [lists[KEPT_SKINS + 2]?.[0] ?? 1, 1];
+        const engine = await createPoseEngine(model);
+        const reference = await createPoseEngine(fresh);
+
+        // every animation with the first list, so that the rig keeps rows and caches for its index
+        playAll(engine, old);
+        playAll(reference, old);
+        const index = engine.state.skin;
+        const before = lookup.skin(index);
+
+        for (const list of lists.slice(1, KEPT_SKINS + 2)) engine.setSkins(list);
+        expect(lookup.skin(index)).toBeUndefined();
+        for (let animation = 0; animation < model.animations.length; animation++) {
+            play(engine, next, animation);
+            play(reference, next, animation);
+            expect(engine.state.skin).toBe(index);
+            expect(lookup.skin(index)).not.toBe(before);
+            expectSame(engine, reference);
+        }
+        // a new engine on the used index, and one of a model that never freed a skin
+        const other = await createPoseEngine(model);
+        const plain = await createPoseEngine(
+            await importSkeleton(fixtureFiles(`${version}/mix-and-match-pro.skel`).skeleton),
+        );
+
+        playAll(other, next);
+        playAll(plain, next);
+        expect(other.state.skin).toBe(index);
+        expectSame(other, plain);
+        for (const pose of [engine, reference, other, plain]) pose.setSkin(-1);
     });
 
     it('keeps a skin while one of several engines shows it', async () => {
@@ -69,6 +148,7 @@ describe.each(['4.2', '4.3'])('combined skins of Spine %s', (version) => {
         one.setSkins(shared);
         two.setSkins(shared);
         const index = one.state.skin;
+        const skin = createAttachmentLookup(model).skin(index);
 
         // one engine moves on through more lists than are kept
         for (const list of lists.slice(1)) one.setSkins(list);
@@ -80,7 +160,8 @@ describe.each(['4.2', '4.3'])('combined skins of Spine %s', (version) => {
             one.setSkins(list);
             one.setSkins(shared.toReversed());
         }
-        expect(createAttachmentLookup(model).skin(index)).toBeUndefined();
+        // freed: the index holds another skin now, or none
+        expect(createAttachmentLookup(model).skin(index)).not.toBe(skin);
     });
 });
 
@@ -120,12 +201,14 @@ describe('a display object with several skins', () => {
 
         spine.skins = ['skin-base', 'hair/brown', 'nose/long'];
         const index = spine.engine.state.skin;
+        const skin = lookup.skin(index);
 
         spine.destroy();
         // it waits with the others that no engine shows, and goes once enough newer ones wait
-        expect(lookup.skin(index)).toBeDefined();
+        expect(skin).toBeDefined();
+        expect(lookup.skin(index)).toBe(skin);
         // lists of three, which no other test of the file makes, so each is a new skin
         for (const [a = 1, b = 2] of pairs(model, KEPT_SKINS + 1)) combineSkins(lookup, model, [a, b, 1]);
-        expect(lookup.skin(index)).toBeUndefined();
+        expect(lookup.skin(index)).not.toBe(skin);
     });
 });

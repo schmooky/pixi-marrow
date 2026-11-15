@@ -94,9 +94,20 @@ describe('combined skins and baking', () => {
             engine.clearTracks();
             engine.setSkin(-1);
         }
-        // the last 8 that no engine shows wait, as without baking
-        expect(skins.filter((index) => lookup.skin(index) !== undefined).length).toBeLessThanOrEqual(8);
+        // the last 8 that no engine shows wait, as without baking, and the others gave their index on
+        const live = skins.filter((index) => lookup.skin(index) !== undefined);
+        const lists = new Set(live.map((index) => lookup.parts(index).join()));
+
+        expect(lists.size).toBeLessThanOrEqual(8);
+        expect(lookup.skinCount).toBeLessThanOrEqual(model.skins.length + 9);
         expect(bakesOf(model).bytes).toBeGreaterThan(0);
+        // a used index finds the clip of the skin it holds now, or none
+        for (const index of new Set(skins)) {
+            const clip = bakesOf(model).find(index, 0, null)?.clip;
+            const names = lookup.parts(index).map((skin) => model.skins[skin]?.name);
+
+            if (clip !== undefined) expect(clip.skins).toEqual(names);
+        }
     });
 });
 
