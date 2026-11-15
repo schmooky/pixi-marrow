@@ -113,7 +113,7 @@ Every constraint is solved: IK, transform, path, physics and sliders. A slider o
 pnpm check
 ```
 
-It runs every gate. First lint, the prose check, typecheck, the source rules and the facts check. Then tests with coverage, the build, the API snapshot, the publish contents check, the size check and the dead code check. CI runs the same steps.
+It runs every gate. First lint, the prose check, typecheck, the source rules and the facts check. Then tests with coverage, the build, the API snapshot, the publish contents check, the size check and the dead code check. CI runs the same steps. It also lints the commit messages of a pull request and runs the typecheck and the unit tests on the lowest peers the package allows.
 
 A change to `src/render`, `src/api` or the shaders also needs the pixel check, which is not part of `pnpm check` because it needs Google Chrome:
 
