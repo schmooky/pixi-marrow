@@ -75,12 +75,14 @@ export default defineDiagram({
                 2700,
             );
             timeline.add(nodes, { opacity: 0, duration: 300 }, 4600);
-            timeline.play();
         };
 
+        // the runtime plays the timeline while the diagram plays, and a paused one shows the three painted
         own({
             play: () => timeline.play(),
             pause: () => timeline.pause(),
+            seek: (milliseconds) => timeline.seek(milliseconds),
+            still: 3000,
             get speed() {
                 return rate;
             },
