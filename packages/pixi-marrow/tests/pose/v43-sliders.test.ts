@@ -210,9 +210,10 @@ describe('what a skeleton pays for sliders in the 4.3 pose engine', () => {
         expect(solve.applied).not.toBe(solve.values);
         expect(solve.split?.applied.colors).toBe(state.colors);
         expect(solve.split?.applied.local).toBe(solve.local);
-        // a slot no slider animates shares its deform
+        // a slot no slider animates shares its deform. One that a slider animates has none yet: each of
+        // its two poses gets an array of its own when a deform needs room, which the parity suite shows
         expect(full.deform[S3]).toBe(state.deform[S3]);
-        expect(full.deform[S0]).not.toBe(state.deform[S0]);
+        expect([full.deform[S0]?.length, state.deform[S0]?.length]).toEqual([0, 0]);
         // a slider that animates bones only: one pose of everything else
         expect(lean.solve.split).not.toBeNull();
         expect([lean.colors, lean.attachments, lean.deform, lean.drawOrder]).toEqual([

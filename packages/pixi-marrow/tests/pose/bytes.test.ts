@@ -63,3 +63,70 @@ describe('engine.bytes', () => {
         expect(second.bytes).toBe(first.bytes);
     });
 });
+
+/** Collects garbage and lets Node settle what it counts for array buffers. */
+async function settled(): Promise<number> {
+    const collect: unknown = Reflect.get(globalThis, 'gc');
+
+    if (typeof collect !== 'function')
+        throw new Error('gc() is not exposed: run the tests with the config of the package');
+    for (let i = 0; i < 3; i++) {
+        collect();
+        await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    const { heapUsed, arrayBuffers } = process.memoryUsage();
+
+    return heapUsed + arrayBuffers;
+}
+
+/** The bytes of heap and of array buffers that one more engine of a model takes, measured over many. */
+async function measuredBytes(model: SkeletonModel): Promise<{ real: number; counted: number }> {
+    const engines = [await createPoseEngine(model)];
+    const count = 400;
+    const before = await settled();
+
+    for (let i = 0; i < count; i++) engines.push(await createPoseEngine(model));
+    const real = ((await settled()) - before) / count;
+
+    return { real, counted: engines[0]?.bytes ?? 0 };
+}
+
+describe('what engine.bytes does not count', () => {
+    it.each(['4.2', '4.3'])(
+        'is no array per slot: %s slots without a deform share one empty array',
+        async (version) => {
+            const model = await modelOf(`${version}/spineboy-pro.json`);
+            const first = await createPoseEngine(model);
+            const second = await createPoseEngine(model);
+            const empty = first.state.deform[0];
+
+            expect(empty?.length).toBe(0);
+            expect(first.state.deform.every((deform) => deform === empty)).toBe(true);
+            expect(second.state.deform.every((deform) => deform === empty)).toBe(true);
+            // a deform gets an array of its own, in the instance that plays it
+            for (let animation = 0; animation < model.animations.length; animation++) {
+                first.setAnimation(0, animation, true);
+                for (let i = 0; i < 3; i++) first.update(1 / 30);
+            }
+            const deformed = first.state.deform.filter((deform) => deform !== empty);
+
+            expect(deformed.length).toBeGreaterThan(0);
+            expect(deformed.every((deform) => deform.length > 0)).toBe(true);
+            expect(new Set(deformed).size).toBe(deformed.length);
+            expect(second.state.deform.every((deform) => deform === empty)).toBe(true);
+            expect(empty?.length).toBe(0);
+        },
+    );
+
+    it.each(['4.2', '4.3'])('is about the same for a small and a large %s skeleton', async (version) => {
+        const small = await measuredBytes(await modelOf(`${version}/coin-pro.json`));
+        const large = await measuredBytes(await modelOf(`${version}/spineboy-pro.json`));
+
+        // the objects of an instance: 5 to 8 kB in Node 24. An empty array per slot made it 16 kB for spineboy
+        for (const { real, counted } of [small, large]) {
+            expect(real - counted).toBeGreaterThan(0);
+            expect(real - counted).toBeLessThan(11_000);
+        }
+        expect(large.real - large.counted - (small.real - small.counted)).toBeLessThan(3000);
+    });
+});

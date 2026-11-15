@@ -8,6 +8,9 @@ import { clipOf, type Rig } from './rig';
 import type { Solver } from './solver';
 import type { Clip } from './timelines';
 
+/** Scratch of one timeline apply: no call keeps it across a return, so every player of every engine shares it. */
+const KEY_VALUES = new Float64Array(8);
+
 /**
  * The playback state of one skeleton instance: the official `AnimationState` and
  * `AnimationStateData`, plus the slot states the official runtime keeps on its slots.
@@ -50,8 +53,8 @@ export class LegacyPlayer {
     events: PoseEvent[] = [];
     /** Scratch: the property ids seen while hold modes are computed. */
     readonly seenIds: Set<number> = new Set();
-    /** Scratch: the values of one key of a timeline with several values. */
-    readonly values: Float64Array = new Float64Array(8);
+    /** Scratch: the values of one key of a timeline with several values. Every player has the same array. */
+    readonly values: Float64Array = KEY_VALUES;
 
     constructor(rig: Rig, pose: PoseState, solver: Solver) {
         this.rig = rig;
