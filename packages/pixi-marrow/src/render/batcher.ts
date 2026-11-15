@@ -164,17 +164,6 @@ export class MarrowBatcher extends Batcher implements BatchHome {
     }
 
     /**
-     * Lets the batches of the last build go of their elements and textures, for a render group
-     * that builds its instructions again before it draws: the one of the idle cache.
-     */
-    release(): void {
-        for (const batch of this.pool) {
-            batch.elements.length = 0;
-            batch.textures.clear();
-        }
-    }
-
-    /**
      * Gives an element its place in the buffers. A part of an element that was added before has
      * its place already. Throws a `MarrowError` for an element of another library.
      */

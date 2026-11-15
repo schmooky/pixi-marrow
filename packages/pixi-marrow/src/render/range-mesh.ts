@@ -72,7 +72,7 @@ export function createRangeMesh(
  * @example
  * range.mesh.geometry = rangeGeometry(buffers, false, measure, range.buffer);
  */
-export function rangeGeometry(
+function rangeGeometry(
     buffers: VertexBuffers,
     dark: boolean,
     measure: () => Bounds,

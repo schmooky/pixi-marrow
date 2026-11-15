@@ -14,7 +14,6 @@ import { BLEND_MODES, type SkeletonModel } from '../model/model';
 import type { PoseState } from '../pose/state';
 import { ImageBody } from '../render/batch-image';
 import { linkRenderer } from '../render/batch-pipe';
-import { MarrowBatcher } from '../render/batcher';
 import { drawsPlain } from '../render/gate';
 import { u8 } from '../render/read';
 import type { SkeletonView } from '../render/skeleton-view';
@@ -149,8 +148,9 @@ function restoresOf(renderer: Renderer): number {
 
 /**
  * Lets the studio go of what its last render built: the instructions, the renderables, and the
- * elements and textures in the batches of ours. They hold the view of the last capture and its
- * skeleton. The next capture builds them again, since the studio gets another child.
+ * elements and textures of its batches. They hold the view of the last capture and its skeleton.
+ * The next capture builds them again, since the studio gets another child. A batcher of ours
+ * keeps its batches for the next build, and each one was in the instructions of its last build.
  */
 function releaseStudio(group: Container): void {
     const renderGroup = group.renderGroup;
@@ -161,7 +161,9 @@ function releaseStudio(group: Container): void {
     for (let i = 0; i < set.instructionSize; i++) {
         const instruction = set.instructions[i];
 
-        if (instruction instanceof Batch && instruction.batcher instanceof MarrowBatcher) instruction.batcher.release();
+        if (!(instruction instanceof Batch)) continue;
+        instruction.elements.length = 0;
+        instruction.textures.clear();
     }
     set.instructions.length = 0;
     set.instructionSize = 0;
