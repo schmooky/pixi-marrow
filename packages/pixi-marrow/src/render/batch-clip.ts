@@ -67,6 +67,12 @@ let plan = new Int32Array(64 * PLAN_STRIDE);
  */
 let lastShared: Uint16Array | null = null;
 
+/**
+ * Per element that clips: the vertices of its cut triangles in the space of the skeleton, as
+ * they were cut last. A display object that moves places them again, and cuts nothing.
+ */
+const spaces = new WeakMap<BatchElement, Float32Array>();
+
 /** Per model: the room its clips needed so far. */
 const rooms = new WeakMap<SkeletonModel, ClipRoom>();
 
@@ -361,9 +367,10 @@ function clipPose(element: BatchElement, pose: PoseState): void {
 /**
  * The part of a sync for a skeleton with slots inside a clip: the cut triangles and the indices
  * of all slots. The batch holds the cut triangles of a pose in the space of the skeleton right
- * after {@link clipPose}, and they are moved to the display object here. They are cut again when
- * the batch holds them for another transform or another list of slots, and when a color changed,
- * which every cut vertex carries.
+ * after {@link clipPose}, and they are moved to the display object here. A copy of them stays in
+ * the space of the skeleton: after a move of the display object alone they are placed again from
+ * it. They are cut again for another list of slots, and when a color changed, which every cut
+ * vertex carries.
  *
  * @param all Whether every vertex of the skeleton was placed again.
  * @param statics Whether colors, texture coordinates or the list of slots changed.
@@ -373,9 +380,18 @@ function clipPose(element: BatchElement, pose: PoseState): void {
  */
 function writeClip(element: BatchElement, home: BatchHome, mark: boolean, all: boolean, statics: boolean): void {
     const at = element._attributeStart + element.layout.vertices * POSITION_WORDS;
+    const positions = home.attributeBuffer.float32View;
+    let kept = spaces.get(element);
 
     if (!element.clipFresh) {
         if (element.clipPlaced && !all && !statics) return;
+        if (element.clipPlaced && !statics && kept !== undefined) {
+            // Only the display object moved: the triangles are the ones that were cut, at another place
+            positions.set(kept.subarray(0, element.clipUsed * POSITION_WORDS), at);
+            placeMoved(positions, at, element.clipUsed, element.place.groupTransform);
+
+            return;
+        }
         if (!batchClip.fill(element, home, mark)) {
             element.resized = true;
             // Pixi looks at the instructions of a display object that says it changed
@@ -383,7 +399,13 @@ function writeClip(element: BatchElement, home: BatchHome, mark: boolean, all: b
         }
     }
     element.stats.indices = element.drawn;
-    placeMoved(home.attributeBuffer.float32View, at, element.clipUsed, element.place.groupTransform);
+    // the cut vertices in the space of the skeleton, for a display object that moves while the pose rests
+    if (kept === undefined || kept.length < element.clipUsed * POSITION_WORDS) {
+        kept = new Float32Array(element.clipVertices * POSITION_WORDS);
+        spaces.set(element, kept);
+    }
+    kept.set(positions.subarray(at, at + element.clipUsed * POSITION_WORDS));
+    placeMoved(positions, at, element.clipUsed, element.place.groupTransform);
     if (mark && !all) {
         home.touchPositions(at, element.clipUsed * POSITION_WORDS);
         element.count(element.clipUsed * POSITION_WORDS, 0, 0);
