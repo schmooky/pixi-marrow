@@ -1,14 +1,39 @@
 ---
 layout: ../layouts/Docs.astro
 title: Start
-description: Install pixi-marrow, load a Spine skeleton and play an animation. The rest of the guide starts from these three calls.
+description: Install pixi-marrow, load a Spine skeleton and play an animation in one file. The rest of the guide starts from these calls.
 ---
 
 import Diagram from '../components/Diagram.astro';
 import Snippet from '../components/Snippet.astro';
+import facts from '../../../../scripts/facts.json';
 import source from '../snippets/start.ts?raw';
 
-This guide shows how to load, play and control Spine animations in PixiJS with pixi-marrow, one step at a time. You need no experience with Spine. If pixels, transforms, triangles and draw calls are new to you, read the [Basics](/basics/pixels/) first: five short pages with animations. The examples of the guide use the symbols of the slot game Bzzz, which this site includes. So many examples look like slot symbols, but nothing in the guide is specific to slots.
+This guide shows how to load, play and control Spine animations in PixiJS with pixi-marrow, one step at a time. You need no experience with Spine. The examples of the guide use the symbols of the slot game Bzzz, which this site includes. So many examples look like slot symbols, but nothing in the guide is specific to slots.
+
+## Install
+
+```bash
+npm install pixi-marrow@next pixi.js
+```
+
+`pixi.js` is the peer dependency that pixi-marrow needs, from version {facts.floor.pixiShort}. `pixi-silk` is an optional peer. Only the [debug overlays](/debug/) need it. The package is a pre-release, on the `next` tag of npm.
+
+The package is ESM only, so a game needs a bundler such as Vite, or a browser that loads modules. [Good to know](/good-to-know/#esm-and-bundlers) says more.
+
+## One complete file
+
+<Snippet source={source} regions="complete" />
+
+This file is a whole game. It makes a Pixi application, loads a skeleton, puts it in the middle of the screen and plays a loop.
+
+- `MarrowSpine.load` reads the skeleton, its atlas and the page images. `skeleton` is a `.skel` or `.json` export of Spine 4.1, 4.2 or 4.3. The page images load from the same place as the atlas.
+- `hero` is a Pixi `Container`. Move it, scale it and add it to the stage like any other.
+- `play` starts an animation now. `loop: true` repeats it until something else plays.
+
+For a name that the skeleton lacks, `play` throws a `MarrowError` that lists the valid names. [Warnings and errors](/warnings/) lists every error code.
+
+The renderer must be WebGL2 or WebGPU. Pixi picks WebGL2 by default, and `preference: 'webgpu'` in `app.init` asks for WebGPU.
 
 ## What Spine is
 
@@ -34,40 +59,18 @@ A runtime reads these files and does the work in every frame:
 2. It places the parts.
 3. It has the GPU draw them.
 
-pixi-marrow is a runtime for PixiJS v8. [One frame](/how/frame/) shows the whole way from the time to the pixels.
-
-## Install
-
-```bash
-npm install pixi-marrow@next pixi.js
-```
-
-`pixi.js` is the peer dependency that pixi-marrow needs, from version 8.21. `pixi-silk` is an optional peer. Only the [debug overlays](/debug/) need it. The package is a pre-release, on the `next` tag of npm.
-
-## Load
-
-<Snippet source={source} regions="import load" />
-
-`skeleton` is a `.skel` or `.json` export of Spine 4.1, 4.2 or 4.3. The page images load from the same place as the atlas.
-
-`hero` is a Pixi `Container`. Move it, scale it and add it to the stage like any other.
-
-## Play
-
-<Snippet source={source} regions="play" />
-
-`play` starts an animation now. `loop: true` repeats it until something else plays. For a name that the skeleton lacks, `play` throws a `MarrowError` that lists the valid names.
+pixi-marrow is a runtime for PixiJS v8. [One frame](/how/frame/) shows the whole way from the time to the pixels. If pixels, transforms, triangles and draw calls are new to you, read the [Basics](/basics/pixels/) first: five short pages with animations.
 
 ## Next
 
 The guide continues in this order:
 
-1. [Assets and copies](/guide/assets/): load once, show many times, load with Pixi `Assets`.
+1. [Assets and instances](/guide/assets/): load once, show many times, load with Pixi `Assets`, destroy and unload.
 2. [Size and units](/guide/size/): fit a skeleton to a place on the screen.
-3. [Play](/guide/play/): tracks, loops, poses that hold, and how to know when an animation ends.
+3. [Play](/guide/play/): tracks, loops, poses that hold, typed names, and how to know when an animation ends.
 4. [Mix and queue](/guide/mix/): blend one animation into the next, and layer them.
 5. [Events](/guide/events/): keys that the animator placed, and the life of a track.
 6. [Skins and slots](/skins-and-slots/): swap images, tint slots, return to the setup pose.
 7. [Bones and attachments](/bones-and-placeholders/): follow a bone, and put your own objects into a skeleton.
 
-[How it works](/how/anatomy/) shows the parts of a skeleton, what the runtime does in every frame, and why.
+[How it works](/how/anatomy/) shows the parts of a skeleton, what the runtime does in every frame, and why. [Performance caveats](/performance/caveats/) lists what makes a scene slow, and how to see it.
