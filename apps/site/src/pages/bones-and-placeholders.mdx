@@ -10,7 +10,7 @@ import Snippet from '../components/Snippet.astro';
 import source from '../previews/placeholders.ts?raw';
 import more from '../snippets/bones.ts?raw';
 
-<Preview name="placeholders" height={430} caption="The bee of the slot game Bzzz. The ring is attached to the slot bee_sp, which lies between the wings and the body in the draw order: it is drawn over the wings and under the body, the head and the hands. The green mark follows the bone of the head." />
+<Preview name="placeholders" height={430} caption="The bee of the slot game Bzzz. The ring is attached to the slot bee_sp, which comes after the wings, the left leg and the left hand in the draw order, and before the body. So the ring is drawn over those, and under the body, the head and the right hand. The green mark follows the bone of the head." />
 
 Both shapes are `SilkGraphics` of [pixi-silk](https://github.com/schmooky/pixi-silk). Any Pixi `Container` works the same way.
 
