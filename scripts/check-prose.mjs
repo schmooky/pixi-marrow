@@ -303,6 +303,15 @@ const named = process.argv.slice(2).filter((a) => a !== '--advisory');
 const files = named.length > 0 ? named.map((f) => join(process.cwd(), f)) : SCOPE.flatMap((p) => walk(join(root, p)));
 const problems = [];
 const advice = [];
+
+// a path of SCOPE that moved away would leave its text unchecked, and the run would still pass
+for (const entry of named.length > 0 ? [] : SCOPE) {
+    if (!existsSync(join(root, entry))) {
+        problems.push(
+            `${entry}  is in SCOPE of scripts/check-prose.mjs but does not exist. Fix the path or remove the entry`,
+        );
+    }
+}
 const report = (file, line, message) => problems.push(`${relative(root, file)}:${line}  ${message}`);
 
 for (const file of files) {
