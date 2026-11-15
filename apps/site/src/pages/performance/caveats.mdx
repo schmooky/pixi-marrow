@@ -306,22 +306,15 @@ One measurement on an Apple M4 shows the size of it. Spineboy played with a mix 
 
 Rule: [MARROW025](/performance/rules/#marrow025).
 
-## pixi.js before 8.23
+## Many mesh draws on WebGPU
 
-**What you see.** More bytes per frame on pixi.js {facts.floor.pixiShort} and 8.22 than on 8.23.
+**What you see.** A scene on WebGPU with about 2,000 draws of the mesh mode in a frame, or more.
 
-**Why.** From 8.23, a WebGL buffer of Pixi uploads the range that the runtime names. Before that, two things upload more:
+**Why.** Pixi keeps one uniform buffer for the draws of a frame, with room for about 2,000 draws. Past that room, each mesh of pixi-marrow binds a small uniform buffer of its own.
 
-- The batched mode on WebGL2 uploads one stretch per buffer, from the first change to the last.
-- A data texture of `skinning: 'gpu'` uploads whole.
+**Fix.** Use the batched mode or instancing for a scene with that many mesh draws.
 
-WebGPU uploads each stretch on every version that the package allows.
-
-**Fix.** Use pixi.js 8.23 or later, or WebGPU.
-
-On WebGPU, one more limit holds in the mesh mode. Pixi keeps one uniform buffer for the draws of a frame, with room for about 2,000 draws. Past that room, each mesh of pixi-marrow binds a small uniform buffer of its own. Use the batched mode or instancing for a scene with that many mesh draws.
-
-Rules: [MARROW026](/performance/rules/#marrow026) and [MARROW024](/performance/rules/#marrow024).
+Rule: [MARROW024](/performance/rules/#marrow024).
 
 ## WebGL1 and Canvas
 
@@ -370,6 +363,5 @@ So measure on your own devices. The [How many](/lab/how-many/) test of the lab a
 8. The resolution has a cap.
 9. Skeletons that leave the screen stop, or the preset is `balanced` or `fast`.
 10. A scene that ends destroys its instances and unloads its assets.
-11. pixi.js is 8.23 or later.
-12. `diagnose(app.stage)` returns no rule that you did not accept.
-13. The game was run on the weakest device that it supports.
+11. `diagnose(app.stage)` returns no rule that you did not accept.
+12. The game was run on the weakest device that it supports.
