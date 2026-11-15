@@ -102,6 +102,10 @@ body.lab {
     font-weight: 700;
     letter-spacing: -0.02em;
 }
+/* the focus comes to the heading by the script, so that a screen reader reads the result next */
+.lab-card-title:focus {
+    outline: none;
+}
 .lab-verdict {
     margin-top: 0.6rem;
     font-size: 0.95rem;

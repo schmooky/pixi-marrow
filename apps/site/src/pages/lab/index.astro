@@ -40,7 +40,11 @@ import Lab from '../../layouts/Lab.astro';
             A scene plays at the rate of the screen, as in a game, after two seconds to warm up. The lab counts the frames the screen got and the
             ones it dropped, and times the work of the CPU in each frame: the update of every skeleton and the render call of Pixi. Nothing waits
             for the GPU on purpose, so a GPU that cannot keep up shows as dropped frames. How many adds symbols every few seconds while the frames
-            keep the rate of the screen.
+            keep the rate of the screen. Then it narrows the limit down between the last number that kept it and the first that did not.
+        </p>
+        <p class="lab-question">
+            The rate of the screen is read from the frames of the run, and the result says when it differs from the rate before the run. A
+            browser rounds its timer, Safari and Firefox to about 1 ms, so every time shows only the decimals that its timer can tell.
         </p>
     </main>
 </Lab>

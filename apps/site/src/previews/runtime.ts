@@ -224,12 +224,21 @@ function begin(load: Loader, canvasHost: HTMLElement, bar: HTMLElement, lost: (l
             close();
             app.stage = endedStage();
         };
+        /**
+         * The skeletons a pause stopped. A preview can drive a skeleton itself, with `autoUpdate`
+         * off, and that one must not start to update itself when the preview runs again.
+         */
+        const held = new Set<MarrowSpine>();
         const pause = (): void => {
             if (running) count(-1);
             running = false;
             app.ticker.stop();
             // a skeleton updates itself from Pixi's shared ticker, not from the ticker of the app
-            for (const skeleton of skeletons(app.stage)) skeleton.autoUpdate = false;
+            for (const skeleton of skeletons(app.stage)) {
+                if (!skeleton.autoUpdate) continue;
+                held.add(skeleton);
+                skeleton.autoUpdate = false;
+            }
         };
 
         lose = (): void => {
@@ -308,7 +317,8 @@ function begin(load: Loader, canvasHost: HTMLElement, bar: HTMLElement, lost: (l
                 running = true;
                 count(1);
                 app.ticker.start();
-                for (const skeleton of skeletons(app.stage)) skeleton.autoUpdate = true;
+                for (const skeleton of held) if (!skeleton.destroyed) skeleton.autoUpdate = true;
+                held.clear();
             },
             destroy: free,
         };
