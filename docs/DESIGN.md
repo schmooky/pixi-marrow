@@ -2,55 +2,55 @@
 
 Draft 3, 2026-11-11. A Spine runtime for PixiJS v8 with its own pose core and its own render path. It plays 4.1, 4.2 and 4.3 skeletons.
 
-Change from draft 1: the runtime does not ship `spine-core`. The pose core is ours. The official cores are used in tests only, as the reference every frame is compared against.
+Change from draft 1: the runtime does not ship `spine-core`. The pose core is ours. Only the tests use the official cores. The tests compare every frame against them.
 
-Change from draft 2: memory is a goal of the same weight as speed (section 8.6). Milestone M0 is built.
+Change from draft 2: memory is a goal of the same weight as speed (section 8.6). Milestone M0 is complete.
 
-Change with M1: the model is a faithful import with no conversion between versions (sections 5.2 and 10). Milestone M1 is built.
+Change with M1: the model is a faithful import with no conversion between versions (sections 5.2 and 10). Milestone M1 is complete.
 
-Change with M2b: the render path uses Pixi meshes with a custom geometry and shader, one mesh per draw range, not a custom render pipe (section 16). Additive slots leave the destination alpha untouched, so on a transparent target the alpha differs from the official runtime while the colors match.
+Change with M2b: the render path uses Pixi meshes with a custom geometry and shader, not a custom render pipe (section 16). It uses one mesh per draw range. Additive slots leave the destination alpha untouched. So on a transparent target the alpha differs from the official runtime, but the colors match.
 
-Change with M2a: there are two pose engines, one for 4.1 and 4.2 and one for 4.3, because the official runtimes mix animations differently (section 5.3). Pose numbers are 64-bit and parity is exact, not within a tolerance (section 15). M2 is split into M2a, which is built, and M2b.
+Change with M2a: there are two pose engines, one for 4.1 and 4.2 and one for 4.3 (section 5.3). There are two because the official runtimes mix animations differently. Pose numbers are 64-bit and parity is exact, not within a tolerance (section 15). M2 has two parts: M2a, which is complete, and M2b.
 
-Change with M3: IK, transform and path constraints are solved in both engines, and clipping works through a stencil mask (sections 5.3, 7.5 and 10). Tight meshes turned out not to be exact to the bit, so they are an option and not the default (section 7.4). The overdraw cuts that are exact are on by default.
+Change with M3: both engines solve IK, transform and path constraints, and clipping works through a stencil mask (sections 5.3, 7.5 and 10). Tight meshes proved not exact to the bit, so they are an option and not the default (section 7.4). The overdraw cuts that are exact are on by default.
 
-Change with M4: physics constraints and sliders are solved, so every constraint of the three versions is (sections 5.3 and 10). The option to ignore constraints is gone. The perf report loads on demand and is asynchronous (section 8.5). The A/B bench lives in this repository and runs on one desktop machine. Numbers per device class wait for spine-benchmark (section 16). That bench moved the batched render mode up: it is M5 now, before pose skipping (sections 7.2 and 16.1).
+Change with M4: the engines solve physics constraints and sliders, so they solve every constraint of the three versions (sections 5.3 and 10). The runtime no longer has the option to ignore constraints. The perf report loads on demand and is asynchronous (section 8.5). The A/B bench lives in this repository and runs on one desktop machine. Numbers per device class wait for spine-benchmark (section 16). That bench moved the batched render mode to an earlier place: it is M5 now, before pose skipping (sections 7.2 and 16.1).
 
-Change with M5: the batched render mode is built, and `renderMode: 'auto'` picks it for every skeleton of up to 1024 batch vertices (section 7.2). Clips are cut on the CPU in that mode, by a port of the official clipper (section 7.5). The static part of a layout is shared between the instances of an asset (section 8.6). The heap numbers of M4 were wrong and are corrected (section 16.1).
+Change with M5: the runtime has the batched render mode, and `renderMode: 'auto'` picks it for every skeleton of up to 1024 batch vertices (section 7.2). In that mode a port of the official clipper cuts clips on the CPU (section 7.5). The instances of an asset share the static part of a layout (section 8.6). The heap numbers of M4 were wrong, and section 16.1 fixes them.
 
-Change with M6: work follows change. A pose state carries a version and stamps per bone and slot. The engines skip what would repeat, and a view does only what a stamp asks for (sections 2, 5.3 and 7.3). A skeleton at rest costs close to nothing and uploads nothing. The mesh mode, the clip code and the cuts of overdraw load on demand (section 11). Sharing one pose between instances is not built, and neither is a keyframe cursor: section 2 says why.
+Change with M6: work follows change. A pose state carries a version and stamps per bone and slot. The engines skip what would repeat, and a view does only what a stamp asks for (sections 2, 5.3 and 7.3). A skeleton at rest costs close to nothing and uploads nothing. The mesh mode, the clip code and the cuts of overdraw load on demand (section 11). The runtime does not share one pose between instances and has no keyframe cursor, for the reasons in section 2.
 
-Change after M6: the display object has bone handles, `follow` and `attach` (section 7.6), and there is a first docs site (section 13). The symbol rigs of a real slot game are fixtures now (section 15). A tree-shaken game could not use the mesh mode: that is fixed and has a check of its own (section 15).
+Change after M6: the display object has bone handles, `follow` and `attach` (section 7.6), and there is a first docs site (section 13). The symbol rigs of a real slot game are fixtures now (section 15). A tree-shaken game could not use the mesh mode: the project fixed that and added a check for it (section 15).
 
-Change after M9: the presets set when a skeleton updates, and nothing else. Baking, tight meshes, the idle cache, `lod` and instancing each cost memory, vertices or draw calls. What they cost depends on the device and the scene, so each is set by its own name (section 8.3). Outlines are off unless the load names a file or asks for the scan (section 7.4). On a Galaxy A05 the idle cache made 120 small resting symbols slower, see 8.3. pixi.js 8.21 is the floor (section 16).
+Change after M9: the presets set when a skeleton updates, and nothing else. Baking, tight meshes, the idle cache, `lod` and instancing each cost memory, vertices or draw calls. What they cost depends on the device and the scene, so the game sets each by its own name (section 8.3). Outlines are off unless the load names a file or asks for the scan (section 7.4). On a Galaxy A05 the idle cache made 120 small resting symbols slower, see 8.3. pixi.js 8.21 is the floor (section 16).
 
-This document is the plan. Every performance number in it is an estimate until the benchmark measures it. Section 0 lists what has been verified.
+This document is the plan. Every performance number in it is an estimate until the benchmark measures it. Section 0 lists the checked facts.
 
 ## 0. Verified facts this design rests on
 
-| Fact | How it was checked |
+| Fact | How the project checked it |
 |---|---|
-| Three official `spine-core` versions (4.1.55, 4.2.106, 4.3.13) run side by side in one process | One Node process imported all three. Each loaded its own spineboy-pro export (`.json` and `.skel`) and posed 30 frames. Hip world position matched across versions. This is what makes one test process able to compare our core against all three. |
+| Three official `spine-core` versions (4.1.55, 4.2.106, 4.3.13) run side by side in one process | One Node process imported all three. Each loaded its own spineboy-pro export (`.json` and `.skel`) and posed 30 frames. Hip world position matched across versions. So one test process can compare our core against all three. |
 | The 4.3 core cannot read 4.2 files | 4.2.22 exports of spineboy and celestial-circus throw in `spine-core@4.3.13` for both `.json` and `.skel`. |
 | Size of the official core without comments | 4.1: 9,287 lines. 4.2: 10,392. 4.3: 12,141. |
 | Solvers barely changed from 4.1 to 4.2 | Changed lines: IK 56, transform constraint 37, path constraint 18. Physics is new in 4.2 (259 lines). |
-| 4.2 to 4.3 is a restructure | Poses split from objects, constraints unified, sliders added. Most files differ in hundreds of lines. How much of that is changed math is not known yet. |
+| 4.2 to 4.3 is a restructure | Poses split from objects, constraints unified, sliders added. Most files differ in hundreds of lines. How much of the change is in the math is not known yet. |
 | The official core finds the current keyframe by a linear scan from the first key on every call | `Timeline.search` in 4.3.13. |
-| 4.1 to 4.2 JSON is additive | Key diff of the two parsers: 4.2 adds physics keys, `inherit`, `referenceScale`. Nothing was removed. |
+| 4.1 to 4.2 JSON is additive | Key diff of the two parsers: 4.2 adds physics keys, `inherit`, `referenceScale`. 4.2 removes nothing. |
 | 4.2 to 4.3 JSON is not | 4.3 drops `offsets`, `order`, `relative`, `uniform`. It adds a unified `constraints` list, sliders and generalized transform constraint properties. |
 | The official binary readers ignore the offset of a typed array view | `new DataView(data.buffer)` in all three versions. A small file read in Node, which is a view into a pool, fails to load. |
 | The official deform timeline packs Bezier curves with its own arithmetic | `DeformTimeline.setBezier` differs from `CurveTimeline.setBezier` in all three versions. Using the generic one changes floats in 168 of 246 deform curves of the 4.1 and 4.2 fixtures. |
 | The official 4.1 JSON reader has a bug in transform constraint timelines | It never carries the shearY mix from key to key. Every key stores the first key's value. The importer reproduces it for 4.1 files. |
 | The official 4.3 JSON and binary readers disagree on a slider with a bone | For `diamond-pro` the JSON reader leaves `max` at 0 and the binary reader stores 2. Each importer follows its own official reader. |
 | The official 4.3 loader overwrites the size of a linked mesh with its parent's | `setSourceMesh`. In 4.1 and 4.2 a linked mesh keeps its own size. |
-| The official atlas reader misreads a file that starts with an empty line and has header fields | The first loop treats `''` as "no line". The importer does not copy this. Real exports are not affected. |
+| The official atlas reader misreads a file that starts with an empty line and has header fields | The first loop treats `''` as "no line". The importer does not copy this. The misread does not affect real exports. |
 | Pixi's batcher starts a new batch when the blend mode changes | `Batcher.mjs`: `breakRequired = blendMode !== adjustedBlendMode`. |
 | The official Pixi runtime maps each slot blend mode to a Pixi blend mode | `SpinePipe.js` in 4.3.13. An additive slot between normal slots costs two extra batches. |
 | The official Pixi runtime repacks every vertex attribute each animated frame | `updateRenderable` calls `updateElement` for every visible slot. |
 | The official Pixi runtime runs a full pose and vertex pass every tick, even with nothing playing | `_updateAndApplyState` sets `_stateChanged` unconditionally (4.3.13). |
 | It computes vertices for alpha 0 slots, and each visibility flip rebuilds the instructions | `transformAttachments` in 4.3.13. |
 
-Not verified: anything in a browser, any timing, and behaviour on rigs other than the official examples.
+Not checked: anything in a browser, any timing, and behaviour on rigs other than the official examples.
 
 ## 1. Goals and non-goals
 
@@ -58,51 +58,51 @@ Goals, in priority order:
 
 1. Correct playback of 4.1, 4.2 and 4.3 skeletons in one runtime, mixed in one scene.
 2. Three render wins from the first usable release: less overdraw, fewer batch breaks, one premultiplied pipeline with additive in the same batch.
-3. A pose core built for speed and low memory: typed arrays, no per-frame allocation, shared data stored once, work skipped when it cannot change the picture.
+3. A pose core built for speed and low memory. Its state is in typed arrays, with no per-frame allocation and shared data stored once. It skips work that cannot change the picture.
 4. Optimizations that are on by default when they are exact, and one knob for the rest.
 5. A small API that a person or an AI agent can use correctly from one page of docs.
 6. Every performance claim backed by spine-benchmark.
 
 Non-goals:
 
-- Canvas 2D or WebGL1. Every program is GLSL 3.00. Pixi falls back to WebGL1 where a browser has no WebGL2, and such a renderer throws a `MarrowError` in every render that draws a skeleton.
+- Canvas 2D or WebGL1. Every program is GLSL 3.00. Pixi uses WebGL1 where a browser has no WebGL2. On such a renderer no skeleton draws, and `console.warn` says so once. The rest of the app continues, because an error thrown in a render would stop Pixi's ticker.
 - Spine 3.8 and 4.0. The model can take more importers later.
 - Editing or authoring skeletons.
 - A runtime dependency on `spine-core`.
 
 ## 2. The pose core is ours
 
-The runtime has two halves. The pose half turns time into bone transforms, slot colors, attachments and draw order. The render half turns a pose into pixels.
+The runtime has two halves. The pose half converts time into bone transforms, slot colors, attachments and draw order. The render half converts a pose into pixels.
 
-Decision: both halves are written here. Nothing from Esoteric ships in the package.
+Decision: this project writes both halves. Nothing from Esoteric ships in the package.
 
-What the official cores are still used for, as dev dependencies only:
+What the project still uses the official cores for, as dev dependencies only:
 
-- Reference for pose: every bone, slot and event of every frame is compared against the official core of the file's own version.
-- Reference for pixels: frames are compared against `spine-pixi-v8` for 4.2 and 4.3.
+- Reference for pose: the tests compare every bone, slot and event of every frame against the official core of the file's own version.
+- Reference for pixels: the tests compare frames against `spine-pixi-v8` for 4.2 and 4.3.
 - Baseline for the benchmark A/B.
 
 What an own core makes possible that a wrapped core does not:
 
 | Item | Official core | Own core | Exact |
 |---|---|---|---|
-| Keyframe lookup | Linear scan from the first key on every call | The same scan. A cursor was measured in M6: a lookup scans 2.4 keys on average, the ceiling is 8.6 percent of an update on two animations, and a trial build was inside the noise. Not built. | |
+| Keyframe lookup | Linear scan from the first key on every call | The same scan. In M6 the project measured a cursor. A lookup scans 2.4 keys on average, and the ceiling is 8.6 percent of an update on two animations. A trial build was inside the noise. Not built. | |
 | Data layout | One object per bone, slot, pose | Typed arrays. The renderer reads them directly, with no copy step. | Yes, within float tolerance |
 | Allocation | The core mostly reuses its arrays. The Pixi layer allocates in places, for example a new clipper per bounds call. | None after warm-up, proven by a test | Yes |
-| Constant timelines | Evaluated every frame | Since M6 an apply that would repeat the one before is left out: an entry past its end, or a clip whose timelines all hold one value. A constant timeline inside a clip that moves is still applied. | Yes |
-| Bones that did not change | Every bone transformed every frame | Since M6 a bone is posed again only when its own pose, its parent or the placement of the skeleton changed. No bone is left out because nobody looks: the pose state is public and equals the official one in every number. | Yes |
+| Constant timelines | Evaluated every frame | Since M6 the engines skip an apply that would repeat the one before. That is an entry past its end, or a clip whose timelines all hold one value. The engines still apply a constant timeline inside a clip that moves. | Yes |
+| Bones that did not change | Every bone transformed every frame | Since M6 the engines pose a bone again only when its own pose, its parent or the placement of the skeleton changed. The engines never skip a bone for the reason that nobody looks at it. The pose state is public and equals the official one in every number. | Yes |
 | Timelines nobody needs | All applied | All applied while the pose changes, for the same reason. | |
-| Path constraints | Curve lengths recomputed every frame | Since M6 a constraint with the bones it writes is left out while nothing it reads changed. A cache inside a path that moves was measured as not worth it: its inputs stay only when the whole group rests. | Yes |
-| Many copies of one rig | One pose each | One pose each. Sharing is not built: it needs a clone of an engine with its track state, events fanned out to several objects and a fork on every command. The gain shows in a bench of identical instances and is small for a few dozen symbols. | |
+| Path constraints | Curve lengths recomputed every frame | Since M6 the engines skip a constraint and the bones it writes while nothing it reads changed. A measurement showed that a cache inside a path that moves is not worth it: its inputs stay only when the whole group rests. | Yes |
+| Many copies of one rig | One pose each | One pose each. The runtime does not share poses. Sharing needs a clone of an engine with its track state, events sent to several objects and a fork on every command. The gain shows in a bench of identical instances and is small for a few dozen symbols. | |
 | Baking | At run time through the engine | At build time in Node, from the same core | Yes |
 | Worker or WASM later | Object graph, hard to move | Plain buffers, ready to share | Later |
 
 Price:
 
 - The core is the largest piece of work in the project. The official one is 9,000 to 12,000 lines per version.
-- Every Spine release has to be ported.
-- Correctness has to be proven, not assumed. Section 15 is the plan for that.
-- Features arrive in stages. Until a feature is ported, a rig that uses it fails with a typed error that names the feature. It never plays wrong silently.
+- Every Spine release needs a port.
+- The project must prove correctness, not assume it. Section 15 is the plan for that.
+- Features arrive in stages. Until a feature has a port, a rig that uses it fails with a typed error that names the feature. It never plays wrong silently.
 
 ## 3. What changes versus the official Pixi runtime
 
@@ -114,9 +114,9 @@ Price:
 | Vertex data | All attributes repacked each frame | UVs, indices and weights uploaded once. Positions only when needed. |
 | Attachment or draw-order key | Full instruction rebuild | Index rewrite in place, in both modes. No instruction rebuild. |
 | Rigid region attachments | Positions computed on CPU and uploaded | Placed in the vertex shader from bone matrices (GPU mode) |
-| Hidden slots (alpha 0) | Left out of the batch, but their vertices are still computed, and each change of visibility rebuilds the instructions | Left out by an index rewrite. No vertex work, no rebuild. |
-| Overdraw | Quads as authored | Invisible regions left out, covered slots skipped. Tight outlines as an option. |
-| Clipping | CPU triangle clipping always, so vertex counts change every frame and the instructions are rebuilt | Batched mode: CPU clipping into a room of constant size, no rebuild. Mesh mode: stencil mask. |
+| Hidden slots (alpha 0) | Not in the batch, but the official runtime still computes their vertices, and each change of visibility rebuilds the instructions | Skipped by an index rewrite. No vertex work, no rebuild. |
+| Overdraw | Quads as authored | Invisible regions and covered slots skipped. Tight outlines as an option. |
+| Clipping | CPU triangle clipping always, so vertex counts change every frame and Pixi rebuilds the instructions | Batched mode: CPU clipping into a room of constant size, no rebuild. Mesh mode: stencil mask. |
 | Idle skeleton | Full pose and vertex pass every tick | Sleeps: no pose work, no upload |
 | Pose work | Every timeline and every bone, every frame | Only what can change the picture (section 2) |
 | Setup | Extensions register on import | Nothing to call. First use registers. |
@@ -163,7 +163,7 @@ Layers and the rule between them. A layer imports only from layers above it in t
 | api | `src/api` | `MarrowSpine`, handles, options |
 | features | `src/bake`, `src/debug`, `src/perf`, `src/optimize` | Optional entry points |
 
-`base`, `model`, `formats` and `pose` never import Pixi. They form `pixi-marrow/core`, which runs in Node. The rule is checked in CI.
+`base`, `model`, `formats` and `pose` never import Pixi. They form `pixi-marrow/core`, which runs in Node. CI checks the rule.
 
 ## 5. Classes
 
@@ -191,21 +191,21 @@ Built in M1. The model is plain data described by interfaces, not classes. The i
 | `SkeletonModel` | Header plus the parts below. Immutable after import. A faithful import: a 4.1 file keeps its 4.1 fields. |
 | `BoneTable` | Names, parent index, setup transform (7 floats per bone), inherit mode, length. One typed array per property. Parents come before children. |
 | `SlotTable` | Names, bone index, setup color and dark color, setup attachment, blend mode, visibility. One typed array per property. |
-| `SkinData` | Attachments sorted by slot and name, each with its data. Bones and constraints the skin turns on. |
+| `SkinData` | Attachments sorted by slot and name, each with its data. Bones and constraints the skin activates. |
 | `AttachmentData` | Region, mesh, bounding box, path, point or clipping. Vertices and weights in the official encoding. A linked mesh holds a reference to its parent and no geometry. |
 | `AttachmentRef` | Skin, slot and name. Attachments have no global index. |
 | `ConstraintData` | One list for all constraints, each tagged with its type. Fields that exist for some versions only are optional. |
 | `AnimationData`, `TimelineData` | Timelines in the order the official runtime applies them. `frames` and `curves` equal the official arrays bit for bit. |
-| `AtlasModel` | Pages, plus regions as 11 integers each. Texture coordinates are not stored. |
+| `AtlasModel` | Pages, plus regions as 11 integers each. The model stores no texture coordinates. |
 | `sniffSkeleton` | Reads format and version from JSON or the binary header. |
 | `importSkeleton` | Picks the reader for the format and version and loads it on demand. |
 | `importJson42`, `importJson43` | JSON to model. 4.1 and 4.2 share one reader because 4.2 only adds keys. |
 | `importBinary42`, `importBinary43` | Binary to model. 4.1 and 4.2 share helpers. Their byte layouts differ in most records. |
 | `importAtlas` | Atlas text to `AtlasModel`. |
 | `describeSkeleton` | Names, counts and features of a model as plain JSON. |
-| `TimelineWriter`, `BinaryInput` | Shared by the readers. Each is tested bit for bit against the official class it mirrors. |
+| `TimelineWriter`, `BinaryInput` | Shared by the readers. A test checks each bit for bit against the official class it mirrors. |
 
-Limits of the model today: indices are 16-bit. A file with more than 32,767 bones or slots, or a mesh with more than 65,535 vertices, is rejected with a typed error.
+Limits of the model today: indices are 16-bit. Import fails with a typed error for a file with more than 32,767 bones or slots, or a mesh with more than 65,535 vertices.
 
 ### 5.3 Pose
 
@@ -213,28 +213,34 @@ Built in M2a, with constraints since M3 and M4:
 
 | Piece | Responsibility |
 |---|---|
-| `PoseState` | Per instance, in typed arrays: local pose (7 numbers per bone), inherit mode, bone activity, world transforms (6 numbers per bone), slot colors and dark colors, sequence index, deform and draw order. The numbers are 64-bit. |
+| `PoseState` | Per instance, in typed arrays. For bones: local pose (7 numbers per bone), inherit mode, bone activity and world transforms (6 numbers per bone). Also slot colors and dark colors, sequence index, deform and draw order. The numbers are 64-bit. |
 | `PoseEngine` | The interface of a pose engine. It mirrors the official `AnimationState` and `Skeleton` calls: tracks, queue, mixing, skins, setup pose, update, events. |
 | `createPoseEngine` | Picks the engine for the model's version and loads it on demand. |
 | `src/pose/legacy` | The engine for 4.1 and 4.2. Their differences are branches on the version. |
 | `src/pose/v43` | The engine for 4.3. The official 4.3 runtime mixes animations with other arguments in every timeline, so it cannot share the 4.1 and 4.2 player. |
 | `createAttachmentLookup`, `meshSource` | Find attachments by skin, slot and name, and the mesh that owns the geometry of a linked mesh. |
 
-IK, transform and path constraints are solved since M3, physics constraints and sliders since M4. Each engine ports the solvers and the update order of its own official runtime, so there is no shared kernel with version modes. The 4.3 engine includes the generalized transform constraints, because 4.3 has no other kind.
+The engines solve IK, transform and path constraints since M3, and physics constraints and sliders since M4. Each engine ports the solvers and the update order of its own official runtime, so there is no shared kernel with version modes. The 4.3 engine includes the generalized transform constraints, because 4.3 has no other kind.
 
-Physics has state: the simulation of each constraint and the time of the skeleton. `engine.physics` is the official `Physics` argument: `update`, `pose`, `reset` or `none`. `physicsTranslate` and `physicsRotate` are the official calls of those names. `PoseState.yDown` is the official static `Skeleton.yDown`, which the official Pixi runtime turns on. It decides which way gravity pulls when a physics constraint rotates or scales a bone. That is apart from the scale of -1 that flips the pose. The display object sets both.
+Physics has state: the simulation of each constraint and the time of the skeleton. `engine.physics` is the official `Physics` argument: `update`, `pose`, `reset` or `none`. `physicsTranslate` and `physicsRotate` are the official calls of those names.
 
-A slider of 4.3 applies an animation to the applied pose, not to the animated one. So a bone, a slot, a constraint or the draw order that a slider touches has two poses in the 4.3 engine. `PoseState` holds what is drawn: the applied values of slots and of the draw order, and the world transform of the applied bone pose. `local` stays the animated bone pose. A skeleton without sliders has one pose and pays nothing.
+`PoseState.yDown` is the official static `Skeleton.yDown`, which the official Pixi runtime sets to true. It decides which way gravity pulls when a physics constraint rotates or scales a bone. That is separate from the scale of -1 that flips the pose. The display object sets both.
 
-The official runtime is the specification, with its quirks. Three that the engines keep: a slider writes the animated pose of the extra slots that a deform timeline reaches through a linked mesh. A physics reset key inside a slider never fires. In 4.1 and 4.2 a gap in the order numbers of constraints drops the constraints after it.
+A slider of 4.3 applies an animation to the applied pose, not to the animated one. So a bone, a slot, a constraint or the draw order that a slider touches has two poses in the 4.3 engine. `PoseState` holds what the renderer draws: the applied values of slots and of the draw order, and the world transform of the applied bone pose. `local` stays the animated bone pose. A skeleton without sliders has one pose and pays nothing.
+
+The official runtime is the specification, with its quirks. The engines keep three of them:
+
+- A slider writes the animated pose of the extra slots that a deform timeline reaches through a linked mesh.
+- A physics reset key inside a slider never fires.
+- In 4.1 and 4.2 a gap in the order numbers of constraints drops the constraints after it.
 
 Three rules of the update path, found by profiling in M3:
 
-- Timelines are applied through a `switch` on a small operation number, not through one closure per timeline.
+- The engines apply timelines through a `switch` on a small operation number, not through one closure per timeline.
 - No function on the update path takes or returns a fractional number. Time, alpha and sampled values go through one shared `Float64Array`, and kernels get indices. V8 puts a double on the heap when it crosses a call that is not inlined.
-- A bone that is not turned skips its trigonometry. The cosine of 0 is 1 and the sine of 0 is 0, so the result is the same to the bit.
+- A bone with a rotation of 0 skips its trigonometry. The cosine of 0 is 1 and the sine of 0 is 0, so the result is the same to the bit.
 
-Measured on an Apple M4, in Node 24: the whole update of each rig's longest animation, against the official core doing the same work. The rows without physics were measured in M3 and did not move in M4.
+Measured on an Apple M4, in Node 24: the whole update of each rig's longest animation, against the official core doing the same work. The rows without physics come from M3 and did not move in M4.
 
 | Engine | Rigs | Time, ours as a share of official |
 |---|---|---|
@@ -243,22 +249,22 @@ Measured on an Apple M4, in Node 24: the whole update of each rig's longest anim
 | 4.1 and 4.2, rigs without physics | 8 | 80 to 99 percent |
 | 4.2, rigs with physics | 4 | 77 to 88 percent |
 
-An update that fires no event allocates nothing once V8 has optimized the path. The official cores allocate 17 to 8,359 bytes per update on the same rigs. The rigs nearest to the official time are bound by the same trigonometry calls: a physics step is mostly `cos`, `sin`, `atan2` and `pow`, which both runtimes call with the same arguments.
+An update that fires no event allocates nothing once V8 optimizes the path. The official cores allocate 17 to 8,359 bytes per update on the same rigs. The same trigonometry calls limit the rigs nearest to the official time. A physics step is mostly `cos`, `sin`, `atan2` and `pow`, and both runtimes call them with the same arguments.
 
 One step goes beyond the official code and stays exact. The official 4.2 runtime computes the applied transform of a bone after every physics constraint. The 4.2 engine does that only when a later bone update or constraint reads it. A test runs every physics fixture both ways and compares the world transforms to the bit.
 
 Since M6 the engines skip what would repeat. What they tell a renderer is in the pose state:
 
 - `version` rises in every update and command that changed something a renderer reads. `boneStamps`, `slotStamps` and `drawOrderStamp` hold the version at which each last changed. A stamp may move although the values stayed. A value never changes without its stamp. The parity suite checks that after every call of every script.
-- An update that would repeat the one before runs no timeline: every entry is past its end or holds one value, and nothing mixes. Times, events and the skeleton time go on as in the official runtime. Such an update takes 27 to 70 nanoseconds, 0.3 to 7 percent of an update that plays.
-- A bone is posed again only when its inputs changed. A constraint and the bones it writes form a group that runs whole when something it reads changed. When most bones move the engine stops looking for a while and poses everything, as before M6.
-- Slot stamps are tight: a timeline that writes the value that is there does not stamp. On the fixtures 4 to 8 percent of the slots are stamped per update.
+- An update that would repeat the one before runs no timeline: every entry is past its end or holds one value, and nothing mixes. Times, events and the skeleton time continue as in the official runtime. Such an update takes 27 to 70 nanoseconds, 0.3 to 7 percent of an update that plays.
+- The engine poses a bone again only when its inputs changed. A constraint and the bones it writes form a group that runs whole when something it reads changed. When most bones move, the engine stops these tests for a while and poses everything, as before M6.
+- Slot stamps are tight: a timeline that writes the value that is there does not stamp. On the fixtures 4 to 8 percent of the slots get a stamp per update.
 - Code that writes an array of the state itself raises the version or calls `touchPose`. The plain fields `x`, `y`, `scaleX`, `scaleY`, `yDown` and the wind and gravity directions need no call.
 
 What it costs and what it does not reach:
 
-- An animation that moves every bone pays for the stamps: 1 to 7 percent more engine time than in M5 on some rigs, 11 percent on the one rig with a slider. Animations that move little take up to 74 percent less (raptor-pro `gun-grab`, spineboy-pro `shoot`, tank-pro `shoot`).
-- Physics in mode `update` does not rest. The official arithmetic almost never reaches a fixed point: the world goes still, the offsets and velocities keep changing in their last bits. An engine that parked it would differ. A physics group is skipped only when one more step gives the same bits, which happens for physics that was never disturbed. The stamps stay tight there, so the view rests while the engine works.
+- An animation that moves every bone pays for the stamps. It takes 1 to 7 percent more engine time than in M5 on some rigs, and 11 percent on the one rig with a slider. For animations that move little, the time falls by up to 74 percent (raptor-pro `gun-grab`, spineboy-pro `shoot`, tank-pro `shoot`).
+- Physics in mode `update` does not rest. The official arithmetic almost never reaches a fixed point: the world becomes still, but the offsets and velocities keep changing in their last bits. An engine that parked it would differ. The engine skips a physics group only when one more step gives the same bits, which happens for physics that was never disturbed. The stamps stay tight there, so the view rests while the engine works.
 - The engines hold 5.7 percent more bytes per instance for the stamps and the notes of what changed.
 
 Planned for the later milestones:
@@ -315,11 +321,11 @@ Load, once per asset:
 Each tick, per instance:
 
 1. Sleep check. Nothing playing, physics at rest, no handle written: skip to step 6.
-2. `AnimationPlayer` advances tracks and applies the timelines that are needed.
-3. `PoseProgram` runs: bone ranges and constraints in order. World matrices land in `PoseState`. Change flags are set as values are written.
+2. `AnimationPlayer` advances tracks and applies the timelines that the pose needs.
+3. `PoseProgram` runs: bone ranges and constraints in order. World matrices land in `PoseState`. The program sets change flags as it writes values.
 4. Skin. GPU mode uploads the bone matrix block as it is. CPU mode writes positions for weighted or deformed ranges only.
 5. If attachments, draw order or visibility changed: rebuild the index buffer. Nothing else.
-6. Pixi asks the pipe to validate. The answer is "no rebuild" unless the skin set changed.
+6. Pixi asks the pipe whether it needs a rebuild. The answer is "no rebuild" unless the skin set changed.
 7. Draw. One call per range.
 
 Baked animations replace steps 2 to 4 with one number: the clip time.
@@ -328,7 +334,7 @@ Baked animations replace steps 2 to 4 with one number: the clip time.
 
 ### 7.1 One premultiplied pipeline
 
-- Every texture is premultiplied on the GPU. Straight atlases are premultiplied on upload. Premultiplied atlases are used as they are.
+- Every texture on the GPU holds premultiplied colors. The runtime premultiplies straight atlases on upload. It uses premultiplied atlases as they are.
 - One blend state for normal and additive: source `ONE`, destination `ONE_MINUS_SRC_ALPHA`.
 - The shader multiplies color by alpha. For an additive slot it then writes alpha 0, which makes the same blend state add.
 - Multiply and screen need a different blend state. They start a new draw range. The perf report counts them.
@@ -336,34 +342,41 @@ Baked animations replace steps 2 to 4 with one number: the clip time.
 
 ### 7.2 Two render modes
 
-Both are built, the batched mode in M5.
+Both modes exist, the batched mode since M5.
 
-| Mode | For | Draw calls | Vertices are placed |
+| Mode | For | Draw calls | Placement of vertices |
 |---|---|---|---|
 | batched | Skeletons of up to 1024 batch vertices | Shared with the other pixi-marrow skeletons of the render group | On the CPU, into the buffer of the batch |
 | mesh | Larger skeletons | One per draw range of every instance | In skeleton space on the CPU and moved by the vertex shader, or from the bones in the vertex shader with `skinning: 'gpu'` |
 
-`renderMode: 'auto'` is the default. It picks the batched mode when the skeleton needs at most 1024 vertices in a batch and the renderer can sample the pages of a run. `mesh` and `batched` force one side. The property can change at run time. `await spine.perf.report()` names the mode and the reason: `small`, `large`, `limit` or `option`.
+`renderMode: 'auto'` is the default. It picks the batched mode when the skeleton needs at most 1024 vertices in a batch. The renderer must also be able to sample the pages of a run. `mesh` and `batched` force one side. The property can change at run time. `await spine.perf.report()` names the mode and the reason: `small`, `large`, `limit` or `option`.
 
 How the batched mode works:
 
 - Two batchers of our own, one with dark tint, feed Pixi's batch pipe. They carry the premultiplied pipeline of 7.1: normal and additive slots share a batch, multiply and screen break it. A skeleton without dark colors joins an open batch with dark tint.
 - A skeleton is one element per run of slots that share a blend state and a group of up to 16 pages. An element has a constant size: every slot has room for its largest attachment, and unused indices are degenerate triangles.
-- So a change of draw order, visibility, attachment or color rewrites data in place. Pixi does not rebuild the instructions of the render group. Pixi's own batcher packs indices only when a batch is built, which is why the batcher is ours. The official runtime rebuilds on most frames.
+- So a change of draw order, visibility, attachment or color rewrites data in place. Pixi does not rebuild the instructions of the render group. Pixi's own batcher packs indices only when it builds a batch, which is why the batcher is ours. The official runtime rebuilds on most frames.
 - An instance holds no Pixi mesh, geometry, buffer or shader. It holds one view container and its elements.
-- Nothing is registered at import. The pipe installs itself into a renderer at the first render of a skeleton, and the batchers are registered then.
+- The import registers nothing. The pipe installs itself into a renderer at the first render of a skeleton, and the batchers register at the same time.
 
-Why 1024: on WebGL2 on the bench machine a batch saves about 2.7 microseconds per instance and costs about 5 nanoseconds per vertex, which crosses near 570 vertices. On WebGPU the batched frame takes 0.64 to 0.76 of the mesh frame from 44 to 819 vertices. A draw call costs more on a phone than on this desktop, so the limit sits above the WebGL2 crossover. The rig raptor-pro has 667 vertices. It pays 3 percent of frame time for the limit on WebGL2 and gains 27 percent on WebGPU.
+Why 1024: on WebGL2 on the bench machine, a batch saves about 2.7 microseconds per instance. It costs about 5 nanoseconds per vertex, so the two cross near 570 vertices. On WebGPU the batched frame takes 0.64 to 0.76 of the mesh frame from 44 to 819 vertices. A draw call costs more on a phone than on this desktop, so the limit sits above the WebGL2 crossover. The rig raptor-pro has 667 vertices. It pays 3 percent of frame time for the limit on WebGL2 and gains 27 percent on WebGPU.
 
 Limits, stated:
 
 - A Pixi object between two skeletons in draw order breaks our batch. It does not break the batch of the official runtime, which uses Pixi's default batcher.
-- The two modes are not equal to the bit, because one places vertices in 64-bit on the CPU and the other in 32-bit on the GPU. Each passes the pixel check against the official runtime. Against each other they differ by 5 levels at most, on 0.006 percent of pixels by more than 1.
-- On WebGPU Pixi gives every mesh draw a slot of one uniform buffer per frame, with room for 2047, and throws past that. Since after M9 a mesh of the mesh mode binds a small uniform buffer of its own once fewer than 256 slots are left. Its uniform group is static, so Pixi uploads it only after the values were written, which happens when its transform, tint or rounding change. Before the audit of 2026-11-15 the group was not static, and Pixi wrote and uploaded it at every draw. So 1200 instances of a rig with a clip, four draws each, draw in the mesh mode. The batched mode never used the slots.
-- The 256 slots kept for the rest of the scene are a limit. A scene whose other draws need more than 256 slots in one frame, as many Graphics or sprites in filters, still makes Pixi throw. Where the room of the batch cannot be read, every mesh of ours binds its own buffer, see below.
+- The two modes are not equal to the bit. One places vertices in 64-bit on the CPU, and the other in 32-bit on the GPU. Each passes the pixel check against the official runtime. Against each other they differ by 5 levels at most, on 0.006 percent of pixels by more than 1.
+- On WebGPU Pixi gives every mesh draw a slot of one uniform buffer per frame, with room for 2047, and throws past that. Since after M9 a mesh of the mesh mode binds a small uniform buffer of its own once fewer than 256 slots remain. Its uniform group is static, so Pixi uploads it only after new values arrive, which happens when its transform, tint or rounding change. Before the audit of 2026-11-15 the group was not static, and Pixi wrote and uploaded it at every draw. So 1200 instances of a rig with a clip, four draws each, draw in the mesh mode. The batched mode never used the slots.
+- The 256 slots kept for the rest of the scene are a limit. A scene whose other draws need more than 256 slots in one frame, for example many Graphics or sprites in filters, still makes Pixi throw. Where the runtime cannot read the room of the batch, every mesh of ours binds its own buffer, see below.
 - A skeleton can grow its room, which rebuilds the instructions once. A clipped animation settles within its first turn.
 
-The batched mode relies on these parts inside Pixi, checked against the source of 8.16.0 and 8.23.0. The `Batcher` base class and the fields of a batch element. `renderPipes.batch` and the protocol of a render pipe. `Container.onRender` and `ViewContainer`. The bind layout of the batch adaptors and `renderer.limits.maxBatchableTextures`. The official runtime builds on the same parts.
+The batched mode relies on these parts inside Pixi, checked against the source of 8.16.0 and 8.23.0:
+
+- The `Batcher` base class and the fields of a batch element.
+- `renderPipes.batch` and the protocol of a render pipe.
+- `Container.onRender` and `ViewContainer`.
+- The bind layout of the batch adaptors and `renderer.limits.maxBatchableTextures`.
+
+The official runtime builds on the same parts.
 
 The mesh mode on WebGPU reads private fields of Pixi, checked against the source of 8.21.0 and 8.23.0, see `render/mesh-uniforms.ts`:
 
@@ -373,30 +386,47 @@ The mesh mode on WebGPU reads private fields of Pixi, checked against the source
 | `renderPipes.uniformBatch._batchBuffer.byteIndex` and `.data` | The room left in the batch of uniforms this frame | Every mesh of ours binds a buffer of its own, which uploads where it moves |
 | `renderPipes.uniformBatch._batchBuffer._minUniformOffsetAlignment` | The bytes of one slot | 128, the value of 8.21 to 8.23 |
 
-A missing field is told once with `console.warn`, which names the version of pixi.js. The idle cache clears the instruction set of its render group after each capture: `renderGroup.instructionSet` with its `instructions` and `renderables`, and `renderGroup.childrenRenderablesToUpdate`. These are public fields that Pixi marks as internal.
+The runtime reports a missing field once with `console.warn`, and the warning names the version of pixi.js. The idle cache clears the instruction set of its render group after each capture: `renderGroup.instructionSet` with its `instructions` and `renderables`, and `renderGroup.childrenRenderablesToUpdate`. These are public fields that Pixi marks as internal.
 
-GPU skinning, built in M7. With `skinning: 'gpu'` the vertex shader of the mesh mode places the vertices from the bone matrices. A layout holds an influence texture of 16 bytes per influence for all of its instances, and weighted meshes are covered with any number of bones a vertex. Its vertex buffer `aSkin`, 8 bytes a vertex, is one GPU buffer for all views of the layout, and the shared bytes of the report count both once. Before the audit of 2026-11-15 every view made a GPU copy of its own. An instance holds a bone texture of 24 bytes a bone and a palette of 8 bytes a slot. A moving skeleton uploads the bones whose stamp moved, and a color key writes the palette of its slot. The CPU still places a mesh with a deform and a region with a sequence, in the same draw call. Code that reads positions, such as the bounds, the debug overlays and the search for covered slots, gets them placed on the CPU on demand. The skinning is fixed when the display object is made. The code is in the chunk of the mesh mode, which grew from 5.7 to 8.9 kB gzip.
+GPU skinning, built in M7. With `skinning: 'gpu'` the vertex shader of the mesh mode places the vertices from the bone matrices.
 
-Measured on the bench machine with 200 instances, `skinning: 'gpu'` cut the uploads of raptor-pro by 61 to 64 percent. The frame took 16 percent longer on WebGL2, and on WebGPU it was equal within the spread of those runs. The runs are not committed as a baseline, so the numbers cannot be checked again from the repo. Most of the extra time is the upload of one bone texture and one palette per instance, 200 to 400 texture uploads a frame. Instancing, below, keeps those textures per layout and uploads each once a frame. `auto` stays `cpu` until the A/B on phones. That run came before instancing. Today the side `gpu` of the bench asks for instancing, and the side `alone` of `--instancing=compare` measures what this run measured.
+A layout holds an influence texture of 16 bytes per influence for all of its instances. It covers weighted meshes with any number of bones a vertex. Its vertex buffer `aSkin`, 8 bytes a vertex, is one GPU buffer for all views of the layout. The shared bytes of the report count both once. Before the audit of 2026-11-15 every view made a GPU copy of its own. An instance holds a bone texture of 24 bytes a bone and a palette of 8 bytes a slot.
 
-Instancing, built in M8 on top of GPU skinning. With `skinning: 'gpu'` and `instancing: 'auto'` or `'on'`, which no preset sets, the skeletons of the mesh mode that follow each other in Pixi's render order draw as one instanced draw. `auto` leaves a layout alone whose union, below, has more than twice the vertices the setup pose shows with its skin. `on` draws it instanced anyway. Of the fixtures that is speedy-ess at 108 against 44, spineboy-pro at 586 against 276, alien-pro, chibi-stickers and seven Bzzz symbols. The perf report names both counts. A render pipe of our own takes their bodies. It ends Pixi's batch before each one, so anything Pixi draws in between ends the run, as in the batched mode. The pipe goes into a renderer when that renderer first draws an instanced body. At the draw the pipe walks the run in order. Members that share a layout, a draw order, a pool, pages, the dark tint and a blend mode are one draw, and a member that differs starts the next one. So a change of draw order splits a run and builds no instructions.
+A moving skeleton uploads the bones whose stamp moved, and a color key writes the palette of its slot. The CPU still places a mesh with a deform and a region with a sequence, in the same draw call. Code that reads positions, such as the bounds, the debug overlays and the search for covered slots, makes the CPU place them on demand. A display object chooses its skinning once, at its creation. The code is in the chunk of the mesh mode, which grew from 5.7 to 8.9 kB gzip.
 
-- A layout keeps a pool of data textures that its instanced views share. A view takes a slot. A float texture holds its bones, then a texel x, y, u, v per vertex the CPU may place. A byte texture holds three texels per slot of the skeleton: the light color, the dark color, and the entry the slot shows with its page. `SkinPose` writes into the slot as it writes into the textures of a view that draws alone. A frame uploads each texture once, from pixi.js 8.23 the stretch from the first texel written to the last. A pool grows by doubling, up to 2048 rows of 2048 texels, and the next pool starts after that. Once no view holds a slot, the pools of the layout and their shaders go after the task that runs, so a burst leaves no large textures. A destroyed pool lets go of its arrays, and a destroyed layout of its template.
+Measured on the bench machine with 200 instances, `skinning: 'gpu'` cut the uploads of raptor-pro by 61 to 64 percent. The frame took 16 percent longer on WebGL2, and on WebGPU it was equal within the spread of those runs. The repo has no baseline of these runs, so nobody can check the numbers again from it. Most of the extra time is the upload of one bone texture and one palette per instance, 200 to 400 texture uploads a frame.
+
+Instancing, below, keeps those textures per layout and uploads each once a frame. `auto` stays `cpu` until the A/B on phones. That run came before instancing. Today the side `gpu` of the bench asks for instancing, and the side `alone` of `--instancing=compare` measures what this run measured.
+
+Instancing, built in M8 on top of GPU skinning. With `skinning: 'gpu'` and `instancing: 'auto'` or `'on'`, the skeletons of the mesh mode that follow each other in Pixi's render order draw as one instanced draw. No preset sets `auto` or `on`.
+
+`auto` leaves a layout alone whose union, below, has more than twice the vertices the setup pose shows with its skin. `on` draws it instanced anyway. Of the fixtures that is speedy-ess at 108 against 44, spineboy-pro at 586 against 276, alien-pro, chibi-stickers and seven Bzzz symbols. The perf report names both counts.
+
+A render pipe of our own takes the bodies of these skeletons. It ends Pixi's batch before each one, so anything Pixi draws in between ends the run, as in the batched mode. The pipe installs itself into a renderer when that renderer first draws an instanced body.
+
+At the draw the pipe walks the run in order. Members that share a layout, a draw order, a pool, pages, the dark tint and a blend mode are one draw. A member that differs starts the next one. So a change of draw order splits a run and builds no instructions.
+
+- A layout keeps a pool of data textures that its instanced views share. A view takes a slot. A float texture holds its bones, then a texel x, y, u, v per vertex the CPU may place. A byte texture holds three texels per slot of the skeleton. They are the light color, the dark color, and the entry the slot shows with its page. `SkinPose` writes into the slot as it writes into the textures of a view that draws alone.
+- A frame uploads each texture once. From pixi.js 8.23 the upload is the stretch from the first texel written to the last. A pool grows by doubling, up to 2048 rows of 2048 texels, and the next pool starts after that. Once no view holds a slot, the runtime frees the pools of the layout and their shaders after the task that runs now. So a burst leaves no large textures. A destroyed pool releases its arrays, and a destroyed layout releases its template.
 - The stats of a view that draws instanced count no uploads: its pool uploads at the draw, once for all its views. The pool counts that, and the row `uploads` of the report gives the count.
-- Each fetch from a data texture computes its row and column from `textureSize` and a division. What that costs on a phone GPU was not measured.
-- The index buffer of a draw order holds every entry of every slot in that order, the union of what any instance can show. The vertex shader drops a vertex whose slot shows another entry or none: a slot that is hidden, at alpha 0 or covered by a later slot. All vertices of such a triangle land on one point outside the clip volume. On the bench rigs the union has 1.00 to 2.45 times the visible vertices. Averaged over their animations it is 193 of 193 for sack-pro, 679 of 646 for raptor-pro and 108 of 44 for speedy-ess, which `auto` now draws alone.
-- Per instance the draw has the transform of the view in its render group, its tint times its alpha and the place of its slot, as attributes with `instance: true`. The vertex shader goes through the statements of the shader of a view that draws alone, with the matrix built from three columns as a uniform would be. The pixel check allows no difference between the two, and found none. That was measured on the bench machine alone, an Apple M4 in headless Chrome. Another GPU or driver may round the two shaders apart.
-- The CPU places a mesh with a deform and a region with a sequence, and copies them into the texels of the slot. A slot has texels for every entry that can need them: a region with a sequence, and a mesh on a slot that a deform timeline keys. A deform the layout did not expect makes the view draw alone.
-- A view draws alone while a clip cuts one of its visible slots or an attached container is drawn between its slots. It always draws alone when a slot of the layout multiplies or screens or the atlas has more than 8 pages. One instanced draw per range would draw the second range of the first instance after the first range of the second one, which changes the picture where they overlap. Of the bench rigs, tank-pro has a multiply slot and the clip of coin-pro cuts in every frame, so neither draws instanced.
-- A view with a filter or a mask of its own draws instanced in a run of one: Pixi puts an instruction before and after it. The idle cache takes its image through the same pipe. The pixel check found both equal to the view drawn alone, on the bench machine.
-- Pixi draws a run with `renderer.encoder.draw` and `instanceCount`, on WebGL2 and WebGPU, checked in the source of 8.16.0 and 8.23.0. A draw has its own buffer of instance data: WebGPU writes every buffer before the draws of a frame run. Before 8.21, pixi.js destroys the index buffer of a geometry with the geometry, so the geometries of a run let go of their shared buffers first.
-- A pool can grow inside a render, when a view lays itself out again right before its draw. Draws earlier in that render bound its old textures, so they are destroyed once the render is over. A review found them destroyed at once, which fails a frame on WebGPU.
-- The pipe keeps the runs of an instruction set for the next build, and holds the set weakly. Pixi before 8.21 does not say when it destroys an instruction set, so the runs of one that is gone are freed when the next instruction set appears. A new build lets go of the views its old runs held.
-- A layout that always draws alone gets no instanced draw at all. Its reason is kept by its skin data.
-- In the reels of the site, a grid of different symbols, a frame takes 21 to 26 draw calls with GPU skinning and 3 in the batched mode. Neighbors are other skeletons, so every one starts a draw.
-- Found in review and left: a view lays itself out again inside the build, against the target the build sees, not one a filter draws to, which matters for `tightMesh: 'on'` alone. A pool can upload more than once in a frame where an idle capture or a cover search writes a slot. The report row keeps the run of the last draw while a view is hidden or shows an image.
+- Each fetch from a data texture computes its row and column from `textureSize` and a division. Nobody measured what that costs on a phone GPU.
+- The index buffer of a draw order holds every entry of every slot in that order, the union of what any instance can show. The vertex shader drops a vertex whose slot shows another entry or none. That happens for a hidden slot, a slot at alpha 0, or a slot that a later slot covers. All vertices of such a triangle land on one point outside the clip volume.
+- On the bench rigs the union has 1.00 to 2.45 times the visible vertices. Averaged over their animations, it is 193 of 193 for sack-pro, 679 of 646 for raptor-pro and 108 of 44 for speedy-ess. `auto` now draws speedy-ess alone.
+- Per instance the draw has attributes with `instance: true`. They hold the transform of the view in its render group, its tint times its alpha and the place of its slot. The vertex shader runs the statements of the shader of a view that draws alone. It builds the matrix from three columns, as for a uniform.
+- The pixel check allows no difference between the instanced draw and a view that draws alone, and found none. The only measurement was on the bench machine, an Apple M4 in headless Chrome. Another GPU or driver may round the two shaders apart.
+- The CPU places a mesh with a deform and a region with a sequence, and copies them into the texels of the slot. A slot has texels for every entry that can need them. Those are a region with a sequence, and a mesh on a slot that a deform timeline keys. A deform the layout did not expect makes the view draw alone.
+- A view draws alone while a clip cuts one of its visible slots, or while an attached container draws between its slots. It always draws alone when a slot of the layout multiplies or screens, or when the atlas has more than 8 pages. One instanced draw per range would draw the second range of the first instance after the first range of the second one. That changes the picture where they overlap. Of the bench rigs, tank-pro has a multiply slot and the clip of coin-pro cuts in every frame, so neither draws instanced.
+- A view with a filter or a mask of its own draws instanced in a run of one. Pixi puts an instruction before and after it. The idle cache takes its image through the same pipe. The pixel check found both equal to the view drawn alone, on the bench machine.
+- Pixi draws a run with `renderer.encoder.draw` and `instanceCount`, on WebGL2 and WebGPU, checked in the source of 8.16.0 and 8.23.0. A draw has its own buffer of instance data: WebGPU writes every buffer before the draws of a frame run. Before 8.21, pixi.js destroys the index buffer of a geometry with the geometry. So the geometries of a run release their shared buffers first.
+- A pool can grow inside a render, when a view computes its layout again right before its draw. Draws earlier in that render bound its old textures, so the runtime destroys them once the render is over. A review found them destroyed at once, which fails a frame on WebGPU.
+- The pipe keeps the runs of an instruction set for the next build, and holds the set weakly. Pixi before 8.21 does not say when it destroys an instruction set. So the pipe frees the runs of a set that no longer exists when the next instruction set appears. A new build releases the views its old runs held.
+- A layout that always draws alone gets no instanced draw at all. Its skin data keeps the reason.
+- The reels of the site are a grid of different symbols. There a frame takes 21 to 26 draw calls with GPU skinning and 3 in the batched mode. Neighbors are other skeletons, so every one starts a draw.
+- A review found three issues that stay. A view computes its layout again inside the build, against the target that the build sees and not one that a filter draws to. That matters for `tightMesh: 'on'` alone. A pool can upload more than once in a frame where an idle capture or a cover search writes a slot. The report row keeps the run of the last draw for a hidden view and for a view that shows an image.
 
-Measured with `pnpm bench:ab --instances=200 --skinning=gpu --instancing=compare --mesh=all` on the bench machine, pixi.js 8.23.0, medians of 3 runs, before `auto` left speedy-ess alone. The machine ran on battery and other programs used the GPU for part of the time, so only sides measured in the same seconds compare well. The spread of the runs was not written down, and the runs are not committed: `scripts/bench/baseline-m5.json` is the only baseline in the repo. So the table is one set of runs on one machine, which the repo cannot reproduce. 200 instances play. CPU ms and frame ms per frame:
+Measured with `pnpm bench:ab --instances=200 --skinning=gpu --instancing=compare --mesh=all` on the bench machine, pixi.js 8.23.0, medians of 3 runs, before `auto` left speedy-ess alone. The machine ran on battery, and other programs used the GPU for part of the time. So only sides measured in the same seconds compare well. Nobody recorded the spread of the runs or committed them: `scripts/bench/baseline-m5.json` is the only baseline in the repo.
+
+So the table is one set of runs on one machine, which the repo cannot reproduce. 200 instances play. CPU ms and frame ms per frame:
 
 | Rig | Renderer | CPU batched (`auto`) | CPU mesh | GPU alone | GPU instanced |
 |---|---|---|---|---|---|
@@ -409,12 +439,12 @@ Measured with `pnpm bench:ab --instances=200 --skinning=gpu --instancing=compare
 
 - Instancing cuts the frame to 0.34 to 0.75 of the same skeletons drawn alone on WebGL2, and to 0.48 to 0.87 on WebGPU. Draw calls fall from 200 to 1.
 - Uploads fall from 200 to 368 a frame to 4 to 6 on WebGL2. The bytes stay near those of drawing alone: raptor-pro uploads 417 against 370 KB a frame. One stretch per texture covers every slot between the first and the last one that changed.
-- Against the default, which batches these three rigs, the instanced frame is 0.74 for raptor-pro and 1.14 for sack-pro on WebGL2: sack-pro is about 14 percent slower instanced. The other four ratios are 0.90 to 0.98.
-- The heap of an instance falls from 31.1 to 23.3 KB for speedy-ess, from 64.8 to 53.6 KB for raptor-pro and from 45.6 to 37.7 KB for sack-pro.
+- The default batches these three rigs. Against it, the instanced frame is 0.74 for raptor-pro and 1.14 for sack-pro on WebGL2. So sack-pro is about 14 percent slower instanced. The other four ratios are 0.90 to 0.98.
+- The heap of an instance falls from 31.1 to 23.3 KB for speedy-ess and from 64.8 to 53.6 KB for raptor-pro. For sack-pro it falls from 45.6 to 37.7 KB.
 - coin-pro, whose clip cuts in every frame, and tank-pro, which has a multiply slot, draw alone. They take the same time with the option on and off.
 - At rest (`--scene=rest`) an instanced run uploads nothing, and its frame is 0.39 to 0.64 of drawing alone on both renderers. In the scene `mixed`, 30 instances of five rigs take turns, so no instance has a neighbour of its layout. It draws 48 calls with the option on and off, equal within the spread.
 
-The numbers are from one desktop. They say nothing about phones, and `skinning` stays `cpu` by default until they are measured.
+The numbers are from one desktop. They say nothing about phones, and `skinning` stays `cpu` by default until there are numbers for phones.
 
 Both modes rely on two more parts for a lost context, see 8.7. The `prerender` runner of a renderer. `Container.isRenderable`, which Pixi's mesh pipe asks right before it draws a mesh.
 
@@ -426,49 +456,57 @@ Limit: a skin set with thousands of alternative attachments makes a large templa
 
 Since M6 a view follows the stamps of the pose state (section 5.3):
 
-- The version is the one the view saw: `update` returns at once. No vertex, no color, no pack, no upload, and Pixi is not told that anything changed. That costs 13 nanoseconds per instance.
-- A slot is placed again when it or one of its bones has a newer stamp. A weighted mesh keeps the list of its bones for that test. Colors are written for newer slots only. The visible list is made again for a newer draw order, another attachment or an alpha that reached or left zero.
+- The version is the one the view saw: `update` returns at once. No vertex, no color, no pack, no upload, and the view does not tell Pixi that anything changed. That costs 13 nanoseconds per instance.
+- The view places a slot again when it or one of its bones has a newer stamp. A weighted mesh keeps the list of its bones for that test. The view writes colors for newer slots only. It makes the visible list again for a newer draw order, another attachment or an alpha that reached or left zero.
 - Uploads follow: only buffers that changed, and from pixi.js 8.23 only the stretch that changed. In a batch that is the stretch of the slots that moved. Pixi's own batcher uploads the whole buffer of a batch when one element changed.
 - A move of the display object alone places no vertex again in skeleton space.
 
-For 200 instances at rest the update takes 0.02 ms. In M5 it took 52 to 95 percent of the update while playing, and up to 1.3 MB went to the GPU per frame for an unchanged picture.
+For 200 instances at rest the update takes 0.02 ms. In M5 it took 52 to 95 percent of the update while playing. In M5 up to 1.3 MB also went to the GPU per frame for an unchanged picture.
 
-Found on the way: a draw range counted on zeros behind its last index, and those did not always reach the GPU. On pixi.js before 8.20, which draws the whole index buffer, the mesh mode drew stale triangles after a skin change or after two updates between two draws. Each range now knows how far the GPU copy can hold something other than zero.
+Found on the way: a draw range counted on zeros behind its last index, and those did not always reach the GPU. On pixi.js before 8.20, the mesh mode drew stale triangles after a skin change or after two updates between two draws. Those versions draw the whole index buffer. Each range now knows how far the GPU copy can hold something other than zero.
 
 ### 7.4 Overdraw
 
-1. Hidden slots are never drawn: alpha 0, no attachment, inactive bone. Always on.
-2. Invisible regions: a region attachment whose atlas region shows no pixel is not drawn. Exact. On by default.
-3. Covered slots: a slot fully inside the opaque rectangle of a later slot is skipped. Exact. On by default.
+1. Hidden slots: the runtime never draws a slot with alpha 0, no attachment or an inactive bone. Always on.
+2. Invisible regions: the runtime does not draw a region attachment whose atlas region shows no pixel. Exact. On by default.
+3. Covered slots: the runtime skips a slot fully inside the opaque rectangle of a later slot. Exact. On by default.
 4. Tight meshes: a region quad becomes a convex polygon of at most 8 vertices around its visible pixels. Fewer shaded pixels, more vertices. Not exact to the bit, so it is an option: `tightMesh: 'on'`.
 5. Later, experimental: an opaque pass with depth test. Not promised for version 1.
 
-Outlines and opaque rectangles come from the atlas pixels, as `AtlasOutlines`. Three sources: a sidecar file written by `pixi-marrow outlines`, an object, or a scan of the page textures in idle time after the load. Since after M9 there are none unless the load asks, through `MarrowAsset.load`, `MarrowAsset.from` and Pixi `Assets` alike. A display object that sets `tightMesh` or `occlusion` by name on an asset without outlines warns once per asset, because they do nothing then. The scan draws every page into a canvas, 32 MB for a page of 2048 by 2048 for a moment, which a phone with little memory can fail on. The scan reads a premultiplied page through a WebGL context, because a 2D canvas loses color under alpha 0, and that color adds light. A page that cannot be read keeps its quads.
+Outlines and opaque rectangles come from the atlas pixels, as `AtlasOutlines`. They have three sources:
 
-Built in M3. What was measured on the 34 example rigs of the pixel check:
+- a sidecar file written by `pixi-marrow outlines`
+- an object
+- a scan of the page textures in idle time after the load
+
+Since after M9 there are none unless the load asks, through `MarrowAsset.load`, `MarrowAsset.from` and Pixi `Assets` alike. A display object that sets `tightMesh` or `occlusion` by name on an asset without outlines warns once per asset, because they do nothing then.
+
+The scan draws every page into a canvas. For a page of 2048 by 2048 that takes 32 MB for a moment, and a phone with little memory can fail there. The scan reads a premultiplied page through a WebGL context, because a 2D canvas loses color under alpha 0, and that color adds light. A page that the scan cannot read keeps its quads.
+
+Built in M3. Measurements on the 34 example rigs of the pixel check:
 
 | Cut | Triangle area drawn | Picture against no cuts |
 |---|---|---|
 | Invisible regions and covered slots | 100.0 percent. Covered slots appear in one rig. | Equal, every pixel of 384 frames |
 | Tight meshes | 90.5 percent, per rig 80.6 to 96.8 | At most 0.08 percent of pixels off by more than 1 of 255 levels |
 
-Why tight meshes are not exact: a GPU interpolates texture coordinates per triangle, from corners it has moved to its subpixel grid. Other triangles give other last bits. The same quad split along its other diagonal already changes up to 12.5 percent of its pixels by one level. A pixel on the outer edge of a region can also fall to the other side of that edge. One or two pixels per frame do, by up to 53 levels measured. The pixel check bounds both effects for `tightMesh: 'on'`.
+Why tight meshes are not exact: a GPU interpolates texture coordinates per triangle, from corners that it moves to its subpixel grid. Other triangles give other last bits. The same quad split along its other diagonal already changes up to 12.5 percent of its pixels by one level. A pixel on the outer edge of a region can also fall to the other side of that edge. One or two pixels per frame do, by up to 53 levels measured. The pixel check bounds both effects for `tightMesh: 'on'`.
 
 The example rigs are mostly meshes, which no outline touches, and their artists left little hidden art. Rigs made of large regions gain more: the regions of the dragon alone lose 78 percent of their area. The default stays exact until the benchmark shows on devices what the polygons buy.
 
 When a cut is off:
 
-- A page keeps its quads when its texture differs from the atlas page in pixel size, has mipmaps or anisotropic filtering, or repeats where the page does not. The one pixel margin of an outline holds for bilinear filtering at full size only.
+- A page keeps its quads when its texture differs from the atlas page in pixel size or has mipmaps or anisotropic filtering. It also keeps them when its texture repeats where the page does not. The one pixel margin of an outline holds for bilinear filtering at full size only.
 - Sequences and meshes keep their geometry.
 - An occluder is a region attachment with normal blending and alpha 255, outside every clip, among the 4 largest opaque rectangles.
-- Covered slots are drawn again in the frame in which any alpha from the object up to the stage is not 1. That is checked again at draw time, after every user callback has run.
+- The runtime draws covered slots again in the frame in which any alpha from the object up to the stage is not 1. It checks that again at draw time, after all user callbacks finish.
 - A view drawn with pixel rounding or to a multisampled target uses no cuts.
 
-Cost: the search for covered slots backs off while it finds nothing, from every 4th to every 64th frame. It then costs under 3 percent of the view update. Building outlines takes 7 to 28 ms per megapixel of page. In Chrome a one-page atlas has its outlines 17 to 33 ms after the load.
+Cost: while the search for covered slots finds nothing, it runs less often, from every 4th to every 64th frame. It then costs under 3 percent of the view update. Building outlines takes 7 to 28 ms per megapixel of page. In Chrome a one-page atlas has its outlines 17 to 33 ms after the load.
 
 ### 7.5 Clipping
 
-Built in M3 with one strategy, the stencil mask. The slots a clip cuts draw inside a Pixi container whose mask is a mesh of the clip polygon. The polygon is placed and shaped each update as the official `SkeletonClipping` of the file's version does it, and triangulated by a port of the official ear clipping.
+Built in M3 with one strategy, the stencil mask. The slots a clip cuts draw inside a Pixi container whose mask is a mesh of the clip polygon. Each update the runtime places and shapes the polygon as the official `SkeletonClipping` of the file's version does it. A port of the official ear clipping triangulates it.
 
 | | |
 |---|---|
@@ -477,26 +515,32 @@ Built in M3 with one strategy, the stencil mask. The slots a clip cuts draw insi
 | Picture | Clipped frames match the official runtime within 2 of 255 levels, at three picture sizes |
 | Not exact | A clip polygon that crosses itself. The official clipper and a stencil mask disagree about such a shape. |
 
-Built in M5, the second strategy: in batched mode a clip is cut on the CPU, because a mask breaks every batch. The kernel in `src/geometry/clip-triangles.ts` is a port of the official `SkeletonClipping` of each version. Its output equals the official one to the bit, on every clipped fixture and on 27,000 random cases per version. It is 2.3 to 5 times as fast as the official clipper per triangle.
+Built in M5, the second strategy: in batched mode the CPU cuts a clip, because a mask breaks every batch. The kernel in `src/geometry/clip-triangles.ts` is a port of the official `SkeletonClipping` of each version. Its output equals the official one to the bit, on every clipped fixture and on 27,000 random cases per version. It is 2.3 to 5 times as fast as the official clipper per triangle.
 
-- A verdict per slot comes first: nothing is left, the slot is whole, or it is cut. A whole slot draws with its shared vertices. Only a cut slot runs the clipper. On spineboy-pro 214 of 216 slots inside a clip need no cut.
-- Cut vertices go into a room behind the rooms of the slots. The room is a high-water mark per model, so vertex counts that change every frame rebuild nothing once the room has settled.
-- The clip polygon of a region without weights or deform is triangulated once per attachment, not once per pose. That was 64 percent of the update of coin-pro.
+- A verdict per slot comes first: nothing remains, the slot is whole, or it needs a cut. A whole slot draws with its shared vertices. Only a cut slot runs the clipper. On spineboy-pro 214 of 216 slots inside a clip need no cut.
+- Cut vertices go into a room behind the rooms of the slots. The room is a high-water mark per model, so vertex counts that change every frame rebuild nothing once the room settles.
+- The runtime triangulates the clip polygon of a region without weights or deform once per attachment, not once per pose. That was 64 percent of the update of coin-pro.
 - The kernel loads on demand, with an asset that has a clipping attachment.
 - The picture: clipped frames in batched mode equal the official runtime in every pixel. The stencil path is within 1 level.
 
-The rules that differ between versions, all ported: 4.3 can use a convex polygon whole, can replace a concave one by its hull, and can keep the outside (`inverse`). In 4.3 an end slot that shows a clip ends the active clip and starts the new one. In 4.2 the first clip then runs to the end of the draw order.
+The runtime ports every rule that differs between versions:
+
+- 4.3 can use a convex polygon whole.
+- 4.3 can replace a concave polygon by its hull.
+- 4.3 can keep the outside (`inverse`).
+- In 4.3 an end slot that shows a clip ends the active clip and starts the new one. In 4.2 the first clip then runs to the end of the draw order.
 
 ### 7.6 Objects attached to slots
 
 Built after M6, for games that put their own Pixi objects into a rig.
 
-- `hero.bone(name)` is the handle of a bone. `x`, `y`, `rotation`, `scaleX` and `scaleY` are the pose next to the parent bone, as the Spine editor shows it, and can be written. `worldX`, `worldY`, `worldRotation` and `worldMatrix()` say where the bone is in the space of the display object after the last update. A write takes effect with the next update and stays until an animation that keys the bone writes it again, as in the official runtime.
+- `hero.bone(name)` is the handle of a bone. `x`, `y`, `rotation`, `scaleX` and `scaleY` are the pose next to the parent bone, as the Spine editor shows it, and are writable. `worldX`, `worldY`, `worldRotation` and `worldMatrix()` say where the bone is in the space of the display object after the last update. A write takes effect with the next update and stays until an animation that keys the bone writes it again, as in the official runtime.
 - `hero.follow(bone, container)`: the container gets the transform of the bone after every update, in the space of the display object, so it belongs inside it. It stays where it is in the display list. It costs no draw call.
-- `hero.attach(slot, container)`: the container becomes a part of the skeleton, drawn at the place of the slot in the draw order, after the attachment of that slot. It moves with the bone of the slot and its alpha is that of the slot. `followAttachment` hides it while the slot is empty, `followColor` tints it. It mirrors `addSlotObject` of the official runtime. A slot holds one container. A clip does not clip it.
-- Cost of `attach`: one more draw call per container that is drawn, in both render modes, because a foreign object ends a batch. A draw order key that moves slots across an attached slot rewrites indices and rebuilds nothing. The official runtime rebuilds 15 times in the scene that measures this.
+- `hero.attach(slot, container)`: the container becomes a part of the skeleton. It draws at the place of the slot in the draw order, after the attachment of that slot. It moves with the bone of the slot and its alpha is that of the slot. `followAttachment` hides it while the slot is empty, `followColor` tints it.
+- `attach` mirrors `addSlotObject` of the official runtime. A slot holds one container. A clip does not clip it.
+- Cost of `attach`: one more draw call for each container that Pixi draws, in both render modes, because a foreign object ends a batch. A draw order key that moves slots across an attached slot rewrites indices and rebuilds nothing. The official runtime rebuilds 15 times in the scene that measures this.
 - A skeleton at rest with containers still rests: a container moves only when the stamp of its bone is newer.
-- The code that draws attached containers is a chunk of 1.4 kB that loads with the first `attach` of a page. The container is hidden for a frame or two until then.
+- The code that draws attached containers is a chunk of 1.4 kB that loads with the first `attach` of a web page. The container does not show for a frame or two until then.
 
 ## 8. Optimizations
 
@@ -508,21 +552,27 @@ Render:
 - Atlas pages in one draw
 - Static UVs, indices and weights
 - Stable plan
-- Hidden slots left out
+- Hidden slots skipped
 - Dark tint only for skeletons that use it
 
 Pose:
 
-- An apply that would repeat the one before is left out (M6)
-- A bone is posed again only when its own pose, its parent or the placement of the skeleton changed (M6)
-- A constraint and the bones it writes are left out while nothing it reads changed (M6)
+- The engines skip an apply that would repeat the one before (M6)
+- The engines pose a bone again only when its own pose, its parent or the placement of the skeleton changed (M6)
+- The engines skip a constraint and the bones it writes while nothing it reads changed (M6)
 - Sleep when idle: a view whose pose version did not change places, colors and uploads nothing (M6)
 - No allocation per update after warm-up
 - One model shared by all instances
 
-Planned here and not built, each with its measurement in section 2: keyframe cursors, constant timelines folded at load, and leaving out bones or timelines that nobody reads. The pose state is public and must equal the official one in every number.
+Planned here and not built, each with its measurement in section 2:
 
-Each item is held by a check. Pose parity is exact, with the stamp check after every call. A test proves that an update allocates nothing. The pixel check compares both render modes with the official runtime.
+- keyframe cursors
+- constant timelines folded at load
+- skipping bones or timelines that nobody reads
+
+The pose state is public and must equal the official one in every number.
+
+A check holds each item. Pose parity is exact, with the stamp check after every call. A test proves that an update allocates nothing. The pixel check compares both render modes with the official runtime.
 
 ### 8.2 Automatic with override
 
@@ -530,17 +580,17 @@ Each item is held by a check. Pose parity is exact, with the stamp check after e
 
 | Option | Values | `auto` decides by | Exact |
 |---|---|---|---|
-| `renderMode` | `auto`, `mesh`, `batched` | Batch vertices of the skeleton: up to 1024 is batched | Within the pixel check. The modes differ in rare pixels, see 7.2. |
+| `renderMode` | `auto`, `mesh`, `batched` | Batch vertices of the skeleton: up to 1024 picks the batched mode | Within the pixel check. The modes differ in rare pixels, see 7.2. |
 | `tightMesh` | `auto`, `on`, `off` | `auto` drops regions without a visible pixel. `on` is opt-in, see 8.3. | Yes for `auto` |
 | `occlusion` | `auto`, `off` | Opaque rectangles present, the 4 largest occluders, world area of at least 1024 | Yes |
-| `skinning` | `auto`, `cpu`, `gpu` | `auto` is `cpu` until phones are measured. `gpu` works in the mesh mode, see 7.2. | Within the pixel check |
+| `skinning` | `auto`, `cpu`, `gpu` | `auto` is `cpu` until there are numbers for phones. `gpu` works in the mesh mode, see 7.2. | Within the pixel check |
 | `instancing` | `auto`, `on`, `off` | A view of the mesh mode with `skinning: 'gpu'` draws instanced with its neighbours of the same layout, see 7.2. `auto` leaves a layout alone whose union has more than twice the vertices of the setup pose, `on` does not. `off` in every preset, set by name. | The pixel check found no difference from the same view drawn alone, on the bench machine |
 
-`sharedPose` was measured in M6 and not built, see section 2.
+The project measured `sharedPose` in M6 and did not build it, see section 2.
 
 ### 8.3 Opt-in (changes timing, memory or look)
 
-All six are built, `idleCache`, `offscreen`, `updateRate` and `lod` in M9. Each is an option of its own and a setting of `perf`.
+All six exist. `idleCache`, `offscreen`, `updateRate` and `lod` came in M9. Each is an option of its own and a setting of `perf`.
 
 | Option | Values | Trade |
 |---|---|---|
@@ -551,11 +601,81 @@ All six are built, `idleCache`, `offscreen`, `updateRate` and `lod` in M9. Each 
 | `updateRate` | `display` or a number of Hz | Fewer pose updates. Motion steps at low rates. |
 | `lod` | `off`, `auto` | Drops physics and deform below 96 pixels on the screen. Visible on close inspection. |
 
-`bake`, built in M8. An update of one entry alone on track 0 at alpha 1 writes a frame baked at 60 frames per second, with no timeline and no constraint. The engine still runs the tracks and fires every event. At a sample time the pose equals the played one rounded to 32 bits. Between samples the nearest frame is shown. The frame before was shown first. A tick of 60 Hz lands on a sample give or take its jitter, so that one repeated a frame and skipped the next in most updates. A skin with a physics constraint or a slider bakes nothing. The local pose of a bone lags while frames play. A clip holds 62 percent of the bones of the fixtures and costs 23 KB to 0.9 MB per animation, shared per asset and skin. The clips of a combined skin go when the skin is freed. A baked attachment change resets the deform and the sequence index as the engines do. `addBakedClips` refuses a clip whose arrays do not fit together, whose duration at 32 bits is not that of the animation, or whose draw order holds a slot twice. A JSON export can lack the editor hash, so the duration catches most stale clips of an edited animation. A big-endian host refuses the bytes of a file. Not handled: a handle write to a keyed value, then `clearTrack` before the next update, loses the write. `auto` starts the bake of an animation the first time it can play baked, and the skeleton plays live until the clip is there. An entry with another one queued after it never plays baked. The bake runs in idle time on an engine of its own, one frame of the animation or more per slice. A slice comes from `requestIdleCallback` with a wait of at most 1 second, else from a timer, and works 4 ms when there is no idle deadline. The clip is the one a bake at once makes. The bake of a combined skin that was freed meanwhile, and one that clips handed over made of no use, keep no answer. Clips stay for the life of the asset, those of a combined skin until the skin is freed, and grow with the duration of the animations and the skins that play them. `pixi-marrow/bake` bakes at build time, and `addBakedClips` hands the clips to an asset.
+`bake`, built in M8. An update of one entry alone on track 0 at alpha 1 writes a baked frame, with no timeline and no constraint. The bake samples at 60 frames per second. The engine still runs the tracks and fires every event. At a sample time the pose equals the played one rounded to 32 bits.
 
-`idleCache: 'auto'` waits 30 updates in which the pose version, the layout and the render mode did not change, then two renders at the same place. It then draws the skeleton once into a render texture on the pixel grid of its target, and a quad with that texture shows it in place of the view. The quad is an element of the batches of the batched mode, so it shares a batch with the skeletons around it. A sprite of Pixi drew it at first, in Pixi's own batch. The reels of the site have symbols at rest and in play side by side. There that made a frame of a win take 10 to 14 draw calls in place of 3 or 4. The image is drawn on the pixel grid, so each pixel samples the color the live skeleton put there. For its place and for moves by whole pixels it is close to the live picture, and not equal to it. It blends the layers of a pixel at 8 bits once, and a pixel center on the edge of a triangle can fall to the other side. The pixel check allows 8 pixels a frame over 1 level and 2 over 8. It found at most 5 and 1 over 392 frames per Pixi version and renderer, on the bench machine. Any other move, a scale change, an ancestor alpha or blend mode, an attached container, another renderer or a restored context draws the skeleton live again in the same frame. So does a page texture that updates or takes another source. A visible multiply or screen slot, an image over 2048 pixels or a multisampled target keeps it live. So does a filter or a mask on the display object or above it: a filter draws at a resolution of its own, 1 unless it says otherwise. All images together hold at most `IDLE_BUDGET`, 64 MB or four images of the largest size. A skeleton whose image would pass it draws live and asks again after the wait. The render group a capture draws through lets go of the instructions and the batch elements of that capture. So does a tint above a skeleton with a dark color, because the shaders tint the light color alone. An image costs 4 bytes per pixel of its box on the target, and a dropped one lets go of its color pixels. Not handled, found in review: Pixi frees the stencil buffer of a dropped image of a clipped rig only when the texture is used again. A capture runs a render, so a game that calls `update` from inside a render can disturb that render. The image has a margin of up to 3 pixels, which a layout that centers by `width` sees. With 200 resting instances on the bench machine a frame takes 0.50 to 0.67 of the live time, and 0.93 for the small rig speedy-ess. No preset sets it since after M9. On a Galaxy A05 with a Mali-G52, 120 Bzzz symbols at rest, one playing its win every 12 frames, took 11.9 ms a frame live and 13.5 ms with the cache. Draw calls rose from 1 to 8, because every image is a texture of its own and splits the batch. The update stayed at 2.3 ms, because a skeleton at rest already costs almost nothing.
+Between samples the runtime shows the nearest frame. At first it showed the frame before. A tick of 60 Hz lands on a sample plus or minus its jitter. So that rule repeated a frame and skipped the next in most updates.
 
-`offscreen` counts a skeleton as off the screen when its bounds lie outside the screen of the renderer, or when no render reached it for more than 2 updates and 0.1 seconds. An empty box counts as on the screen, so a skeleton that shows nothing for a while shows again. A skeleton that is hidden, or under a hidden parent, counts as off the screen: `visible` or `renderable` false. Pixi still calls `onRender` for it, and its bounds are empty or ignore the parents. An empty child of the display object hears the renders, so `onRender` stays the game's. `throttle` updates it 4 times a second with the time that passed. `pause` loses the time. `updateRate` gathers the time of the updates it leaves out. `play`, `queue` and `stop` pose the gathered time first, so the events of what the tracks held fire. `lod: 'auto'` runs the engine with physics `none` and its deform timelines off below 96 pixels across. Every mesh then shows its setup vertices, and a baked frame writes no deform. Both come back at 120 pixels. Physics comes back with a reset, so that nothing jumps. The switch is `PoseEngine.deform`. Off, it keeps every deform aside and shows none. On, the deforms come back, and the next update applies the deform timelines again, even for a pose at rest. A slot that showed another attachment meanwhile loses its deform, as in the official runtime. The deform timelines of an entry that mixes out still run while the switch is off, on the deforms it keeps aside. They mix from the setup shape, so a deform that mixes out while small comes back as the official runtime leaves it. A physics mode `none` or a deform switch that the game set stays as the game set it. Two things differ from a skeleton that kept its deform. An additive track of 4.1 or 4.2 that builds a deform up frame by frame misses the frames while it was off. A rig whose path constraint follows a deformed path poses live while the deform is off, because its baked bones followed the deform. Off, the engine update of 200 instances took 0.64 of the time for goblins-pro `walk`, 0.89 for alien-pro `jump` and 0.95 for tank-pro `shoot`. These are engine updates alone, in Node, on battery power, so they are ratios and not times. With `skinning: 'gpu'` a mesh without a deform is placed by the vertex shader, so a small skeleton uploads no positions for its meshes either.
+A skin with a physics constraint or a slider bakes nothing. The local pose of a bone lags while frames play. A baked attachment change resets the deform and the sequence index as the engines do.
+
+A clip holds 62 percent of the bones of the fixtures and costs 23 KB to 0.9 MB per animation, shared per asset and skin. The runtime frees the clips of a combined skin with the skin.
+
+`pixi-marrow/bake` bakes at build time, and `addBakedClips` hands the clips to an asset. `addBakedClips` refuses a clip in these cases:
+
+- Its arrays do not fit together.
+- Its duration at 32 bits is not that of the animation.
+- Its draw order holds a slot twice.
+
+A JSON export can lack the editor hash, so the duration catches most stale clips of an edited animation. A big-endian host refuses the bytes of a file. Not handled: a handle write to a keyed value, then `clearTrack` before the next update, loses the write.
+
+`auto` starts the bake of an animation the first time it can play baked. The skeleton plays live until the clip is there. An entry with another one queued after it never plays baked.
+
+The bake runs in idle time on an engine of its own, one frame of the animation or more per slice. A slice comes from `requestIdleCallback` with a wait of at most 1 second, else from a timer. When there is no idle deadline, a slice works 4 ms. The clip equals the one that an immediate bake makes.
+
+Two bakes keep no answer: the bake of a combined skin that the runtime freed meanwhile, and a bake that clips handed over made useless. Clips stay for the life of the asset. The clips of a combined skin stay until the runtime frees the skin. The clips grow with the duration of the animations and the skins that play them.
+
+`idleCache: 'auto'` waits 30 updates in which the pose version, the layout and the render mode did not change, then two renders at the same place. It then draws the skeleton once into a render texture on the pixel grid of its target. A quad with that texture shows it in place of the view.
+
+The quad is an element of the batches of the batched mode, so it shares a batch with the skeletons around it. At first a sprite of Pixi drew it, in Pixi's own batch. The reels of the site have symbols at rest and in play side by side. There the sprite made a frame of a win take 10 to 14 draw calls in place of 3 or 4.
+
+The runtime draws the image on the pixel grid, so each pixel samples the color the live skeleton put there. For its place and for moves by whole pixels it is close to the live picture, and not equal to it. It blends the layers of a pixel at 8 bits once. A pixel center on the edge of a triangle can also fall to the other side. The pixel check allows 8 pixels a frame over 1 level and 2 over 8. It found at most 5 and 1 over 392 frames per Pixi version and renderer, on the bench machine.
+
+These draw the skeleton live again in the same frame:
+
+- any other move
+- a scale change
+- an ancestor alpha or blend mode
+- an attached container
+- another renderer or a restored context
+- a page texture that updates or takes another source
+
+These keep it live:
+
+- a visible multiply or screen slot
+- an image over 2048 pixels
+- a multisampled target
+- a filter or a mask on the display object or above it. A filter draws at a resolution of its own, 1 unless it says otherwise.
+- a tint above a skeleton with a dark color, because the shaders tint the light color alone
+
+All images together hold at most `IDLE_BUDGET`, 64 MB or four images of the largest size. A skeleton whose image would pass it draws live and asks again after the wait. The render group that a capture draws through releases the instructions and the batch elements of that capture. An image costs 4 bytes per pixel of its box on the target. A dropped image releases its color pixels.
+
+Not handled, found in review: Pixi frees the stencil buffer of a dropped image of a clipped rig only when something uses the texture again. A capture runs a render, so a game that calls `update` from inside a render can disturb that render. The image has a margin of up to 3 pixels, which a layout that centers by `width` sees.
+
+With 200 resting instances on the bench machine a frame takes 0.50 to 0.67 of the live time, and 0.93 for the small rig speedy-ess. No preset sets it since after M9.
+
+On a Galaxy A05 with a Mali-G52, the scene was 120 Bzzz symbols at rest, one playing its win every 12 frames. A frame took 11.9 ms live and 13.5 ms with the cache. Draw calls rose from 1 to 8, because every image is a texture of its own and splits the batch. The update stayed at 2.3 ms, because a skeleton at rest already costs almost nothing.
+
+`offscreen` counts a skeleton as off the screen in these cases:
+
+- Its bounds lie outside the screen of the renderer.
+- No render reached it for more than 2 updates and 0.1 seconds.
+- It or a parent above it has `visible` or `renderable` false.
+
+An empty box counts as on the screen, so a skeleton that shows nothing for a while shows again. Pixi still calls `onRender` for a hidden skeleton, and its bounds are empty or ignore the parents. An empty child of the display object hears the renders, so `onRender` stays the game's.
+
+`throttle` updates a skeleton off the screen 4 times a second with the time that passed. `pause` loses the time. `updateRate` gathers the time of the updates it skips. `play`, `queue` and `stop` pose the gathered time first, so the events of what the tracks held fire.
+
+`lod: 'auto'` runs the engine with physics `none` and its deform timelines off below 96 pixels across. Every mesh then shows its setup vertices, and a baked frame writes no deform. Both return at 120 pixels. Physics returns with a reset, so that nothing jumps.
+
+The switch is `PoseEngine.deform`. When off, it stores every deform and shows none. When on, the deforms return, and the next update applies the deform timelines again, even for a pose at rest. A slot that showed another attachment meanwhile loses its deform, as in the official runtime.
+
+The deform timelines of an entry that mixes out still run while the switch is off, on the deforms it stores. They mix from the setup shape, so a deform that mixes out while small returns as the official runtime leaves it. A physics mode `none` or a deform switch that the game set stays as the game set it.
+
+Two things differ from a skeleton that kept its deform:
+
+- An additive track of 4.1 or 4.2 that accumulates a deform frame by frame misses the frames while the deform was off.
+- A rig whose path constraint follows a deformed path poses live while the deform is off, because its baked bones followed the deform.
+
+Off, the engine update of 200 instances took 0.64 of the time for goblins-pro `walk`, 0.89 for alien-pro `jump` and 0.95 for tank-pro `shoot`. These are engine updates alone, in Node, on battery power, so they are ratios and not times. With `skinning: 'gpu'` the vertex shader places a mesh without a deform, so a small skeleton uploads no positions for its meshes either.
 
 ### 8.4 One knob
 
@@ -581,7 +701,11 @@ All six are built, `idleCache`, `offscreen`, `updateRate` and `lod` in M9. Each 
 ]
 ```
 
-Built in M4 with 15 rows: draw calls, blend ranges, pages, clipping, tight meshes, covered slots, outlines, dark tint, physics, constraints by kind, bones, slots, vertices, uploads and the layout. Every reason is read from the state of the instance when the call resolves. M7 to M9 added rows. `perf` and `pacing` come first and name the settings in effect and how often the skeleton updates now. `bake` counts the updates that played baked and says why the last one did or did not. `uploads` counts the uploads of the bones under `skinning: 'gpu'`, and `renderMode` names who places the vertices. `instancing` follows `renderMode`. It says whether the instance draws instanced, in a run of how many and in how many draw calls, or why it draws alone. The run and its draws are those of the last frame Pixi drew. The row also gives the vertices the vertex shader runs per instance and the bytes of the slot. A row about active bones is not built.
+Built in M4 with 15 rows. They cover draw calls, blend ranges, pages, clipping, tight meshes, covered slots, outlines and dark tint. The other rows are physics, constraints by kind, bones, slots, vertices, uploads and the layout. The report reads every reason from the state of the instance when the call resolves.
+
+M7 to M9 added rows. `perf` and `pacing` come first and name the settings in effect and how often the skeleton updates now. `bake` counts the updates that played baked and says why the last one did or did not. `uploads` counts the uploads of the bones under `skinning: 'gpu'`, and `renderMode` names who places the vertices.
+
+`instancing` follows `renderMode`. It says whether the instance draws instanced, in a run of how many and in how many draw calls, or why it draws alone. The run and its draws are those of the last frame Pixi drew. The row also gives the vertices the vertex shader runs per instance and the bytes of the slot. The report has no row about active bones.
 
 The report and `spine.perf.memory()` are asynchronous. Their code is 4.4 kB gzipped and most games never call it, so it loads at the first call and not with the root import.
 
@@ -595,40 +719,50 @@ Memory is a goal of the same weight as speed. These rules apply to every milesto
 
 | Rule | Effect |
 |---|---|
-| One model per asset | Bones, slots, attachments, animations and names are stored once, however many instances exist. |
+| One model per asset | The model holds bones, slots, attachments, animations and names once, however many instances exist. |
 | Static GPU buffers per asset | In mesh mode all instances of an asset share UVs, indices, weights and rest positions. An instance adds bone matrices and a slot palette. |
 | Per-instance state in typed arrays | No object per bone or slot. The byte size of an instance follows from its counts. |
 | Narrow types | 16-bit indices and ids where counts allow, 8-bit flags, 32-bit floats. |
 | Allocate on first use | The deform pool exists only when an animation deforms. Physics state exists only with physics. Dark colors exist only when the rig uses them. |
-| No copies during import | The binary importer writes straight into the tables. Parsed JSON is released after import. |
-| Templates follow the active skins | Geometry for skins that are not active is not built. It is freed when a skin is removed. |
+| No copies during import | The binary importer writes straight into the tables. Nothing keeps parsed JSON after import. |
+| Templates follow the active skins | The runtime builds no geometry for skins that are not active. It frees the geometry of a skin when the game removes the skin. |
 | Shared scratch buffers | Kernels use one set of scratch arrays, not one per instance. |
-| Textures | No CPU copy is kept after upload. Compressed formats pass through. Pages are released with the last asset that uses them. |
-| Baked clips | Only bones that move are stored. |
+| Textures | The runtime keeps no CPU copy after upload. Compressed formats pass through. The last asset that uses a page releases it. |
+| Baked clips | A clip stores only bones that move. |
 
 Measured, not assumed:
 
 - `await spine.perf.memory()` reports bytes shared per asset, bytes per instance and GPU bytes, built in M4. It counts typed arrays, GPU buffers and page textures, not JavaScript objects.
 - A memory baseline in `ci/` works like the size baseline. Growth of more than 10 percent in bytes per instance on the fixtures fails the build.
-- Since M3 the baseline counts `engine.bytes`: the pose state and what constraints add to an instance. A constrained bone costs 56 bytes more in 4.1 and 4.2 and 104 bytes more in 4.3. A skeleton without solved constraints pays nothing for them. Of the 104 bytes, 48 keep the world transform that a bone shows between a skin change and the next update equal to the official one. Cutting it turned out not to be exact: an active bone under an inactive parent reads the stale world transform of that parent.
-- Since M4 the baseline also counts physics and slider state. A physics constraint adds 144 bytes to an instance in 4.2 and 180 in 4.3. A skeleton without physics or sliders pays nothing. The baseline is 1,530,600 bytes for one instance of each of the 114 fixtures, 6.6 percent above M3, all of it on the 20 files with physics or a slider.
-- The lookup of attachments by skin, slot and name is built once per model since M4. Before, every drawn instance built its own.
-- Since M5 the static arrays of a layout are shared by the instances of a model, skin and set of cuts. One view shader serves every view of the same pages, and one mask shader every mask. tank-pro in mesh mode went from 188 to 131 KB per instance. An instance of coin-pro went from 33 to 16.5 KB.
-- The bench reads the heap on a fresh page per reading since M5, twice in opposite order. The two readings differ by 0.4 percent at most.
+- Since M3 the baseline counts `engine.bytes`: the pose state and what constraints add to an instance. A constrained bone costs 56 bytes more in 4.1 and 4.2 and 104 bytes more in 4.3. A skeleton without solved constraints pays nothing for them. Of the 104 bytes, 48 keep a world transform equal to the official one. That is the transform a bone shows between a skin change and the next update. Cutting it proved not exact: an active bone under an inactive parent reads the stale world transform of that parent.
+- Since M4 the baseline also counts physics and slider state. A physics constraint adds 144 bytes to an instance in 4.2 and 180 in 4.3. A skeleton without physics or sliders pays nothing. The baseline is 1,530,600 bytes for one instance of each of the 114 fixtures. That is 6.6 percent above M3, all of it on the 20 files with physics or a slider.
+- Since M4 the runtime builds the lookup of attachments by skin, slot and name once per model. Before, every drawn instance built its own.
+- Since M5 the instances of a model, skin and set of cuts share the static arrays of a layout. One view shader serves every view of the same pages. One mask shader serves every mask. The rig tank-pro in mesh mode went from 188 to 131 KB per instance. An instance of coin-pro went from 33 to 16.5 KB.
+- The bench reads the heap on a fresh web page per reading since M5, twice in opposite order. The two readings differ by 0.4 percent at most.
 - The spine-benchmark A/B reports heap and GPU memory next to frame time.
 
 ### 8.7 A WebGL context that is lost and restored
 
-A browser can take the WebGL context of a page away and give it back. Safari on iOS does that to tabs in the background. Pixi keeps its `Application` alive and makes its GPU resources again when the context is back. The runtime follows two rules.
+A browser can remove the WebGL context of a web page and then return it. Safari on iOS does that to tabs in the background. Pixi keeps its `Application` alive and makes its GPU resources again when the context is back. The runtime follows two rules.
 
-- It does nothing for its buffers, and that is enough. After a restore Pixi gives every buffer a new GPU buffer, and a new one uploads its whole array at its first draw. The arrays in memory are complete at every moment. So the stretches that wait for an upload, the reach of an index range and the skip for an unchanged pose stay right. A skeleton at rest comes back without an upload of its own.
-- It draws no skeleton while the context is lost. Pixi cannot compile a program that it first uses without a context. Version 8.16 of pixi.js throws out of the render then. Version 8.23 logs the error and never sets the uniforms of that program again. What draws with it stays invisible after the restore. The shaders of the runtime are made on demand, so a skeleton that first appears while the context is away brings such a program. The pipe of the batched mode runs no batch then, and the meshes of the mesh mode say that they are not renderable. The first draw with the new context compiles the programs.
+- It does nothing for its buffers, and that is enough. After a restore Pixi gives every buffer a new GPU buffer, and a new one uploads its whole array at its first draw. The arrays in memory are complete at every moment. So the stretches that wait for an upload, the reach of an index range and the skip for an unchanged pose stay right. A skeleton at rest returns without an upload of its own.
+- It draws no skeleton while the context is away. Pixi cannot compile a program that it first uses without a context. Version 8.16 of pixi.js then throws, and the error leaves the render. Version 8.23 logs the error and never sets the uniforms of that program again. What draws with it stays invisible after the restore.
 
-Cost: a renderer asks its context once per render, not once per skeleton. The root import grew by 107 bytes to 28.99 kB gzip. Measured with `pnpm bench:ab --scene=rest` on the bench machine, 200 instances on WebGL2, the build before against the build after. In the mesh mode the update takes 0.025 to 0.040 ms on both builds. The CPU part of a frame takes 0.090 to 0.330 ms, equal within one step of the clock, which is 0.005 ms. In the batched mode the update takes 0.020 to 0.050 ms on both builds, and they differ by less than the runs of one build do. No run uploads a byte.
+  The runtime makes its shaders on demand, so a skeleton that first appears while the context is away brings such a program. The pipe of the batched mode runs no batch then, and the meshes of the mesh mode say that they are not renderable. The first draw with the new context compiles the programs.
 
-The last step of `pnpm check:render` measures the picture, see `scripts/render/restore-check.mjs`. Nine cases run in both modes on pixi.js 8.21.0 and 8.23.0, in Chrome on WebGL2, on the author's machine. They ran on 8.16.0 until 8.21 became the floor. Five cases rest or play: a skeleton at rest, one that plays, a clip at rest, a clip that plays, and eight instances of one asset. Two have attached containers, at rest and playing. Two have a skeleton that is first drawn without a context. Every pixel of five frames after the restore equals a run that kept its context. Without the second rule the last two cases failed on 8.16.0 and 8.23.0, and the other seven passed.
+Cost: a renderer asks its context once per render, not once per skeleton. The root import grew by 107 bytes to 28.99 kB gzip.
 
-Not covered: the loss of a WebGPU device, real phones, and display objects of Pixi's own that are first drawn without a context. Those have the same trouble inside Pixi.
+Measured with `pnpm bench:ab --scene=rest` on the bench machine, 200 instances on WebGL2, the build before against the build after. In the mesh mode the update takes 0.025 to 0.040 ms on both builds. The CPU part of a frame takes 0.090 to 0.330 ms, equal within one step of the clock, which is 0.005 ms. In the batched mode the update takes 0.020 to 0.050 ms on both builds. The builds differ by less than the runs of one build do. No run uploads a byte.
+
+The last step of `pnpm check:render` measures the picture, see `scripts/render/restore-check.mjs`. Nine cases run in both modes on pixi.js 8.21.0 and 8.23.0, in Chrome on WebGL2, on the author's machine. They ran on 8.16.0 until 8.21 became the floor. The nine cases are these:
+
+- Five cases rest or play. They are a skeleton at rest, one that plays, a clip at rest, a clip that plays, and eight instances of one asset.
+- Two cases use attached containers, at rest and playing.
+- Two cases have a skeleton that first draws without a context.
+
+Every pixel of five frames after the restore equals a run that kept its context. Without the second rule the last two cases failed on 8.16.0 and 8.23.0, and the other seven passed.
+
+Not covered: the loss of a WebGPU device, real phones, and Pixi's own display objects that first draw without a context. Those have the same trouble inside Pixi.
 
 ## 9. Public API sketch
 
@@ -657,10 +791,10 @@ console.table(await hero.perf.report());
 Rules the API follows:
 
 - Options objects, no positional booleans. `play('run', { loop: true })`, not `setAnimation(0, 'run', true)`.
-- Spine vocabulary is kept: track, skin, slot, bone, event, mix. Agents and animators already know it.
+- The API keeps the Spine vocabulary: track, skin, slot, bone, event, mix. Agents and animators already know it.
 - A wrong name throws `MarrowError` with the valid names and the closest match.
-- Every feature of the three versions is ported since M4. A file that names something its version does not have, such as physics in 4.1, throws `MarrowError` with code `unsupported-feature`.
-- Play options are checked before anything plays: a wrong type or an unknown key throws and the track stays as it was.
+- Since M4 the runtime ports every feature of the three versions. A file that names something its version does not have, such as physics in 4.1, throws `MarrowError` with code `unsupported-feature`.
+- The runtime checks play options before anything plays: a wrong type or an unknown key throws and the track stays as it was.
 - The common track options have plain names: `loop`, `mix`, `speed`, `alpha`, `reverse`, `additive`, `start`, `end`. The rest of the official `TrackEntry` is reachable by its official names through `entry` and `track.configure`.
 - No required setup call. No import for side effects.
 - `hero.info` returns a JSON description: version, bones, slots, skins, animations with duration and flags, events, features used.
@@ -679,7 +813,7 @@ hero.play('idel'); // compile error
 
 ## 10. Version support
 
-One model type for all versions. It is a faithful import, not a conversion: a 4.1 or 4.2 file keeps its own constraint fields, and the fields that exist for some versions only are optional. An older constraint does not run on the 4.3 kernel. That was decided in M3: each engine has its own solvers.
+One model type for all versions. It is a faithful import, not a conversion. A 4.1 or 4.2 file keeps its own constraint fields, and the fields that exist for some versions only are optional. An older constraint does not run on the 4.3 kernel. The project decided that in M3: each engine has its own solvers.
 
 | Feature | 4.1 | 4.2 | 4.3 | Lands in |
 |---|---|---|---|---|
@@ -691,7 +825,15 @@ One model type for all versions. It is a faithful import, not a conversion: a 4.
 | Sliders | no | no | yes | M4, built |
 | Additive tracks and the remaining track options | yes | yes | yes | M4, built |
 
-The first draft planned one kernel per constraint with a version mode for older behaviour. The official solvers differ in too many small places for that: guards, comparisons of squares against lengths, rotation wrapping, the inherit modes in the applied transform, the sort of path bones. Exact parity is simpler to keep with one port per engine, where 4.1 and 4.2 differ by branches on the version.
+The first draft planned one kernel per constraint with a version mode for older behaviour. The official solvers differ in too many small places for that:
+
+- guards
+- comparisons of squares against lengths
+- rotation wrapping
+- the inherit modes in the applied transform
+- the sort of path bones
+
+Exact parity is simpler to keep with one port per engine, where 4.1 and 4.2 differ by branches on the version.
 
 ## 11. Package shape
 
@@ -710,7 +852,33 @@ Peer: `pixi.js`. Dev dependencies only: the three official cores and `spine-pixi
 
 Importers are separate modules loaded by version, so a game that ships 4.3 binary files does not carry the JSON or 4.1 readers. Since the bone handles the root import is 28.9 kB gzipped: handles and `follow` must work at once and weigh 2 kB. In M6 it was 26.9 kB, from 31.1 kB in M5. The limit the bench checks went from 27 to 29 kB for that.
 
-The support for Pixi `Assets` came with the first pre-release. `registerMarrowAssets` adds the parsers, because nothing is registered at import. The code that reads `Assets` hangs off that call, so a game that never makes it carries 0.2 kB of the support. A game that imports `MarrowSpine` alone has a root import of 29.2 kB, one that also registers the parsers 30.3 kB. The limit the bench checks was 30 kB then, for the first of the two. The slot handle, several skins, the setup pose and the point conversion of a bone came after it. They must work at once, so they are in the root import: 1.2 kB, to 30.4 kB. The code that combines skins, counts who shows them and frees the unused ones loads with the pose engines. The limit was 31 kB then. M7 to M9 added 1.4 kB. The presets, their checks and the pacing must work at once and weigh 1.2 kB. The hooks that load the idle cache and the baked playback weigh 0.2 kB, and the code they load is on demand. GPU skinning is in the chunk of the mesh mode. The root import is 31.8 kB, so the limit is now 32 kB. Instancing put 6.2 kB into the chunk of the mesh mode, from 8.9 to 15.1 kB gzip, and 0.9 kB into the chunk of the report. The root import went from 31.83 to 31.80 kB: the code that writes the indices of the mesh mode moved into its chunk. After M9 and instancing, `lod` for deform and the images of the idle cache in our batches took it to 31.94 kB, 63 bytes under the limit. The quad of an image is known to the root by its type alone, and its code loads with the idle cache, which grew from 2.25 to 3.17 kB. Three parts load on demand. The mesh mode (15.1 kB with GPU skinning and instancing) loads with an asset that `auto` draws with meshes or that asks for them. The clip code (7.3 kB) loads with an asset that has a clipping attachment. The cuts of overdraw (2.6 kB) load with the outlines. An instance that asks for the mesh mode before its chunk is there draws batched until it arrives. The two pose engines grew with the skipping, from 47.8 to 58.4 kB on demand for both together. A game loads one of them. Size budget for the root import with one importer: 60 KB gzipped. It is a target to confirm at M2, checked in CI after that. The fixes of the audit of 2026-11-15 took the root import to 32.17 kB. The new code must run at once: the check for WebGL1, pacing that sees a hidden parent, and a skin set again as a no-op. The reuse of freed skin indices and the hook of the outline warning are also in the root. The limit is now 32.5 kB. It lives in `scripts/size-limit.mjs`. `pnpm size:check` fails above it in CI, and the verdict of M6 reads it from there.
+The support for Pixi `Assets` came with the first pre-release. `registerMarrowAssets` adds the parsers, because the import registers nothing. Only that call reaches the code that reads `Assets`, so a game that never makes the call carries 0.2 kB of the support. A game that imports `MarrowSpine` alone has a root import of 29.2 kB. A game that also registers the parsers has 30.3 kB. The limit the bench checks was 30 kB then, for the first of the two.
+
+The slot handle, several skins, the setup pose and the point conversion of a bone came after it. They must work at once, so they are in the root import: 1.2 kB, to 30.4 kB. The code that combines skins, counts who shows them and frees the unused ones loads with the pose engines. The limit was 31 kB then.
+
+M7 to M9 added 1.4 kB. The presets, their checks and the pacing must work at once and weigh 1.2 kB. The hooks that load the idle cache and the baked playback weigh 0.2 kB, and the code they load is on demand. GPU skinning is in the chunk of the mesh mode. The root import is 31.8 kB, so the limit is now 32 kB.
+
+Instancing put 6.2 kB into the chunk of the mesh mode, from 8.9 to 15.1 kB gzip. It also put 0.9 kB into the chunk of the report. The root import went from 31.83 to 31.80 kB: the code that writes the indices of the mesh mode moved into its chunk.
+
+After M9 and instancing, `lod` for deform and the images of the idle cache in our batches took it to 31.94 kB. That is 63 bytes under the limit. The root import knows the quad of an image by its type alone. Its code loads with the idle cache, which grew from 2.25 to 3.17 kB.
+
+Three parts load on demand:
+
+- The mesh mode (15.1 kB with GPU skinning and instancing) loads with an asset that `auto` draws with meshes or that asks for them.
+- The clip code (7.3 kB) loads with an asset that has a clipping attachment.
+- The cuts of overdraw (2.6 kB) load with the outlines.
+
+An instance that asks for the mesh mode before its chunk is there draws batched until it arrives. The two pose engines grew with the skipping, from 47.8 to 58.4 kB on demand for both together. A game loads one of them.
+
+Size budget for the root import with one importer: 60 KB gzipped. It is a target to check at M2, and CI checks it after that.
+
+The fixes of the audit of 2026-11-15 took the root import to 32.17 kB. The new code must run at once:
+
+- the check for WebGL1
+- pacing that sees a hidden parent
+- a skin set again as a no-op
+
+The reuse of freed skin indices and the hook of the outline warning are also in the root. The limit is now 32.5 kB. It lives in `scripts/size-limit.mjs`. `pnpm size:check` fails above it in CI, and the verdict of M6 reads it from there.
 
 ## 12. Repo setup, compared with pixi-silk
 
@@ -725,7 +893,7 @@ Measured on pixi-silk today. Docs: 33 guide pages with 27,700 words, `llms-full.
 | Layer rules | By convention | Import rules between layers checked in CI |
 | Public API | Typedoc pages | Add an API snapshot file. Any change to the public surface shows in the pull request diff. |
 | Dead code | Not checked | `knip` in CI |
-| Coverage | No threshold found | Threshold on non-kernel code. Kernels are covered by parity tests. |
+| Coverage | No threshold found | Threshold on non-kernel code. Parity tests cover the kernels. |
 | Render checks | Playwright script, referenced only by the Windows workflow | Pixel parity on WebGL2 and WebGPU, `pnpm check:render`. It needs a GPU and Google Chrome, so it runs on the author's machine and not in CI. |
 | Entry points | About 40, listed by hand in the build config | At most 8, generated from `package.json` exports |
 | Shared facts | `facts.mjs` plus a check that copies match | Generate README table, llms files and skill sections from one facts file. The check is a diff of generated output. |
@@ -741,7 +909,7 @@ Change after M9: the user asked for docs that guide and explain, not only list t
 
 - **Basics**, 5 pages: pixels and frames, coordinates and transforms (with an interactive pixi-silk gizmo), triangles and textures, the GPU and draw calls, transparency and blending. Computer graphics from zero, for readers who never wrote any.
 - **Guide**, 8 pages: start, assets and copies, size and units, play, mix and queue, events, skins and slots, bones and attachments. It is about animation in general. Its examples use the Bzzz slot symbols, because most users come from slot games.
-- **How it works**, 6 pages: anatomy of a skeleton, an animation, the pose, vertices, draw order and batches, why it is fast. Each has a live preview that takes the runtime apart on the Bzzz rigs. They explain why the runtime does what it does, and what makes a scene slow.
+- **How it works**, 6 pages: anatomy of a skeleton, an animation, the pose, vertices, draw order and batches, why it is fast. Each has a live preview that shows the runtime part by part on the Bzzz rigs. They explain why the runtime does what it does, and what makes a scene slow.
 - **Reference**, 4 pages: performance, debug overlays, good to know, an example with reels.
 
 The top bar names the three parts, the playground and the lab. The sidebar lists the pages of each part.
@@ -757,11 +925,13 @@ The top bar names the three parts, the playground and the lab. The sidebar lists
 9. Versions and limits
 10. Moving from `spine-pixi-v8`: one mapping table
 
-Built after M6: a first site in `apps/site`, far below this plan on purpose. Astro and MDX, five pages and about 1,500 words: home, start, bones and placeholders, skins and slots, good to know. Two live previews show the bee of the slot game Bzzz: one plays its animations, one has a shape attached to a slot and a mark that follows a bone. Every code block is a region of a file that is type-checked against the built package. There is no API reference, no search and no deploy yet. `pnpm site:dev` and `pnpm site:build` run it.
+Built after M6: a first site in `apps/site`, far below this plan on purpose. Astro and MDX, five pages and about 1,500 words: home, start, bones and placeholders, skins and slots, good to know. Two live previews show the bee of the slot game Bzzz. One plays its animations. The other has a shape attached to a slot and a mark that follows a bone.
 
-The API reference is generated from TSDoc. Every public symbol has a one-line summary and an `@example`. No hand-written API prose.
+Every code block is a region of a file that is type-checked against the built package. There is no API reference, no search and no deploy yet. `pnpm site:dev` and `pnpm site:build` run it.
 
-Every code block in the docs is a file under `examples/`. The file is type-checked and run in the render check. A doc cannot show code that does not work.
+The API reference comes from TSDoc. Every public symbol has a one-line summary and an `@example`. No hand-written API prose.
+
+Every code block in the docs is a file under `examples/`. The file is type-checked, and the render check runs it. A doc cannot show code that does not work.
 
 ## 14. AI experience
 
@@ -771,7 +941,7 @@ Every code block in the docs is a file under `examples/`. The file is type-check
 | `llms-full.txt`, at most 8,000 words | The whole manual in one read |
 | Two skills shipped in the npm package: use, and migrate from `spine-pixi-v8` | Works offline from `node_modules` |
 | Small surface, one way per task | Fewer wrong guesses |
-| `MarrowError` with code, fix and valid names | The agent can repair its own mistake in one step |
+| `MarrowError` with code, fix and valid names | The agent can fix its own mistake in one step |
 | `hero.info` and `await hero.perf.report()` as JSON | Inspect, do not guess |
 | `typegen` | Wrong names fail at compile time |
 | `pixi-marrow/core` in Node: load, pose and geometry without a GPU | An agent can test its code without a browser |
@@ -781,84 +951,122 @@ Every code block in the docs is a file under `examples/`. The file is type-check
 
 ## 15. Testing
 
-The pose core is only as good as its proof. The parity suite is built before the core.
+The pose core is only as good as its proof. The project builds the parity suite before the core.
 
 | Test | Runs in | Proves |
 |---|---|---|
 | Model parity | Node | After import, counts, names, setup values, timelines and keys equal the official `SkeletonData` of the same file |
-| Pose parity | Node | For every fixture and animation, stepped at 60 Hz: bone world matrices, slot colors, attachment names, draw order, deform and events equal the official core of the file's version, within float tolerance |
+| Pose parity | Node | It steps every fixture and animation at 60 Hz. Bone world matrices, slot colors, attachment names, draw order, deform and events equal the official core of the file's version, within float tolerance |
 | Mix parity | Node | The same for scripted mixes: A to B at several points, queues, multiple tracks, interruptions |
 | Random play parity | Node | Seeded random sequences of play, queue, skin and time-scale calls on both engines. Any divergence prints the seed. |
 | Optimization parity | Node | Every item in 8.1 produces the same pose with the item on and off |
 | Geometry parity | Node | Positions, UVs and colors per slot equal the official `computeWorldVertices` output |
 | Pixel parity | Headless Chrome, WebGL2 and WebGPU, on the author's machine | Our frame equals the official `spine-pixi-v8` frame for 4.2 and 4.3. For 4.1 the reference is our CPU path. |
-| Cut parity | Headless Chrome | Our frame with the exact overdraw cuts equals our frame without them, in every pixel. With tight meshes it stays within stated bounds: at most 0.25 percent of pixels off by more than 1 level, 0.01 percent by more than 8. |
+| Cut parity | Headless Chrome | Our frame with the exact overdraw cuts equals our frame without them, in every pixel. With tight meshes it stays within stated bounds. At most 0.25 percent of pixels are off by more than 1 level, and 0.01 percent by more than 8. |
 | Premultiplied parity | Headless Chrome | Straight and premultiplied exports of one rig match |
 | Plan stability | Node | Attachment and draw-order keys cause zero template rebuilds |
 | Allocation | Node | A played loop allocates nothing after warm-up |
 | Docs examples | Node and Chrome | Every example compiles and renders |
 | Mode parity | Headless Chrome | The batched mode equals the official frame under the rules of pixel parity. The two modes differ from each other by 6 levels at most, on 0.05 percent of pixels by more than 1. |
-| Scenes | Headless Chrome | 19 scenes with many instances draw like the official runtime in both modes. They cover overlap, two rigs interleaved, a Pixi object in between, and parents with alpha, tint, mask, filter and render group. Instances are added, removed, moved and destroyed between frames. |
+| Scenes | Headless Chrome | 19 scenes with many instances draw like the official runtime in both modes. They cover overlap, two rigs interleaved, a Pixi object in between, and parents with alpha, tint, mask, filter and render group. The scenes add, remove, move and destroy instances between frames. |
 | Clip parity | Node | The CPU clip kernel writes the vertices and indices of the official `clipTriangles`, bit for bit, in all three versions |
 | A/B bench | Headless Chrome | Not a test. `pnpm bench:ab` measures CPU time, frame time, draw calls and heap against the official Pixi runtime, and tight meshes on against off (section 16). |
 
 No tolerance: pose values are 64-bit, like the numbers of the official JavaScript core, and the engines port its arithmetic in the same order. Pose parity is exact equality. The one bounded difference is in mesh UVs of JSON files, where the model stores `regionUVs` in 32-bit and the official reader keeps 64-bit. The largest difference seen is 5.96e-8, far below one texel.
 
-The pose suite as built in M2a: 5,508 scripts and 165,298 compared updates over 117 rigs, in 18 seconds. Since M3 it runs 17 families of scripts on 129 rigs with constraints solved, in about 45 seconds. Four of the hand-written rigs exist for constraints: IK, transform, path, and the order in which constraints feed each other. A run of the official core against itself gives zero differences, and a change of one unit in the last place on either side is reported.
+The pose suite as built in M2a: 5,508 scripts and 165,298 compared updates over 117 rigs, in 18 seconds. Since M3 it runs 17 families of scripts on 129 rigs with constraints solved, in about 45 seconds. Four of the hand-written rigs exist for constraints: IK, transform, path, and the order in which constraints feed each other. A run of the official core against itself gives zero differences. The suite reports a change of one unit in the last place on either side.
 
-Since M4 the reference is the played official skeleton with nothing switched off. The suite runs 18 families of scripts on 135 skeleton files: 2,430 cases in about 26 seconds. The new family is for physics: every mode, `physicsTranslate` and `physicsRotate`, wind and gravity directions, y down, moves and mirrored scales, steps of zero and of more than a second. Six more hand-written rigs exist for physics and sliders, because the fixtures hold one slider in total. They cover every physics property and flag, 21 sliders, and every kind of timeline inside a slider animation. A separate test proves that the reference does solve physics and sliders: the pose differs from a run in mode `none` and from the same rig without its sliders.
+Since M4 the reference is the played official skeleton with nothing disabled. The suite runs 18 families of scripts on 135 skeleton files: 2,430 cases in about 26 seconds. The new family is for physics. It covers these:
 
-Since M6 the suite runs 22 families: 2,970 cases. The new ones are for skipping. `rest` plays an animation far past its end and wakes the skeleton in every way there is. `keys` sets times by hand, runs backwards and over many loops on the longest timelines. `still bones` keys few bones and then moves the skeleton, changes the skin and wakes a constraint. After every call of every script the stamps of the pose state are checked: a value that changed needs a newer stamp. A self-check proves that a stamp held back fails, for a bone, a slot, the draw order and the version. Each engine also runs every script with its skipping on against off.
+- every mode, `physicsTranslate` and `physicsRotate`
+- wind and gravity directions, y down
+- moves and mirrored scales
+- steps of zero and of more than a second
 
-The pixel check, `pnpm check:render`, is not a step of CI. It needs Google Chrome on a GPU, and CI runners have none. Every result of it in this document comes from local runs on the author's machine, on WebGL2 and WebGPU and on each version of pixi.js named. A workflow that ran it on software rendering never ran and is gone.
+Six more hand-written rigs exist for physics and sliders, because the fixtures hold one slider in total. They cover every physics property and flag, 21 sliders, and every kind of timeline inside a slider animation. A separate test proves that the reference does solve physics and sliders. The pose differs from a run in mode `none` and from the same rig without its sliders.
 
-The pixel check as built in M3: 456 frames against the official runtime per renderer, worst difference 4 of 255 levels, 0.008 percent of pixels off by more than 1. A frame that fails is drawn again, moved by a fraction of a pixel, and fails only when it fails at both places. The two runtimes place vertices in different code, so a vertex on a subpixel boundary can round two ways. Three frames pass at the second place only. A defect does not pass: the check proves that on shifted, tinted and hidden slots.
+Since M6 the suite runs 22 families: 2,970 cases. The new ones are for skipping:
 
-Since M4 both sides run every constraint, physics and sliders included, from the same first update. The check draws 732 frames against the official runtime per renderer, on 45 rigs: worst difference 4 of 255 levels, 0.008 percent of pixels off by more than 1. The 284 frames of rigs with physics or a slider differ by 2 levels at most. Five frames pass at the second place only. The cuts on and off differ in no pixel on 530 frames.
+- `rest` plays an animation far past its end and wakes the skeleton in every way there is.
+- `keys` sets times by hand, runs backwards and over many loops on the longest timelines.
+- `still bones` keys few bones and then moves the skeleton, changes the skin and wakes a constraint.
 
-Since M5 the check draws every rig in both render modes, in 160 seconds for both renderers. The batched mode against the official runtime: 366 frames per renderer, and no pixel differs, clipped frames and rigs with physics included. It places vertices on the CPU in 64-bit as the official runtime does. The mesh mode stands as before, worst 4. The two modes against each other: 482 frames, worst 5, 0.006 percent of pixels off by more than 1. The scenes: 56 frames per mode, worst 3 in mesh mode and 1 in batched mode. Two instances swapped in draw order fail, as they must.
+After every call of every script the suite checks the stamps of the pose state: a value that changed needs a newer stamp. A self-check proves that a stamp held back fails, for a bone, a slot, the draw order and the version. Each engine also runs every script with its skipping on against off.
+
+The pixel check, `pnpm check:render`, is not a step of CI. It needs Google Chrome on a GPU, and CI runners have none. Every result of it in this document comes from local runs on the author's machine. Those runs used WebGL2 and WebGPU and each version of pixi.js named. A workflow to run it on software rendering never ran, and the repo no longer has it.
+
+The pixel check as built in M3 draws 456 frames against the official runtime per renderer. The worst difference is 4 of 255 levels, and 0.008 percent of pixels are off by more than 1. The check draws a failing frame again, moved by a fraction of a pixel, and fails it only when it fails at both places. The two runtimes place vertices in different code, so a vertex on a subpixel boundary can round two ways. Three frames pass at the second place only. A defect does not pass: the check proves that on shifted, tinted and hidden slots.
+
+Since M4 both sides run every constraint, physics and sliders included, from the same first update. The check draws 732 frames against the official runtime per renderer, on 45 rigs. The worst difference is 4 of 255 levels, with 0.008 percent of pixels off by more than 1. The 284 frames of rigs with physics or a slider differ by 2 levels at most. Five frames pass at the second place only. The cuts on and off differ in no pixel on 530 frames.
+
+Since M5 the check draws every rig in both render modes, in 160 seconds for both renderers. These are the results:
+
+- The batched mode against the official runtime: 366 frames per renderer, and no pixel differs, clipped frames and rigs with physics included. It places vertices on the CPU in 64-bit as the official runtime does.
+- The mesh mode stands as before, worst 4.
+- The two modes against each other: 482 frames, worst 5, 0.006 percent of pixels off by more than 1.
+- The scenes: 56 frames per mode, worst 3 in mesh mode and 1 in batched mode. Two instances swapped in draw order fail, as they must.
 
 The check also counts how often Pixi rebuilds the instructions of the render group while 111 animations play 30 frames each. It counts 11 rebuilds in batched mode and 26 in mesh mode, in 7 animations. Those are rooms that grow and runs whose blend structure changes. The official runtime rebuilds in 7 to 27 of 15 frames of a scene.
 
-Since M6 the check has six scenes for sleeping and waking. A skeleton rests and plays again. Its parent moves while it rests. It rests next to one that plays in the same batch. It is hidden while it would change. Its skin, tint or mode changes at rest. It is destroyed at rest. Every frame is compared in both modes. A side that leaves out one update is rejected, with 44 percent of the pixels off. Four more scenes cover the chunks: a page that needs no mesh mode does not request it, and an instance switched to meshes draws every frame until the chunk is there.
+Since M6 the check has six scenes for sleeping and waking:
 
-Since M6 the check also runs on other versions of pixi.js: `pnpm check:render --pixi=8.16.0`. The package is built and checked on 8.23.0. It allowed 8.16 and later until after M9, and allows 8.21 and later since. In local runs on the author's machine the whole check passed on 8.16.0, 8.21.0 and 8.23.0, in about three minutes per version. The versions in between were not run. It found two defects that the default run could not see. M5 lost partial uploads on 8.20 to 8.22, which shows only with several instances in a batch. The mesh mode drew stale triangles on 8.16 (section 7.3). On WebGPU the official runtime itself draws another alpha on Pixi before 8.23, because Pixi changed the blend factors of `add`. So ours on an old Pixi is judged against the official picture on 8.23.0.
+- A skeleton rests and plays again.
+- Its parent moves while it rests.
+- It rests next to one that plays in the same batch.
+- The scene hides it while it would change.
+- Its skin, tint or mode changes at rest.
+- The scene destroys it at rest.
+
+The check compares every frame in both modes. It rejects a side that skips one update: 44 percent of its pixels are off. Four more scenes cover the chunks. They check that a web page that needs no mesh mode does not request it. They also check that an instance switched to meshes draws every frame until the chunk is there.
+
+Since M6 the check also runs on other versions of pixi.js: `pnpm check:render --pixi=8.16.0`. The project builds and checks the package on 8.23.0. It allowed 8.16 and later until after M9, and allows 8.21 and later since. In local runs on the author's machine the whole check passed on 8.16.0, 8.21.0 and 8.23.0, in about three minutes per version. Nobody ran the versions in between.
+
+The runs on other versions found two defects that the default run could not see:
+
+- M5 lost partial uploads on 8.20 to 8.22, which shows only with several instances in a batch.
+- The mesh mode drew stale triangles on 8.16 (section 7.3).
+
+On WebGPU the official runtime itself draws another alpha on Pixi before 8.23, because Pixi changed the blend factors of `add`. So the check judges ours on an old Pixi against the official picture on 8.23.0.
 
 After M6 three things joined the checks.
 
 - The symbol rigs of the slot game Bzzz are fixtures in the repository, with the leave of its owner. They are 16 skeletons of Spine 4.2 in the binary format, on one atlas with an AVIF page. They are the first rigs of a real game the runtime ran on. All of them pass model, pose, geometry and atlas parity, in every script family.
-- A script family writes bones from outside the engine, as a bone handle does. It found that the 4.1 and 4.2 engine lost a write when `setSkin` was called with the skin that was set already. That is fixed.
-- The pixel check ends with a game check. It draws 9 cases from a bundle that is made as a game makes one: `Application` and `MarrowSpine` imported by name, the tree shaken. Pixi registers a pipe when its module loads, and a renderer takes its pipes when it is created. So the mesh mode, whose code loads on demand since M6, found no mesh pipe in a game that imports no `Mesh` of its own, and threw. The docs site found this, because it is the first real bundle. The mesh mode now gives a renderer the pipe it lacks. Without the fix 10 of 18 cases fail, on pixi.js 8.16.0 and 8.23.0. Two scenes compare `attach` and `follow` with `addSlotObject` of the official runtime.
+- A script family writes bones from outside the engine, as a bone handle does. It found that the 4.1 and 4.2 engine lost a write when a call to `setSkin` passed the current skin. The project fixed it.
+- The pixel check ends with a game check. It draws 9 cases from a bundle built the way a game builds one: `Application` and `MarrowSpine` imported by name, the tree shaken. Pixi registers a pipe when its module loads, and a renderer takes its pipes at its creation.
 
-One failure stays unexplained. A frame of celestial-circus-pro on a multisampled target on WebGPU differed by 3 in one run of M5 and by 1 in one run of M6. It did not show again in more than 40 runs of that case.
+  Since M6 the code of the mesh mode loads on demand. So in a game that imports no `Mesh` of its own, the mesh mode found no mesh pipe and threw. The docs site found this, because it is the first real bundle. The mesh mode now gives a renderer the pipe it lacks. Without the fix 10 of 18 cases fail, on pixi.js 8.16.0 and 8.23.0.
 
-Fixtures: 57 official example rigs across 4.1, 4.2 and 4.3, each as JSON and binary, listed in `fixtures/manifest.json` at pinned commits with a hash per file. They are downloaded on demand and not committed, because the licence of the example assets has not been read. Your own rigs go into `fixtures/local/`, which is not committed either.
+  Two scenes compare `attach` and `follow` with `addSlotObject` of the official runtime.
 
-One finding from building the suite: the official binary readers ignore the offset of a typed array view (`new DataView(data.buffer)` in all three versions). A view into a larger buffer is read from the wrong place. Our importer must honour the view, and a test must prove it.
+One failure stays unexplained. A frame of celestial-circus-pro on a multisampled target on WebGPU differed by 3 in one run of M5. It differed by 1 in one run of M6. It did not show again in more than 40 runs of that case.
+
+Fixtures: 57 official example rigs across 4.1, 4.2 and 4.3, each as JSON and binary. `fixtures/manifest.json` lists them at pinned commits with a hash per file. They are downloaded on demand and not committed, because the licence of the example assets is still unread. Your own rigs go into `fixtures/local/`, which is not committed either.
+
+One finding from building the suite: the official binary readers ignore the offset of a typed array view (`new DataView(data.buffer)` in all three versions). They read a view into a larger buffer from the wrong place. Our importer must honour the view, and a test must prove it.
 
 ## 16. Milestones
 
 | Milestone | Content | Done when |
 |---|---|---|
 | M0 Scaffold and parity suite | Repo and gates from section 12. Facts file with generated blocks. Parity suite that loads fixtures into the three official cores. The docs site, the llms files and the skills wait for M2, when there is an API to document. | Built 2026-11-11. `pnpm check` passes locally. `pnpm parity:ref` prints reference poses for all 114 fixtures. CI has not run yet: there is no remote. |
-| M1 Model | `SkeletonModel`, JSON and binary importers for 4.1 to 4.3, atlas importer, `describeSkeleton`, `generateNames` and the command line tool | Built 2026-11-11. Model parity on all 114 fixtures and atlas parity on all 57 atlases, with exact equality. Hand-written skeletons cover the timeline kinds the fixtures lack. Every feature is imported, even those not yet solved. Not done: a memory baseline, which waits for instances in M2. |
-| M2a Pose, headless | Pose engines for 4.1 and 4.2 and for 4.3: bone transforms, every timeline that does not animate a constraint, tracks, queue, mixing, events, skins, deform, sequences. Geometry kernel: vertex positions and UVs. Memory baseline. | Built 2026-11-11. Pose parity is exact on all 114 fixtures and 3 hand-written rigs. Geometry parity is exact on all fixtures, with the one bounded case for JSON mesh UVs. A rig with constraints throws the typed error unless it is played with constraints ignored. Not done: keyframe cursors, which wait for M6 with the other skipping work. |
-| M2b First frames | Render: `SkeletonView` draws through Pixi meshes with its own geometry and shader. CPU skinning into buffers, premultiplied pipeline, additive in the same draw, pages in one draw, stable vertex layout, hidden slots left out. The display object `MarrowSpine` with `MarrowAsset` and `Track`. Pixel check in headless Chrome (`pnpm check:render`). | Built 2026-11-11. On 12 rigs in 34 versions the picture matches the official Pixi runtime within 4 of 255 levels, on WebGL2 and WebGPU. At most 0.02 percent of pixels are off by more than 1. One draw call for every rig with only normal and additive slots. Known gap: clipping, which is M3. Not done: a custom render pipe, which the design named. Pixi meshes gave the same result with less reliance on Pixi internals. |
-| M3 Constraints and overdraw | Pose: IK, transform and path constraints in both engines, with the generalized transform constraints of 4.3. Render: clipping through a stencil mask, invisible regions left out, covered slots skipped, tight meshes as an option, outlines from a sidecar file or a scan in idle time. | Built 2026-11-11. Pose parity with constraints is exact on all 114 fixtures and 15 hand-written rigs, five per version. The pixel check passes on WebGL2 and WebGPU with constraints and clipping on both sides. The exact cuts change no pixel. Tight meshes draw 90.5 percent of the triangle area and stay opt-in, because they are not exact to the bit. Not done: the perf report, which moves to M4 with the perf probes. |
-| M4 Complete | Physics, sliders, additive tracks. Perf report and perf probes. An A/B bench against the official Pixi runtime. | Built 2026-11-11. Physics constraints and sliders in both engines, the remaining track options, physics control, `perf.report()`, `perf.memory()`, the probe entry and `pnpm bench:ab`. Pose parity is exact on 135 skeleton files with every constraint on. In local runs the pixel check passes on WebGL2 and WebGPU with physics and sliders live. Not done: the A/B inside spine-benchmark and numbers per device class. The package is not published and its licence is not decided, so spine-benchmark cannot load it yet. `tightMesh` stays an option until devices are measured. |
-| M5 Batched mode | Small skeletons that share a render group share draw calls, with the premultiplied shader, additive slots in the batch and pages joined by texture. `renderMode: 'auto'` picks the mode per skeleton. The heap of an instance with a clip is explained and cut. | Built 2026-11-12. Two batchers of our own, constant-size elements with rewrites in place, CPU clipping by a port of the official clipper, layouts shared per asset. 200 instances of a rig without a blend break draw in 1 call. The frame takes 30 to 89 percent of the official time on the five bench rigs. The pixel check passes in both modes. One rule of the list is missed: raptor-pro is 4 percent slower in batched mode than in mesh mode on WebGL2 (section 16.2). Not done: a CI run against pixi.js 8.16.0, and loading the mesh mode on demand. |
-| M6 Pose skipping | Constant folding, needed set, timeline skipping, path cache, shared pose, sleep. The mesh mode on demand. | Built 2026-11-12, with a narrower list than planned. Built: stamps in the pose state. Engines that skip an apply that would repeat and pose only bones whose inputs changed. Views that place, color and upload only what changed. Three chunks on demand. Not built, each with its measurement in section 2: a keyframe cursor, sharing a pose between instances, leaving out bones or timelines that nobody looks at. Pose parity is exact with the stamp check on. 200 instances at rest take 0.02 to 0.04 ms to update and upload nothing. No bench rig is slower than in M5. The pixel check passes on pixi.js 8.16.0, 8.21.0 and 8.23.0. Not reached: physics in mode `update` does not rest. |
-| Handles and site, after M6 | `bone`, `follow`, `attach`. A first docs site. Real rigs as fixtures. | Built 2026-11-12. The three calls work in both render modes and are compared with the official `addSlotObject` in the pixel check. The site shows the bee of the slot game Bzzz. Found and fixed on the way: the mesh mode in a tree-shaken game, and a bone write lost after `setSkin` in the 4.1 and 4.2 engine. |
-| Slots and skins, after the first pre-release | Several skins at once, a slot handle, the setup pose and point conversion on the display object | Built 2026-11-13. `skins` combines skins as the official `Skin.addSkin` does, and the lookup of a model shares each combined skin between its instances. A combined skin stays while an engine shows it, the last 8 that none shows wait, and older ones are freed with the caches the engines keep for them. The index of a freed skin goes to the next new one, so the count of skins stays bounded for a game that tries many lists. `slot` writes the attachment, the color and the dark color through new engine calls. They write `slotPose`, the animated pose of a 4.3 slot that a slider poses, and a write of the value there changes nothing. A parity family "slots and skins" runs every call against the official cores of 4.1, 4.2 and 4.3. Planted bugs fail it: the first skin winning fails 19 rigs, a missing clamp 140. A review of the first draft found two defects the family could not see. A tint write took the alpha a slider drew into the pose. `worldToLocal` used the 4.2 formula in 4.3, off in the last bit. Both are fixed and tested. |
+| M1 Model | `SkeletonModel`, JSON and binary importers for 4.1 to 4.3, atlas importer, `describeSkeleton`, `generateNames` and the command line tool | Built 2026-11-11. Model parity on all 114 fixtures and atlas parity on all 57 atlases, with exact equality. Hand-written skeletons cover the timeline kinds the fixtures lack. The importers read every feature, even those not yet solved. Not done: a memory baseline, which waits for instances in M2. |
+| M2a Pose, headless | Pose engines for 4.1 and 4.2 and for 4.3. They cover bone transforms, every timeline that does not animate a constraint, tracks, queue, mixing, events, skins, deform and sequences. Geometry kernel: vertex positions and UVs. Memory baseline. | Built 2026-11-11. Pose parity is exact on all 114 fixtures and 3 hand-written rigs. Geometry parity is exact on all fixtures, with the one bounded case for JSON mesh UVs. A rig with constraints throws the typed error unless it plays with constraints ignored. Not done: keyframe cursors, which wait for M6 with the other skipping work. |
+| M2b First frames | Render: `SkeletonView` draws through Pixi meshes with its own geometry and shader. CPU skinning into buffers, premultiplied pipeline, additive in the same draw, pages in one draw, stable vertex layout, hidden slots skipped. The display object `MarrowSpine` with `MarrowAsset` and `Track`. Pixel check in headless Chrome (`pnpm check:render`). | Built 2026-11-11. On 12 rigs in 34 versions the picture matches the official Pixi runtime within 4 of 255 levels, on WebGL2 and WebGPU. At most 0.02 percent of pixels are off by more than 1. One draw call for every rig with only normal and additive slots. Known gap: clipping, which is M3. Not done: a custom render pipe, which the design named. Pixi meshes gave the same result with less reliance on Pixi internals. |
+| M3 Constraints and overdraw | Pose: IK, transform and path constraints in both engines, with the generalized transform constraints of 4.3. Render: clipping through a stencil mask, invisible regions and covered slots skipped, and tight meshes as an option. Outlines come from a sidecar file or a scan in idle time. | Built 2026-11-11. Pose parity with constraints is exact on all 114 fixtures and 15 hand-written rigs, five per version. The pixel check passes on WebGL2 and WebGPU with constraints and clipping on both sides. The exact cuts change no pixel. Tight meshes draw 90.5 percent of the triangle area and stay opt-in, because they are not exact to the bit. Not done: the perf report, which moves to M4 with the perf probes. |
+| M4 Complete | Physics, sliders, additive tracks. Perf report and perf probes. An A/B bench against the official Pixi runtime. | Built 2026-11-11. Physics constraints and sliders in both engines, the remaining track options, physics control, `perf.report()`, `perf.memory()`, the probe entry and `pnpm bench:ab`. Pose parity is exact on 135 skeleton files with every constraint on. In local runs the pixel check passes on WebGL2 and WebGPU with physics and sliders live. Not done: the A/B inside spine-benchmark and numbers per device class. The package is not published and its licence is not decided, so spine-benchmark cannot load it yet. `tightMesh` stays an option until there are numbers for devices. |
+| M5 Batched mode | Small skeletons that share a render group share draw calls, with the premultiplied shader, additive slots in the batch and pages joined by texture. `renderMode: 'auto'` picks the mode per skeleton. The work explains the heap of an instance with a clip, and cuts it. | Built 2026-11-12. Two batchers of our own, constant-size elements with rewrites in place, CPU clipping by a port of the official clipper, layouts shared per asset. 200 instances of a rig without a blend break draw in 1 call. The frame takes 30 to 89 percent of the official time on the five bench rigs. The pixel check passes in both modes. One rule of the list fails: raptor-pro is 4 percent slower in batched mode than in mesh mode on WebGL2 (section 16.2). Not done: a CI run against pixi.js 8.16.0, and loading the mesh mode on demand. |
+| M6 Pose skipping | Constant folding, needed set, timeline skipping, path cache, shared pose, sleep. The mesh mode on demand. | Built 2026-11-12, with a narrower list than planned. Built: stamps in the pose state. Engines that skip an apply that would repeat and pose only bones whose inputs changed. Views that place, color and upload only what changed. Three chunks on demand. Not built: a keyframe cursor, a pose shared between instances, and skipping bones or timelines that nobody looks at. Section 2 has the measurement of each. Pose parity is exact with the stamp check on. 200 instances at rest take 0.02 to 0.04 ms to update and upload nothing. No bench rig is slower than in M5. The pixel check passes on pixi.js 8.16.0, 8.21.0 and 8.23.0. Not reached: physics in mode `update` does not rest. |
+| Handles and site, after M6 | `bone`, `follow`, `attach`. A first docs site. Real rigs as fixtures. | Built 2026-11-12. The three calls work in both render modes. The pixel check compares them with the official `addSlotObject`. The site shows the bee of the slot game Bzzz. On the way the project found and fixed two defects. They were the mesh mode in a tree-shaken game, and a bone write lost after `setSkin` in the 4.1 and 4.2 engine. |
+| Slots and skins, after the first pre-release | Several skins at once, a slot handle, the setup pose and point conversion on the display object | Built 2026-11-13. `skins` combines skins as the official `Skin.addSkin` does, and the lookup of a model shares each combined skin between its instances. A combined skin stays while an engine shows it, and the last 8 that no engine shows wait. The runtime frees older ones with the caches the engines keep for them. The index of a freed skin goes to the next new one. So the count of skins stays bounded for a game that tries many lists. `slot` writes the attachment, the color and the dark color through new engine calls. They write `slotPose`, the animated pose of a 4.3 slot that a slider poses, and a write of the value there changes nothing. A parity family "slots and skins" runs every call against the official cores of 4.1, 4.2 and 4.3. Planted bugs fail it: the first skin winning fails 19 rigs, a missing clamp 140. A review of the first draft found two defects the family could not see. A tint write took the alpha a slider drew into the pose. `worldToLocal` used the 4.2 formula in 4.3, off in the last bit. The project fixed and tested both. |
 | Debug overlays, after slots and skins | `pixi-marrow/debug` with the overlays the official debug renderer has, and overdraw | Built 2026-11-13. `MarrowDebug` draws with `SilkGraphics` and `SilkText` of pixi-silk, an optional peer that the source check allows in `src/debug` only. Its shapes come from the geometry functions of the core and equal the official `computeWorldVertices` to the bit on four rigs in every version. It draws again only when the pose or a setting changed, unlike the official renderer, which makes a new object per bone every frame. The overdraw layer fills the triangles the view draws, after the cuts. The entry is 4.9 kB gzip without pixi-silk. Not checked: a WebGPU renderer, which `enableWebGPU` of pixi-silk covers. |
 | M7 GPU | GPU skinning, slot palette | Built 2026-11-13. `skinning: 'gpu'` places the vertices of the mesh mode in the vertex shader from a bone texture, with a palette of slot colors. In local runs the pixel check passes in the mesh mode with GPU skinning on pixi.js 8.16.0 and 8.23.0, on WebGL2 and WebGPU. A rigid rig uploads no positions. On the bench machine it cut uploads by 61 to 64 percent for raptor-pro, and frames took 16 percent longer on WebGL2, see 7.2. So `auto` stays `cpu`. Not done: the A/B on phones. |
-| M8 Baked | Baker at build time and run time, baked playback, instancing, `balanced` preset | Built 2026-11-13, with instancing on top of GPU skinning the same day. `pixi-marrow/bake` bakes an animation in Node or in a game: one playback on track 0 from the setup pose, 60 frames per second, 32-bit numbers. A clip keeps the world transforms of the bones that move and the slot values that change. `bake: 'auto'` bakes an animation the first time it plays alone, per asset and skin, in a chunk of 5.2 kB that loads on demand. No preset sets it. Since 2026-11-15 the bake runs in idle time, and the skeleton plays live until its clip is there. The engines gained `solo`, `advance` and `holdsSetup`, so a baked update still runs the tracks and fires every event. At every sample time the baked pose equals the played one rounded to 32 bits, on every fixture animation that can be baked in 4.1, 4.2 and 4.3. The events are equal to the bit in all 22 script families. The pixel check passes 453 baked frames per render mode and renderer on pixi.js 8.16.0 and 8.23.0, worst 4 of 255. With 200 instances the CPU time per frame falls to 50 to 82 percent on five rigs. Instancing: with `skinning: 'gpu'` the instances of a layout that follow each other draw in one instanced draw, see 7.2. The pixel check found 518 rig frames and 387 scene frames per renderer equal to the same views drawn alone, on pixi.js 8.16.0 and 8.23.0, on the bench machine alone. With 200 playing instances it cuts the frame to 0.34 to 0.75 of drawing alone on WebGL2 and 0.48 to 0.87 on WebGPU, measured on battery. Not done: phones, and the defaults of `skinning`, which wait for them. |
-| M9 Release 1.0 | `fast` preset, idle cache, level of detail, docs within budget, migration guide | Partly built 2026-11-13. Built: the presets, `offscreen`, `updateRate`, `lod` for physics and deform, and the idle cache. With 200 resting instances the idle cache cuts a frame to 0.50 to 0.67 of the live time, see 8.3. In local runs the pixel check holds the idle images to the live skeleton and the official runtime in both modes, on WebGL2 and WebGPU, on pixi.js 8.16.0 and 8.23.0. Not done: a docs site within the budget of section 13, the migration guide and numbers for phones. |
+| M8 Baked | Baker at build time and run time, baked playback, instancing, `balanced` preset | Built 2026-11-13, with instancing on top of GPU skinning the same day. `pixi-marrow/bake` bakes an animation in Node or in a game: one playback on track 0 from the setup pose, 60 frames per second, 32-bit numbers. A clip keeps the world transforms of the bones that move and the slot values that change. `bake: 'auto'` bakes an animation the first time it plays alone, per asset and skin, in a chunk of 5.2 kB that loads on demand. No preset sets it. Since 2026-11-15 the bake runs in idle time, and the skeleton plays live until its clip is there. The engines gained `solo`, `advance` and `holdsSetup`, so a baked update still runs the tracks and fires every event. At every sample time the baked pose equals the played one rounded to 32 bits. That holds on every fixture animation that can be baked in 4.1, 4.2 and 4.3. The events are equal to the bit in all 22 script families. The pixel check passes 453 baked frames per render mode and renderer on pixi.js 8.16.0 and 8.23.0, worst 4 of 255. With 200 instances the CPU time per frame falls to 50 to 82 percent on five rigs. Instancing: with `skinning: 'gpu'` the instances of a layout that follow each other draw in one instanced draw, see 7.2. The pixel check found 518 rig frames and 387 scene frames per renderer equal to the same views drawn alone. That was on pixi.js 8.16.0 and 8.23.0, on the bench machine alone. With 200 playing instances it cuts the frame to 0.34 to 0.75 of drawing alone on WebGL2, and to 0.48 to 0.87 on WebGPU. The machine ran on battery. Not done: phones, and the defaults of `skinning`, which wait for them. |
+| M9 Release 1.0 | `fast` preset, idle cache, level of detail, docs within budget, migration guide | Partly built 2026-11-13. Built: the presets, `offscreen`, `updateRate`, `lod` for physics and deform, and the idle cache. With 200 resting instances the idle cache cuts a frame to 0.50 to 0.67 of the live time, see 8.3. In local runs the pixel check holds the idle images to the live skeleton and the official runtime in both modes. Those runs used WebGL2 and WebGPU, on pixi.js 8.16.0 and 8.23.0. Not done: a docs site within the budget of section 13, the migration guide and numbers for phones. |
 | Later | Worker, WASM kernel, opaque pass | Only with benchmark evidence |
 
 ### 16.1 Measured in M4
 
-`pnpm bench:ab` on one machine: Apple M4 with 10 cores on battery, headless Chrome 157 with the real GPU, pixi.js 8.23.0, a canvas of 1280 by 720. 200 instances of one rig play one animation. The numbers are medians of 3 runs of 200 frames. This is one desktop. It says nothing about phones.
+`pnpm bench:ab` on one machine: Apple M4 with 10 cores on battery, headless Chrome 157 with the real GPU. It used pixi.js 8.23.0 and a canvas of 1280 by 720. 200 instances of one rig play one animation. The numbers are medians of 3 runs of 200 frames. This is one desktop. It says nothing about phones.
 
 Ours as a share of the official `spine-pixi-v8` of the rig's version. Lower is better.
 
@@ -875,12 +1083,12 @@ CPU per frame is the update plus the CPU part of the render. The official runtim
 What the numbers say:
 
 - pixi-marrow needs less CPU time on every rig measured.
-- It does not join instances into one draw call, and the official runtime does. On small rigs that eats the CPU gain: the frame takes as long or longer.
+- It does not join instances into one draw call, and the official runtime does. On small rigs that cancels the CPU gain: the frame takes as long or longer.
 - It holds less heap per instance on three rigs of five. speedy-ess holds 13 percent more and coin-pro more than twice as much.
 
-The heap column was measured again in M5. The first numbers were too low for both runtimes. A destroyed instance stays reachable through the instruction set of Pixi's render group, so a reading after another block on the same page is wrong. Every reading is on a fresh page now, taken twice in opposite order, and the two differ by 0.4 percent at most.
+In M5 the bench measured the heap column again. The first numbers were too low for both runtimes. A destroyed instance stays reachable through the instruction set of Pixi's render group. So a reading after another block on the same web page is wrong. Every reading is on a fresh web page now, taken twice in opposite order, and the two differ by 0.4 percent at most.
 
-Where the heap of an instance goes, for coin-pro without its clip: 22.8 KB against 11.7 KB of the official object. The view template and state take 5.1 KB, the pose engine 4.65 KB, Pixi buffers 3.35 KB, the shader and its bind group 2.1 KB and the cover test 1.6 KB. The clip adds 9.65 KB: a mask mesh, a container, a shader and a range mesh of its own. The official runtime keeps one container per instance and its vertices in Pixi's shared batch buffers.
+Where the heap of an instance goes, for coin-pro without its clip: 22.8 KB against 11.7 KB of the official object. The view template and state take 5.1 KB, and the pose engine 4.65 KB. Pixi buffers take 3.35 KB, the shader and its bind group 2.1 KB and the cover test 1.6 KB. The clip adds 9.65 KB: a mask mesh, a container, a shader and a range mesh of its own. The official runtime keeps one container per instance and its vertices in Pixi's shared batch buffers.
 
 `pnpm bench:ab --mode=overdraw`: 24 instances scaled to cover a canvas of 1920 by 1080 several times, 5 runs. Render time with `tightMesh: 'on'` against `off`, on WebGL2:
 
@@ -892,7 +1100,7 @@ Where the heap of an instance goes, for coin-pro without its clip: 22.8 KB again
 | 4.3 chibi-stickers | 2.9 percent less | 97.4 percent | 22 percent more |
 | 4.2 tank-pro | 2.7 percent less | 90.9 percent | 64 percent more |
 
-Every run had the same sign. On WebGPU four rigs gain 3 to 22 percent with a wide spread between runs, and chibi-stickers shows no steady gain. The default cuts cost nothing: `auto` is within 0.3 percent of `off`. So tight meshes pay in a scene that is bound by fill, by 3 to 12 percent on this GPU. They are not exact to the bit and they add vertices. They stay an option until a phone GPU is measured.
+Every run had the same sign. On WebGPU four rigs gain 3 to 22 percent with a wide spread between runs, and chibi-stickers shows no steady gain. The default cuts cost nothing: `auto` is within 0.3 percent of `off`. So tight meshes pay in a fill-bound scene, by 3 to 12 percent on this GPU. They are not exact to the bit and they add vertices. They stay an option until there are numbers for a phone GPU.
 
 ### 16.2 Measured in M5
 
@@ -906,9 +1114,11 @@ Every run had the same sign. On WebGPU four rigs gain 3 to 22 percent with a wid
 | 4.2 speedy-ess | 1 and 1 | 0.39 and 0.62 | 0.82 and 1.05 | 0.96 and 1.23 | 18.2 and 26.7 |
 | 4.3 sack-pro, with physics | 1 and 1 | 1.29 and 1.54 | 2.25 and 2.53 | 2.39 and 2.77 | 34.4 and 46.6 |
 
-The frame takes 30 to 89 percent of the official time on WebGL2 and 42 to 86 percent on WebGPU. The rig tank-pro needs two draw calls per instance. The cause was not looked into.
+The frame takes 30 to 89 percent of the official time on WebGL2 and 42 to 86 percent on WebGPU. The rig tank-pro needs two draw calls per instance. Nobody examined the cause.
 
-The list of M5 has 16 rows. 15 pass. One fails: raptor-pro in batched mode takes 4.23 ms per frame on WebGL2 and 4.08 ms in mesh mode, 4 percent more. On WebGPU it takes 4.47 against 5.27 ms. The limit of 1024 vertices stays. It trades those 4 percent on a desktop for 1 draw call in place of 200, which weighs more on a phone. That is a judgement and not a measurement: no phone was measured.
+The list of M5 has 16 rows. 15 pass. One fails: raptor-pro in batched mode takes 4.23 ms per frame on WebGL2 and 4.08 ms in mesh mode, 4 percent more. On WebGPU it takes 4.47 against 5.27 ms.
+
+The limit of 1024 vertices stays. It trades those 4 percent on a desktop for 1 draw call in place of 200, which weighs more on a phone. That is a judgement and not a measurement: nobody measured a phone.
 
 Against mesh mode a batched instance holds more heap where a rig is large: tank-pro 156 against 131 KB, raptor-pro 70 against 56 KB. It keeps its positions in skeleton space next to the copy in the batch. The cover test, the clipper and a move without an update read them.
 
@@ -936,14 +1146,14 @@ A bench on battery is not valid. On low battery the typed array code of pixi-mar
 
 `rest` is an animation that ended. `moved` is the same with a parent that moves each frame. `little` plays an animation that moves few bones: raptor-pro `gun-grab`, owl-pro `blink`, and for tank-pro one bone turned by an animation written for the bench. `mixed` is what a slot game looks like: most instances rest, one starts a short animation every 12 frames.
 
-- At rest the update of 200 instances takes 0.02 to 0.04 ms, 0.9 to 7.6 percent of the update while playing. In M5 it took 52 to 95 percent. Nothing is uploaded. The official runtime uploads 0.2 to 3.4 MB per frame at rest.
-- Against the M5 build measured in the same hour, while playing: the update takes 60 to 97 percent, the CPU time per frame 63 to 98 percent. No row of the list of M6 fails. 6 of 51 are undecided because the runs overlap.
-- The update alone is still above the official one on some rigs while playing, three times for coin-pro. The official runtime places vertices while it renders, so the CPU time per frame is the fair column, and there ours is lower in every row.
-- A skeleton with physics rests only when its physics was never disturbed. sack-pro in `little` updates in 0.58 ms against 0.50 ms of the official runtime.
+- At rest the update of 200 instances takes 0.02 to 0.04 ms, 0.9 to 7.6 percent of the update while playing. In M5 it took 52 to 95 percent. Ours uploads nothing. The official runtime uploads 0.2 to 3.4 MB per frame at rest.
+- Against the M5 build measured in the same hour, while playing, the update takes 60 to 97 percent. The CPU time per frame takes 63 to 98 percent. No row of the list of M6 fails. 6 of 51 have no verdict because the runs overlap.
+- The update alone is still above the official one on some rigs while playing, three times for coin-pro. The official runtime places vertices while it renders, so the CPU time per frame is the fair column. There ours is lower in every row.
+- A skeleton with physics rests only when its physics was never disturbed. The rig sack-pro in `little` updates in 0.58 ms against 0.50 ms of the official runtime.
 - The heap per instance grew by 1.3 to 3.4 KB for the stamps and the state of the skipping. It is 159 KB for tank-pro, 73 for raptor-pro, 38 for sack-pro, 19.5 for speedy-ess and 17.8 for coin-pro. The last one is now 16 percent above the official runtime. The other four are below it.
 - The rule of M5 that failed still fails: raptor-pro is 5 percent slower batched than in mesh mode on WebGL2.
 
-Your three must-haves: fewer batch breaks and the premultiplied pipeline land in M2, overdraw in M3. The part that was open after M4 is closed in M5: many instances of small skeletons share draw calls. What stays: a Pixi object between two skeletons ends our batch and not the batch of the official runtime. M2 is the largest milestone because the first correct frame needs model, pose and render together.
+Your three must-haves: fewer batch breaks and the premultiplied pipeline land in M2, overdraw in M3. M5 closes the part that was open after M4: many instances of small skeletons share draw calls. What stays: a Pixi object between two skeletons ends our batch and not the batch of the official runtime. M2 is the largest milestone because the first correct frame needs model, pose and render together.
 
 ## 17. Risks
 
@@ -953,7 +1163,7 @@ Your three must-haves: fewer batch breaks and the premultiplied pipeline land in
 | Older solvers differ from 4.3 in ways a mode flag cannot cover | Per-constraint experiment first (section 10). Fallback: a separate kernel per version for that constraint. |
 | Physics drifts from the official result | It does not: the port keeps the order of the official arithmetic, and physics parity is exact equality like the rest (M4). |
 | A new Spine release changes the solver | The parity suite shows exactly which frames diverge. Port, then extend the model. |
-| Pixi internals used by a custom pipe and batcher change between minors | The parts used are listed in 7.2, with the private fields of the mesh mode on WebGPU, and were checked against the source of 8.16.0 or 8.21.0 and 8.23.0. A missing private field is told once in the console. Not done: a CI run against the lowest supported Pixi. |
+| Pixi internals used by a custom pipe and batcher change between minors | Section 7.2 lists the parts used, with the private fields of the mesh mode on WebGPU. The project checked them against the source of 8.16.0 or 8.21.0 and 8.23.0. The runtime reports a missing private field once in the console. Not done: a CI run against the lowest supported Pixi. |
 | WebGPU and WebGL2 differ on stencil or data textures | Both renderers in pixel parity from M2 |
 | Tight outlines cost load time | Sidecar from the optimizer. Load-time scan only in idle frames. |
 | More than 65,535 vertices in one template | 32-bit indices when needed |
@@ -969,13 +1179,13 @@ Settled:
 2. Scope: Spine 4.1, 4.2, 4.3.
 3. Own pose core. No `spine-core` at run time.
 4. Must-haves: less overdraw, fewer batch breaks, premultiplied pipeline with additive in the batch.
-5. Licence: the Spine Runtimes License, chosen on 2026-11-12. The pose core is ported from the official source, so it is a derivative work of the Spine Runtimes.
+5. Licence: the Spine Runtimes License, chosen on 2026-11-12. The pose core is a port of the official source, so it is a derivative work of the Spine Runtimes.
 
 Open, each with a recommendation the design assumes:
 
 1. Pixi floor: `^8.21` since after M9. It was `^8.16`, the floor of the official 4.3 runtime, and the versions before 8.21 needed workarounds that cost code and checks.
 2. WebGPU from M2, not added later.
-3. Display class name: `MarrowSpine`, in line with `SilkGraphics`.
+3. Name of the display object class: `MarrowSpine`, in line with `SilkGraphics`.
 4. Default preset: `exact`.
 5. Pose values are 64-bit on the CPU, so parity with the official core is exact. Copies for the GPU are 32-bit. Settled in M2a. A pose costs 1 to 26 KB per instance on the fixtures. With the state of the constraints, counted since M3, an instance costs 1 to 41 KB.
 6. Unported features fail loudly with a typed error. No silent fallback.
