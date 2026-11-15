@@ -7,6 +7,7 @@
  * - The headless core (base, model, formats, pose, geometry and src/core.ts) never imports pixi.js.
  *   Neither does src/bake: the baker runs in Node. It imports the headless core only.
  * - The display object in src/api loads src/bake on demand: a dynamic import() is the one way in.
+ *   The command line tool in src/optimize loads the static rules of src/diagnose the same way.
  * - No runtime dependencies. The source imports nothing from npm except pixi.js. The official
  *   Spine cores are for tests. Node built-ins are allowed in src/optimize only. pixi-silk, an
  *   optional peer, is allowed in src/debug only: the debug overlays draw with it.
@@ -27,7 +28,7 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 const pkgDir = join(root, 'packages/pixi-marrow');
 const srcDir = join(pkgDir, 'src');
 const LAYERS = ['base', 'model', 'formats', 'pose', 'geometry', 'render', 'api'];
-const FEATURES = ['bake', 'debug', 'perf', 'optimize'];
+const FEATURES = ['bake', 'debug', 'perf', 'optimize', 'diagnose'];
 const HEADLESS = ['base', 'model', 'formats', 'pose', 'geometry'];
 /** Features that run without Pixi: they import the headless core and themselves only. */
 const HEADLESS_FEATURES = ['bake'];
@@ -92,6 +93,8 @@ function checkImport(file, area, allowed, specifier, dynamic) {
 
         // the display object loads the baked playback when a skeleton asks for it
         if (dynamic && area === 'api' && target === 'bake') return;
+        // the command line tool runs the static rules of src/diagnose, which need no Pixi, on a tree dump
+        if (dynamic && area === 'optimize' && target === 'diagnose') return;
         if (target === '..') fail(file, `imports "${specifier}", which is outside src`);
         else if (!LAYERS.includes(target) && !FEATURES.includes(target))
             fail(file, `imports "${specifier}". Entry files are for consumers, not for the source`);

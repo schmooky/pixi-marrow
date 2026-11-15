@@ -35,6 +35,8 @@ const SCOPE = [
     'packages/pixi-marrow/src',
     'packages/pixi-marrow/tests',
     'packages/pixi-marrow/bin',
+    'packages/pixi-marrow/agent',
+    'packages/pixi-marrow/skills',
     'packages/pixi-marrow/CHANGELOG.md',
     'apps/site/src',
     'apps/site/scripts',

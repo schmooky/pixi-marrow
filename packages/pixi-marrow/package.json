@@ -32,6 +32,11 @@
       "types": "./dist/debug.d.ts",
       "default": "./dist/debug.js"
     },
+    "./diagnose": {
+      "types": "./dist/diagnose.d.ts",
+      "default": "./dist/diagnose.js"
+    },
+    "./perf-rules.json": "./perf-rules.json",
     "./package.json": "./package.json"
   },
   "bin": {
@@ -42,7 +47,10 @@
     "bin",
     "README.md",
     "LICENSE",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "AGENTS.md",
+    "perf-rules.json",
+    "skills"
   ],
   "scripts": {
     "build": "tsdown",

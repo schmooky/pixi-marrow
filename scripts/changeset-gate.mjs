@@ -28,6 +28,10 @@ const TARBALL = [
     'packages/pixi-marrow/src/',
     'packages/pixi-marrow/bin/',
     'packages/pixi-marrow/package.json',
+    // guidance for coding agents that ships with the package
+    'packages/pixi-marrow/agent/',
+    'packages/pixi-marrow/skills/',
+    'packages/pixi-marrow/perf-rules.json',
     // how the build makes dist
     'packages/pixi-marrow/tsdown.config.ts',
     'packages/pixi-marrow/tsconfig.build.json',
