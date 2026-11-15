@@ -36,6 +36,8 @@ import {
  * while it is hidden. The image is dropped, and the view shows again in the same frame:
  *
  * - by an update that changes the pose, the layout or the render mode, or that attaches a container,
+ * - by a render after time passed in updates that drew nothing: the skeleton was hidden, or paused
+ *   off the screen, and its animations went on,
  * - by a page texture that changes: a canvas or a video that updates, or a page that takes another source,
  * - by a render that puts the skeleton elsewhere than whole pixels away, by another renderer,
  *   after the WebGL context came back, with an alpha, a blend mode, a filter or a mask above it,
@@ -170,6 +172,8 @@ class IdleImage implements IdleCache {
     private rest = 0;
     /** What the picture depends on, as the last update saw it. Nothing yet: the first update counts as a change. */
     private version = -1;
+    /** The time of the skeleton after the last update that drew. An update that draws nothing moves it on. */
+    private time = 0;
     private builds = 0;
     private mode = '';
     private choice = '';
@@ -223,6 +227,7 @@ class IdleImage implements IdleCache {
         // a container between the slots draws on its own, and a skeleton that shows nothing needs no image
         const fits = (view.inserts?.containers.length ?? 0) === 0 && stats.drawCalls > 0;
 
+        this.time = state.time;
         if (!same || !fits) {
             this.note();
             this.drop();
@@ -323,8 +328,12 @@ class IdleImage implements IdleCache {
         captures = 0;
         placeOf(owner, target.resolution, now);
         if (image !== null) {
+            // time that passed in updates that drew nothing, while Pixi did not draw the skeleton or
+            // it was paused off the screen: the pose of this render is not the one in the image
             const kept =
                 !this.paged &&
+                this.state.time === this.time &&
+                this.state.version === this.version &&
                 renderer === image.renderer &&
                 restoresOf(renderer) === image.restores &&
                 !multisampled &&

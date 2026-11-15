@@ -128,6 +128,49 @@ describe('the idle cache', () => {
         spine.destroy();
     });
 
+    it('drops the image in the render that shows a skeleton again whose time passed while it was hidden', async () => {
+        let tick: (ticker: { deltaMS: number }) => void = () => undefined;
+        const ticker = {
+            add(callback: (ticker: { deltaMS: number }) => void, context?: unknown): void {
+                tick = (time) => callback.call(context, time);
+            },
+            remove: (): void => undefined,
+        };
+        const spine = new MarrowSpine(await fixtureAsset('4.2/speedy-ess.skel'), { idleCache: 'auto', ticker });
+        const fake = fakeRenderer(spine);
+        const stage = stageOf(spine);
+        /** One frame of a game: the ticker updates, then Pixi renders. */
+        const tickFrame = (): void => {
+            tick({ deltaMS: 1000 / 60 });
+            render(spine, fake);
+        };
+
+        // the stage of an app is a render group from its first render on
+        stage.enableRenderGroup();
+        spine.position.set(200, 300);
+        for (let i = 0; i < 2 * IDLE_WAIT && !cached(spine); i++) tickFrame();
+        expect(cached(spine)).toBe(true);
+        // hidden at rest, and shown again: no time passed that the picture shows, so the image stays
+        spine.visible = false;
+        for (let i = 0; i < 5; i++) tickFrame();
+        spine.visible = true;
+        tickFrame();
+        expect(cached(spine)).toBe(true);
+        // an animation runs while the skeleton is hidden: its updates pose and draw nothing
+        spine.visible = false;
+        spine.play('run', { loop: true });
+        const version = spine.engine.state.version;
+
+        for (let i = 0; i < 5; i++) tick({ deltaMS: 1000 / 60 });
+        expect(spine.engine.state.version).toBe(version);
+        // the render that shows it again comes before the next update: the image must be gone in it
+        spine.visible = true;
+        render(spine, fake);
+        expect(cached(spine)).toBe(false);
+        expect(viewContainer(spine).visible).toBe(true);
+        spine.destroy();
+    });
+
     it('keeps the image for a move by whole pixels, and drops it in the render of any other placement', async () => {
         const spine = await resting();
         const fake = fakeRenderer(spine);
