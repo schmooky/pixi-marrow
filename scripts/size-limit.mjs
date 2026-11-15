@@ -22,7 +22,7 @@ export const ROOT_IMPORT_ENTRY = 'root (MarrowSpine)';
 /**
  * The most bytes, gzipped, of code that loads on demand: what a game downloads the first time a
  * skeleton needs a reader, a pose engine, the mesh mode or the code for clips. The keys are those
- * of `ON_DEMAND` in scripts/size-measure.mjs. Each limit is the size of 2026-11-15 plus 3 percent,
+ * of `ON_DEMAND` in scripts/size-check.mjs. Each limit is the size of 2026-11-15 plus 3 percent,
  * rounded up to half a kilobyte.
  *
  * The root import stays small because code moves into these chunks. Without a limit they can

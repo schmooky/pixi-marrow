@@ -12,8 +12,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { measureSizes, ON_DEMAND } from './size-check.mjs';
 import { ON_DEMAND_LIMITS, ROOT_IMPORT_ENTRY, ROOT_IMPORT_LIMIT } from './size-limit.mjs';
-import { measureSizes, ON_DEMAND } from './size-measure.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const pkgDir = join(root, 'packages/pixi-marrow');
