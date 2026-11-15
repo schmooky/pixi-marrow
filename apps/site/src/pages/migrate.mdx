@@ -1,0 +1,259 @@
+---
+layout: ../layouts/Docs.astro
+title: Migrate from spine-pixi-v8 or pixi-spine
+description: pixi-marrow is not a drop-in replacement. This page maps each call of spine-pixi-v8 and pixi-spine to its call in pixi-marrow, and lists what is not there.
+---
+
+import Snippet from '../components/Snippet.astro';
+import source from '../snippets/migrate.ts?raw';
+
+pixi-marrow is not a drop-in replacement for `@esotericsoftware/spine-pixi-v8` or for pixi-spine. The Spine files of a game stay as they are. The import, the load and each call on `spine.state` and `spine.skeleton` change. This page maps them one by one.
+
+The official names on this page come from the declarations of `@esotericsoftware/spine-pixi-v8` 4.2.120 and 4.3.13. The names of pixi-marrow come from its [API reference](/api/pixi-marrow/).
+
+This page describes the code on the `main` branch. The newest release on npm can lack some of it. [Changelog](/changelog/) lists what waits for the next release.
+
+## Before you start
+
+Check these four points first:
+
+1. **The Spine version of your files.** pixi-marrow plays exports of Spine 4.1, 4.2 and 4.3. An export of 4.0 or earlier does not load. Export such a project again from a newer Spine editor.
+2. **The PixiJS version.** pixi-marrow needs PixiJS 8.21 or later. A game on pixi-spine is on PixiJS v7 or earlier, so it must move to v8 first.
+3. **The renderer.** pixi-marrow draws on WebGL2 and WebGPU. On the Canvas renderer and on WebGL1 it draws no skeleton.
+4. **What your code uses.** Read [what is not there](#what-is-not-there). When your game needs one of those, stay with the official runtime.
+
+## Install
+
+```bash
+npm uninstall @esotericsoftware/spine-pixi-v8
+npm install pixi-marrow@next pixi.js
+```
+
+Do not register two Spine runtimes in one game. Both claim the same file extensions in Pixi `Assets`. The official runtime registers its loaders when a file imports it. pixi-marrow registers nothing at import: `registerMarrowAssets()` does it, once.
+
+## Load with Pixi Assets
+
+Before, with the official runtime:
+
+```ts
+import { Assets } from 'pixi.js';
+import { Spine } from '@esotericsoftware/spine-pixi-v8';
+
+await Assets.load(['coin.skel', 'coin.atlas']);
+
+const coin = Spine.from({ skeleton: 'coin.skel', atlas: 'coin.atlas', scale: 0.5 });
+```
+
+After, with pixi-marrow:
+
+<Snippet source={source} regions="assets" />
+
+`MarrowSpine.from` takes the same aliases and returns at once. Manifests, bundles and the files of AssetPack load as before. The `data` of an atlas takes `images` and `imageMetadata`, as in the official runtime.
+
+`scale` is not a load option. Pass it, and the call throws an error that names the fix. Set the scale of the display object, as for any Pixi object. [Size and units](/guide/size/) shows how to fit a skeleton to a place on the screen.
+
+## Load without Pixi Assets
+
+<Snippet source={source} regions="load" />
+
+`MarrowSpine.load` takes URLs. It loads the skeleton, the atlas and the page images, and needs no `registerMarrowAssets()`. Two loads of the same files share one asset.
+
+## Play and queue
+
+Before:
+
+```ts
+spine.state.setAnimation(0, 'idle', true);
+spine.state.setAnimation(1, 'blink', false);
+spine.state.addAnimation(0, 'win', false, 0);
+spine.state.addAnimation(0, 'idle', true, 0.5);
+spine.state.setEmptyAnimation(1, 0.2);
+spine.state.clearTracks();
+```
+
+After:
+
+<Snippet source={source} regions="play" />
+
+A track is a layer that plays one animation at a time. `play` takes the name first, and the track and the loop as options. The default track is 0, and the default is no loop. `queue` plays an animation after what the track holds.
+
+## Entry fields and speed
+
+Before:
+
+```ts
+const entry = spine.state.setAnimation(0, 'win', false);
+
+entry.timeScale = 1.5;
+entry.mixDuration = 0.1;
+entry.animationStart = 0.2;
+entry.animationEnd = 1.1;
+
+spine.state.timeScale = 0.5;
+spine.state.data.defaultMix = 0.2;
+spine.state.data.setMix('idle', 'win', 0.3);
+```
+
+After:
+
+<Snippet source={source} regions="entry" />
+
+`play` and `queue` return a `Track`, the handle on one animation. Its `speed` is the official `timeScale` of the entry. The `timeScale` of the display object is the official `timeScale` of the state.
+
+## Events
+
+Before:
+
+```ts
+spine.state.addListener({
+    complete: (entry) => console.log(entry.animation?.name),
+    event: (entry, event) => console.log(event.data.name, event.stringValue),
+});
+```
+
+After:
+
+<Snippet source={source} regions="events" />
+
+The events have the official names: `start`, `interrupt`, `end`, `dispose`, `complete` and `event`. They are Pixi events of the display object, with types. A wrong event name does not compile. In `event`, the event comes first and the track second.
+
+The official runtime also takes a listener on one entry. pixi-marrow has no such listener. Compare the track in the listener, or wait for the animation to end:
+
+<Snippet source={source} regions="finished" />
+
+## Skins, bones and slots
+
+Before, in 4.2. In 4.3 the names are `setSkin`, `setupPoseSlots` and `setupPose`:
+
+```ts
+spine.skeleton.setSkinByName('gold');
+spine.skeleton.setSlotsToSetupPose();
+spine.skeleton.setToSetupPose();
+
+const head = spine.skeleton.findBone('head');
+
+spine.skeleton.setAttachment('weapon', 'axe');
+```
+
+After:
+
+<Snippet source={source} regions="skins slots" />
+
+A new skin puts the slots into their setup pose by itself. `skins` takes a list and combines it, as a `Skin` with `addSkin` does in the official runtime.
+
+`bone` and `slot` return handles, not `spine-core` objects. A bone handle reads and writes the pose next to its parent, and reads the place in the skeleton. A slot handle reads and writes the attachment, the tint, the alpha and the dark tint.
+
+## Slot objects
+
+Before:
+
+```ts
+spine.addSlotObject('placeholder', badge, { followAttachmentTimeline: true });
+spine.removeSlotObject(badge);
+```
+
+After:
+
+<Snippet source={source} regions="attach" />
+
+`attach` draws a container at the place of a slot in the draw order. It costs one draw call. `follow` moves a child with a bone and leaves the draw order as it is. [Bones and attachments](/bones-and-placeholders/) shows both.
+
+## Update, ticker and bounds
+
+<Snippet source={source} regions="update" />
+
+`autoUpdate`, `ticker` and `update(seconds)` have the same names as in the official runtime. The default ticker is `Ticker.shared`.
+
+`getBounds()` of Pixi measures what the skeleton draws. There are no bounds providers. The option `boundsProvider` throws an error that says so.
+
+## Destroy and unload
+
+<Snippet source={source} regions="destroy" />
+
+An asset counts its users. `MarrowSpine.load` gives its hold on the asset to the display object. So the last `destroy()` of such an object unloads the model and the page images. An asset from `MarrowAsset.load` stays until the game calls `asset.destroy()` and no display object uses it. An image that the game loaded through Pixi `Assets` itself is never unloaded by pixi-marrow.
+
+## The mapping table
+
+| spine-pixi-v8 or pixi-spine | pixi-marrow |
+|---|---|
+| `Spine.from({ skeleton, atlas })` | `MarrowSpine.from({ skeleton, atlas })`, after `registerMarrowAssets()` |
+| `scale` in `Spine.from` | `hero.scale.set(...)`, see [Size and units](/guide/size/) |
+| `darkTint` in `Spine.from` | No option. A slot with a dark color draws with it |
+| `state.setAnimation(track, name, loop)` | `hero.play(name, { track, loop })` |
+| `state.addAnimation(track, name, loop, delay)` | `hero.queue(name, { track, loop, delay })` |
+| `state.setEmptyAnimation(track, mix)` | `hero.stop({ track, mix })` |
+| `state.clearTrack(track)` | `hero.stop({ track })` |
+| `state.clearTracks()` | `hero.stop()` |
+| `state.addListener({ complete })` | `hero.on('complete', (track) => ...)` |
+| `state.addListener({ event })` | `hero.on('event', (event, track) => ...)` |
+| `state.timeScale` | `hero.timeScale` |
+| `state.data.defaultMix` | `hero.defaultMix` |
+| `state.data.setMix(from, to, seconds)` | `hero.setMix(from, to, seconds)` |
+| `entry.timeScale` | `speed` in the options, and `track.speed` |
+| `entry.mixDuration` | `mix` in the options |
+| `entry.animationStart`, `entry.animationEnd` | `start` and `end` in the options |
+| `entry.alpha`, `entry.loop`, `entry.reverse` | `alpha`, `loop` and `reverse` in the options |
+| `entry.trackTime` | `track.time` |
+| Other fields of `TrackEntry` | `entry: { ... }` in the options, or `track.configure({ ... })` |
+| `skeleton.setSkinByName(name)` in 4.2, `skeleton.setSkin(name)` in 4.3 | `hero.skin = name` |
+| A `Skin` with `addSkin` | `hero.skins = [...]` |
+| `skeleton.setToSetupPose()` in 4.2, `skeleton.setupPose()` in 4.3 | `hero.setupPose()` |
+| `skeleton.setSlotsToSetupPose()`, `skeleton.setBonesToSetupPose()` | `hero.setupPose('slots')`, `hero.setupPose('bones')` |
+| `skeleton.findBone(name)` | `hero.bone(name)` |
+| `skeleton.findSlot(name)` | `hero.slot(name)` |
+| `skeleton.setAttachment(slot, name)` | `hero.slot(slot).attachment = name` |
+| `skeleton.physicsTranslate`, `skeleton.physicsRotate` | `hero.physicsTranslate`, `hero.physicsRotate` |
+| `spine.addSlotObject(slot, container)` | `hero.attach(slot, container)` |
+| `followAttachmentTimeline`, `followSlotColor` | `followAttachment`, `followColor` |
+| `spine.removeSlotObject(container)` | `hero.detach(container)` |
+| `spine.autoUpdate`, `spine.ticker`, `spine.update(seconds)` | The same names |
+| `spine.debug = new SpineDebugRenderer()` | `new MarrowDebug(hero)` from `pixi-marrow/debug` |
+| `spine.destroy()` | `hero.destroy()` |
+
+## What behaves differently
+
+- **Options are checked.** A key that is no option throws a `MarrowError` with the code `invalid-option` and the closest name. So a `scale`, `darkTint` or `boundsProvider` that stayed in the code fails at once, with the fix in the message.
+- **Names are checked.** An animation, skin, bone or slot that the skeleton lacks throws an error with the closest name.
+- **`finished` tells why.** `await track.finished` gives `'complete'`, `'interrupted'`, `'stopped'` or `'destroyed'`. It never rejects.
+- **After `destroy()`, calls throw.** `play`, `queue`, `bone`, `slot` and others throw a `MarrowError` with the code `destroyed`.
+- **A hidden skeleton is not posed.** On the ticker, a skeleton that Pixi does not draw keeps its time, its events and `finished`. The runtime poses it when it shows again. A manual `update` always poses.
+- **Physics does not follow the Pixi position.** Tell it with `physicsTranslate` and `physicsRotate`.
+- **Assets have owners.** See [Destroy and unload](#destroy-and-unload).
+- **Nothing is registered at import.** A game that loads through Pixi `Assets` calls `registerMarrowAssets()` once.
+
+## Typed names
+
+<Snippet source={source} regions="typed" />
+
+`pixi-marrow typegen` reads a skeleton and writes its names as a type. With that type, a misspelled animation, skin, bone, slot or event name does not compile. The official runtime takes names as `string`.
+
+## What is not there
+
+pixi-marrow has no call for these today:
+
+- `spine.skeleton` and `spine.state`, and any other `spine-core` object.
+- A `Skin` that the game builds from single attachments. `skins` combines whole skins of the file.
+- Constraints that the game reads or changes at run time. `hero.info.constraints` lists their names and types.
+- A listener on one track entry.
+- `getCurrent(track)`. Keep the `Track` that `play` returned.
+- The duration on a `Track`. `hero.info.animations` has the duration of each animation.
+- Bounds providers and `skeletonBounds`, for hit tests against bounding box attachments.
+- `allowMissingRegions`.
+- The hooks `beforeUpdateWorldTransforms` and `afterUpdateWorldTransforms`.
+- The Canvas renderer and WebGL1.
+- Spine 4.0 and earlier.
+- A single-file build. The package is ES modules that load on demand.
+
+## From pixi-spine
+
+pixi-spine is for PixiJS v5 to v7 and Spine 3.7 to 4.1, as its README says. So a move to pixi-marrow is three moves at once:
+
+1. Move the game to PixiJS v8, with the migration guide of PixiJS.
+2. Export the Spine projects again as 4.1, 4.2 or 4.3, when they are older than 4.1.
+3. Change the calls. pixi-spine also plays through `spine.state.setAnimation(...)`, so the table above holds.
+
+## Check the result
+
+1. Run the game with the browser console open. An option or a name that did not migrate throws a `MarrowError` with its fix.
+2. Read `hero.stats.drawCalls` and `await hero.perf.report()` in your scene.
+3. Compare the picture with the old build. The pixel check of the repo compares pixi-marrow with the official runtime on the official example rigs, on WebGL2 and WebGPU.
