@@ -28,7 +28,7 @@ const SAYS: Record<State, (share: number) => string> = {
     fading: (share) =>
         `{second:Track 1} mixes out, ${Math.floor(share * 10) * 10} percent of the way. {first:Track 0} keys no scale, so the scale fades back to the setup pose.`,
     faded: () =>
-        '{second:Track 1} has mixed out. The scale is back at the setup pose, and {first:track 0} still moves the square.',
+        '{second:Track 1} mixed out. The scale is back at the setup pose, and {first:track 0} still moves the square.',
 };
 
 /** What the line says when a stop with a mix was picked while track 1 held nothing. */

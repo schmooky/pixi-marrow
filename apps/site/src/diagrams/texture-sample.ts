@@ -113,7 +113,7 @@ export default defineDiagram({
             link.setAttribute('x2', String(sx));
             link.setAttribute('y2', String(sy));
             show(
-                `weights ${weights.map((w) => w.toFixed(2)).join(', ')}: reads the picture at ${u.toFixed(2)}, ${v.toFixed(2)}`,
+                `weights ${weights.map((w) => w.toFixed(2)).join(', ')}: the GPU reads the picture at ${u.toFixed(2)}, ${v.toFixed(2)}`,
             );
         });
     },

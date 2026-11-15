@@ -175,7 +175,7 @@ export function showResult(host: HTMLElement, result: LabResult, saved: string |
         element(
             'p',
             'lab-note',
-            'Every skeleton has the settings a game gets when it sets none. The scene played at the rate of the screen. The CPU times are the update of the skeletons and the render call of Pixi.',
+            'Every skeleton has the settings a game gets when it sets none. The scene played at the rate of the screen. The CPU times measure the update of the skeletons and the render call of Pixi.',
         ),
         device,
     );

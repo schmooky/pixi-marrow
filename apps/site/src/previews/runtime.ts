@@ -33,9 +33,9 @@ const INFANCY = 1500;
 /** How many contexts in a row may be lost that young before a preview stops making them. */
 const YOUNG_LOSSES = 2;
 /** What a preview says when its context was taken away again and again. */
-const TAKEN = 'The browser took the WebGL context of this preview away.';
+const TAKEN = 'The browser removed the WebGL context of this preview.';
 /** What a preview says when no context lived. */
-const NO_CONTEXT = 'The browser cannot make a WebGL context at the moment. Starting it again can help.';
+const NO_CONTEXT = 'The browser cannot make a WebGL context at the moment. It can help to start the browser again.';
 
 /** How a preview lost its context: `young` within a moment of its birth, `lost` later. */
 type Loss = 'young' | 'lost';

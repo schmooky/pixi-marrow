@@ -30,7 +30,7 @@ export interface PlaygroundPage {
 
 /** What became of a load, as the line under the readout says it. */
 function summary(sorted: Sorted, loaded: number): string {
-    const ignored = sorted.ignored > 0 ? ` Left out ${plural(sorted.ignored, 'other file')}.` : '';
+    const ignored = sorted.ignored > 0 ? ` Ignored ${plural(sorted.ignored, 'other file')}.` : '';
     const skeletons = sorted.rigs.length + sorted.problems.length;
 
     return skeletons === 0
@@ -46,7 +46,7 @@ function showLost(page: PlaygroundPage): void {
 
     note.className = 'pg-lost';
     text.textContent =
-        'The browser took the WebGL context of the playground away, so it stopped. Load the page again and choose the files once more.';
+        'The browser removed the WebGL context of the playground, so the playground stopped. Load the page again and choose the files once more.';
     reload.type = 'button';
     reload.className = 'pg-button';
     reload.textContent = 'Load the page again';

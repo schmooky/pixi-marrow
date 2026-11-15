@@ -66,7 +66,9 @@ export default defineDiagram({
             // the box of the frame is the square itself: fitting to it undoes the growth and the lift
             place(live, 60, (CELL * 0.6) / (SIDE * pose.scale), { scale: pose.scale, lift: 0 });
             place(setup, 400, (CELL * 0.6) / SIDE, pose);
-            show('left: the fit undoes the animation in every frame. Right: it grows and lifts as made');
+            show(
+                'Left: the fit undoes the animation in every frame. Right: the square grows and lifts, as in the animation',
+            );
         });
     },
 });

@@ -56,7 +56,7 @@ export default defineDiagram({
                 if (moves) moved++;
             }
             show(
-                `${moved} moved, so they were posed, placed and uploaded. The other ${COUNT - moved} were asked, and skipped.`,
+                `${moved} moved, so the runtime posed, placed and uploaded them. It asked the other ${COUNT - moved}, and skipped them.`,
             );
         });
     },

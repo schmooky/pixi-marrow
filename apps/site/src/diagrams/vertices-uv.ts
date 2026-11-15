@@ -112,7 +112,7 @@ export default defineDiagram({
             }
             show(
                 pull > 0.5
-                    ? 'the grid bends where the triangles meet: each one is mapped on its own'
+                    ? 'the grid bends where the triangles meet: the GPU maps each one on its own'
                     : 'the corner moves: each triangle stretches its part of the picture',
             );
         });

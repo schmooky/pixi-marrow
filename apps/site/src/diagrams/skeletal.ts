@@ -75,7 +75,7 @@ export default defineDiagram({
         const showSkeleton = readout('Skeleton', 56);
 
         say(
-            'Both arms make the same wave. The sheet has 8 pictures, so its arm jumps. The skeleton computes its bone in every frame, so its arm glides.',
+            'Both arms make the same wave, but the sheet has 8 pictures, so its arm jumps. The skeleton computes its bone in every frame, so its arm glides.',
         );
         const sheet = { frame: 0 };
         const skeleton = { share: 0 };

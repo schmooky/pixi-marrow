@@ -114,7 +114,7 @@ export function rendererText(result: LabResult): string {
 
     return result.renderer === result.settings.renderer
         ? name(result.renderer)
-        : `${name(result.renderer)} (${name(result.settings.renderer)} was asked for and did not start)`;
+        : `${name(result.renderer)} (the lab requested ${name(result.settings.renderer)}, which did not start)`;
 }
 
 /** A count with its noun, as in 1 draw call and 3 draw calls. */
@@ -140,10 +140,12 @@ export function verdicts(result: LabResult): string[] {
         );
     } else if (atFullRate(play)) {
         lines.push(
-            `Played at the full rate of this ${refresh} Hz screen: ${fps} fps, ${play.dropped} of ${total} frames dropped.`,
+            `The scene played at the full rate of this ${refresh} Hz screen: ${fps} fps, ${play.dropped} of ${total} frames dropped.`,
         );
     } else {
-        lines.push(`Played at ${fps} fps on this ${refresh} Hz screen, ${play.dropped} of ${total} frames dropped.`);
+        lines.push(
+            `The scene played at ${fps} fps on this ${refresh} Hz screen, ${play.dropped} of ${total} frames dropped.`,
+        );
     }
     if (result.count > 0) {
         const time = `Update and render took ${ms(result, play.cpu)} ms on the CPU`;
@@ -175,7 +177,7 @@ export function verdicts(result: LabResult): string[] {
     }
     if (coarseTimer(timerStep)) {
         lines.push(
-            `This browser rounds its timer to ${stepText(timerStep)} ms, so the CPU times are rounded to that too.`,
+            `This browser rounds its timer to ${stepText(timerStep)} ms, so it rounds the CPU times to that too.`,
         );
     }
 
@@ -199,7 +201,7 @@ export function resultText(result: LabResult): string {
         '',
         `${result.count} ${result.noun}: ${play.fps.toFixed(1)} fps over ${play.seconds.toFixed(1)} s, ${play.dropped} of ${play.frames + play.dropped} frames dropped.`,
         `CPU per frame: ${ms(result, play.cpu)} ms (update ${ms(result, play.update)}, render ${ms(result, play.render)}), 95th percentile ${ms(result, play.cpuP95)} ms.`,
-        `Frames that came late: ${play.late}, of them after CPU work that took most of a frame: ${play.lateAfterSlowCpu}.`,
+        `Frames that came late: ${play.late}, and ${play.lateAfterSlowCpu} of them after CPU work that took most of a frame.`,
         `Draw calls per frame: ${play.draws}.`,
         ...(result.over === null
             ? []

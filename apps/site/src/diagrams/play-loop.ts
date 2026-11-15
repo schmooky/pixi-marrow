@@ -46,8 +46,8 @@ export default defineDiagram({
             line.show(time);
             show(
                 time < LENGTH
-                    ? 'The first second: {first:loop: true} and {second:loop: false} both play the move. {result:The 0 s animation} has only one frame, so it holds it.'
-                    : '{first:loop: true} jumps back to the start and plays again. {second:loop: false} stops and holds its last frame. It does not go back.',
+                    ? 'In the first second, {first:loop: true} and {second:loop: false} both play the move. {result:The 0 s animation} has only one frame, so it holds it.'
+                    : '{first:loop: true} jumps to the start and plays again. {second:loop: false} stops, holds its last frame and does not return to the start.',
             );
         });
     },

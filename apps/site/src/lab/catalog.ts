@@ -21,7 +21,7 @@ export const CATALOG: readonly LabInfo[] = [
         title: 'How many',
         question: 'How many slot symbols does this device play at the full frame rate?',
         scene: (count) =>
-            `Bzzz symbols play their idle loops. It starts with ${count}, and more join every few seconds until the frames drop.`,
+            `Bzzz symbols play their idle loops. The test starts with ${count}, and more join every few seconds until the frames drop.`,
         count: 20,
         noun: 'symbols',
         grows: true,

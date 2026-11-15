@@ -112,7 +112,7 @@ export default definePreview({
             const reasons: string[] = [];
 
             if (breaks.meshes) reasons.push('every symbol draws its own meshes');
-            if (breaks.multiply) reasons.push('one symbol multiplies, a blend state of its own');
+            if (breaks.multiply) reasons.push('one symbol multiplies and needs a blend state of its own');
             if (breaks.text) reasons.push('a Pixi text lies between two symbols');
 
             return reasons.length === 0 ? 'all symbols follow each other and share one batch' : reasons.join(', and ');

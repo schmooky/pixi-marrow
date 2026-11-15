@@ -94,7 +94,7 @@ export default defineDiagram({
             } else {
                 show(
                     intoB
-                        ? '{second:B} alone: it scales the square up, and keys no position.'
+                        ? '{second:B} alone: it makes the square bigger, and keys no position.'
                         : '{first:A} alone: it moves the square right.',
                 );
             }

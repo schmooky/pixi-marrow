@@ -49,7 +49,7 @@ export default defineDiagram({
                 mode = next;
                 say(
                     next === 'lower bone holds 30'
-                        ? 'The {second:lower bone} keeps its own 30 degrees, yet it turns on screen: the {first:upper bone} carries it along.'
+                        ? 'The {second:lower bone} keeps its own 30 degrees, yet it turns on screen: the {first:upper bone} carries it.'
                         : 'The {second:lower bone} turns on its own as well. On screen its turn adds to the turn of the {first:upper bone}.',
                 );
             },
@@ -60,7 +60,7 @@ export default defineDiagram({
         const showLower = readout('Lower rotation', 60);
 
         say(
-            'The {second:lower bone} keeps its own 30 degrees, yet it turns on screen: the {first:upper bone} carries it along.',
+            'The {second:lower bone} keeps its own 30 degrees, yet it turns on screen: the {first:upper bone} carries it.',
         );
         onFrame((seconds) => {
             time += seconds;

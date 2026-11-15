@@ -233,7 +233,7 @@ async function matchRig(skeleton: PickedFile, name: string, kinds: Kinds): Promi
     if (atlas === undefined) {
         const reason =
             kinds.atlases.length === 0
-                ? 'No .atlas file was dropped.'
+                ? 'None of the files is an .atlas file.'
                 : 'No atlas has its name or lies alone in its folder.';
 
         return { name, reason };
