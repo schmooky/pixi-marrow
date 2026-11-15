@@ -177,7 +177,7 @@ export function recordClip(
     const fps = options.fps ?? 60;
 
     if (!Number.isFinite(fps) || fps <= 0) {
-        throw new MarrowError('invalid-data', `fps ${fps} is not a rate.`, {
+        throw new MarrowError('invalid-option', `fps ${fps} is not a rate.`, {
             fix: 'Pass a number of frames a second above 0.',
         });
     }

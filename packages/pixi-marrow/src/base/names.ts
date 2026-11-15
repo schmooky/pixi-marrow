@@ -60,23 +60,30 @@ export function closestName(name: string, validNames: readonly string[]): string
  * Creates the error for a name a skeleton does not have. The message states the name, its kind
  * and the closest valid name. The error carries every valid name.
  *
+ * @param owner What lacks the name, for the message. Default `The skeleton`.
+ *
  * @example
  * throw unknownName('animation', 'idel', ['idle', 'run']);
  * // [pixi-marrow:unknown-name] The skeleton has no animation "idel". The closest name is "idle". ...
  */
-export function unknownName(kind: string, name: string, validNames: readonly string[]): MarrowError {
+export function unknownName(
+    kind: string,
+    name: string,
+    validNames: readonly string[],
+    owner = 'The skeleton',
+): MarrowError {
     const closest = closestName(name, validNames);
     const listed = validNames.slice(0, LISTED_NAMES).join(', ');
     const more = validNames.length > LISTED_NAMES ? ` and ${validNames.length - LISTED_NAMES} more` : '';
 
     if (closest === undefined) {
-        return new MarrowError('unknown-name', `The skeleton has no ${kind} "${name}". It has no ${kind} names.`, {
+        return new MarrowError('unknown-name', `${owner} has no ${kind} "${name}". It has no ${kind} names.`, {
             fix: `Export the skeleton again with the ${kind} in it.`,
             validNames,
         });
     }
 
-    return new MarrowError('unknown-name', `The skeleton has no ${kind} "${name}". The closest name is "${closest}".`, {
+    return new MarrowError('unknown-name', `${owner} has no ${kind} "${name}". The closest name is "${closest}".`, {
         fix: `Pass one of the ${kind} names: ${listed}${more}.`,
         validNames,
         closest,

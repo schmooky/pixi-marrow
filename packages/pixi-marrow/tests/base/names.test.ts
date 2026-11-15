@@ -88,4 +88,11 @@ describe('unknownName', () => {
         expect(error.closest).toBeUndefined();
         expect(error.validNames).toEqual([]);
     });
+
+    it('names what lacks the name when that is not the skeleton', () => {
+        const error = unknownName('attachment', 'gunn', ['gun'], 'The slot "gun"');
+
+        expect(error.message).toContain('The slot "gun" has no attachment "gunn". The closest name is "gun".');
+        expect(error.fix).toBe('Pass one of the attachment names: gun.');
+    });
 });

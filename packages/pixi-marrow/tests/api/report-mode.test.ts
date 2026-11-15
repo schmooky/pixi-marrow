@@ -87,7 +87,7 @@ describe('the render mode of a display object', () => {
                 error = caught;
             }
             expect(error).toBeInstanceOf(MarrowError);
-            expect(error).toMatchObject({ code: 'invalid-data', validNames: ['auto', 'mesh', 'batched'] });
+            expect(error).toMatchObject({ code: 'invalid-option', validNames: ['auto', 'mesh', 'batched'] });
         }
         expect(spine.renderMode).toBe('auto');
     });

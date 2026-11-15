@@ -151,7 +151,7 @@ describe.each(VERSIONS)('the track options of a Spine %s skeleton', (version) =>
             spine.update(0.125);
 
             expect(completed).toHaveBeenCalledExactlyOnceWith(track);
-            await expect(track.finished).resolves.toBeUndefined();
+            await expect(track.finished).resolves.toBe('complete');
         });
 
         it('time an animation that is queued with a mix after the part that plays', () => {
@@ -305,7 +305,7 @@ describe.each(VERSIONS)('the track options of a Spine %s skeleton', (version) =>
             const spine = create();
             const error = callLoosely(spine, 'play', { looping: true });
 
-            expect(error.code).toBe('unknown-name');
+            expect(error.code).toBe('invalid-option');
             expect(error.message).toContain('"looping" is not an option of play.');
             expect(error.closest).toBe('loop');
             expect(error.validNames).toEqual([
@@ -360,8 +360,8 @@ describe.each(VERSIONS)('the track options of a Spine %s skeleton', (version) =>
             ];
 
             for (const error of errors) {
-                expect(error.code).toBe('invalid-data');
-                expect(error.message).toContain(`The option "${option}" was set to`);
+                expect(error.code).toBe('invalid-option');
+                expect(error.message).toContain(`${option} got`);
                 expect(error.fix).toBe(`Pass ${expected}.`);
             }
             expect(setAnimation).not.toHaveBeenCalled();
@@ -372,7 +372,7 @@ describe.each(VERSIONS)('the track options of a Spine %s skeleton', (version) =>
             const spine = create();
             const error = callLoosely(spine, 'queue', { delay: Number.NaN });
 
-            expect(error.message).toContain('The option "delay" was set to NaN.');
+            expect(error.message).toContain('delay got NaN.');
             expect(error.fix).toBe('Pass a finite number.');
         });
     });

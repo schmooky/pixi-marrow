@@ -1,13 +1,13 @@
 import { AlphaFilter, Batch, Bounds, type Container, Graphics, getLocalBounds, TextureSource } from 'pixi.js';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { loadIdleCode } from '../../src/api/idle-cache';
-import { IDLE_BUDGET, IDLE_MAX_SIDE, IDLE_WAIT } from '../../src/api/idle-image';
+import { IDLE_BUDGET, IDLE_CAPTURES, IDLE_MAX_SIDE, IDLE_WAIT } from '../../src/api/idle-image';
 import { MarrowSpine } from '../../src/index';
 import { BatchElement } from '../../src/render/batch-element';
 import { MarrowBatcher } from '../../src/render/batcher';
 import { createStage } from '../render/batch-stage';
 import { fixtureAsset } from './helpers';
-import { cached, fakeRenderer, frame, framesUntilCached, stageOf, viewContainer } from './idle-stage';
+import { cached, fakeRenderer, frame, framesUntilCached, render, stageOf, viewContainer } from './idle-stage';
 
 /*
  * What the idle cache must not hold an image through, found in an audit: a page texture that
@@ -190,5 +190,33 @@ describe('the limits of the idle cache', () => {
                 expect((batch as Batch).elements.some((element) => element instanceof BatchElement)).toBe(false);
             }
         }
+    });
+
+    it('draws a few images a frame, so that skeletons that come to rest together do not draw theirs in one', async () => {
+        const crowd = await Promise.all(Array.from({ length: 3 * IDLE_CAPTURES + 1 }, () => resting()));
+        const [first] = crowd;
+
+        if (first === undefined) throw new Error('the crowd has a first skeleton');
+        const fake = fakeRenderer(first);
+        const shown: number[] = [];
+
+        for (let i = 0; i < IDLE_WAIT + 8 && shown.at(-1) !== crowd.length; i++) {
+            const before = fake.renders.length;
+
+            for (const spine of crowd) spine.update(1 / 60);
+            // the images of one frame, drawn in its updates
+            expect(fake.renders.length - before).toBeLessThanOrEqual(IDLE_CAPTURES);
+            for (const spine of crowd) render(spine, fake);
+            shown.push(crowd.filter(cached).length);
+        }
+        // every skeleton gets its image, a few frames later than alone
+        expect(shown.at(-1)).toBe(crowd.length);
+        expect(shown.filter((count) => count > 0)).toEqual([
+            IDLE_CAPTURES,
+            2 * IDLE_CAPTURES,
+            3 * IDLE_CAPTURES,
+            crowd.length,
+        ]);
+        expect(fake.renders).toHaveLength(crowd.length);
     });
 });

@@ -1,5 +1,5 @@
 import { MarrowError } from '../base/errors';
-import { closestName } from '../base/names';
+import { checkKeys, oneOf } from './values';
 
 /** How the vertices of the mesh mode are placed: on the CPU, or in the vertex shader from the bone matrices. */
 export type SkinningMode = 'auto' | 'cpu' | 'gpu';
@@ -16,9 +16,10 @@ export interface PerfSettings {
     tightMesh: 'auto' | 'on' | 'off';
     /**
      * `gpu` places the vertices of the mesh mode in the vertex shader from the bone matrices, so
-     * only the matrices go to the GPU while a skeleton moves. Attachments that deform or hang on
-     * several bones stay on the CPU. `cpu` places every vertex on the CPU. `auto` is `cpu` until
-     * devices have been measured. The batched mode always places on the CPU.
+     * only the matrices go to the GPU while a skeleton moves. That holds for meshes with weights
+     * too. The CPU still places a mesh while a deform is on it, and a region with a sequence.
+     * `cpu` places every vertex on the CPU. `auto` is `cpu` until devices have been measured. The
+     * batched mode always places on the CPU, so the setting has no effect there.
      */
     skinning: SkinningMode;
     /**
@@ -53,13 +54,15 @@ export interface PerfSettings {
     /**
      * `update` (the `exact` default) updates a skeleton off the screen as one on it. `throttle`
      * updates it 4 times a second, with the time that passed, so events fire late. `pause` does
-     * not update it, so its time stands still until it is on the screen again. A skeleton that
-     * is hidden, or under a parent that is, counts as off the screen: `visible` or `renderable` false.
+     * not pose or draw it. Its tracks, its events and `Track.finished` go on, and the picture
+     * stands still until it is on the screen again. A skeleton that is hidden, or under a parent
+     * that is, counts as off the screen: `visible` or `renderable` false, or an alpha of 0.
      */
     offscreen: OffscreenMode;
     /**
-     * `display` (the `exact` default) updates the pose every frame. A number updates it at most
-     * that many times a second, with the time that passed: motion steps at low rates.
+     * `display` (the `exact` default) updates the pose every frame. A number updates it that
+     * many times a second, with the time that passed: motion steps at low rates. The updates
+     * keep an even rhythm on a display of any rate, and never come more often than its frames.
      */
     updateRate: UpdateRate;
     /**
@@ -132,19 +135,16 @@ const CHOICES: Record<keyof PerfSettings, readonly string[]> = {
     lod: ['off', 'auto'],
 };
 
-function wrong(setting: string, value: unknown, valid: readonly string[]): MarrowError {
-    return new MarrowError('invalid-data', `"${String(value)}" is not a value of ${setting}.`, {
-        fix: `Set one of: ${valid.join(', ')}.`,
-        validNames: valid,
-        closest: closestName(String(value), valid) ?? valid[0] ?? '',
-    });
-}
+/** The names of the settings. Each one is an option of a display object too. */
+export const PERF_KEYS = Object.keys(CHOICES) as (keyof PerfSettings)[];
+/** The keys of a `perf` object. */
+const SETTINGS: readonly string[] = ['preset', ...PERF_KEYS];
 
 /** Checks one setting. Throws a `MarrowError` for a value it does not take. */
 function check<K extends keyof PerfSettings>(setting: K, value: PerfSettings[K]): PerfSettings[K] {
     if (setting === 'updateRate' && typeof value === 'number') {
         if (!Number.isFinite(value) || value <= 0) {
-            throw new MarrowError('invalid-data', `updateRate ${value} is not a rate.`, {
+            throw new MarrowError('invalid-option', `updateRate ${value} is not a rate.`, {
                 fix: "Pass a number of updates a second above 0, or 'display'.",
             });
         }
@@ -153,14 +153,14 @@ function check<K extends keyof PerfSettings>(setting: K, value: PerfSettings[K])
     }
     if (setting === 'bake' && Array.isArray(value)) {
         if (!value.every((name) => typeof name === 'string')) {
-            throw new MarrowError('invalid-data', 'bake takes a list of animation names.', {
+            throw new MarrowError('invalid-option', 'bake takes a list of animation names.', {
                 fix: "Pass names of animations, 'auto' or 'off'.",
             });
         }
 
         return value;
     }
-    if (!CHOICES[setting].includes(value as string)) throw wrong(setting, value, CHOICES[setting]);
+    oneOf(`a value of ${setting}`, value, CHOICES[setting]);
 
     return value;
 }
@@ -173,7 +173,7 @@ export interface ResolvedPerf extends PerfSettings {
 
 /**
  * The settings in effect: an option given by name wins, then a setting of a `perf` object, then
- * its preset, then `exact`. Throws a `MarrowError` for a preset or a value that does not exist.
+ * its preset, then `exact`. Throws a `MarrowError` for a preset or a value that does not exist, and for a key of a `perf` object that is no setting.
  *
  * @example
  * const settings = resolvePerf('fast', { tightMesh: 'off' });
@@ -184,13 +184,13 @@ export function resolvePerf(
     named: { [K in keyof PerfSettings]?: PerfSettings[K] | undefined } = {},
 ): ResolvedPerf {
     const object = typeof perf === 'object' && perf !== null ? perf : {};
-    const preset = typeof perf === 'string' ? perf : (object.preset ?? 'exact');
+    const preset = oneOf('a value of perf', typeof perf === 'string' ? perf : (object.preset ?? 'exact'), PRESETS);
 
-    if (!PRESETS.includes(preset)) throw wrong('perf', preset, PRESETS);
+    checkKeys(object, 'perf', SETTINGS);
     const settings: PerfSettings = { ...PERF_PRESETS[preset] };
     const given = new Set<keyof PerfSettings>();
 
-    for (const key of Object.keys(CHOICES) as (keyof PerfSettings)[]) {
+    for (const key of PERF_KEYS) {
         const value = named[key] ?? object[key];
 
         if (value === undefined) continue;

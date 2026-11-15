@@ -31,4 +31,20 @@ describe('MarrowError', () => {
         expect(error.validNames).toEqual(['4.1', '4.2', '4.3']);
         expect(error.closest).toBe('4.3');
     });
+
+    it('carries the address of a docs page when it is given one', () => {
+        const plain = new MarrowError('destroyed', 'The display object was destroyed.', { fix: 'Make a new one.' });
+        const linked = new MarrowError('invalid-option', '"scale" is not an option.', {
+            fix: 'Set the scale of the display object.',
+            docs: 'https://pixi-marrow.schmooky.dev/migrate/',
+        });
+
+        expect(plain.docs).toBeUndefined();
+        expect(plain.code).toBe('destroyed');
+        expect(linked.docs).toBe('https://pixi-marrow.schmooky.dev/migrate/');
+        // the message stays the cause and the fix
+        expect(linked.message).toBe(
+            '[pixi-marrow:invalid-option] "scale" is not an option. Set the scale of the display object.',
+        );
+    });
 });

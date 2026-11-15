@@ -2,6 +2,16 @@ import type { PoseEngine, TrackEntry, TrackFields } from '../pose/engine';
 import type { MarrowNames, StopOptions } from './options';
 
 /**
+ * Why a {@link Track} ended, as its `finished` promise says it.
+ *
+ * - `complete`: an animation that does not loop played to its end, or the track end came.
+ * - `interrupted`: another animation took the track, by `play` or from the queue.
+ * - `stopped`: `stop` cleared the track or mixed it out.
+ * - `destroyed`: the display object was destroyed.
+ */
+export type TrackEnd = 'complete' | 'interrupted' | 'stopped' | 'destroyed';
+
+/**
  * A handle on one playing or queued animation. `play` and `queue` of the display object return it.
  *
  * Once the track was disposed the handle keeps its last values, and setting them does nothing.
@@ -26,9 +36,16 @@ export interface Track<N extends MarrowNames = MarrowNames> {
     readonly time: number;
     /**
      * Resolves when an animation that does not loop has played to its end once. It also resolves
-     * when the animation ends or is disposed for any reason, whichever comes first. It never rejects.
+     * when the animation ends or is disposed for any reason, whichever comes first. It never
+     * rejects. The value says why: see {@link TrackEnd}.
+     *
+     * An animation that another one replaced resolves when its mix out ends, with `interrupted`.
+     * It resolves with `complete` when it plays to its end before that.
+     *
+     * @example
+     * if ((await hero.play('win').finished) === 'complete') showTotal();
      */
-    readonly finished: Promise<void>;
+    readonly finished: Promise<TrackEnd>;
     /** Stops the track this animation is on. Does nothing once the animation was disposed. */
     stop(options?: Pick<StopOptions, 'mix'>): void;
     /**
@@ -85,9 +102,12 @@ export class TrackHandle<N extends MarrowNames = MarrowNames> implements Track<N
     private lastSpeed = 1;
     private lastAlpha = 1;
     private lastTime = 0;
-    private settled = false;
-    private promise: Promise<void> | null = null;
-    private resolve: (() => void) | null = null;
+    /** Why the entry will end, once an `interrupt` event said so. */
+    cause: TrackEnd | undefined;
+    /** Why {@link finished} resolved, once it did. */
+    private ended: TrackEnd | undefined;
+    private promise: Promise<TrackEnd> | null = null;
+    private resolve: ((why: TrackEnd) => void) | null = null;
 
     /** @param duration The duration of the animation in seconds. */
     constructor(owner: TrackOwner, entry: TrackEntry, animation: N['animations'], duration: number) {
@@ -131,14 +151,15 @@ export class TrackHandle<N extends MarrowNames = MarrowNames> implements Track<N
         return this.entry === null ? this.lastTime : this.entry.trackTime;
     }
 
-    get finished(): Promise<void> {
+    get finished(): Promise<TrackEnd> {
         if (this.promise === null) {
             // made on first use: most handles are never awaited
-            this.promise = this.settled
-                ? Promise.resolve()
-                : new Promise((resolve) => {
-                      this.resolve = resolve;
-                  });
+            this.promise =
+                this.ended === undefined
+                    ? new Promise((resolve) => {
+                          this.resolve = resolve;
+                      })
+                    : Promise.resolve(this.ended);
         }
 
         return this.promise;
@@ -160,10 +181,11 @@ export class TrackHandle<N extends MarrowNames = MarrowNames> implements Track<N
         if (mixBlend !== undefined) this.adds = mixBlend === 'add';
     }
 
-    /** Resolves {@link finished}. */
-    settle(): void {
-        this.settled = true;
-        this.resolve?.();
+    /** Resolves {@link finished} with the reason. The first reason stays. */
+    settle(why: TrackEnd): void {
+        if (this.ended !== undefined) return;
+        this.ended = why;
+        this.resolve?.(why);
         this.resolve = null;
     }
 
@@ -171,7 +193,7 @@ export class TrackHandle<N extends MarrowNames = MarrowNames> implements Track<N
      * Lets go of the entry at its `dispose` event and resolves {@link finished}. The handle keeps
      * the values the entry has now, because the engine may use the object for another entry.
      */
-    release(): void {
+    release(why: TrackEnd): void {
         const entry = this.entry;
 
         if (entry === null) return;
@@ -180,7 +202,7 @@ export class TrackHandle<N extends MarrowNames = MarrowNames> implements Track<N
         this.lastAlpha = entry.alpha;
         this.lastTime = entry.trackTime;
         this.entry = null;
-        this.settle();
+        this.settle(why);
     }
 
     /**

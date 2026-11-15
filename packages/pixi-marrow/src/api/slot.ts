@@ -1,8 +1,8 @@
 import { unknownName } from '../base/names';
 import type { PoseEngine } from '../pose/engine';
 import { createAttachmentLookup } from '../pose/shared/lookup';
-import { finiteArgument } from './checks';
 import type { MarrowNames } from './options';
+import { finite } from './values';
 
 /** A part of a color, 0 to 1, as one byte of a tint. */
 const byte = (part: number): number => Math.round(part * 255);
@@ -33,7 +33,10 @@ export class Slot<N extends MarrowNames = MarrowNames> {
     private readonly engine: PoseEngine;
     private readonly index: number;
 
-    /** @param index The index of the slot in the skeleton. */
+    /**
+     * @internal
+     * @param index The index of the slot in the skeleton.
+     */
     constructor(engine: PoseEngine, index: number, name: N['slots']) {
         const { slots, bones } = engine.state.model;
 
@@ -66,7 +69,8 @@ export class Slot<N extends MarrowNames = MarrowNames> {
      * default skin, as the official `Skeleton.setAttachment` finds it. Null or an empty name shows
      * nothing, as there.
      *
-     * Throws a `MarrowError` that lists the names the skins have for the slot.
+     * Throws a `MarrowError` that lists the names the active skins and the default skin have for
+     * the slot.
      */
     set attachment(name: string | null) {
         const { engine, index } = this;
@@ -85,7 +89,7 @@ export class Slot<N extends MarrowNames = MarrowNames> {
                 (skin?.attachments ?? []).filter((entry) => entry.slot === index).map((entry) => entry.name),
             );
 
-            throw unknownName(`attachment for the slot "${this.name}"`, String(name), [...new Set(names)]);
+            throw unknownName('attachment', String(name), [...new Set(names)], `The slot "${this.name}"`);
         }
         engine.setAttachment(index, found);
     }
@@ -98,7 +102,7 @@ export class Slot<N extends MarrowNames = MarrowNames> {
     /** Sets the color of the slot and keeps its alpha. */
     set tint(value: number) {
         // the text that names the slot is built for the error only: a write in every frame allocates nothing
-        if (!Number.isFinite(value)) finiteArgument(`slot("${this.name}")`, 'tint', value);
+        if (!Number.isFinite(value)) finite(`slot("${this.name}").tint`, value);
         const color = value & 0xffffff;
 
         this.engine.setColor(
@@ -120,7 +124,7 @@ export class Slot<N extends MarrowNames = MarrowNames> {
         const { colors } = this.engine.slotPose;
         const at = this.index * 4;
 
-        if (!Number.isFinite(value)) finiteArgument(`slot("${this.name}")`, 'alpha', value);
+        if (!Number.isFinite(value)) finite(`slot("${this.name}").alpha`, value);
         this.engine.setColor(this.index, Number(colors[at]), Number(colors[at + 1]), Number(colors[at + 2]), value);
     }
 
@@ -145,7 +149,7 @@ export class Slot<N extends MarrowNames = MarrowNames> {
         const { engine, index } = this;
 
         if (value === null && engine.state.model.slots.hasDark[index] !== 1) return;
-        if (value === null || !Number.isFinite(value)) finiteArgument(`slot("${this.name}")`, 'darkTint', value);
+        if (value === null || !Number.isFinite(value)) finite(`slot("${this.name}").darkTint`, value);
         const color = (value ?? 0) & 0xffffff;
 
         engine.setDarkColor(index, (color >> 16) / 255, ((color >> 8) & 255) / 255, (color & 255) / 255);
