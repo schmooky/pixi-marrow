@@ -1,24 +1,24 @@
 ---
+import Head from '../components/Head.astro';
 import Nav from '../components/Nav.astro';
-import { SITE } from '../lib/site';
 import '../styles/global.css';
 
 interface Props {
+    /** The title of the page as its heading shows it. `Head` makes the title of the browser tab from it. */
     title?: string;
     description?: string;
+    /** True for a page of the docs. */
+    article?: boolean;
+    /** True for a page that search engines must not index. */
+    noindex?: boolean;
 }
-const { title = `${SITE.name}: ${SITE.tagline}`, description = SITE.description } = Astro.props;
+const { title, description, article, noindex } = Astro.props;
 ---
 
 <!doctype html>
 <html lang="en">
     <head>
-        <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>{title}</title>
-        <meta name="description" content={description} />
-        <link rel="canonical" href={new URL(Astro.url.pathname, Astro.site)} />
-        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+        <Head title={title} description={description} article={article} noindex={noindex} />
     </head>
     <body>
         <a href="#content" class="skip-link">Skip to content</a>
