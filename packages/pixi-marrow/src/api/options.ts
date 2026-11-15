@@ -43,10 +43,11 @@ export interface MarrowSpineOptions {
      * True when the object updates itself from a Pixi ticker. Default true. Pass false where
      * there are no animation frames, as in Node, and call `update` yourself.
      *
-     * An update from the ticker does not pose or draw an object that Pixi does not draw. That is
+     * An update from the ticker does not draw an object that Pixi does not draw. That is
      * an object without a parent, and one with `visible` or `renderable` false or an alpha of 0,
-     * on itself or on a parent. Its tracks, its events and `Track.finished` go on. The render
-     * that shows it again poses it first. `bone(name)` reads the pose of its last posed update
+     * on itself or on a parent. Its tracks, its events and `Track.finished` go on. An animation
+     * that plays alone on track 0 is not posed either. With a mix or several tracks the engine
+     * still poses, and no vertex is placed. The render that shows it again poses it first. `bone(name)` reads the pose of its last posed update
      * until then. An update you call yourself always poses.
      */
     autoUpdate?: boolean;
@@ -260,8 +261,8 @@ export interface StopOptions {
     /** The index of the track to stop. Default: every track. */
     track?: number;
     /**
-     * Seconds to mix out to the setup pose. At 0 the track is cleared at once and the pose keeps
-     * what the track did to it. Default 0.
+     * Seconds to mix out, to what lower tracks give or to the setup pose where they key nothing.
+     * At 0 the track is cleared at once and the pose keeps what the track did to it. Default 0.
      */
     mix?: number;
 }

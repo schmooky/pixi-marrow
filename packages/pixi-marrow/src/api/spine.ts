@@ -265,8 +265,10 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
     }
 
     /**
-     * Stops one track, or every track. With `mix` the track mixes out to the setup pose through
-     * an empty animation. Without it the track is cleared at once and the pose stays as it is.
+     * Stops one track, or every track. With `mix` the track mixes out through an empty animation,
+     * as in the official runtime. What it keyed goes back to what lower tracks give, or to the
+     * setup pose where they key nothing. Without it the track is cleared at once and the pose
+     * stays as it is.
      *
      * @example
      * hero.stop({ track: 1, mix: 0.2 });
@@ -343,8 +345,10 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
 
     /**
      * Stops updating and frees what this instance holds. Every {@link Track} of it resolves its
-     * `finished`, with `destroyed` when nothing ended it before. The asset is shared and stays
-     * loaded. See the class for what the object does after this.
+     * `finished`, with `destroyed` when nothing ended it before. The asset is shared: it stays
+     * loaded while an owner or another instance holds it, and ends when this one was its last
+     * holder. That is the case after `MarrowSpine.load`, which gives its hold to the instance.
+     * See the class for what the object does after this.
      */
     override destroy(options?: DestroyOptions): void {
         if (this.destroyed) return;
