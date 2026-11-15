@@ -15,7 +15,7 @@ import {
 import { type PackSource, placeEntries, planRuns, STATICS_CHANGED, writeEntries, writeIndices } from './batch-pack';
 import { clipCode } from './clip-code';
 import type { DrawGate } from './gate';
-import { restBytes, type ViewStats } from './stats';
+import type { ViewStats } from './stats';
 import type { Template } from './template';
 import type { VisibleList } from './visible';
 
@@ -116,8 +116,6 @@ export class BatchElement implements BatchableElement, PackSource {
     packedTo = 0;
     staticFrom = 0;
     staticTo = 0;
-    /** 1 while the bytes of a frame are counted, 2 when that frame was drawn, 0 when the bytes of the frame are 0. */
-    counted = 0;
 
     /** The texture source of every atlas page, in page order. */
     readonly pages: readonly TextureSource[];
@@ -347,23 +345,13 @@ export class BatchElement implements BatchableElement, PackSource {
      * @param indices Indices.
      */
     count(positions: number, statics: number, indices: number): void {
-        const { uploadBytes: total, frameBytes: frame } = this.stats;
+        const { stats } = this;
         const indexBytes = indices * (this.home?.indexBuffer.BYTES_PER_ELEMENT ?? 2);
 
-        if (this.counted !== 1) restBytes(frame);
-        this.counted = 1;
-        total.positions += positions * 4;
-        frame.positions += positions * 4;
-        total.statics += statics * 4;
-        frame.statics += statics * 4;
-        total.indices += indexBytes;
-        frame.indices += indexBytes;
-    }
-
-    /** Ends a frame for the bytes of the stats. The pipe calls it after the element wrote, while {@link counted} is not 0. */
-    endFrame(): void {
-        if (this.counted === 2) restBytes(this.stats.frameBytes);
-        this.counted = this.counted === 1 ? 2 : 0;
+        stats.uploadBytes.positions += positions * 4;
+        stats.uploadBytes.statics += statics * 4;
+        stats.uploadBytes.indices += indexBytes;
+        stats.frameBytes += (positions + statics) * 4 + indexBytes;
     }
 
     /**
@@ -417,7 +405,6 @@ export class BatchElement implements BatchableElement, PackSource {
         // what the batch holds of the skeleton, and has to change for a display object above it
         const kept = mark && !this.stale;
         const statics = this.writeStatics(home, mark, kept);
-        const staticWords = this.staticTo - this.staticFrom;
         const transform = this.place.groupTransform;
         const moved = noteTransform(this.placedWith, transform);
         // every vertex is placed again where the batch holds none of them, and after a move of the display object
@@ -435,7 +422,7 @@ export class BatchElement implements BatchableElement, PackSource {
             indices = this.indexSize;
             if (mark) home.touchIndices(this._indexStart, indices);
         }
-        if (mark && positionWords + staticWords + indices > 0) this.count(positionWords, staticWords, indices);
+        if (mark) this.count(positionWords, this.staticTo - this.staticFrom, indices);
         this.stale = false;
         this.listDirty = false;
         this.dirty = false;
@@ -447,14 +434,15 @@ export class BatchElement implements BatchableElement, PackSource {
      */
     private writeStatics(home: BatchHome, mark: boolean, kept: boolean): boolean {
         const tint = this.place.groupColorAlpha;
-        const fresh = this.stale || tint !== this.tint;
+        const retinted = tint !== this.tint;
+        const fresh = this.stale || retinted;
         // an entry shows other colors, another frame or another attachment only now and then
         const statics = fresh || this.marked || this.listDirty;
         const base = (this._attributeStart / POSITION_WORDS) * this.staticWords;
 
         // a new place in the batch holds no entry of any slot
         if (this.stale) this.state.fill(-1, 0, this.changedAt);
-        if (kept && tint !== this.tint) this.stats.tintRewrites++;
+        if (kept && retinted) this.stats.tintRewrites++;
         this.tint = tint;
         this.staticTo = this.staticFrom;
         if (statics) {

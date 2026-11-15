@@ -1,6 +1,6 @@
 import {
     type Bounds,
-    Buffer,
+    type Buffer,
     type Container,
     RenderContainer,
     type Renderer,
@@ -11,7 +11,7 @@ import { MarrowError } from '../base/errors';
 import { i16, i32 } from '../geometry/read';
 import type { SkeletonModel } from '../model/model';
 import { isNewer, type PoseState } from '../pose/state';
-import { uploadStretch, uploadsStretch } from './batch-upload';
+import { uploadsStretch } from './batch-upload';
 import { clipCode, clipCodeMissing } from './clip-code';
 import { drawsNothing } from './context-watch';
 import { bendsEdges, type DrawGate } from './gate';
@@ -23,9 +23,9 @@ import { vertexBuffer } from './pages';
 import { type PosePass, poseEntries } from './pose-pass';
 import type { VertexBuffers } from './range-mesh';
 import { DrawRanges, type DrawRangesOptions } from './ranges';
-import { sent } from './sent';
+import { sent, uploadStretch } from './sent';
 import { MeshSkin } from './skin-paint';
-import { restBytes, type UploadBytes, type ViewStats } from './stats';
+import type { UploadBytes, ViewStats } from './stats';
 import { type Template, templateBytes } from './template';
 import { restoreColors } from './vertex-colors';
 import type { VisibleList } from './visible';
@@ -37,7 +37,7 @@ const NO_DEFORM = new Float64Array(0);
 const NO_SKIPS = new Uint8Array(0);
 
 /** Whether this Pixi uploads a stretch of a buffer on its own. */
-const RANGED = uploadsStretch(Buffer.prototype.update, VERSION);
+const RANGED = uploadsStretch(VERSION);
 
 /** Whether a display object and all its parents are visible: Pixi draws it unless it culls it. */
 function shown(node: Container | null): boolean {
@@ -210,8 +210,6 @@ export class MeshPaint {
         const { bones, hasDark } = this.model.slots;
         const { skin } = this;
 
-        // the bytes of a frame are those of one update. What the textures upload at the draw comes on top
-        restBytes(this.stats.frameBytes);
         if (skin !== undefined) {
             this.choose(pass, template, state, seen);
             skin.pose(pass, template, state, seen);
@@ -249,7 +247,7 @@ export class MeshPaint {
     /** Counts bytes that went to the GPU in the stats of the view. */
     private note(kind: keyof UploadBytes, bytes: number): void {
         this.stats.uploadBytes[kind] += bytes;
-        this.stats.frameBytes[kind] += bytes;
+        this.stats.frameBytes += bytes;
     }
 
     /**

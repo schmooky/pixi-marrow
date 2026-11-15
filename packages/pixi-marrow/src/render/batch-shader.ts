@@ -13,6 +13,10 @@ import { GlProgram, GpuProgram, getBatchSamplersUniformGroup, Shader } from 'pix
  * - The textures are those of the batch, not of one skeleton. Pixi binds them to the units 0 and
  *   up on WebGL2 and as group 1 on WebGPU.
  *
+ * The vertex stage goes through the same steps as the batch shader of Pixi, in the same order,
+ * identity matrix included. For an additive slot the color stays and the alpha leaves the blend
+ * equation. The sources hold no comment and no indentation: they are a part of the root import.
+ *
  * Attribute `aFlags` holds three bytes: x is the texture of the page in the batch, y is 255 for
  * an additive slot, z is 255 when positions are rounded to pixels.
  */
@@ -21,7 +25,7 @@ const range = (count: number): number[] => Array.from({ length: count }, (_, i) 
 
 const GL_ROUND = `
 vec2 roundPixels(vec2 position, vec2 targetSize) {
-    return (floor(((position * 0.5 + 0.5) * targetSize) + 0.5) / targetSize) * 2.0 - 1.0;
+return (floor(((position * 0.5 + 0.5) * targetSize) + 0.5) / targetSize) * 2.0 - 1.0;
 }`;
 
 function glVertex(dark: boolean): string {
@@ -32,40 +36,34 @@ in vec4 aColor;
 in vec4 aTint;
 in vec4 aFlags;
 ${dark ? 'in vec4 aDark;' : ''}
-
 uniform mat3 uProjectionMatrix;
 uniform mat3 uWorldTransformMatrix;
 uniform vec4 uWorldColorAlpha;
 uniform vec2 uResolution;
-
 out vec2 vUV;
 out vec4 vLight;
 ${dark ? 'out vec4 vDark;' : ''}
 flat out float vPage;
 ${GL_ROUND}
-
 void main(void) {
-    // the same steps as the batch shader of Pixi, so that the same bits come out
-    mat3 worldTransformMatrix = uWorldTransformMatrix;
-    mat3 modelMatrix = mat3(
-        1.0, 0.0, 0.0,
-        0.0, 1.0, 0.0,
-        0.0, 0.0, 1.0
-    );
-    vec2 position = aPosition;
-    mat3 modelViewProjectionMatrix = uProjectionMatrix * worldTransformMatrix * modelMatrix;
-    vec4 tint = vec4(aTint.rgb * aTint.a, aTint.a) * uWorldColorAlpha;
-
-    gl_Position = vec4((modelViewProjectionMatrix * vec3(position, 1.0)).xy, 0.0, 1.0);
-    if (aFlags.z == 1.0) {
-        gl_Position.xy = roundPixels(gl_Position.xy, uResolution);
-    }
-    vUV = aUV;
-    vLight = vec4(aColor.rgb * aColor.a, aColor.a) * tint;
-    // additive: the color stays, the alpha leaves the blend equation
-    vLight.a *= 1.0 - aFlags.y;
-    ${dark ? 'vDark = vec4(aDark.rgb * tint.a, aDark.a);' : ''}
-    vPage = aFlags.x * 255.0;
+mat3 worldTransformMatrix = uWorldTransformMatrix;
+mat3 modelMatrix = mat3(
+1.0, 0.0, 0.0,
+0.0, 1.0, 0.0,
+0.0, 0.0, 1.0
+);
+vec2 position = aPosition;
+mat3 modelViewProjectionMatrix = uProjectionMatrix * worldTransformMatrix * modelMatrix;
+vec4 tint = vec4(aTint.rgb * aTint.a, aTint.a) * uWorldColorAlpha;
+gl_Position = vec4((modelViewProjectionMatrix * vec3(position, 1.0)).xy, 0.0, 1.0);
+if (aFlags.z == 1.0) {
+gl_Position.xy = roundPixels(gl_Position.xy, uResolution);
+}
+vUV = aUV;
+vLight = vec4(aColor.rgb * aColor.a, aColor.a) * tint;
+vLight.a *= 1.0 - aFlags.y;
+${dark ? 'vDark = vec4(aDark.rgb * tint.a, aDark.a);' : ''}
+vPage = aFlags.x * 255.0;
 }
 `;
 }
@@ -92,14 +90,11 @@ in vec2 vUV;
 in vec4 vLight;
 ${dark ? 'in vec4 vDark;' : ''}
 flat in float vPage;
-
 uniform sampler2D uTextures[${textures}];
-
 out vec4 finalColor;
-
 void main(void) {
-    ${glSample(textures)}
-    finalColor = ${color};
+${glSample(textures)}
+finalColor = ${color};
 }
 `;
 }
@@ -108,7 +103,7 @@ void main(void) {
 function wgslSample(textures: number): string {
     const sample = (i: number): string => `textureSampleGrad(uTexture${i}, uSampler${i}, varyings.uv, dx, dy)`;
     const derivatives = `let dx = dpdx(varyings.uv);
-    let dy = dpdy(varyings.uv);`;
+let dy = dpdy(varyings.uv);`;
 
     if (textures === 1) return `${derivatives}\n    let texel = ${sample(0)};`;
     const cases = range(textures).map(
@@ -116,27 +111,26 @@ function wgslSample(textures: number): string {
     );
 
     return `${derivatives}
-    var texel: vec4<f32>;
-    switch varyings.page {
-        ${cases.join('\n        ')}
-    }`;
+var texel: vec4<f32>;
+switch varyings.page {
+${cases.join('\n        ')}
+}`;
 }
 
 function wgsl(dark: boolean, textures: number): string {
     const color = dark
         ? `vec4<f32>(
-        ((texel.a - 1.0) * varyings.dark.a + 1.0 - texel.rgb) * varyings.dark.rgb + texel.rgb * varyings.light.rgb,
-        texel.a * varyings.light.a,
-    )`
+((texel.a - 1.0) * varyings.dark.a + 1.0 - texel.rgb) * varyings.dark.rgb + texel.rgb * varyings.light.rgb,
+texel.a * varyings.light.a,
+)`
         : 'texel * varyings.light';
 
     return `struct GlobalUniforms {
-    uProjectionMatrix: mat3x3<f32>,
-    uWorldTransformMatrix: mat3x3<f32>,
-    uWorldColorAlpha: vec4<f32>,
-    uResolution: vec2<f32>,
+uProjectionMatrix: mat3x3<f32>,
+uWorldTransformMatrix: mat3x3<f32>,
+uWorldColorAlpha: vec4<f32>,
+uResolution: vec2<f32>,
 }
-
 @group(0) @binding(0) var<uniform> globalUniforms: GlobalUniforms;
 ${range(textures)
     .map(
@@ -145,59 +139,50 @@ ${range(textures)
             `@group(1) @binding(${i * 2 + 1}) var uSampler${i}: sampler;`,
     )
     .join('\n')}
-
 struct Varyings {
-    @builtin(position) position: vec4<f32>,
-    @location(0) uv: vec2<f32>,
-    @location(1) light: vec4<f32>,
-    ${dark ? '@location(2) dark: vec4<f32>,' : ''}
-    @location(3) @interpolate(flat) page: u32,
+@builtin(position) position: vec4<f32>,
+@location(0) uv: vec2<f32>,
+@location(1) light: vec4<f32>,
+${dark ? '@location(2) dark: vec4<f32>,' : ''}
+@location(3) @interpolate(flat) page: u32,
 }
-
 fn roundPixels(position: vec2<f32>, targetSize: vec2<f32>) -> vec2<f32> {
-    return (floor(((position * 0.5 + 0.5) * targetSize) + 0.5) / targetSize) * 2.0 - 1.0;
+return (floor(((position * 0.5 + 0.5) * targetSize) + 0.5) / targetSize) * 2.0 - 1.0;
 }
-
 @vertex
 fn mainVertex(
-    @location(0) aPosition: vec2<f32>,
-    @location(1) aUV: vec2<f32>,
-    @location(2) aColor: vec4<f32>,
-    @location(3) aTint: vec4<f32>,
-    @location(4) aFlags: vec4<f32>,
-    ${dark ? '@location(5) aDark: vec4<f32>,' : ''}
+@location(0) aPosition: vec2<f32>,
+@location(1) aUV: vec2<f32>,
+@location(2) aColor: vec4<f32>,
+@location(3) aTint: vec4<f32>,
+@location(4) aFlags: vec4<f32>,
+${dark ? '@location(5) aDark: vec4<f32>,' : ''}
 ) -> Varyings {
-    // the same steps as the batch shader of Pixi, so that the same bits come out
-    var worldTransformMatrix = globalUniforms.uWorldTransformMatrix;
-    var modelMatrix = mat3x3<f32>(
-        1.0, 0.0, 0.0,
-        0.0, 1.0, 0.0,
-        0.0, 0.0, 1.0
-    );
-    var position = aPosition;
-    var modelViewProjectionMatrix = globalUniforms.uProjectionMatrix * worldTransformMatrix * modelMatrix;
-    var clip = (modelViewProjectionMatrix * vec3<f32>(position, 1.0)).xy;
-    let tint = vec4<f32>(aTint.rgb * aTint.a, aTint.a) * globalUniforms.uWorldColorAlpha;
-    var varyings: Varyings;
-
-    if (aFlags.z == 1.0) {
-        clip = roundPixels(clip, globalUniforms.uResolution);
-    }
-    varyings.position = vec4<f32>(clip, 0.0, 1.0);
-    varyings.uv = aUV;
-    // additive: the color stays, the alpha leaves the blend equation
-    varyings.light = vec4<f32>(aColor.rgb * aColor.a * tint.rgb, aColor.a * tint.a * (1.0 - aFlags.y));
-    ${dark ? 'varyings.dark = vec4<f32>(aDark.rgb * tint.a, aDark.a);' : ''}
-    varyings.page = u32(aFlags.x * 255.0 + 0.5);
-
-    return varyings;
+var worldTransformMatrix = globalUniforms.uWorldTransformMatrix;
+var modelMatrix = mat3x3<f32>(
+1.0, 0.0, 0.0,
+0.0, 1.0, 0.0,
+0.0, 0.0, 1.0
+);
+var position = aPosition;
+var modelViewProjectionMatrix = globalUniforms.uProjectionMatrix * worldTransformMatrix * modelMatrix;
+var clip = (modelViewProjectionMatrix * vec3<f32>(position, 1.0)).xy;
+let tint = vec4<f32>(aTint.rgb * aTint.a, aTint.a) * globalUniforms.uWorldColorAlpha;
+var varyings: Varyings;
+if (aFlags.z == 1.0) {
+clip = roundPixels(clip, globalUniforms.uResolution);
 }
-
+varyings.position = vec4<f32>(clip, 0.0, 1.0);
+varyings.uv = aUV;
+varyings.light = vec4<f32>(aColor.rgb * aColor.a * tint.rgb, aColor.a * tint.a * (1.0 - aFlags.y));
+${dark ? 'varyings.dark = vec4<f32>(aDark.rgb * tint.a, aDark.a);' : ''}
+varyings.page = u32(aFlags.x * 255.0 + 0.5);
+return varyings;
+}
 @fragment
 fn mainFragment(varyings: Varyings) -> @location(0) vec4<f32> {
-    ${wgslSample(textures)}
-
-    return ${color};
+${wgslSample(textures)}
+return ${color};
 }
 `;
 }

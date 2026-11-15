@@ -15,10 +15,16 @@ export interface BatchBodyOptions extends Omit<BatchElementOptions, 'place'> {
 function link(this: BatchBody, renderer: Renderer): void {
     if (renderer === this.linked) return;
     linkRenderer(renderer);
+    // a renderer that draws no skeleton, in every frame: the body leaves the batch and the view counts no draw
+    if (drawsNothing(renderer)) {
+        const { stats } = this.element;
+
+        this.visible = false;
+        stats.drawCalls = stats.indices = 0;
+
+        return;
+    }
     this.linked = renderer;
-    // a renderer that draws no skeleton: the view counts no draw call from now on
-    this.blind = drawsNothing(renderer);
-    if (this.blind) this.element.stats.drawCalls = this.element.stats.indices = 0;
     // a GPU that cannot sample the pages of one run in a batch: the view goes back to meshes before Pixi collects it
     if (renderer.limits.maxBatchableTextures < Math.min(this.element.pages.length, GROUP_PAGES)) {
         this.gate.refuseBatch();
@@ -47,8 +53,6 @@ export class BatchBody extends ViewContainer {
     readonly gate: DrawGate;
     /** The renderer that drew the body last, which has the pipe. */
     linked: Renderer | null = null;
-    /** True when that renderer can draw no skeleton, see `drawsNothing`. */
-    blind = false;
     private readonly measure: () => Bounds;
 
     constructor(options: BatchBodyOptions) {

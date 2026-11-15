@@ -1,7 +1,7 @@
 import {
     type BLEND_MODES,
     type Bounds,
-    Buffer,
+    type Buffer,
     Container,
     type Mesh,
     type Shader,
@@ -44,7 +44,7 @@ import { NO_CLIP, type VisibleList } from './visible';
  */
 
 /** Whether a buffer of this Pixi uploads at once when it is told that it changed, see `uploadsStretch`. */
-const AT_ONCE = uploadsStretch(Buffer.prototype.update, VERSION);
+const AT_ONCE = uploadsStretch(VERSION);
 
 /** What {@link DrawRanges} draws with. */
 export interface DrawRangesOptions {

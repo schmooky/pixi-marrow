@@ -54,13 +54,13 @@ describe('a renderer of WebGL1', () => {
                 expect(thrown(() => link(fakeRenderer('gpu')))).toBeUndefined();
             }
             expect(thrown(() => linkMeshPipe(old))).toBeUndefined();
-            expect(warn.mock.calls.filter(([text]) => /no skeleton draws/.test(String(text)))).toHaveLength(1);
+            expect(warn.mock.calls.filter(([text]) => /draws no skeleton/.test(String(text)))).toHaveLength(1);
             // the Canvas renderer of Pixi is neither WebGL nor WebGPU: the same warning, once per renderer
             const canvas = fakeRenderer('canvas');
 
             expect(thrown(() => linkRenderer(canvas))).toBeUndefined();
             expect(thrown(() => linkMeshPipe(canvas))).toBeUndefined();
-            expect(warn.mock.calls.filter(([text]) => /no skeleton draws/.test(String(text)))).toHaveLength(2);
+            expect(warn.mock.calls.filter(([text]) => /draws no skeleton/.test(String(text)))).toHaveLength(2);
         } finally {
             warn.mockRestore();
         }

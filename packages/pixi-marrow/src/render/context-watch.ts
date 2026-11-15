@@ -79,7 +79,7 @@ export function watchContext(renderer: Renderer): void {
     watched.add(renderer);
     const old = drawsNothing(renderer);
 
-    if (old) console.warn('pixi-marrow: no skeleton draws with this renderer. Use WebGL2 or WebGPU.');
+    if (old) console.warn('pixi-marrow: this renderer draws no skeleton. Use WebGL2 or WebGPU.');
     // every renderer that draws skeletons answers, so the answer of another one never stays
     const watch = {
         prerender(): void {

@@ -127,22 +127,12 @@ export interface ViewStats {
     /** The bytes the view handed to the GPU so far. */
     uploadBytes: UploadBytes;
     /**
-     * The bytes of the last frame. In the batched mode that is the last frame that drew the
-     * skeleton. In the mesh mode it is the last update, and all 0 after an update that skipped.
+     * The bytes of all kinds the view handed to the GPU since its last update began: those of one
+     * frame, for a view that is updated once per frame. It is 0 after a frame in which the
+     * skeleton and every display object above it rested. A draw without an update before it adds
+     * to the same number.
      */
-    frameBytes: UploadBytes;
-}
-
-const noBytes = (): UploadBytes => ({ positions: 0, statics: 0, indices: 0, bones: 0, masks: 0 });
-
-/**
- * Sets the bytes of a frame to 0.
- *
- * @example
- * restBytes(view.stats.frameBytes);
- */
-export function restBytes(frame: UploadBytes): void {
-    frame.positions = frame.statics = frame.indices = frame.bones = frame.masks = 0;
+    frameBytes: number;
 }
 
 /**
@@ -177,7 +167,7 @@ export function createViewStats(vertices: number, bufferBytes: number, renderMod
         transformReplaces: 0,
         tintRewrites: 0,
         instructionBuilds: 0,
-        uploadBytes: noBytes(),
-        frameBytes: noBytes(),
+        uploadBytes: { positions: 0, statics: 0, indices: 0, bones: 0, masks: 0 },
+        frameBytes: 0,
     };
 }

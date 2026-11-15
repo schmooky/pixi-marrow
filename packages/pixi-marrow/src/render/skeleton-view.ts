@@ -22,7 +22,7 @@ import { pageSources } from './pages';
 import { ViewPaints } from './paints';
 import { clipsMoved, createPosePass, notePass, type PosePass, poseEntries } from './pose-pass';
 import { u8 } from './read';
-import { createViewStats, restBytes, type ViewStats } from './stats';
+import { createViewStats, type ViewStats } from './stats';
 import { buildTemplate, type Template, templateBytes } from './template';
 import { VisibleList } from './visible';
 
@@ -194,8 +194,8 @@ export class SkeletonView implements DrawGate {
      * version the view drew last asks for none, and the update returns at once. It does not when
      * the outlines or the mode of the view changed, or a search for covered slots is owed.
      *
-     * Throws a `MarrowError` for a pose of another model, after {@link destroy}, and for a
-     * clipping attachment with fewer than three vertices, which it names.
+     * Every update starts the count of `stats.frameBytes` again. Throws a `MarrowError` for a pose of
+     * another model, after {@link destroy}, and for a clipping attachment with fewer than three vertices.
      */
     update(state: PoseState): void {
         checkPose(this.destroyed, state.model === this.model);
@@ -204,8 +204,8 @@ export class SkeletonView implements DrawGate {
         const same = state === this.last && state.version === pass.seen && !pass.all;
         const arrived = paints.waits && meshCode() !== undefined;
 
+        this.stats.frameBytes = 0;
         if (same && !stale && !this.restyle && !this.cover.owes && !arrived) {
-            if (paints.mode === 'mesh') restBytes(this.stats.frameBytes);
             this.stats.skips++;
             pass.skipped = true;
 
@@ -461,14 +461,14 @@ export class SkeletonView implements DrawGate {
             const runs = element.plan();
             // One that no renderer can batch draws nothing while it waits for the code of the mesh mode
             const { body } = this.paints;
-            const shows = count > 0 && !(this.refused && this.paints.waits) && body?.blind !== true;
+            const shows = count > 0 && !(this.refused && this.paints.waits);
 
             // A skeleton that shows nothing joins no batch. One that is in a batch stays there with
             // triangles without area: to leave would make Pixi build the instructions again
             if (body !== undefined) body.visible = shows || (count === 0 && body.visible && element.placed);
             stats.drawCalls = shows ? runs : 0;
             stats.maskDraws = 0;
-            stats.indices = shows ? indices : 0;
+            stats.indices = indices;
             stats.bufferBytes = templateBytes(template) + element.bytes;
         } else mesh?.reindex(template, seen, skipped, indices, stats);
         seen.dirty = false;

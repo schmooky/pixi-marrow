@@ -18,7 +18,7 @@ import { BATCHER, BatchElement, type BatchHome, type BatchPart, DARK_BATCHER, PI
 import type { ImageElement } from './batch-image';
 import { GROUP_PAGES, POSITION_WORDS, STATIC_WORDS } from './batch-layout';
 import { createBatchShader } from './batch-shader';
-import { PendingUpload, type UploadMode } from './batch-upload';
+import { PendingUpload } from './batch-upload';
 
 /*
  * The batcher of the batched mode. Pixi creates one per render group when the first skeleton of
@@ -300,15 +300,15 @@ export class MarrowBatcher extends Batcher implements BatchHome {
      * noted, or its used part when that is less work: a batch of 200 skeletons of which one
      * moved uploads the vertices of that one.
      *
-     * @param mode How the buffers of the renderer upload, see `uploadMode`.
+     * @param each Whether a buffer of the renderer uploads every stretch it is told, see `uploadsStretch`.
      */
-    flush(mode: UploadMode): void {
+    flush(each: boolean): void {
         const [positions] = this.geometry.buffers;
         const statics = (this.attributeSize / POSITION_WORDS) * this.staticWords;
 
-        if (positions !== undefined) this.positionsPending.flush(positions, 4, this.attributeSize, mode);
-        this.staticsPending.flush(this.staticBuffer, 4, statics, mode);
-        this.indicesPending.flush(this.geometry.indexBuffer, this.indexBuffer.BYTES_PER_ELEMENT, this.indexSize, mode);
+        if (positions !== undefined) this.positionsPending.flush(positions, 4, this.attributeSize, each);
+        this.staticsPending.flush(this.staticBuffer, 4, statics, each);
+        this.indicesPending.flush(this.geometry.indexBuffer, this.indexBuffer.BYTES_PER_ELEMENT, this.indexSize, each);
     }
 
     /**

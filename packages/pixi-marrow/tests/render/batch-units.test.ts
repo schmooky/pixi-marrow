@@ -2,7 +2,7 @@ import { Buffer, BufferUsage, type Renderer, Shader, VERSION } from 'pixi.js';
 import { describe, expect, it } from 'vitest';
 import { holdsLayout, layoutSlots } from '../../src/render/batch-layout';
 import { createBatchShader } from '../../src/render/batch-shader';
-import { PendingUpload, uploadMode, uploadsStretch } from '../../src/render/batch-upload';
+import { PendingUpload, uploadsStretch } from '../../src/render/batch-upload';
 import { CoverTest } from '../../src/render/cover';
 import { batcherOf, createStage } from './batch-stage';
 import { type CoverSlot, coverRig } from './cover-rig';
@@ -103,67 +103,56 @@ describe('what a batch buffer uploads', () => {
         const { buffer, uploads } = noting(100_000);
         const pending = new PendingUpload();
 
-        expect(pending.flush(buffer, 4, 100_000, 'each')).toBe(0);
+        expect(pending.flush(buffer, 4, 100_000, true)).toBe(0);
         pending.add(100, 50);
         pending.add(4000, 10);
         expect(pending.count).toBe(2);
-        expect(pending.flush(buffer, 4, 100_000, 'each')).toBe(240);
+        expect(pending.flush(buffer, 4, 100_000, true)).toBe(240);
         expect(uploads).toEqual([
             [400, 200],
             [16_000, 40],
         ]);
         // nothing is left for the next draw
-        expect(pending.flush(buffer, 4, 100_000, 'each')).toBe(0);
+        expect(pending.flush(buffer, 4, 100_000, true)).toBe(0);
         expect(uploads).toHaveLength(2);
         // a stretch without an item is no upload: Pixi takes a size of 0 for the whole buffer
         pending.add(500, 0);
         expect(pending.count).toBe(0);
-        expect(pending.flush(buffer, 4, 100_000, 'each')).toBe(0);
+        expect(pending.flush(buffer, 4, 100_000, true)).toBe(0);
         expect(uploads).toHaveLength(2);
     });
 
-    it('joins stretches that touch, overlap or lie near each other, in the order of the buffer', () => {
+    it('uploads every stretch it was told, in the order it was told', () => {
         const { buffer, uploads } = noting(100_000);
         const pending = new PendingUpload();
 
-        // a stretch that goes on where the one before ended is the same stretch
-        pending.add(100, 50);
-        pending.add(150, 50);
-        pending.add(120, 10);
-        expect(pending.count).toBe(1);
-        // one far behind and one far before: they upload in the order of the buffer
         pending.add(50_000, 8);
+        pending.add(100, 50);
         pending.add(20_000, 8);
-        // a gap of fewer bytes than a call costs is uploaded with its neighbours
-        pending.add(21_000, 8);
-        expect(pending.count).toBe(4);
-        expect(pending.flush(buffer, 4, 100_000, 'each')).toBe((100 + 1008 + 8) * 4);
+        expect(pending.count).toBe(3);
+        expect(pending.flush(buffer, 4, 100_000, true)).toBe(66 * 4);
         expect(uploads).toEqual([
-            [400, 400],
-            [80_000, 4032],
             [200_000, 32],
+            [400, 200],
+            [80_000, 32],
         ]);
     });
 
-    it('keeps more stretches than it has room for by joining the nearest ones', () => {
+    it('keeps more stretches than it has room for by making one of them', () => {
         const { buffer, uploads } = noting(4_000_000);
         const pending = new PendingUpload();
 
-        // 600 skeletons that each changed one slot, far from each other, written back to front
-        for (let i = 599; i >= 0; i--) pending.add(i * 5000, 20);
+        // 300 skeletons that each changed one slot, far from each other, written back to front
+        for (let i = 299; i >= 0; i--) pending.add(i * 5000 + 1_000_000, 20);
         expect(pending.whole).toBe(false);
         expect(pending.count).toBeLessThanOrEqual(256);
-        const bytes = pending.flush(buffer, 4, 3_000_000, 'each');
-        let end = -1;
+        const bytes = pending.flush(buffer, 4, 3_000_000, true);
 
-        // every change is inside an upload, the uploads do not overlap, and they are far less than the buffer
+        // every change is inside an upload, and the uploads are less than the buffer
         expect(bytes).toBeLessThan(3_000_000 * 4);
-        for (const [from, size] of uploads) {
-            expect(from).toBeGreaterThan(end);
-            end = from + size;
-        }
-        for (let i = 0; i < 600; i++) {
-            const from = i * 5000 * 4;
+        expect(bytes).toBe(uploads.reduce((sum, [, size]) => sum + size, 0));
+        for (let i = 0; i < 300; i++) {
+            const from = (i * 5000 + 1_000_000) * 4;
 
             expect(uploads.some(([at, size]) => at <= from && from + 80 <= at + size)).toBe(true);
         }
@@ -176,22 +165,22 @@ describe('what a batch buffer uploads', () => {
         // long: the calls cost more than the whole
         pending.add(0, 43_000);
         pending.add(47_000, 43_000);
-        expect(pending.flush(buffer, 4, 90_000, 'each')).toBe(360_000);
+        expect(pending.flush(buffer, 4, 90_000, true)).toBe(360_000);
         // a small buffer: one call for all of it is the least work
         pending.add(3, 2);
         pending.add(60, 2);
-        expect(pending.flush(buffer, 2, 100, 'each')).toBe(118);
+        expect(pending.flush(buffer, 2, 100, true)).toBe(200);
         // after a build the whole buffer is new
         pending.whole = true;
-        expect(pending.flush(buffer, 4, 10, 'each')).toBe(40);
+        expect(pending.flush(buffer, 4, 10, true)).toBe(40);
         expect(uploads).toEqual([
             [0, 360_000],
-            [6, 118],
+            [0, 200],
             [0, 40],
         ]);
         pending.add(1, 1);
         pending.clear();
-        expect(pending.flush(buffer, 4, 10, 'each')).toBe(0);
+        expect(pending.flush(buffer, 4, 10, true)).toBe(0);
     });
 
     it('is one stretch around all changes where a buffer keeps one stretch until it is bound', () => {
@@ -201,11 +190,11 @@ describe('what a batch buffer uploads', () => {
         pending.add(90_000, 4);
         pending.add(100, 50);
         pending.add(4000, 10);
-        expect(pending.flush(buffer, 4, 95_000, 'span')).toBe((90_004 - 100) * 4);
+        expect(pending.flush(buffer, 4, 95_000, false)).toBe((90_004 - 100) * 4);
         pending.add(7, 3);
-        expect(pending.flush(buffer, 2, 95_000, 'span')).toBe(6);
+        expect(pending.flush(buffer, 2, 95_000, false)).toBe(6);
         pending.whole = true;
-        expect(pending.flush(buffer, 4, 95_000, 'span')).toBe(380_000);
+        expect(pending.flush(buffer, 4, 95_000, false)).toBe(380_000);
         expect(uploads).toEqual([
             [400, (90_004 - 100) * 4],
             [14, 6],
@@ -213,15 +202,9 @@ describe('what a batch buffer uploads', () => {
         ]);
     });
 
-    it('is always the used part with a Pixi that cannot upload from an offset', () => {
-        const { buffer, uploads } = noting(100_000);
-        const pending = new PendingUpload();
-        const old = (size?: number): void => void size;
-
+    it('knows by the version of Pixi whether a WebGL buffer uploads every stretch at once', () => {
         // the version under test decides for WebGL: every stretch from pixi.js 8.23 on, one stretch before
-        expect(uploadsStretch(buffer.update, VERSION)).toBe(RANGED_UPLOADS);
-        expect(uploadsStretch(Buffer.prototype.update, VERSION)).toBe(RANGED_UPLOADS);
-        expect(uploadMode(Buffer.prototype.update, VERSION, false)).toBe(RANGED_UPLOADS ? 'each' : 'span');
+        expect(uploadsStretch(VERSION)).toBe(RANGED_UPLOADS);
         // pixi.js 8.20 to 8.22 takes an offset, and its WebGL buffers upload when they are bound:
         // a second stretch before that would replace the first. WebGPU writes at once
         for (const [version, ranged] of [
@@ -232,14 +215,8 @@ describe('what a batch buffer uploads', () => {
             ['8.30.1', true],
             ['9.0.0', true],
         ] as const) {
-            expect(uploadsStretch(buffer.update, version), version).toBe(ranged);
-            expect(uploadMode(buffer.update, version, false), version).toBe(ranged ? 'each' : 'span');
-            expect(uploadMode(buffer.update, version, true), version).toBe('each');
-            expect(uploadMode(old, version, true), version).toBe('whole');
+            expect(uploadsStretch(version), version).toBe(ranged);
         }
-        pending.add(90_000, 4);
-        expect(pending.flush(buffer, 4, 95_000, uploadMode(old, VERSION, false))).toBe(380_000);
-        expect(uploads).toEqual([[0, 380_000]]);
     });
 
     it('is pushed by hand for a Pixi that uploads a buffer when its geometry is bound', async () => {

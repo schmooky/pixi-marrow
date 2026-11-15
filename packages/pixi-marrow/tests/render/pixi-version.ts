@@ -1,4 +1,4 @@
-import { Buffer, VERSION } from 'pixi.js';
+import { VERSION } from 'pixi.js';
 import { uploadsStretch } from '../../src/render/batch-upload';
 
 /*
@@ -11,7 +11,7 @@ import { uploadsStretch } from '../../src/render/batch-upload';
  */
 
 /** True when this pixi.js uploads a stretch of a buffer, from 8.23 on. */
-export const RANGED_UPLOADS = uploadsStretch(Buffer.prototype.update, VERSION);
+export const RANGED_UPLOADS = uploadsStretch(VERSION);
 
 /** The `fragmentOutputMask` of a program, or undefined before pixi.js 8.23, where programs have none. */
 export const outputMask = (program: object): number | undefined =>
