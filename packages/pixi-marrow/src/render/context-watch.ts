@@ -1,4 +1,5 @@
 import type { Renderer } from 'pixi.js';
+import { requireWebGL2 } from './webgl-check';
 
 /*
  * Whether the renderer that draws at the moment has lost its WebGL context.
@@ -47,7 +48,8 @@ export function contextLost(): boolean {
  * call for a renderer adds one listener to it, later calls do nothing. Call it before the
  * renderer first draws a skeleton: the answer for the render that is under way is set at once.
  *
- * A renderer without a WebGL context, as the one of WebGPU, never counts as lost.
+ * A renderer without a WebGL context, as the one of WebGPU, never counts as lost. A renderer of
+ * WebGL1 throws a `MarrowError`, see `webgl-check.ts`.
  *
  * @example
  * watchContext(renderer);
@@ -55,6 +57,8 @@ export function contextLost(): boolean {
  */
 export function watchContext(renderer: Renderer): void {
     if (watched.has(renderer)) return;
+    // the first render of a skeleton by a renderer comes here, which is where WebGL1 must fail
+    requireWebGL2(renderer);
     watched.add(renderer);
     // every renderer that draws skeletons answers, so the answer of another one never stays
     const watch = {

@@ -29,8 +29,8 @@ export type InstanceWhy = 'off' | 'cpu' | LayoutBlock | 'clip' | 'attached' | 'd
 /** Puts the pipe of instanced draws into the renderer that is about to draw a body. */
 function link(this: InstanceBody, renderer: Renderer): void {
     if (renderer === this.linked) return;
-    this.linked = renderer;
     linkInstancePipe(renderer);
+    this.linked = renderer;
 }
 
 /**

@@ -316,12 +316,13 @@ export function linkInstancePipe(renderer: Renderer): InstancePipe {
     const found: unknown = Reflect.get(renderer.renderPipes, INSTANCE_PIPE);
 
     if (found instanceof InstancePipe) return found;
+    // first: a renderer of WebGL1 throws in every render, and gets no pipe
+    watchContext(renderer);
     const pipe = new InstancePipe(renderer);
 
     // what a renderer does with the pipes it finds at its creation
     Reflect.set(renderer.renderPipes, INSTANCE_PIPE, pipe);
     renderer.runners.destroy.add(pipe);
-    watchContext(renderer);
 
     return pipe;
 }

@@ -107,8 +107,8 @@ export class MeshPaint {
         // a renderer that was created before this code loaded may have no pipe for meshes
         this.container.onRender = (renderer): void => {
             if (renderer === this.linked) return;
-            this.linked = renderer;
             linkMeshPipe(renderer);
+            this.linked = renderer;
         };
         this.positions = vertexBuffer(template.positions, 'marrow-positions');
         this.statics = vertexBuffer(template.statics, 'marrow-uvs');
