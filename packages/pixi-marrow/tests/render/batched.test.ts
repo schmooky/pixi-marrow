@@ -6,7 +6,6 @@ import { MarrowBatcher } from '../../src/render/batcher';
 import { expectBatch, loadFamily, populate } from './batch-check';
 import { batcherOf, bodyOf, createStage, elementOf, readVertex, watchUploads } from './batch-stage';
 import { settle, WINDOW } from './heap';
-import { RANGED_UPLOADS } from './pixi-version';
 import { drawPose, meshes, play, type Rig, step, visibleSlots } from './rig';
 
 /** Plays one frame on every rig, each at its own place of the loop on the first call. */
@@ -191,8 +190,7 @@ describe('the batched mode', () => {
         drawPose(first.view, first.engine.state);
         stage.render();
         expect(uploads.indices).toBe(1);
-        // before pixi.js 8.23 the index buffer uploads whole
-        if (RANGED_UPLOADS) expect(uploads.indexBytes).toBeLessThan(batcher.indexSize * 2);
+        expect(uploads.indexBytes).toBeLessThan(batcher.indexSize * 2);
         expect(uploads.statics).toBe(0);
     });
 

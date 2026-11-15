@@ -21,7 +21,7 @@
     "pixi-marrow": "workspace:*",
     "pixi-reels": "4.4.0",
     "pixi-silk": "^1.0.2",
-    "pixi.js": "^8.22.0"
+    "pixi.js": "^8.23.0"
   },
   "devDependencies": {
     "typescript": "^7.0.2"

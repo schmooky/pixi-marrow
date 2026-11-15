@@ -7,7 +7,7 @@ description: pixi-marrow draws Spine skeletons on the WebGPU renderer of PixiJS 
 import Snippet from '../components/Snippet.astro';
 import source from '../snippets/webgpu.ts?raw';
 
-pixi-marrow draws Spine 4.1, 4.2 and 4.3 skeletons on the WebGPU renderer of PixiJS v8, from PixiJS 8.21. The game code is the same as on WebGL2. Both render modes, clipping, dark tint, the blend modes and the options work on both renderers.
+pixi-marrow draws Spine 4.1, 4.2 and 4.3 skeletons on the WebGPU renderer of PixiJS v8, from PixiJS 8.23. The game code is the same as on WebGL2. Both render modes, clipping, dark tint, the blend modes and the options work on both renderers.
 
 ## Pick the renderer
 
@@ -40,16 +40,14 @@ The pixel check of the repo draws rigs with pixi-marrow and with the official ru
 
 ### Uploads
 
-A skeleton that moves sends new vertex positions to the GPU in each frame. How much it sends depends on the renderer and on the PixiJS version.
+A skeleton that moves sends new vertex positions to the GPU in each frame. The two renderers upload the same parts of a buffer.
 
-| PixiJS | Batched mode on WebGPU | Batched mode on WebGL2 | Mesh mode, both renderers |
-|---|---|---|---|
-| 8.21 and 8.22 | Each changed stretch of a buffer | One stretch per buffer, from the first change to the last | One stretch per buffer, from the first change to the last |
-| 8.23 and later | Each changed stretch of a buffer | Each changed stretch of a buffer | One stretch per buffer, from the first change to the last |
+| Mode | What uploads, on WebGPU and on WebGL2 |
+|---|---|
+| Batched | Each changed stretch of a buffer |
+| Mesh | One stretch per buffer, from the first change to the last |
 
-A stretch is a part of a buffer that holds the vertices of some skeletons. On WebGPU, a buffer writes a stretch at once in every PixiJS that the package allows. On WebGL2 before PixiJS 8.23, a buffer keeps only one stretch until Pixi binds it.
-
-So on PixiJS 8.21 and 8.22, a scene where a few of many skeletons move uploads less on WebGPU than on WebGL2. From PixiJS 8.23 the two are equal.
+A stretch is a part of a buffer that holds the vertices of some skeletons. A buffer writes a stretch at once on both renderers.
 
 <Snippet source={source} regions="bytes" />
 
@@ -61,7 +59,7 @@ On WebGPU, Pixi gives each mesh draw a slot in one uniform buffer per frame. The
 
 pixi-marrow keeps this from the game. A mesh of the mesh mode takes a slot while the buffer has room, and leaves 256 slots for the rest of the scene. After that, the mesh binds a small uniform buffer of its own. That buffer uploads only when its transform, its tint or its rounding changes.
 
-This code reads private fields of Pixi. The project checked them against the source of PixiJS 8.21.0 and 8.23.0. When a field is missing, the runtime says so once in the console, with the PixiJS version. WebGL2 sets uniforms one by one and has no such limit.
+This code reads private fields of Pixi. The project checked them against the source of PixiJS 8.23.0. When a field is missing, the runtime says so once in the console, with the PixiJS version. WebGL2 sets uniforms one by one and has no such limit.
 
 The batched mode draws no mesh per skeleton. So it stays far from this limit.
 
@@ -96,4 +94,3 @@ The choice of the render mode also rests on a measurement. The machine was an Ap
 - Phones and tablets on WebGPU.
 - Browsers other than Google Chrome.
 - A lost WebGPU device.
-- PixiJS 8.21 and 8.22 on WebGPU in the bench. The pixel check can run on 8.21 with `pnpm check:render --pixi=8.21.0`.

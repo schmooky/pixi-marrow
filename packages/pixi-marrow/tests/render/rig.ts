@@ -1,4 +1,4 @@
-import { Mesh, type Renderer, Texture, TextureSource } from 'pixi.js';
+import { Mesh, Texture, TextureSource } from 'pixi.js';
 import { expect } from 'vitest';
 import { importAtlas } from '../../src/formats/atlas';
 import { importSkeleton } from '../../src/formats/import';
@@ -157,7 +157,6 @@ export function redraw(rig: Rig): void {
 }
 
 /** A renderer as far as the uploads of the mesh mode ask one: it has no GPU, so it is no WebGPU. */
-const NO_GPU = {} as unknown as Renderer;
 
 /** The paints of the views that {@link flushUploads} was called for. */
 const PAINTS = new WeakMap<SkeletonView, SkeletonView['parts']['paints']>();
@@ -175,7 +174,7 @@ export function flushUploads(view: SkeletonView): void {
         paints = view.parts.paints;
         PAINTS.set(view, paints);
     }
-    paints.mesh?.flush(NO_GPU);
+    paints.mesh?.flush();
 }
 
 /** Advances the pose and brings the view in line with it. */

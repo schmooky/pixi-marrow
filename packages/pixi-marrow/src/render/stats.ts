@@ -5,8 +5,8 @@ export type DrawMode = 'mesh' | 'batched';
  * Bytes a view handed to the GPU, by what they hold.
  *
  * In the batched mode they are the bytes the view wrote into the buffers of its batch. The batch
- * can upload more: it joins stretches that lie near each other, and pixi.js before 8.23 uploads
- * one stretch per buffer on WebGL. A view that draws instanced counts nothing: its pool uploads.
+ * can upload more: it joins stretches that lie near each other. A view that draws instanced
+ * counts nothing: its pool uploads.
  */
 export interface UploadBytes {
     /** Vertex positions. */

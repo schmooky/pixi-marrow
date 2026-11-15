@@ -25,8 +25,8 @@
     "fps": 60
   },
   "floor": {
-    "pixi": "8.21.0",
-    "pixiShort": "8.21",
+    "pixi": "8.23.0",
+    "pixiShort": "8.23",
     "pixiSilk": "1.0.1",
     "node": "24.0"
   },

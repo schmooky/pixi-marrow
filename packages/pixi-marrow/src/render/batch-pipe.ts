@@ -2,7 +2,6 @@ import { type Batch, type BatchableElement, extensions, type InstructionSet, typ
 import type { BatchBody } from './batch-body';
 import { BatchElement, PIPE_ID } from './batch-element';
 import type { ImageBody } from './batch-image';
-import { AT_ONCE } from './batch-upload';
 import { MarrowBatcher } from './batcher';
 import { contextLost, watchContext } from './context-watch';
 import { MarrowDarkBatcher } from './dark-batcher';
@@ -126,10 +125,8 @@ export class MarrowPipe {
                 // only what the look at the draw changed: Pixi has asked for the rest before
                 if (element.dirty) element.sync();
             }
-            // WebGPU writes every stretch at once. A WebGL buffer before pixi.js 8.23 keeps one until it is bound
-            batcher.flush(AT_ONCE || 'gpu' in renderer);
-            // a later batch of a batcher finds its geometry bound, and an older Pixi uploaded when it bound it
-            if (!AT_ONCE && batch.action === 'renderBatch') batcher.push(renderer);
+            // a buffer writes every stretch at once, on WebGL and on WebGPU
+            batcher.flush();
         }
         renderer.renderPipes.batch.execute(batch);
     }

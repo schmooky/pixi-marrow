@@ -4,7 +4,7 @@
 [![CI](https://github.com/schmooky/pixi-marrow/actions/workflows/ci.yml/badge.svg)](https://github.com/schmooky/pixi-marrow/actions/workflows/ci.yml)
 [![Licence: Spine Runtimes License](https://img.shields.io/badge/licence-Spine%20Runtimes%20License-blue)](LICENSE)
 
-pixi-marrow is a fast Spine runtime for PixiJS v8 (pixi.js <!-- fact:floor.pixiShort -->8.21<!-- /fact --> or later). It plays Spine 4.1, 4.2 and 4.3 skeletons on WebGL2 and WebGPU with its own pose core and its own render path. It is an alternative to the official `@esotericsoftware/spine-pixi-v8` and to `pixi-spine`, and it does not ship `spine-core`.
+pixi-marrow is a fast Spine runtime for PixiJS v8 (pixi.js <!-- fact:floor.pixiShort -->8.23<!-- /fact --> or later). It plays Spine 4.1, 4.2 and 4.3 skeletons on WebGL2 and WebGPU with its own pose core and its own render path. It is an alternative to the official `@esotericsoftware/spine-pixi-v8` and to `pixi-spine`, and it does not ship `spine-core`.
 
 - [Docs](https://pixi-marrow.schmooky.dev): the guide, How it works and the reference.
 - [Playground](https://pixi-marrow.schmooky.dev/playground/): drop your own Spine files on it.
@@ -20,7 +20,7 @@ Pre-release, published as `pixi-marrow@next`. Skeletons of Spine 4.1, 4.2 and 4.
 npm install pixi-marrow@next pixi.js
 ```
 
-It needs pixi.js <!-- fact:floor.pixiShort -->8.21<!-- /fact --> or later. The package is ESM only, and it loads some of its code on demand, so a game needs a bundler.
+It needs pixi.js <!-- fact:floor.pixiShort -->8.23<!-- /fact --> or later. The package is ESM only, and it loads some of its code on demand, so a game needs a bundler.
 
 ## Use
 

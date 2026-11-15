@@ -4,7 +4,7 @@ This file ships in the npm package `pixi-marrow`. It tells a coding agent how to
 
 ## What the package is
 
-pixi-marrow is a Spine runtime for PixiJS v8. It plays skeletons that the Spine editor exported as 4.1, 4.2 or 4.3, on WebGL2 and WebGPU. `MarrowSpine` is a Pixi `Container`. The package needs `pixi.js` 8.21 or later and has no other dependency.
+pixi-marrow is a Spine runtime for PixiJS v8. It plays skeletons that the Spine editor exported as 4.1, 4.2 or 4.3, on WebGL2 and WebGPU. `MarrowSpine` is a Pixi `Container`. The package needs `pixi.js` 8.23 or later and has no other dependency.
 
 ```bash
 npm install pixi-marrow@next pixi.js
@@ -150,7 +150,6 @@ Without the hook, find skeletons by the field `isMarrowSpine` and read `hero.sta
 | [MARROW023](https://pixi-marrow.schmooky.dev/performance/rules/#marrow023) | The runtime builds the vertex layout again and again | Set the skins once. To change one attachment, use `hero.slot(name).attachment`. |
 | [MARROW024](https://pixi-marrow.schmooky.dev/performance/rules/#marrow024) | More mesh draws on WebGPU than the shared uniform buffer of Pixi holds | Use the batched mode for small skeletons, or `skinning: 'gpu'` with `instancing: 'auto'` for large ones. |
 | [MARROW025](https://pixi-marrow.schmooky.dev/performance/rules/#marrow025) | A Spine 4.3 track changes its animation faster than the mix | Let a mix end before the next change, or change with `mix: 0`. |
-| [MARROW026](https://pixi-marrow.schmooky.dev/performance/rules/#marrow026) | Uploads are larger on pixi.js before 8.23 with WebGL | Use pixi.js 8.23 or later, or WebGPU. |
 <!-- /rules:table -->
 
 ## Docs

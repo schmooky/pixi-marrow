@@ -7,7 +7,7 @@
  * usage: pnpm check:render [--renderer=webgl|webgpu|both] [--only=4.3/spineboy] [--animations=3|all]
  *                          [--render-mode=both|mesh|batched] [--strict-rebuilds] [--trust-mode]
  *                          [--strict-clipping] [--self-test] [--verbose] [--shots=4]
- *                          [--out=.shots/render] [--size=512] [--dist=<folder>] [--pixi=8.21]
+ *                          [--out=.shots/render] [--size=512] [--dist=<folder>] [--pixi=<version>]
  *                          [--skinning=gpu]
  *
  * The rigs are the entries of fixtures/manifest.json that have page images. For each one a few
@@ -195,12 +195,11 @@
  * nothing about a batched mode. --dist names a folder with the `package.json` and the `dist` of a
  * build of pixi-marrow that was kept: the check then draws that build and leaves the working
  * tree alone.
- * --pixi names the version of pixi.js the pages run on, for example `--pixi=8.21`. The package
- * allows a range of versions and is developed on one of them, and the runtime has branches by
- * the version of Pixi. The version must be installed as a dev dependency of the package under
- * an alias, see `pixiPackage` of scripts/render/setup.mjs. pixi-marrow then runs on that
- * pixi.js. The official runtime allows the same range and can draw differently on an old
- * pixi.js too, so it runs twice. Its pictures on the pixi.js the package is developed with are
+ * --pixi names the version of pixi.js the pages run on, for example a release that is newer
+ * than the one the package is developed with. The package allows a range of versions and is
+ * developed on one of them. The version must be installed as a dev dependency of the package
+ * under an alias, see `pixiPackage` of scripts/render/setup.mjs. pixi-marrow then runs on that
+ * pixi.js. The official runtime can draw differently on another pixi.js too, so it runs twice. Its pictures on the pixi.js the package is developed with are
  * the reference: every comparison with the official runtime is one with them. Its pictures on
  * the pixi.js of the page are held against the reference too:
  *

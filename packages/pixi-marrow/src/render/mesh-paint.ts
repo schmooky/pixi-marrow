@@ -1,17 +1,8 @@
-import {
-    type Bounds,
-    type Buffer,
-    type Container,
-    RenderContainer,
-    type Renderer,
-    type TextureSource,
-    VERSION,
-} from 'pixi.js';
+import { type Bounds, type Buffer, type Container, RenderContainer, type Renderer, type TextureSource } from 'pixi.js';
 import { MarrowError } from '../base/errors';
 import { i16, i32 } from '../geometry/read';
 import type { SkeletonModel } from '../model/model';
 import { isNewer, type PoseState } from '../pose/state';
-import { uploadsStretch } from './batch-upload';
 import { clipCode, clipCodeMissing } from './clip-code';
 import { drawsNothing } from './context-watch';
 import { bendsEdges, type DrawGate } from './gate';
@@ -35,9 +26,6 @@ const NO_DEFORM = new Float64Array(0);
 
 /** The covered slots of a build that draws nothing. */
 const NO_SKIPS = new Uint8Array(0);
-
-/** Whether this Pixi uploads a stretch of a buffer on its own. */
-const RANGED = uploadsStretch(VERSION);
 
 /** Whether a display object and all its parents are visible: Pixi draws it unless it culls it. */
 function shown(node: Container | null): boolean {
@@ -127,7 +115,7 @@ export class MeshPaint {
         // a renderer that was created before this code loaded may have no pipe for meshes
         this.stats = stats;
         this.container.onRender = (renderer): void => {
-            this.flush(renderer);
+            this.flush();
             if (renderer === this.linked) return;
             linkMeshPipe(renderer);
             this.linked = renderer;
@@ -247,21 +235,16 @@ export class MeshPaint {
      * the colors, and with `gpu` the textures of bones and colors. Pixi calls it before every
      * render, so each uploads once per frame, and not while the view is hidden.
      *
-     * A buffer gets one stretch, from the first vertex that changed to the last. The renderer
-     * says how it takes it. WebGPU writes it at once, and so does WebGL from pixi.js 8.23 on. An
-     * older WebGL buffer keeps one stretch until its geometry is bound, so it uploads here.
-     * Else a render that draws no mesh of the view would let the next stretch replace this one.
+     * A buffer gets one stretch, from the first vertex that changed to the last. The buffer
+     * writes it at once, on WebGL and on WebGPU.
      */
-    flush(renderer: Renderer): void {
+    flush(): void {
         const { positions, colors, waiting } = this;
 
         if (!shown(this.container)) return;
         if (this.skin !== undefined) this.note('bones', this.skin.flush());
-        // WebGPU writes a stretch at once, and WebGL from pixi.js 8.23 on
-        const push = RANGED || 'gpu' in renderer ? null : renderer;
-
-        this.note('positions', uploadWaiting(positions, waiting, 0, 8, push));
-        if (colors !== undefined) this.note('statics', uploadWaiting(colors, waiting, 2, this.colorBytes, push));
+        this.note('positions', uploadWaiting(positions, waiting, 0, 8));
+        if (colors !== undefined) this.note('statics', uploadWaiting(colors, waiting, 2, this.colorBytes));
     }
 
     /** Notes the vertices a pass wrote in {@link waiting}: positions at 0, colors at 2. No number crosses a call. */

@@ -83,21 +83,6 @@ export function dataTexture(data: Float32Array | Uint8Array, texels: number, lab
     });
 }
 
-/** `update` of a data texture, with the texels to upload as pixi.js 8.23 takes them. */
-type RangeUpdate = (low?: number, high?: number) => void;
-
-/**
- * Uploads the texels from `low` up to `high`, which is left out. From pixi.js 8.23 the upload is
- * that range. pixi.js 8.21 and 8.22 take no range: they upload the whole texture, which gives the
- * same pixels and costs more bytes.
- *
- * @example
- * uploadTexels(bones, 3, 9);
- */
-export function uploadTexels(source: BufferImageSource, low: number, high: number): void {
-    (source.update as RangeUpdate).call(source, low, high);
-}
-
 /** Writes one texel of 4 numbers. */
 function put(out: Float32Array, texel: number, a: number, b: number, c: number, d: number): void {
     const at = texel * 4;

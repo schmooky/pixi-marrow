@@ -10,7 +10,6 @@ import {
     ExtensionType,
     Geometry,
     type InstructionSet,
-    type Renderer,
     type Shader,
 } from 'pixi.js';
 import { MarrowError } from '../base/errors';
@@ -18,7 +17,7 @@ import { BATCHER, BatchElement, type BatchHome, type BatchPart, DARK_BATCHER, PI
 import type { ImageElement } from './batch-image';
 import { GROUP_PAGES, POSITION_WORDS, STATIC_WORDS } from './batch-layout';
 import { createBatchShader } from './batch-shader';
-import { AT_ONCE, PendingUpload } from './batch-upload';
+import { PendingUpload } from './batch-upload';
 
 /*
  * The batcher of the batched mode. Pixi creates one per render group when the first skeleton of
@@ -150,10 +149,9 @@ export class MarrowBatcher extends Batcher implements BatchHome {
         super.begin();
         this.serial++;
         this.used = 0;
-        // Pixi tells the positions and the indices to upload whole at the end of a build. Where that
-        // waits until they are bound, a stretch that a skeleton notes before would take its place
-        this.positionsPending.clear(!AT_ONCE);
-        this.indicesPending.clear(!AT_ONCE);
+        // Pixi uploads the positions and the indices whole at the end of a build
+        this.positionsPending.clear();
+        this.indicesPending.clear();
         this.pending.fill(undefined, 0, this.waiting);
         this.waiting = 0;
     }
@@ -300,34 +298,14 @@ export class MarrowBatcher extends Batcher implements BatchHome {
      * The pipe calls it before a batch draws. Every buffer uploads the stretches its skeletons
      * noted, or its used part when that is less work: a batch of 200 skeletons of which one
      * moved uploads the vertices of that one.
-     *
-     * @param each Whether a buffer of the renderer uploads every stretch it is told, see `uploadsStretch`.
      */
-    flush(each: boolean): void {
+    flush(): void {
         const [positions] = this.geometry.buffers;
         const statics = (this.attributeSize / POSITION_WORDS) * this.staticWords;
 
-        if (positions !== undefined) this.positionsPending.flush(positions, 4, this.attributeSize, each);
-        this.staticsPending.flush(this.staticBuffer, 4, statics, each);
-        this.indicesPending.flush(this.geometry.indexBuffer, this.indexBuffer.BYTES_PER_ELEMENT, this.indexSize, each);
-    }
-
-    /**
-     * Makes a renderer upload now what {@link flush} told the buffers. pixi.js before 8.23 uploads
-     * a WebGL buffer when its geometry is bound. That is before the first batch of a batcher
-     * draws. What a later batch of the same batcher notes would wait for the next frame.
-     *
-     * The geometry of the batcher must be the one that is bound: the index buffer is uploaded
-     * through the binding of its vertex array.
-     */
-    push(renderer: Renderer): void {
-        const [positions] = this.geometry.buffers;
-
-        // a renderer without a GPU has no buffer to upload
-        if (!('buffer' in renderer)) return;
-        if (positions !== undefined) renderer.buffer.updateBuffer(positions);
-        renderer.buffer.updateBuffer(this.staticBuffer);
-        renderer.buffer.updateBuffer(this.geometry.indexBuffer);
+        if (positions !== undefined) this.positionsPending.flush(positions, 4, this.attributeSize);
+        this.staticsPending.flush(this.staticBuffer, 4, statics);
+        this.indicesPending.flush(this.geometry.indexBuffer, this.indexBuffer.BYTES_PER_ELEMENT, this.indexSize);
     }
 
     /** Pixi's batcher packs an element here. An element of the batched mode writes itself. */

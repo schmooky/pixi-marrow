@@ -111,7 +111,7 @@ function presets() {
     return found;
 }
 
-/** The start of a range such as `^8.21.0` or `>=22.12`. */
+/** The start of a range such as `^8.23.0` or `>=22.12`. */
 function floorOf(range, what) {
     const version = /^(?:\^|>=)?\s*(\d+(?:\.\d+){1,2})$/.exec(range ?? '')?.[1];
 

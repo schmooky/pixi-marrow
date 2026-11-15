@@ -341,19 +341,6 @@ describe('the static rules about the scene', () => {
         marrowOf(many).render.drawCalls = 4;
         expect(hitsOf(diagnoseTree(many), 'MARROW024')).toEqual([]);
     });
-
-    it('MARROW026 hits for many batched skeletons on WebGL with pixi.js before 8.23', async () => {
-        const owls = await Promise.all(Array.from({ length: 8 }, () => spine(OWL)));
-        const many = serializeTree(stageOf(...owls));
-        const one = await owlDump(() => undefined);
-
-        many.pixi = '8.23.0';
-        expect(hitsOf(diagnoseTree(many), 'MARROW026')).toEqual([]);
-        many.pixi = '8.21.0';
-        one.pixi = '8.21.0';
-        expect(hitsOf(diagnoseTree(many), 'MARROW026')[0]?.measured).toMatchObject({ skeletons: 8 });
-        expect(hitsOf(diagnoseTree(one), 'MARROW026')).toEqual([]);
-    });
 });
 
 describe('what a diagnosis leaves out', () => {

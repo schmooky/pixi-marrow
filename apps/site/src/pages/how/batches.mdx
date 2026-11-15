@@ -69,13 +69,7 @@ A device can also refuse the batch. Some devices sample fewer textures in one dr
 
 Before a draw, the GPU needs the vertices. The batched mode keeps them in two buffers. Positions change with the pose. Texture coordinates, colors and flags change now and then.
 
-Every skeleton notes the stretches of the buffer that it wrote. Before the draw, the runtime uploads them. How exact that is depends on the renderer and on the version of pixi.js:
-
-| Mode | Renderer and pixi.js | What uploads |
-|---|---|---|
-| Batched | WebGPU, and WebGL2 from 8.23 | Each stretch that changed |
-| Batched | WebGL2 on 8.21 and 8.22 | One stretch per buffer, from the first change to the last |
-| Mesh | From 8.21 | One range per buffer of the skeleton, from the first change to the last |
+Every skeleton notes the stretches of the buffer that it wrote. Before the draw, the runtime uploads them. The batched mode uploads each stretch that changed. The mesh mode uploads one range per buffer of the skeleton, from the first change to the last. WebGL2 and WebGPU upload the same.
 
 When more than 256 stretches of one buffer changed, the runtime uploads one stretch around all of them. After Pixi builds the instructions of a render group again, the buffers of its batches upload whole too.
 

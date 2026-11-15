@@ -26,7 +26,7 @@ Found in the audit of 2026-11-15: at rest a batched skeleton still uploads when 
 
 Change after M6: the display object has bone handles, `follow` and `attach` (section 7.6), and there is a first docs site (section 13). The symbol rigs of a real slot game are fixtures now (section 15). A tree-shaken game could not use the mesh mode: the project fixed that and added a check for it (section 15).
 
-Change after M9: the presets set when a skeleton updates, and nothing else. Baking, tight meshes, the idle cache, `lod` and instancing each cost memory, vertices or draw calls. What they cost depends on the device and the scene, so the game sets each by its own name (section 8.3). Outlines are off unless the load names a file or asks for the scan (section 7.4). On a Galaxy A05 the idle cache made 120 small resting symbols slower, see 8.3. pixi.js 8.21 is the floor (section 16).
+Change after M9: the presets set when a skeleton updates, and nothing else. Baking, tight meshes, the idle cache, `lod` and instancing each cost memory, vertices or draw calls. What they cost depends on the device and the scene, so the game sets each by its own name (section 8.3). Outlines are off unless the load names a file or asks for the scan (section 7.4). On a Galaxy A05 the idle cache made 120 small resting symbols slower, see 8.3. pixi.js 8.21 became the floor then. Since 2026-11-15 the floor is 8.23 (section 16).
 
 This document is the plan. Every performance number in it is an estimate until the benchmark measures it. Section 0 lists the checked facts.
 
@@ -423,7 +423,7 @@ A render pipe of our own takes the bodies of these skeletons. It ends Pixi's bat
 At the draw the pipe walks the run in order. Members that share a layout, a draw order, a pool, pages, the dark tint and a blend mode are one draw. A member that differs starts the next one. So a change of draw order splits a run and builds no instructions.
 
 - A layout keeps a pool of data textures that its instanced views share. A view takes a slot. A float texture holds its bones, then a texel x, y, u, v per vertex the CPU may place. A byte texture holds three texels per slot of the skeleton. They are the light color, the dark color, and the entry the slot shows with its page. `SkinPose` writes into the slot as it writes into the textures of a view that draws alone.
-- A frame uploads each texture once. From pixi.js 8.23 the upload is the stretch from the first texel written to the last. A pool grows by doubling, up to 2048 rows of 2048 texels, and the next pool starts after that. Once no view holds a slot, the runtime frees the pools of the layout and their shaders after the task that runs now. So a burst leaves no large textures. A destroyed pool releases its arrays, and a destroyed layout releases its template.
+- A frame uploads each texture once. The upload is the stretch from the first texel written to the last. A pool grows by doubling, up to 2048 rows of 2048 texels, and the next pool starts after that. Once no view holds a slot, the runtime frees the pools of the layout and their shaders after the task that runs now. So a burst leaves no large textures. A destroyed pool releases its arrays, and a destroyed layout releases its template.
 - The stats of a view that draws instanced count no uploads: its pool uploads at the draw, once for all its views. The pool counts that, and the row `uploads` of the report gives the count.
 - Each fetch from a data texture computes its row and column from `textureSize` and a division. Nobody measured what that costs on a phone GPU.
 - The index buffer of a draw order holds every entry of every slot in that order, the union of what any instance can show. The vertex shader drops a vertex whose slot shows another entry or none. That happens for a hidden slot, a slot at alpha 0, or a slot that a later slot covers. All vertices of such a triangle land on one point outside the clip volume.
@@ -474,7 +474,7 @@ Since M6 a view follows the stamps of the pose state (section 5.3):
 
 - The version is the one the view saw: `update` returns at once. No vertex, no color, no pack, no upload, and the view does not tell Pixi that anything changed. That costs 13 nanoseconds per instance.
 - The view places a slot again when it or one of its bones has a newer stamp. A weighted mesh keeps the list of its bones for that test. The view writes colors for newer slots only. It makes the visible list again for a newer draw order, another attachment or an alpha that reached or left zero.
-- Uploads follow: only buffers that changed. In a batch that is the stretch of the slots that moved, on every pixi.js that the package allows. WebGPU writes each stretch. WebGL on 8.21 and 8.22 writes one stretch per buffer, from the first change to the last. The mesh mode uploads whole buffers below 8.23. Pixi's own batcher uploads the whole buffer of a batch when one element changed.
+- Uploads follow: only buffers that changed. In a batch that is each stretch of the slots that moved, on WebGL2 and on WebGPU. The mesh mode uploads one stretch per buffer, from the first change to the last. Pixi's own batcher uploads the whole buffer of a batch when one element changed.
 - A move of the display object alone places no vertex again in skeleton space.
 - In the batched mode the batch holds positions in the space of the render group. So a display object above the skeleton that moves makes the view place every vertex again, also for a pose at rest. A tint or an alpha above it that changes makes the view write its static data again. `stats.transformReplaces` and `stats.tintRewrites` count those frames. A parent with `isRenderGroup: true` moves and fades in the shader, and costs neither.
 
@@ -775,7 +775,7 @@ Cost: a renderer asks its context once per render, not once per skeleton. The ro
 
 Measured with `pnpm bench:ab --scene=rest` on the bench machine, 200 instances on WebGL2, the build before against the build after. In the mesh mode the update takes 0.025 to 0.040 ms on both builds. The CPU part of a frame takes 0.090 to 0.330 ms, equal within one step of the clock, which is 0.005 ms. In the batched mode the update takes 0.020 to 0.050 ms on both builds. The builds differ by less than the runs of one build do. No run uploads a byte.
 
-The last step of `pnpm check:render` measures the picture, see `scripts/render/restore-check.mjs`. Nine cases run in both modes on pixi.js 8.21.0 and 8.23.0, in Chrome on WebGL2, on the author's machine. They ran on 8.16.0 until 8.21 became the floor. The nine cases are these:
+The last step of `pnpm check:render` measures the picture, see `scripts/render/restore-check.mjs`. Nine cases run in both modes on pixi.js 8.23.0, in Chrome on WebGL2, on the author's machine. They also ran on 8.16.0 and on 8.21.0 while the package allowed those versions. The nine cases are these:
 
 - Five cases rest or play. They are a skeleton at rest, one that plays, a clip at rest, a clip that plays, and eight instances of one asset.
 - Two cases use attached containers, at rest and playing.
@@ -1052,14 +1052,14 @@ Since M6 the check has six scenes for sleeping and waking:
 
 The check compares every frame in both modes. It rejects a side that skips one update: 44 percent of its pixels are off. Four more scenes cover the chunks. They check that a web page that needs no mesh mode does not request it. They also check that an instance switched to meshes draws every frame until the chunk is there.
 
-Since M6 the check also runs on other versions of pixi.js: `pnpm check:render --pixi=8.16.0`. The project builds and checks the package on 8.23.0. It allowed 8.16 and later until after M9, and allows 8.21 and later since. In local runs on the author's machine the whole check passed on 8.16.0, 8.21.0 and 8.23.0, in about three minutes per version. Nobody ran the versions in between.
+Since M6 the check can also run on another version of pixi.js, as `pnpm check:render --pixi=8.16.0` did. The project builds and checks the package on 8.23.0. It allowed 8.16 and later until after M9, then 8.21 and later. Since 2026-11-15 it allows 8.23 and later, and no other version is installed. In local runs on the author's machine the whole check passed on 8.16.0, 8.21.0 and 8.23.0, in about three minutes per version. Nobody ran the versions in between.
 
 The runs on other versions found two defects that the default run could not see:
 
 - M5 lost partial uploads on 8.20 to 8.22, which shows only with several instances in a batch.
 - The mesh mode drew stale triangles on 8.16 (section 7.3).
 
-On WebGPU the official runtime itself draws another alpha on Pixi before 8.23, because Pixi changed the blend factors of `add`. So the check judges ours on an old Pixi against the official picture on 8.23.0.
+On WebGPU the official runtime itself draws another alpha on Pixi before 8.23, because Pixi changed the blend factors of `add`. So the check judged ours on an old Pixi against the official picture on 8.23.0.
 
 After M6 three things joined the checks.
 
@@ -1196,7 +1196,7 @@ Your three must-haves: fewer batch breaks and the premultiplied pipeline land in
 | Older solvers differ from 4.3 in ways a mode flag cannot cover | Per-constraint experiment first (section 10). Fallback: a separate kernel per version for that constraint. |
 | Physics drifts from the official result | It does not: the port keeps the order of the official arithmetic, and physics parity is exact equality like the rest (M4). |
 | A new Spine release changes the solver | The parity suite shows exactly which frames diverge. Port, then extend the model. |
-| Pixi internals used by a custom pipe and batcher change between minors | Section 7.2 lists the parts used, with the private fields of the mesh mode on WebGPU. The project checked them against the source of 8.16.0 or 8.21.0 and 8.23.0. The runtime reports a missing private field once in the console. The job `pixi-floor` of CI runs the typecheck and the unit tests on the lowest pixi.js that the package allows. It runs in Node, so it draws nothing. |
+| Pixi internals used by a custom pipe and batcher change between minors | Section 7.2 lists the parts used, with the private fields of the mesh mode on WebGPU. The project checked them against the source of 8.16.0 or 8.21.0 and 8.23.0. The runtime reports a missing private field once in the console. The floor is the version that the project develops on, so the tests of CI run on the lowest pixi.js that the package allows. |
 | WebGPU and WebGL2 differ on stencil or data textures | Both renderers in pixel parity from M2 |
 | Tight outlines cost load time | Sidecar from the optimizer. Load-time scan only in idle frames. |
 | More than 65,535 vertices in one template | 32-bit indices when needed |
@@ -1216,7 +1216,7 @@ Settled:
 
 Open, each with a recommendation the design assumes:
 
-1. Pixi floor: `^8.21` since after M9. It was `^8.16`, the floor of the official 4.3 runtime, and the versions before 8.21 needed workarounds that cost code and checks.
+1. Pixi floor: `^8.23` since 2026-11-15. It was `^8.16`, the floor of the official 4.3 runtime, and `^8.21` after M9. The versions before 8.23 needed a second upload path, with its own tests and a CI job. The library is a pre-release and 8.23 is the latest pixi.js, so that path was not worth its cost.
 2. WebGPU from M2, not added later.
 3. Name of the display object class: `MarrowSpine`, in line with `SilkGraphics`.
 4. Default preset: `exact`.

@@ -1,9 +1,9 @@
 {
   "everything": {
-    "gzip": 37864
+    "gzip": 37723
   },
   "root (MarrowSpine)": {
-    "gzip": 32887
+    "gzip": 32745
   },
   "core (everything)": {
     "gzip": 6580
@@ -33,10 +33,10 @@
     "gzip": 3913
   },
   "diagnose (everything)": {
-    "gzip": 14393
+    "gzip": 14156
   },
   "diagnose (diagnoseTree)": {
-    "gzip": 8153
+    "gzip": 7914
   },
   "on demand (reader of 4.1 and 4.2 JSON)": {
     "gzip": 9079
@@ -57,7 +57,7 @@
     "gzip": 34342
   },
   "on demand (mesh mode)": {
-    "gzip": 18374
+    "gzip": 18233
   },
   "on demand (clipping)": {
     "gzip": 7592

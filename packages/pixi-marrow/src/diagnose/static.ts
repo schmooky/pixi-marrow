@@ -10,10 +10,6 @@ import type { Diagnosis, SceneTotals, TreeDump, TreeNode } from './types';
 
 /** The draws of the mesh mode that the shared uniform buffer of Pixi holds on WebGPU, less the room the runtime keeps free. */
 const UNIFORM_DRAWS = 1791;
-/** The first pixi.js 8 minor whose buffers upload a stretch. */
-const RANGED_MINOR = 23;
-/** From this many batched skeletons, one stretch per buffer can cost more than a stretch for each. */
-const MANY_BATCHED = 8;
 
 /** A tree in draw order: the skeletons Pixi draws, the steps of the order, and all skeletons. */
 interface Flat {
@@ -62,27 +58,13 @@ function flatten(root: TreeNode): Flat {
     return flat;
 }
 
-/** MARROW024 and MARROW026: what the renderer and the version of Pixi do with the draws and the uploads. */
+/** MARROW024: what the renderer does with the draws. */
 function sceneRules(dump: TreeDump, drawn: readonly Seen[], scene: SceneTotals, hits: Hits): void {
     const meshes = drawn.filter(({ marrow }) => marrow.render.mode === 'mesh');
     const alone = meshes.filter(({ marrow }) => !marrow.render.instancing.active);
     const draws = alone.reduce((sum, { marrow }) => sum + marrow.render.drawCalls, 0);
-    const [major = 0, minor = 0] = dump.pixi.split('.').map(Number);
-    const [first] = meshes;
 
-    const batched = drawn.filter(({ marrow }) => marrow.render.mode === 'batched').length;
-
-    // one stretch per buffer costs more only when several skeletons of a batch change in a frame
-    if (major === 8 && minor < RANGED_MINOR && batched >= MANY_BATCHED && dump.renderer?.type !== 'webgpu') {
-        hits.add(
-            'MARROW026',
-            dump.root.path,
-            '',
-            { skeletons: batched },
-            `pixi.js ${dump.pixi} on WebGL uploads one stretch per buffer for the ${batched} batched skeletons, from the first change to the last.`,
-        );
-    }
-    if (first === undefined) return;
+    if (meshes.length === 0) return;
     if (dump.renderer?.type === 'webgpu' && draws > UNIFORM_DRAWS) {
         hits.add(
             'MARROW024',

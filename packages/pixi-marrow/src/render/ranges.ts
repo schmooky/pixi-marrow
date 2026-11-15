@@ -6,10 +6,8 @@ import {
     type Mesh,
     type Shader,
     type TextureSource,
-    VERSION,
 } from 'pixi.js';
 import { i16, i32 } from '../geometry/read';
-import { uploadsStretch } from './batch-upload';
 import { ClipMask } from './clip-mask';
 import type { ClipShape } from './clip-shape';
 import type { MeasuredGeometry } from './measured-geometry';
@@ -42,9 +40,6 @@ import { NO_CLIP, type VisibleList } from './visible';
  * `Geometry.indexCount` draws the whole buffer, and zeros are triangles without area. A range therefore
  * knows how far the GPU can hold other indices, see `DrawRange.held`, and every upload reaches that far.
  */
-
-/** Whether a buffer of this Pixi uploads at once when it is told that it changed, see `uploadsStretch`. */
-const AT_ONCE = uploadsStretch(VERSION);
 
 /** What {@link DrawRanges} draws with. */
 export interface DrawRangesOptions {
@@ -81,9 +76,8 @@ interface DrawRange {
     count: number;
     /**
      * How many indices from the start of the buffer can be other than zero on the GPU. An upload
-     * reaches this far, so that what the array has zeroed since is zero there too. It is the
-     * count of the last upload where Pixi uploads at once. Where an upload waits for the next
-     * draw and a later, shorter one would replace it, it is the most the buffer ever held.
+     * reaches this far, so that what the array has zeroed since is zero there too. Pixi uploads
+     * at once, so it is the count of the last upload.
      */
     held: number;
     /** The slot blend mode the mesh is set to. Additive counts as normal. */
@@ -185,8 +179,8 @@ export class DrawRanges {
             else {
                 range.indices = this.createIndices();
                 range.buffer.data = range.indices;
-                // Pixi uploads the new array whole. Where that waits for a draw, the next upload must not be shorter
-                range.held = AT_ONCE ? 0 : range.indices.length;
+                // Pixi uploads the new array whole, and it is all zero
+                range.held = 0;
             }
             range.count = 0;
             this.bytes += range.indices.byteLength;
@@ -395,8 +389,7 @@ export class DrawRanges {
         range.mesh.geometry.indexCount = drawn;
         range.buffer.update(changed * range.indices.BYTES_PER_ELEMENT);
         sent.indices += changed * range.indices.BYTES_PER_ELEMENT;
-        // an upload that waits for a draw can be replaced by the next one, which must then reach as far
-        range.held = AT_ONCE ? written : Math.max(written, range.held);
+        range.held = written;
         range.mesh.visible = true;
         return drawn;
     }

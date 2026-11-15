@@ -385,21 +385,6 @@
       "fix": "Let a mix end before the next change, or change with `mix: 0`.",
       "since": "0.1.0-next.2",
       "docs": "https://pixi-marrow.schmooky.dev/performance/rules/#marrow025"
-    },
-    {
-      "id": "MARROW026",
-      "slug": "whole-buffer-upload-floor",
-      "title": "Uploads are larger on pixi.js before 8.23 with WebGL",
-      "severity": "info",
-      "cost": ["upload"],
-      "detect": "static",
-      "pattern": "The game runs pixi.js 8.21 or 8.22 on WebGL2, and 8 or more batched skeletons draw.",
-      "does": "Before pixi.js 8.23 a WebGL buffer keeps one stretch until Pixi binds it. So each buffer uploads one stretch, from the first change to the last. A data texture of `skinning: 'gpu'` uploads whole. From 8.23 the runtime uploads each stretch that changed.",
-      "source": "src/render/batch-upload.ts",
-      "check": "The tree dump states the pixi.js version and the renderer.",
-      "fix": "Use pixi.js 8.23 or later, or WebGPU.",
-      "since": "0.1.0-next.2",
-      "docs": "https://pixi-marrow.schmooky.dev/performance/rules/#marrow026"
     }
   ]
 }

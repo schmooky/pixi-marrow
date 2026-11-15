@@ -6,8 +6,8 @@ import { ruleOf } from '../../src/diagnose/hits';
 const read = (path: string): string => readFileSync(new URL(path, import.meta.url), 'utf8');
 
 describe('the catalogue of the performance rules', () => {
-    it('has the ids MARROW001 to MARROW026 in order, each with its docs address', () => {
-        expect(RULES).toHaveLength(26);
+    it('has the ids MARROW001 to MARROW025 in order, each with its docs address', () => {
+        expect(RULES).toHaveLength(25);
         RULES.forEach((rule, index) => {
             expect(rule.id).toBe(`MARROW${String(index + 1).padStart(3, '0')}`);
             expect(rule.docs).toBe(`${RULES_DOCS}#${rule.id.toLowerCase()}`);
@@ -16,6 +16,15 @@ describe('the catalogue of the performance rules', () => {
         });
         expect(new Set(RULES.map((rule) => rule.slug)).size).toBe(RULES.length);
         expect(() => ruleOf('MARROW999')).toThrow('MARROW999');
+    });
+
+    it('keeps the id MARROW026 retired: no rule has it, and the docs page keeps its heading', () => {
+        const page = read('../../../../apps/site/src/pages/performance/rules.mdx');
+
+        expect(() => ruleOf('MARROW026')).toThrow('MARROW026');
+        expect(page).toContain('\n## Retired rules\n');
+        expect(page).toContain('\n### MARROW026\n');
+        expect(page).not.toContain('\n## MARROW026\n');
     });
 
     it('is the data of perf-rules.json, which the package ships', () => {

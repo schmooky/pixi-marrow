@@ -153,7 +153,7 @@ const SEO: Readonly<Record<string, SeoEntry>> = {
     '/good-to-know/': {
         seoTitle: 'pixi-marrow: Spine versions, PixiJS versions, limits',
         seoDescription:
-            'pixi-marrow plays Spine 4.1, 4.2 and 4.3 in PixiJS 8, from 8.21, on WebGL2 and WebGPU. See what the runtime does on its own, its options and its limits.',
+            'pixi-marrow plays Spine 4.1, 4.2 and 4.3 in PixiJS 8, from 8.23, on WebGL2 and WebGPU. See what the runtime does on its own, its options and its limits.',
     },
     '/reels/': {
         seoTitle: 'Slot reels example: Spine symbols in PixiJS v8',
@@ -178,12 +178,12 @@ const SEO: Readonly<Record<string, SeoEntry>> = {
     '/faq/': {
         seoTitle: 'pixi-marrow FAQ: a Spine runtime for PixiJS v8, answered',
         seoDescription:
-            'pixi-marrow plays Spine 4.1 to 4.3 in PixiJS 8.21 or later, on WebGL2 and WebGPU. Short answers on draw calls, size, speed, the licence and readiness.',
+            'pixi-marrow plays Spine 4.1 to 4.3 in PixiJS 8.23 or later, on WebGL2 and WebGPU. Short answers on draw calls, size, speed, the licence and readiness.',
     },
     '/webgpu/': {
         seoTitle: 'Spine on PixiJS WebGPU: what works with pixi-marrow',
         seoDescription:
-            'pixi-marrow draws Spine skeletons on the WebGPU renderer of PixiJS v8, from 8.21. See what differs from WebGL2: uploads, the mesh limit and a lost device.',
+            'pixi-marrow draws Spine skeletons on the WebGPU renderer of PixiJS v8, from 8.23. See what differs from WebGL2: uploads, the mesh limit and a lost device.',
     },
     '/api/': {
         seoTitle: 'API reference of pixi-marrow, Spine runtime for PixiJS v8',

@@ -32,7 +32,7 @@ import { RangeMesh } from './range-mesh';
  *
  * This reads parts of Pixi that are private: the field `_adaptor` of the mesh pipe, and the
  * fields `byteIndex`, `data` and `_minUniformOffsetAlignment` of `_batchBuffer` of the pipe
- * `uniformBatch`. They are checked against the source of 8.21.0 and 8.23.0. Where one is
+ * `uniformBatch`. They are checked against the source of 8.23.0. Where one is
  * missing, the console says so once, with the version of Pixi.
  */
 
