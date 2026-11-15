@@ -6,17 +6,16 @@ description: What each version of pixi-marrow changed, and what waits for the ne
 
 import Changelog from '../components/Changelog.astro';
 
-pixi-marrow is a pre-release. Its versions are `0.1.0-next.N`, on the npm tag `next`. This page lists what each one changed. The build reads it from `packages/pixi-marrow/CHANGELOG.md` in the repo.
+pixi-marrow is before version 1.0. Its versions are `0.x`, on the npm tag `latest`. The first two were `0.1.0-next.N`, on the tag `next`. This page lists what each one changed. The build reads it from `packages/pixi-marrow/CHANGELOG.md` in the repo.
 
 ## What can change before 1.0
 
-A pre-release can change or remove an API. This is what the repo says about the versions before 1.0:
+A minor version before 1.0 can change or remove an API. This is what the repo says about the versions before 1.0:
 
-- A pre-release can break code. The changes that wait for the next release show it: they list some under the words "Breaking changes".
-- Only the newest version on npm gets fixes. Before 1.0 that is the newest pre-release.
-- Until 1.0, the npm tags `next` and `latest` both point at the newest pre-release.
+- A minor version can break code. The changelog lists such changes under the words "Breaking changes".
+- Only the newest version on npm gets fixes. Before 1.0 that is the newest `0.x` version.
 
-Install a fixed version when a game must not change under you: `npm install pixi-marrow@0.1.0-next.1`.
+Install a fixed version when a game must not change under you: `npm install pixi-marrow@0.2.0`.
 
 ## Not released yet
 

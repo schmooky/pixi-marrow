@@ -10,8 +10,8 @@ export const SITE = {
     npm: 'https://www.npmjs.com/package/pixi-marrow',
     /** The version of the package in this checkout, which the bar at the top shows. */
     version,
-    /** The command that installs the pre-release, as the start page and the README have it. */
-    install: 'npm install pixi-marrow@next pixi.js',
+    /** The command that installs the package, as the start page and the README have it. */
+    install: 'npm install pixi-marrow pixi.js',
 };
 
 /**

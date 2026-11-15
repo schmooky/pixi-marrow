@@ -39,7 +39,7 @@ import { fileURLToPath } from 'node:url';
 export const DOCS = 'https://pixi-marrow.schmooky.dev/performance/rules/';
 
 /** The release that first shipped the catalogue. */
-const SINCE = '0.1.0-next.2';
+const SINCE = '0.2.0';
 
 /** What a cause costs, with the words the docs use for it. */
 export const COSTS = {

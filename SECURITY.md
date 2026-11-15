@@ -25,4 +25,4 @@ A file that fails with a `MarrowError` is not a vulnerability. That is the answe
 
 ## Supported versions
 
-Only the newest version on npm gets fixes. Before 1.0 that is the newest `0.x` pre-release under the tags `next` and `latest`.
+Only the newest version on npm gets fixes. Before 1.0 that is the newest `0.x` version under the tag `latest`.

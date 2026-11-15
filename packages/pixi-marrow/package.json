@@ -1,6 +1,6 @@
 {
   "name": "pixi-marrow",
-  "version": "0.1.0-next.1",
+  "version": "0.2.0",
   "description": "A fast Spine runtime for PixiJS v8 with its own pose core. Plays Spine 4.1, 4.2 and 4.3 skeletons on WebGL2 and WebGPU.",
   "license": "LicenseRef-LICENSE",
   "type": "module",

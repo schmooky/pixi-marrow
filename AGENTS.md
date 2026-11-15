@@ -7,7 +7,7 @@ Instructions for AI coding agents and for people working in this repo. Read it b
 pixi-marrow is a Spine runtime for PixiJS v8. It has its own pose core and its own render path, and it plays Spine 4.1, 4.2 and 4.3 skeletons. The plan, the classes and the milestones are in `docs/DESIGN.md`.
 
 <!-- facts:status -->
-Pre-release, published as `pixi-marrow@next`. Skeletons of Spine 4.1, 4.2 and 4.3 load, play and draw in PixiJS v8 with every constraint solved: IK, transform, path, physics and sliders. The poses equal the official cores to the bit, and the picture matches the official Pixi runtime. Small skeletons share draw calls, and a skeleton at rest costs close to nothing.
+Version 0.2, published as `pixi-marrow`. Before 1.0, a minor version can change an API. Skeletons of Spine 4.1, 4.2 and 4.3 load, play and draw in PixiJS v8 with every constraint solved: IK, transform, path, physics and sliders. The poses equal the official cores to the bit, and the picture matches the official Pixi runtime. Small skeletons share draw calls, and a skeleton at rest costs close to nothing.
 <!-- /facts:status -->
 
 ```
@@ -182,15 +182,15 @@ Library changes need a changeset. Run `pnpm changeset`.
 
 ## 8. Releases
 
-Changesets runs in pre mode with the tag `next`, so a release is `0.1.0-next.N`. The workflow `.github/workflows/release.yml` publishes from a runner, with provenance. It starts by hand only, and no push starts it. npm trusts the workflow as a trusted publisher, so the repo holds no npm token. The header of the workflow file says how the owner sets that up once.
+A release is a version `0.x.y` under the npm tag `latest`. Before 1.0, a minor version can change an API. The owner can publish from a terminal with `pnpm --filter pixi-marrow publish`, or from the workflow. The workflow `.github/workflows/release.yml` publishes from a runner, with provenance. It starts by hand only, and no push starts it. npm trusts the workflow as a trusted publisher, so the repo holds no npm token. The header of the workflow file says how the owner sets that up once.
 
 1. Merge the pull requests of the release. Each change to the library brings its changeset in `.changeset/`.
 2. On a branch from an up-to-date `main`, run `GITHUB_TOKEN="$(gh auth token)" pnpm version-packages`. The changelog plugin needs the token to link pull requests and authors.
-3. Read the new section of `packages/pixi-marrow/CHANGELOG.md`. The version in `packages/pixi-marrow/package.json` moved, and the changesets moved into `.changeset/pre/`.
+3. Read the new section of `packages/pixi-marrow/CHANGELOG.md`. The version in `packages/pixi-marrow/package.json` moved, and the changesets are gone from `.changeset/`. Name the branch `changeset-release/main`, which the changeset gate lets pass.
 4. Commit it as `chore: release pixi-marrow <version>` and open the release pull request. Merge it when CI passes. Then wait for the CI run of the merge commit.
 5. Run the workflow Release on `main` with the version as `version`, and leave `dry-run` set. The run checks that the version and the changelog agree, runs `pnpm check` and packs the tarball. It publishes nothing.
-6. Run it again with `dry-run` off. The run waits for the approval of the owner in the environment `npm`. Then it publishes with the tag of `.changeset/pre.json`, makes the git tag and makes the GitHub Release.
+6. Run it again with `dry-run` off. The run waits for the approval of the owner in the environment `npm`. Then it publishes with the tag `latest`, makes the git tag and makes the GitHub Release.
 7. `prepublishOnly` of the package runs `pnpm build` before the package manager makes the tarball. So the tarball never holds an old `dist`. `prepack` copies README and LICENSE into the package, and `postpack` removes them.
-8. Until 1.0, `latest` points at the newest pre-release too. The owner moves it from a terminal: `npm dist-tag add pixi-marrow@<version> latest`. A new version can take some minutes to show in `npm view pixi-marrow dist-tags`.
+8. A new version can take some minutes to show in `npm view pixi-marrow dist-tags`.
 
 A run that failed after the publish can run again. It sees the version on npm, skips the publish, and makes the tag and the Release.

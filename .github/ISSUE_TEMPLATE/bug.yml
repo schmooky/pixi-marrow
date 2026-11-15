@@ -22,7 +22,7 @@ body:
     attributes:
       label: Versions
       description: pixi-marrow, pixi.js and the Spine editor that exported the skeleton.
-      placeholder: pixi-marrow 0.1.0-next.1, pixi.js 8.23.0, Spine 4.2.43
+      placeholder: pixi-marrow 0.2.0, pixi.js 8.23.0, Spine 4.2.43
     validations:
       required: true
   - type: dropdown
