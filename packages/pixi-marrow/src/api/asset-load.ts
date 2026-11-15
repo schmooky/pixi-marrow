@@ -253,7 +253,7 @@ export async function loadPages(
 
 /** Whether a file starts like a web page: with `<`, after white space and a byte order mark. */
 function isPage(file: unknown): boolean {
-    if (typeof file === 'string') return /^[\s﻿]*</.test(file);
+    if (typeof file === 'string') return /^[\s\uFEFF]*</.test(file);
     if (!(file instanceof Uint8Array)) return false;
     for (const byte of file) {
         if (byte > 0x20 && byte !== 0xef && byte !== 0xbb && byte !== 0xbf) return byte === 0x3c;

@@ -5,7 +5,7 @@ import { afterAll, beforeAll, vi } from 'vitest';
 export const ROOT = 'http://localhost/';
 
 /** A URL as a test wrote it: without the root that Pixi puts in front. */
-export const local = (url: string): string => (url.startsWith(ROOT) ? url.slice(ROOT.length) : url);
+const local = (url: string): string => (url.startsWith(ROOT) ? url.slice(ROOT.length) : url);
 
 /**
  * Gives Pixi a base URL for the tests of one file. Node has no document, and the loader of Pixi

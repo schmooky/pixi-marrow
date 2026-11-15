@@ -166,8 +166,9 @@ const nextSlice = (run: Runner): Promise<void> => new Promise((resolve) => run.i
 
 /**
  * Reads one page and outlines its regions, in idle slices. Returns null for a page that keeps
- * its quads: one whose pixels cannot be read, one whose image can change, and one that is sampled
- * in a way outlines do not hold for. Returns undefined when nobody waits for the page any more.
+ * its quads. That is a page whose pixels cannot be read, and one whose image can change. It is
+ * also one that is sampled in a way outlines do not hold for. Returns undefined when nobody
+ * waits for the page any more.
  */
 async function scanPage(
     job: PageJob,

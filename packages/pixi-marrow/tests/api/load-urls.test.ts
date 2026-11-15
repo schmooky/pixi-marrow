@@ -126,7 +126,7 @@ describe('a skeleton URL without a telling name', () => {
     it.each([
         ['a hash in the name', 'assets/boy-3f2a91c0'],
         ['a query', 'api/skeleton?id=boy&format=json'],
-        ['a .skel name', 'art/really-json.skel'],
+        ['a .skel name', 'art/json-inside.skel'],
         ['a blob', 'blob:http://localhost/77aa'],
     ])('loads JSON from a URL with %s', async (_, url) => {
         files.set(url, BOY_JSON.skeleton);
@@ -138,11 +138,11 @@ describe('a skeleton URL without a telling name', () => {
     });
 
     it('loads a binary skeleton from a URL that ends in .json', async () => {
-        files.set('art/really-binary.json', BOY.skeleton);
-        const asset = await load({ skeleton: 'art/really-binary.json', atlas: 'art/boy.atlas' });
+        files.set('art/binary-inside.json', BOY.skeleton);
+        const asset = await load({ skeleton: 'art/binary-inside.json', atlas: 'art/boy.atlas' });
 
         expect(asset.info.animations.map((animation) => animation.name)).toContain('walk');
-        files.delete('art/really-binary.json');
+        files.delete('art/binary-inside.json');
     });
 });
 

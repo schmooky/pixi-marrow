@@ -290,10 +290,10 @@ describe('JSON that arrives as bytes', () => {
     it('is told from binary data by its content', async () => {
         expect(sniffSkeleton(bytes)).toEqual({ format: 'json', version: '4.2', editorVersion: '4.2.43' });
         expect(sniffSkeleton(bytes.buffer).format).toBe('json');
-        expect(sniffSkeleton(new TextEncoder().encode(`﻿ \n\t${text}`)).format).toBe('json');
+        expect(sniffSkeleton(new TextEncoder().encode(`\uFEFF \n\t${text}`)).format).toBe('json');
         expect((await importSkeleton(bytes)).slots.names).toEqual(['glow']);
         expect((await importSkeleton(bytes.slice().buffer)).animations[0]?.name).toBe('flash');
-        expect((await importSkeleton(`﻿${text}`)).slots.names).toEqual(['glow']);
+        expect((await importSkeleton(`\uFEFF${text}`)).slots.names).toEqual(['glow']);
     });
 
     it('stays binary when the hash of a .skel file starts with the byte of "{"', async () => {
