@@ -7,14 +7,19 @@
  * code an app loads up front. Chunks behind a dynamic import() load only when used, so they are
  * listed on their own and not added.
  *
- *   --check   fail when an import grew more than 10% over the baseline, or a marker check fails
- *   --update  rewrite the baseline
+ * The root import also has a limit of its own, `ROOT_IMPORT_LIMIT` of scripts/size-limit.mjs. The
+ * baseline moves with every accepted change, so 10% over it can add up to far more than the limit.
+ *
+ *   --check   fail when an import grew more than 10% over the baseline, the root import is over its
+ *             limit, or a marker check fails
+ *   --update  rewrite the baseline. Refused when the root import is over its limit
  */
 import { mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 import { rolldown } from 'rolldown';
+import { ROOT_IMPORT_ENTRY, ROOT_IMPORT_LIMIT } from './size-limit.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const pkgDir = join(root, 'packages/pixi-marrow');
@@ -163,7 +168,19 @@ for (const [name, { minified, gzip }] of Object.entries(results)) {
         failures.push(`${name}: no baseline. Record one with: pnpm size:update`);
 }
 
-if (process.argv.includes('--update')) {
+// the limit is not a baseline: --update does not accept a root import over it
+const rootImport = results[ROOT_IMPORT_ENTRY]?.gzip;
+const overLimit =
+    rootImport === undefined
+        ? `${ROOT_IMPORT_ENTRY}: not measured, though scripts/size-limit.mjs has a limit for it`
+        : rootImport > ROOT_IMPORT_LIMIT
+          ? `${ROOT_IMPORT_ENTRY}: ${kb(rootImport)} gzip is over the limit of ${kb(ROOT_IMPORT_LIMIT)} in scripts/size-limit.mjs`
+          : null;
+
+if (overLimit) failures.unshift(overLimit);
+else console.log(`size-check: ${ROOT_IMPORT_ENTRY} is ${kb(ROOT_IMPORT_LIMIT - rootImport)} under its limit`);
+
+if (process.argv.includes('--update') && !overLimit) {
     writeFileSync(
         baselinePath,
         `${JSON.stringify(Object.fromEntries(Object.entries(results).map(([n, r]) => [n, { gzip: r.gzip }])), null, 2)}\n`,
@@ -171,8 +188,13 @@ if (process.argv.includes('--update')) {
     console.log('size-check: baseline updated');
 } else if (failures.length) {
     for (const f of failures) console.error(`size-check: ${f}`);
-    if (process.argv.includes('--check')) {
-        console.error('If the growth is intended: pnpm size:update');
+    if (overLimit) {
+        console.error(
+            'Make the root import smaller, or raise the limit in scripts/size-limit.mjs in a commit of its own that says why.',
+        );
+    }
+    if (process.argv.includes('--check') || process.argv.includes('--update')) {
+        if (!overLimit) console.error('If the growth is intended: pnpm size:update');
         process.exit(1);
     }
 }

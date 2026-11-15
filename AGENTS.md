@@ -103,7 +103,7 @@ Every constraint is solved: IK, transform, path, physics and sliders. A slider o
 | Add an official fixture | Add the rig name to `rigs` in `fixtures/manifest.json`, then run `pnpm fixtures:refresh`. |
 | Add your own fixture | Put the skeleton and its atlas into `fixtures/local/`. |
 | Add an error code | Extend `MarrowErrorCode` in `src/base/errors.ts` and throw it with a `fix`. |
-| Accept a size change | Run `pnpm size:update`. |
+| Accept a size change | Run `pnpm size:update`. The root import also has a fixed limit in `scripts/size-limit.mjs`, which `pnpm size:check` enforces. Raise it only in a commit of its own that says why. |
 | Accept a change in bytes per instance | Run `pnpm memory:update`. |
 
 ## 6. Before you say done

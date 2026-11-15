@@ -5,7 +5,7 @@
  *   - a skeleton at rest: the update costs at most a tenth of what it costs while it plays
  *   - a skeleton at rest uploads nothing
  *   - playing: no rig gets slower than in M5, in update, cpu and frame
- *   - the root import is at most 30 kB gzip
+ *   - the root import is at most the limit of scripts/size-limit.mjs, gzipped
  *
  * The first two need the scenes `play` and `rest` in one run. A row is one rule for one renderer
  * and rig, with the outcome `pass`, `fail`, `undecided` or `not measured`, as in the list of M5:
@@ -25,6 +25,7 @@
  * accepted last, not of this run.
  */
 import { existsSync, readFileSync } from 'node:fs';
+import { ROOT_IMPORT_ENTRY as SIZE_ENTRY, ROOT_IMPORT_LIMIT as SIZE_LIMIT } from '../size-limit.mjs';
 import { runsOf } from './baseline.mjs';
 import { ms, overlap, print, spread } from './table.mjs';
 
@@ -34,16 +35,6 @@ const VERDICT_RENDERERS = ['webgl', 'webgpu'];
 const REST_SHARE = 0.1;
 /** Bytes a frame at rest may upload above an empty stage: the uniforms of a few draw calls. */
 const UNIFORM_SLACK = 1024;
-/**
- * The most bytes the root import may have, gzipped, for a game that imports `MarrowSpine`. The
- * list of M6 said 27 kB. Bone handles and `follow` came after it and must work at once, so they
- * are in the root: 29 kB. The support for Pixi `Assets` added 0.2 kB to a game that does not
- * register it: 30 kB. The slot handle and several skins: 31 kB. The perf presets and the pacing,
- * which must work at once, and the hooks of the idle cache and of baked playback: 32 kB.
- */
-const SIZE_LIMIT = 32 * 1024;
-/** The entry of ci/size-baseline.json that the limit is for. */
-const SIZE_ENTRY = 'root (MarrowSpine)';
 
 const kb = (bytes) => (bytes / 1024).toFixed(1);
 
