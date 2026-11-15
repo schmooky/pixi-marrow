@@ -41,7 +41,7 @@ A game that imports `MarrowSpine` loads about 32 kB of code, gzipped. The mesh m
 
 ## Less overdraw
 
-The GPU paints every pixel of every triangle it draws, also where the image is transparent and where a later slot covers it. With outlines, a region without a visible pixel is not drawn, and a slot behind the opaque part of a later one is skipped. The picture stays the same. The overdraw layer of the [debug overlays](/debug/) shows where the GPU paints a pixel more than once.
+The GPU paints every pixel of every triangle it draws, also where the image is transparent and where a later slot covers it. With outlines, a region without a visible pixel is not drawn, and a slot behind the opaque part of a later one is skipped. The picture stays the same. Outlines are off by default, and a game passes them with the `outlines` option of the load. The overdraw layer of the [debug overlays](/debug/) shows where the GPU paints a pixel more than once.
 
 ## What it does not trade
 
