@@ -35,6 +35,14 @@ import Lab from '../../layouts/Lab.astro';
             <li><code>?n=100</code> sets the number of skeletons.</li>
             <li><code>?seconds=30</code> plays the scene for 30 seconds. The default is 10, and 12 for the slot grid.</li>
         </ul>
+        <h2 class="lab-subtitle">What a run sends</h2>
+        <p class="lab-question">
+            At the end of a run, the page sends the result to the address <code>/lab-results</code> of the server that serves it. The result
+            holds the test and its settings, the counts and the frame times. It also holds what the browser tells about the device: the user
+            agent, the name of the GPU, the size and the density of the canvas, the number of cores, the memory, the rate of the screen and the
+            state of the battery. The lab server of the repository saves the result to a file. A
+            server without that address saves nothing, and the result stays in the page.
+        </p>
         <h2 class="lab-subtitle">How it measures</h2>
         <p class="lab-question">
             A scene plays at the rate of the screen, as in a game, after a warm-up of two seconds. The lab counts the frames the screen got and the

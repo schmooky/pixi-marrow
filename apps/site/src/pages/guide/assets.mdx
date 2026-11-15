@@ -1,20 +1,22 @@
 ---
 layout: ../../layouts/Docs.astro
-title: Assets and copies
-description: A game loads a skeleton once and shows it as often as a scene needs. Load with pixi-marrow or with Pixi Assets, and keep copies at hand.
+title: Assets and instances
+description: A game loads a skeleton once and shows it as often as a scene needs. Load with pixi-marrow or with Pixi Assets, keep instances at hand, and unload what a scene no longer needs.
 ---
 
 import Diagram from '../../components/Diagram.astro';
 import Snippet from '../../components/Snippet.astro';
+import facts from '../../../../../scripts/facts.json';
 import source from '../../snippets/guide-assets.ts?raw';
+import life from '../../snippets/lifecycle.ts?raw';
 
-## An asset and its copies
+## An asset and its instances
 
-A game often shows one skeleton many times: a crowd, a row of coins, the symbols of a reel. The runtime splits what all of them share from what each one keeps.
+A game often shows one skeleton many times: a crowd, a row of coins, the symbols of a reel. Each one on the screen is an instance. The runtime splits what all instances share from what each one keeps.
 
-<Diagram name="assets-share" height={210} rows={1} caption="One asset and its copies. Pick how many copies there are, and watch which part of the memory grows." />
+<Diagram name="assets-share" height={210} rows={1} caption="One asset and its instances. Pick how many instances there are, and watch which part of the memory grows." />
 
-The big part, the skeleton data, the pictures and the code, loads once and stays the same however many copies there are. Each copy adds only what makes it move on its own: its pose, its tracks and the buffers it draws from. So a hundred copies of one symbol cost little more than one. A hundred different skeletons each bring their own skeleton data and code. They share the pictures only where they use one atlas.
+The big part, the skeleton data, the pictures and the code, loads once and stays the same however many instances there are. Each instance adds only what makes it move on its own: its pose, its tracks and the buffers it draws from. So a hundred instances of one symbol cost little more than one. A hundred different skeletons each bring their own skeleton data. They share the pictures only where they use one atlas.
 
 <Snippet source={source} regions="load" />
 
@@ -22,32 +24,63 @@ The big part, the skeleton data, the pictures and the code, loads once and stays
 
 A second load of the same files with the same options returns the same asset. So two parts of a game can load a skeleton without knowing about each other.
 
-## Make copies
+## Make instances
 
-<Snippet source={source} regions="copies" />
+<Snippet source={source} regions="instances" />
 
-`new MarrowSpine(asset)` makes a copy that plays on its own. A copy keeps its pose, its tracks and its draw buffers, and shares everything else. It is a Pixi `Container`, so it goes into any container like other display objects.
+`new MarrowSpine(asset)` makes an instance that plays on its own. An instance keeps its pose, its tracks and its draw buffers, and shares everything else. It is a Pixi `Container`, so it goes into any container like other display objects.
 
-`MarrowSpine.load` from [Start](/start/) does both at once: it loads the asset, or takes the one loaded before, and makes a copy.
+`MarrowSpine.load` from [Start](/start/) does both at once: it loads the asset, or takes the one loaded before, and makes an instance.
 
 ## Load with Pixi Assets
 
 <Snippet source={source} regions="assets" />
 
-`registerMarrowAssets` teaches Pixi `Assets` the Spine files: `.skel`, Spine `.json` and `.atlas`. Call it once, before the first load. Aliases, manifests and bundles then load them, also as AssetPack writes them. `MarrowAsset.get` returns the asset of files that `Assets` loaded, at once.
+`registerMarrowAssets` teaches Pixi `Assets` the Spine files: `.skel`, Spine `.json` and `.atlas`. Call it once, before the first load. Aliases, manifests and bundles then load them, also as AssetPack writes them. `MarrowAsset.get` returns the asset of files that `Assets` loaded, at once. `MarrowSpine.from` does the same and makes an instance.
 
-An atlas named like `hero@0.5x.webp.atlas` counts as resolution 0.5 in WebP, so `texturePreference` picks among its variants. Unloading an atlas destroys the assets made from it. So destroy their copies first.
+An atlas named like `hero@0.5x.webp.atlas` counts as resolution 0.5 in WebP, so `texturePreference` picks among its variants. Do not register another Spine runtime in the same game: both claim the same file extensions.
 
-## Keep copies in a pool
+## Destroy and unload
+
+An asset counts who holds it. It unloads its page images when nobody holds it any more. There are two kinds of holders:
+
+- An owner is a call that gave the asset to the game. Each `MarrowAsset.load` that returns the asset is one owner.
+- A user is an instance that is alive.
+
+<Snippet source={life} regions="import destroy" />
+
+`MarrowSpine.load` gives its hold on the asset to the instance. So `hero.destroy()` also unloads the asset when no other holder is left. A game that loads a skeleton this way needs no other call.
+
+<Snippet source={life} regions="owners" />
+
+With `MarrowAsset.load`, call `asset.destroy()` once for each load. The asset stays whole while an instance of it is alive, so an instance on the stage never loses its textures. `asset.destroyed` is true only when the asset ended.
+
+Three more rules hold:
+
+- pixi-marrow never unloads an image that the game loaded through Pixi `Assets` itself.
+- Pixi `Assets` owns an asset of `MarrowAsset.get` and `MarrowSpine.from`. Unload the atlas or the skeleton with `Assets.unload` to let it go. The pages stay until the last instance is destroyed.
+- Textures that you pass in `textures`, or to `MarrowAsset.from`, stay yours. No `destroy` call touches them.
+
+After `destroy()`, an instance throws a `MarrowError` with the code `destroyed` for `play`, `queue`, `stop`, `bone`, `slot` and the other calls that change it. `update` and a second `destroy` do nothing.
+
+<Snippet source={life} regions="finished" />
+
+Code that waits for an animation does not hang. `finished` of every track of a destroyed instance resolves with `'destroyed'`.
+
+## Keep instances in a pool
 
 <Diagram name="assets-pool" height={210} rows={1} caption="A reel whose symbols scroll down. A symbol that leaves at the bottom goes into the pool, and one that enters at the top comes from it. Turn the pool off to see every symbol made new." />
 
-With the pool, the counter of made symbols stops after a few. Every later symbol comes from the pool. Without it, the game makes a new copy for every symbol that enters. The old one waits for the garbage collector, which can cost a frame on a phone.
+With the pool, the counter of made symbols stops after a few. Every later symbol comes from the pool. Without it, the game makes a new instance for every symbol that enters. The old one waits for the garbage collector, which can cost a frame on a phone.
 
-Making a copy allocates its pose and its buffers. So a pool helps a scene that shows and hides copies often. A copy from the pool still holds its last pose. Stop it and set its setup pose before it shows again.
+A new instance allocates its pose and its buffers. So a pool helps a scene that shows and hides instances often. An instance from the pool still holds its last pose. Stop it and set its setup pose before it shows again.
 
 <Snippet source={source} regions="pool" />
 
-## Keep copies together
+An instance without a parent costs little while it waits. The ticker places no vertex for an instance that Pixi does not draw. Its tracks still move, so stop it, as `give` does. A stopped instance runs no timeline.
 
-Copies that follow each other in the display list share draw calls, when each has up to 1024 vertices. Any other Pixi object between two of them ends that batch. So put the skeletons of a scene into one container, and texts, frames and effects above or below it. [Draw order and batches](/how/batches/) shows why.
+## Keep instances together
+
+Instances that follow each other in the display list share draw calls, when each has up to {facts.batch.autoVertices} vertices. Any other Pixi object between two of them ends that batch. So put the skeletons of a scene into one container, and texts, frames and effects above or below it. [Draw order and batches](/how/batches/) shows why.
+
+A container that moves or fades with skeletons in it has a cost of its own. [Performance caveats](/performance/caveats/#a-parent-that-moves-or-fades) shows how a render group removes it.

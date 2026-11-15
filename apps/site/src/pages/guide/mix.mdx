@@ -18,7 +18,7 @@ import source from '../../snippets/guide-mix.ts?raw';
 - At `delay -0.2` the idle loop starts while the square is still in the air, and the bounce ends early.
 - At `delay 0.15` the idle loop starts 0.15 seconds after the landing started. That is how a reaction can start before the action is over.
 
-<Snippet source={source} regions="queue" />
+<Snippet source={source} regions="import queue" />
 
 `delay` above 0 starts the queued animation that many seconds after the one before it started. At 0 or below it counts from the end of the one before, less the mix. So a negative delay starts it a little early.
 
@@ -73,3 +73,7 @@ When two tracks key the same value, the higher one decides how they combine:
 ## What a mix costs
 
 During a mix both animations apply in every update, so a mix costs about two animations for its length. A track costs what its animation keys. [An animation](/how/animation/) shows how a time becomes a pose.
+
+On a skeleton of Spine 4.3, do not change the animation of a track faster than its mix time, again and again. The track then keeps every animation that it still mixes from, and each update costs more. The official 4.3 runtime does the same, and pixi-marrow keeps its pose equal to it. The chain ends when the track stays on one animation for longer than the mix.
+
+`mix: 0` builds no chain, and a skeleton of 4.1 or 4.2 does not have this cost. See the rule [MARROW025](/performance/rules/#marrow025).

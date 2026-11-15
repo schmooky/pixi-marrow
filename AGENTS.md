@@ -12,14 +12,22 @@ Pre-release, published as `pixi-marrow@next`. Skeletons of Spine 4.1, 4.2 and 4.
 
 ```
 packages/pixi-marrow/   the library
-  src/                  source, one folder per layer
+  src/                  source, one folder per layer, and one file per entry point
   tests/                vitest, node environment
   tests/parity/         the parity suite: official cores, fixtures, reference models and poses
   bin/                  the pixi-marrow command line tool, a thin wrapper around dist
   api.md                snapshot of the public API
-scripts/                repo checks and generators
+  CHANGELOG.md          written by changesets
+apps/site/              the docs site: Astro and MDX, with diagrams, live previews, a lab and a playground
+scripts/                repo checks and generators. facts.json holds the numbers that the docs repeat
+scripts/bench/          the A/B bench against the official Pixi runtime
+scripts/render/         the parts of the pixel check
+ci/                     the size baseline and the memory baseline
 fixtures/               manifest of the official example exports. Downloads are not committed
-docs/DESIGN.md          the design
+fixtures/bzzz/          the symbol rigs of a real slot game, committed
+.changeset/             one file per change to the library, until a release takes them
+.github/workflows/      ci.yml, pr.yml and release.yml
+docs/DESIGN.md          the design and its history
 docs/EXPLAINING.md      how the docs explain: the standard for every page of the site
 ```
 
@@ -40,7 +48,7 @@ Entry points:
 
 | Out of scope | Where it belongs |
 |---|---|
-| Canvas 2D or WebGL1 | Not supported |
+| Canvas 2D or WebGL1 | Not supported. No skeleton draws, and the console warns once: `pixi-marrow: this renderer draws no skeleton. Use WebGL2 or WebGPU.` The rest of the app goes on. |
 | Spine 3.8 and 4.0 | Not planned |
 | A runtime dependency on `spine-core` | The official cores are dev dependencies for the parity suite |
 | Editing skeletons | The Spine editor |
@@ -60,7 +68,7 @@ A file imports only from its own layer or the layers above it in this table. `pn
 | api | `src/api` | The display object and handles |
 | features | `src/bake`, `src/debug`, `src/perf`, `src/optimize` | Optional entry points |
 
-`base`, `model`, `formats`, `pose`, `geometry`, `render`, `api`, `optimize` and `perf` have files today. The others arrive with their milestones.
+Every folder of the table has files. Each entry point also has one file in `src`: `index.ts`, `core.ts`, `optimize.ts`, `debug.ts`, `bake.ts` and `perf.ts`.
 
 `src/render` turns a pose into a picture (`SkeletonView`) in one of two modes. The batched mode feeds Pixi's batch pipe through batchers of our own, so skeletons share draw calls. The mesh mode draws Pixi meshes with our shader, for large rigs. `src/api` is the public display object (`MarrowSpine`) on top of a pose engine and a view.
 
@@ -78,9 +86,11 @@ The engines solve every constraint: IK, transform, path, physics and sliders. A 
 - No `spine-core` in `src`. Only tests import the official cores.
 - The model is a faithful import. A reader stores what its file holds and does not convert between versions.
 - A reader mirrors the official reader of its own version, bugs included. It is stricter only where the official reader would crash, hang or store garbage. There it throws.
-- No runtime dependencies. `pixi.js` will be the one peer.
-- Speed and memory are goals of equal weight. Pose data lives in typed arrays. A played loop allocates nothing after warm-up. The runtime stores once what all instances can share. State of a feature exists only for a skeleton that uses the feature.
-- Code that most games never call loads on demand, not with the root import. The size check guards the root.
+- No runtime dependencies. The peers are `pixi.js` from <!-- fact:floor.pixi -->8.21.0<!-- /fact -->, which the root import needs, and `pixi-silk` from <!-- fact:floor.pixiSilk -->1.0.1<!-- /fact -->. `pixi-silk` is optional: only `pixi-marrow/debug` needs it.
+- Speed and memory are goals of equal weight. Pose data lives in typed arrays.
+- After warm-up, an update that reports no event allocates nothing. An update with events allocates the list and one object for each event. `tests/pose/heap.test.ts` measures the heap of playing engines of both kinds.
+- The runtime stores once what all instances can share. State of a feature exists only for a skeleton that uses the feature.
+- Code that most games never call loads on demand, not with the root import. The size check guards the root and each chunk that loads on demand.
 - An optimization that is on by default must be exact. It needs a test that runs it on and off.
 - An optimization that is not exact to the bit is an option. Its doc states what changes in the picture, and the pixel check bounds it. `tightMesh: 'on'` is the first one.
 - The two render modes each pass the pixel check against the official runtime. They are not equal to each other to the bit, and the pixel check bounds their difference.
@@ -103,7 +113,8 @@ The engines solve every constraint: IK, transform, path, physics and sliders. A 
 | Add an official fixture | Add the rig name to `rigs` in `fixtures/manifest.json`, then run `pnpm fixtures:refresh`. |
 | Add your own fixture | Put the skeleton and its atlas into `fixtures/local/`. |
 | Add an error code | Extend `MarrowErrorCode` in `src/base/errors.ts` and throw it with a `fix`. |
-| Accept a size change | Run `pnpm size:update`. The root import also has a fixed limit in `scripts/size-limit.mjs`, which `pnpm size:check` enforces. Raise it only in a commit of its own that says why. |
+| Accept a size change | Run `pnpm size:update`, which writes `ci/size-baseline.json`. `pnpm size:check` fails when an import grew more than 10 percent over that baseline. It also fails above the fixed limits of `scripts/size-limit.mjs`. The root import is <!-- fact:size.root -->31<!-- /fact --> kB gzipped, and its limit is <!-- fact:size.limit.root -->32.5<!-- /fact --> kB. The readers, the pose engines, the mesh mode and the clip code load on demand, and each has a limit of its own. Raise a limit only in a commit of its own that says why. |
+| Add a docs page | Add an `.mdx` file under `apps/site/src/pages` with `layout`, `title` and `description` in its frontmatter. Add an entry to `PAGES` in `apps/site/src/lib/site.ts` for the navigation, and one to `SEO` in `apps/site/src/lib/seo.ts`. A code sample is a region of a file in `apps/site/src/snippets`, shown with `<Snippet>`. A number comes from `scripts/facts.json` by an import. The build writes the sitemap, `llms.txt`, `llms-full.txt` and the `.md` twin of the page. |
 | Accept a change in bytes per instance | Run `pnpm memory:update`. |
 | Release a version | Follow section 8. |
 
@@ -113,7 +124,28 @@ The engines solve every constraint: IK, transform, path, physics and sliders. A 
 pnpm check
 ```
 
-It runs every gate. First lint, the prose check, typecheck, the source rules and the facts check. Then tests with coverage, the build, the API snapshot, the publish contents check, the size check and the dead code check. CI runs the same steps. It also lints the commit messages of a pull request. On the lowest peers that the package allows, it runs the typecheck and the unit tests.
+It runs every gate, in this order:
+
+1. Lint with Biome, and the prose check.
+2. Typecheck.
+3. The source rules.
+4. Tests with coverage.
+5. The build.
+6. The facts check, which reads the build.
+7. The API snapshot.
+8. The publish contents check.
+9. The size check.
+10. The typecheck of the site.
+11. The dead code check.
+
+CI is in `.github/workflows`. `ci.yml` has four jobs:
+
+- `ci` runs the steps above without the typecheck of the site. It also lints the commit messages of a pull request.
+- `node-floor` builds on Node 24. Then it runs the unit tests, the command line tool and the entries for Node on Node <!-- fact:floor.node -->22.12<!-- /fact -->, the start of `engines`.
+- `pixi-floor` installs the lowest peers that the package allows. Then it runs the typecheck and the unit tests.
+- `site` builds the library, then it type-checks and builds the site.
+
+`pr.yml` has two jobs. `changeset-gate` fails a pull request that changes the published package without a changeset. `pr-title` lints the title of the pull request with commitlint. `release.yml` publishes, see section 8.
 
 A change to `src/render`, `src/api` or the shaders also needs the pixel check. It is not part of `pnpm check`, because it needs Google Chrome:
 
@@ -152,13 +184,15 @@ Library changes need a changeset. Run `pnpm changeset`.
 
 ## 8. Releases
 
-Changesets runs in pre mode with the tag `next`, so a release is `0.1.0-next.N`. CI publishes nothing. The owner publishes from a terminal, because npm asks for a second factor.
+Changesets runs in pre mode with the tag `next`, so a release is `0.1.0-next.N`. The workflow `.github/workflows/release.yml` publishes from a runner, with provenance. It starts by hand only, and no push starts it. npm trusts the workflow as a trusted publisher, so the repo holds no npm token. The header of the workflow file says how the owner sets that up once.
 
 1. Merge the pull requests of the release. Each change to the library brings its changeset in `.changeset/`.
 2. On a branch from an up-to-date `main`, run `GITHUB_TOKEN="$(gh auth token)" pnpm version-packages`. The changelog plugin needs the token to link pull requests and authors.
 3. Read the new section of `packages/pixi-marrow/CHANGELOG.md`. The version in `packages/pixi-marrow/package.json` moved, and the changesets moved into `.changeset/pre/`.
 4. Commit it as `chore: release pixi-marrow <version>` and open the release pull request. Merge it when CI passes. Then wait for the CI run of the merge commit.
-5. On `main` at that commit, with a clean working tree, run `pnpm install --frozen-lockfile` and `pnpm changeset publish`.
-6. `prepublishOnly` of the package runs `pnpm build` before the package manager makes the tarball. So the tarball never holds an old `dist`. `prepack` copies README and LICENSE into the package, and `postpack` removes them.
-7. Push the tag that `changeset publish` made: `git push --follow-tags`.
-8. Until 1.0, `latest` points at the newest pre-release too: `npm dist-tag add pixi-marrow@<version> latest`. A new version can take some minutes to show in `npm view pixi-marrow dist-tags`.
+5. Run the workflow Release on `main` with the version as `version`, and leave `dry-run` set. The run checks that the version and the changelog agree, runs `pnpm check` and packs the tarball. It publishes nothing.
+6. Run it again with `dry-run` off. The run waits for the approval of the owner in the environment `npm`. Then it publishes with the tag of `.changeset/pre.json`, makes the git tag and makes the GitHub Release.
+7. `prepublishOnly` of the package runs `pnpm build` before the package manager makes the tarball. So the tarball never holds an old `dist`. `prepack` copies README and LICENSE into the package, and `postpack` removes them.
+8. Until 1.0, `latest` points at the newest pre-release too. The owner moves it from a terminal: `npm dist-tag add pixi-marrow@<version> latest`. A new version can take some minutes to show in `npm view pixi-marrow dist-tags`.
+
+A run that failed after the publish can run again. It sees the version on npm, skips the publish, and makes the tag and the Release.

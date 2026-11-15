@@ -29,4 +29,8 @@ When its reel stops, the symbol plays the beats of the game in a row:
 
 <Snippet source={symbol} regions="landed" />
 
-The whole symbol is `src/previews/reel-symbol.ts` of the site, about 170 lines.
+The whole symbol is `src/previews/reel-symbol.ts` of the site, in the repository.
+
+## What a spin costs
+
+While a reel spins, its symbols move. In the batched mode the runtime then places the vertices of each moving symbol again in every frame, also for a symbol whose pose rests. A reel container that is a render group moves on the GPU and removes that work. [Performance caveats](/performance/caveats/#a-parent-that-moves-or-fades) shows the code.

@@ -58,4 +58,4 @@ One page matters for speed. The GPU draws everything that uses the same textures
 
 ## What pixi-marrow keeps
 
-A loaded skeleton becomes a model of plain tables. The bones are arrays of names, parents and setup values. The slots are arrays of bones, colors and blend modes. Every copy of a skeleton shares that model, its atlas and the code that poses it. A copy keeps only its own pose. That is why a scene can hold many copies of one skeleton.
+A loaded skeleton becomes a model of plain tables. The bones are arrays of names, parents and setup values. The slots are arrays of bones, colors and blend modes. Every instance of a skeleton shares that model, its atlas and the code that poses it. An instance keeps only its own pose. That is why a scene can hold many instances of one skeleton.

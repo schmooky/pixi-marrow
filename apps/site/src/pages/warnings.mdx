@@ -1,0 +1,119 @@
+---
+layout: ../layouts/Docs.astro
+title: Warnings and errors
+description: Every console warning of pixi-marrow and every MarrowError code, with the text, the cause and the fix.
+---
+
+import Snippet from '../components/Snippet.astro';
+import source from '../snippets/errors.ts?raw';
+
+pixi-marrow never fails without a word. It throws a `MarrowError` when a call cannot do what it was asked. It writes a warning to the console when a call works, and something is probably not what you want.
+
+## Errors
+
+<Snippet source={source} regions="import catch" />
+
+Every error that the library throws on purpose is a `MarrowError`. Its message has this form: `[pixi-marrow:code] cause. fix.` Besides the message it has these fields:
+
+| Field | What it holds |
+|---|---|
+| `code` | Why the error was thrown. The codes are stable, so code can branch on them. |
+| `fix` | What to change so that the call works. |
+| `validNames` | The values that the call accepts, when the error is about a name. |
+| `closest` | The accepted value closest to the one that was passed. |
+| `docs` | The address of a docs page about the error, when it has one. |
+
+### invalid-data
+
+A file, or a value made from one, is not what its format says. In this version the code also covers a file that did not load.
+
+| Message starts with | Cause | Fix |
+|---|---|---|
+| `The skeleton at <url> did not load: status 404.` | The URL is wrong, or the server refuses the request. The same text exists for the atlas and the outlines file. | Check the URL. |
+| `The server returned an HTML page for the skeleton at <url>, not the file.` | A dev server or the host of a single-page app answers a wrong URL with its index page and status 200. | Check the URL. |
+| `The page image "<name>" at <url> did not load:` | The image is not next to the atlas. | Put the image there, or pass it in `textures` under the page name. |
+| `The atlas has <n> pages, but <m> textures were passed.` | `MarrowAsset.from` got the wrong number of textures. | Pass one texture per page, in page order. |
+| `The outlines do not fit the atlas:` | The outlines file is of another atlas, or of an older export. | Run `pixi-marrow outlines <atlas>` again. |
+| `Pixi Assets has no parsers of pixi-marrow yet.` | `MarrowAsset.get` or `MarrowSpine.from` ran before `registerMarrowAssets()`. | Call `registerMarrowAssets()` before the first load. |
+| `Pixi Assets holds no skeleton that pixi-marrow loaded under "<alias>".` | The file is not loaded, or another Spine runtime loaded it. The same text exists for the atlas. | Load it with `Assets.load` after `registerMarrowAssets()`. |
+| `The animation "<name>" animates the dark color of the slot "<slot>", which has none.` | The export has two-color keys on a slot without Tint black. | Turn on Tint black for the slot in Spine, or remove the keys, and export again. |
+| `A batch of this renderer samples <n> textures, and a skeleton needs <m> of its atlas pages at once.` | The device samples fewer textures than the skeleton needs in one draw. | Create the display object with `renderMode: 'mesh'`. |
+| `The track entry field "<name>" takes` | `entry` or `configure` got a value of the wrong type. The text names the type. | Pass a value of that type. |
+
+A damaged skeleton or atlas file also has this code. The message names what the reader found, and the fix is a new export from Spine.
+
+### unsupported-version
+
+| Message starts with | Cause | Fix |
+|---|---|---|
+| `The skeleton was exported from Spine <version>.` | The export is not of Spine 4.1, 4.2 or 4.3. | Export it again from Spine 4.1, 4.2 or 4.3. |
+
+### unsupported-feature
+
+The data is valid, and this library does not read or play it.
+
+| Message starts with | Cause | Fix |
+|---|---|---|
+| `A Spine <version> track entry has no field "<name>".` | The field belongs to another Spine version, such as `mixAttachmentThreshold` on a 4.1 skeleton. | Use the field of that version. The error lists them. |
+| `<what>: <count>. The model holds at most <limit>.` | The skeleton has more bones, slots or vertices than the model holds. No reader takes more than 32,767 bones or slots. | Split the skeleton or the mesh. |
+| `"<animation>" cannot be baked:` | The animation needs physics or a slider, which baked frames cannot hold. | Play it without baking. |
+| `Baked clips are little-endian, and this host is big-endian.` | The host cannot read a clip file. | Bake on that host with `bakeAnimations`. |
+
+### unknown-name
+
+The skeleton has no animation, skin, bone, slot or attachment of that name. The message gives the closest name, and `validNames` holds all of them. The same code is for a track entry field that no Spine version has, and for a name in `textures` that is no atlas page.
+
+| Message starts with | Fix |
+|---|---|
+| `<owner> has no animation "<name>". The closest name is "<closest>".` | Pass one of the names. `pixi-marrow typegen` makes a wrong name a compile error. |
+| `The atlas has no page "<name>".` | Name the textures after the atlas pages. |
+| `A track entry has no field "<name>".` | Set a field of the official `TrackEntry`. |
+
+### invalid-option
+
+An option, a setter or an argument got a key or a value that it does not take.
+
+| Message starts with | Cause | Fix |
+|---|---|---|
+| `"<key>" is not an option of <where>.` | A key that is no option, such as a misspelled `autoUpdat`. For `scale`, `darkTint` and `boundsProvider` the fix says what to use here. | Pass one of the options. `closest` names the nearest. |
+| `"<value>" is not a value of <setting>.` | A setting got a value that it does not have. | Set one of the listed values. |
+| `<option> got <value>.` | A number option got a value that is no finite number, such as `speed got NaN.` | Pass a number. |
+| `updateRate <value> is not a rate.` | The rate is 0, negative or not finite. | Pass a number above 0, or `'display'`. |
+| `A container is attached to the slot "<slot>" already.` | A slot holds one container. | Detach the first, or put both into one container. |
+| `The container is attached to the slot "<slot>" already.` | The container is attached or follows a bone already. | Call `detach` or `unfollow` first. |
+| `skins takes a list of skin names, not <value>.` | `skins` got something that is no array. | Pass an array of names. |
+| `setupPose has no part "<part>".` | A wrong argument. | Pass `'all'`, `'bones'` or `'slots'`. |
+
+### destroyed
+
+| Message | Cause | Fix |
+|---|---|---|
+| `The display object was destroyed.` | A call such as `play`, `bone` or `slot` after `destroy()`. | Make a new instance. |
+| `The asset was destroyed.` | `new MarrowSpine(asset)` with an asset that ended. | Load the asset again. |
+
+### not-found, not-registered, not-loaded
+
+The type `MarrowErrorCode` has these three codes, and no call throws them in this version. A file that did not load has the code `invalid-data`. So has a call before `registerMarrowAssets()`, and an alias that Pixi `Assets` does not hold. Do not branch on these three codes yet.
+
+## Warnings
+
+A warning starts with `pixi-marrow:`. Each one shows once: once per page load, once per asset or once per image, as the table says. Later versions add the address of a docs page to the end of a warning. So match the start of the text, not the whole of it.
+
+| Warning | Shows | Cause | Fix |
+|---|---|---|---|
+| `pixi-marrow: this renderer draws no skeleton. Use WebGL2 or WebGPU.` | Once per renderer | The renderer is WebGL1 or Canvas. No skeleton draws, and the rest of the game goes on. | Use a browser with WebGL2, or `preference: 'webgpu'`. |
+| `pixi-marrow: tightMesh: 'on' has no effect, because the asset has no outlines of the atlas regions.` | Once per asset | `tightMesh` or `occlusion: 'auto'` was set by name on an asset without outlines. | Load the asset with an outlines file, or with `outlines: 'auto'`. |
+| `pixi-marrow: instancing: 'auto' has no effect, because it acts on the mesh mode with skinning: 'gpu'.` | Once per asset | `instancing` without `skinning: 'gpu'`. | Set `skinning: 'gpu'` with it. |
+| `pixi-marrow: skinning: 'gpu' has no effect, because renderMode auto batches a skeleton of this size, and the batched mode places every vertex on the CPU.` | Once per asset | `skinning: 'gpu'` or `instancing` on a skeleton that draws in a batch. The text names `renderMode is batched` when the option forces the batch. | Set `renderMode: 'mesh'` with it. |
+| `pixi-marrow: follow('<bone>', container) got a container that is not a child of the display object.` | Once per container | The transform of a bone is in the space of the skeleton, so the container stands elsewhere. | Add the container with `hero.addChild(container)`. |
+| `pixi-marrow: outlines: 'auto' could not scan the page "<name>", so its regions keep their quads:` | Once per page load | The scan could not read the pixels of a page, for example an image of another origin. | Write the outlines at build time with `pixi-marrow outlines`. |
+| `pixi-marrow: outlines: 'auto' read no page image, so every region keeps its quad:` | Once per page load | The code of the scan did not load or did not run. | The same. |
+| `pixi-marrow: the page image at <url> was loaded before with the alpha mode "<mode>", but the atlas page "<name>" needs "<mode>".` | Once per image | The game loaded the image first, in another alpha mode than the atlas page needs. Edges can look too dark or too bright. | Load the image with `data: { alphaMode }` as the warning says, or let pixi-marrow load it first. |
+| `pixi-marrow: the page image at <url> was not unloaded:` | Each time | Pixi `Assets` could not unload a page image when its asset ended. | Check the cause in the text. The game goes on. |
+| `pixi-marrow: pixi.js <version> has no <part>.` | Once per page load | A private part of Pixi that the mesh mode reads on WebGPU is missing in this version of pixi.js. The text names the part and says what that costs. | Report it with the version of pixi.js. |
+
+The command line tool prints its errors to the error stream of the terminal, and exits with a code that is not 0.
+
+## Performance rules
+
+Warnings are for options that do nothing. A scene that works and is slow gets no warning. For that, the entry `pixi-marrow/diagnose` checks a scene against the [performance rules](/performance/rules/), and [Performance caveats](/performance/caveats/) explains each cause.

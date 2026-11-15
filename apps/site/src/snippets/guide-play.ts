@@ -1,4 +1,7 @@
+// #region import
 import { MarrowSpine } from 'pixi-marrow';
+
+// #endregion
 
 const hero = await MarrowSpine.load({ skeleton: 'rigs/animation_bee.skel', atlas: 'rigs/symbols.atlas' });
 
@@ -28,6 +31,6 @@ hero.play('disable');
 // #region finished
 const win = hero.play('win');
 
-await win.finished;
-hero.play('idle', { loop: true });
+// wait for the win, and show the total only when it played to its end
+if ((await win.finished) === 'complete') hero.play('idle', { loop: true });
 // #endregion

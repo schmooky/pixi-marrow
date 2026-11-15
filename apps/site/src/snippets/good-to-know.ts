@@ -1,4 +1,7 @@
+// #region import
 import { MarrowSpine } from 'pixi-marrow';
+
+// #endregion
 
 const hero = await MarrowSpine.load({ skeleton: 'hero.skel', atlas: 'hero.atlas' });
 /** How far the game moved the skeleton in this frame, in pixels. */
