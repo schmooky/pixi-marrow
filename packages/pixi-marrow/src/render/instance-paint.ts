@@ -142,9 +142,9 @@ export class InstancePaint {
 
     /** Stops to draw instanced: gives the slot and the index buffer back and hides the body. */
     leave(): void {
-        const { layout, union } = this;
+        const { layout, union, slot } = this;
 
-        this.slot?.release();
+        if (layout !== undefined && slot !== undefined) layout.give(slot);
         if (layout !== undefined && union !== undefined) layout.drop(union);
         this.slot = undefined;
         this.union = undefined;

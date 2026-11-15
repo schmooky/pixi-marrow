@@ -18,6 +18,9 @@ import { MAX_PAGES, type Template } from './template';
  * multiplies or screens and the atlas has at most 8 pages. A layout that needs more ranges does
  * not draw instanced: one draw per range would draw the second range of the first instance
  * after the first range of the second one. Where instances overlap, the picture would change.
+ *
+ * The pools grow with the views that draw instanced at one time. Once no view holds a slot, the
+ * pools go, after the code that runs at the moment: a burst of views leaves no large textures.
  */
 
 /** Why the views of a layout draw alone: a slot multiplies or screens, more than 8 pages, or too many entries. */
@@ -123,7 +126,8 @@ export class InstanceLayout {
     readonly shape: PoolShape;
     /** The pools, in the order they were made. */
     readonly pools: InstancePool[] = [];
-    private readonly template: Template;
+    /** The template the index buffers are laid out from, until the layout is destroyed. */
+    private template: Template | undefined;
     private readonly unions: Union[] = [];
     /** The page arrays of the views, one for each set of page textures. */
     private readonly pageSets: (readonly TextureSource[])[] = [];
@@ -131,6 +135,9 @@ export class InstanceLayout {
     /** The pool of each shader. */
     private readonly users = new Map<Shader, InstancePool>();
     private readonly wide: boolean;
+    /** True while the pools are due to go, once no view holds a slot. */
+    private emptying = false;
+    private destroyed = false;
 
     constructor(template: Template, model: SkeletonModel, skin: SkinLayout, pages: number) {
         const usage = BufferUsage.VERTEX | BufferUsage.COPY_DST;
@@ -171,7 +178,7 @@ export class InstanceLayout {
     /** The bytes the views of the layout share: the buffers, the index buffers and the room of the pools no view takes. */
     get bytes(): number {
         // the statics of the template are counted with the template, unless the layout holds a copy
-        const own = this.statics.data === this.template.statics ? 0 : this.statics.data.byteLength;
+        const own = this.statics.data === this.template?.statics ? 0 : (this.statics.data?.byteLength ?? 0);
         let bytes = this.skin.data.byteLength + own + this.entries.data.byteLength;
 
         for (const union of this.unions) bytes += union.buffer.data.byteLength;
@@ -194,6 +201,21 @@ export class InstanceLayout {
         if (slot === undefined) throw new RangeError('A pool of instances has no room for one slot.');
 
         return slot;
+    }
+
+    /**
+     * Gives the slot of a view back. Once no view holds a slot, the pools, their textures and
+     * their shaders go after the code that runs at the moment, unless a view takes a slot first.
+     */
+    give(slot: PoolSlot): void {
+        slot.release();
+        if (this.emptying || this.pools.some((pool) => pool.used > 0)) return;
+        this.emptying = true;
+        // draws earlier in a render that runs now may have bound the textures, and WebGPU submits them at its end
+        queueMicrotask(() => {
+            this.emptying = false;
+            if (!this.destroyed && this.pools.every((pool) => pool.used === 0)) this.empty();
+        });
     }
 
     /** The index buffer of a draw order, for one more view that draws with it. Give it back with {@link drop}. */
@@ -275,19 +297,27 @@ export class InstanceLayout {
         });
     }
 
-    /** Frees the buffers, the pools and the shaders. The skin data belongs to the layout. */
+    /** Frees the buffers, the pools and the shaders, and lets go of the template. The skin data belongs to the layout. */
     destroy(): void {
-        // the shaders let go of the textures before those are destroyed
-        for (const shader of this.shaders.values()) shader.destroy();
+        this.destroyed = true;
+        this.empty();
         this.skin.destroy();
         this.statics.destroy();
         this.entries.destroy();
         for (const union of this.unions) union.buffer.destroy();
-        for (const pool of this.pools) pool.destroy();
         this.unions.length = 0;
+        this.template = undefined;
+    }
+
+    /** Frees the pools and their shaders, and forgets the page arrays. No view holds a slot. */
+    private empty(): void {
+        // the shaders let go of the textures before those are destroyed. Every shader is one of a pool
+        for (const shader of this.shaders.values()) shader.destroy();
+        for (const pool of this.pools) pool.destroy();
         this.pools.length = 0;
         this.shaders.clear();
         this.users.clear();
+        this.pageSets.length = 0;
     }
 
     /** Lays out the index buffer of a draw order: for each slot in that order, every entry it has. */
@@ -295,6 +325,7 @@ export class InstanceLayout {
         const { template } = this;
         let count = 0;
 
+        if (template === undefined) throw new RangeError('The instance layout was destroyed.');
         for (let entry = 0; entry < template.slots.length; entry++) {
             if (i32(template.counts, entry) > 0) count += template.triangles[entry]?.length ?? 0;
         }

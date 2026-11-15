@@ -160,12 +160,16 @@ export class InstancePool {
         return uploads;
     }
 
-    /** Frees the textures. No shader may bind them any more. */
+    /** Frees the textures and the arrays. No shader may bind them any more. */
     destroy(): void {
         for (const texture of this.retired) texture.destroy();
         this.retired.length = 0;
         this.pose.destroy();
         this.palette.destroy();
+        this.poseData = new Float32Array(0);
+        this.paletteData = new Uint8Array(0);
+        this.room = 0;
+        this.used = 0;
         this.slots.length = 0;
         this.free.length = 0;
     }

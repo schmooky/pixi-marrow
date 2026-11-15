@@ -1,8 +1,8 @@
-import { type Geometry, type Instruction, type InstructionSet, type Renderer, type Shader, State } from 'pixi.js';
+import { type Instruction, type InstructionSet, type Renderer, State } from 'pixi.js';
 import { contextLost, watchContext } from './context-watch';
 import { bendsEdges } from './gate';
 import type { InstanceBody } from './instance-paint';
-import { RunPart, type Shaded } from './instance-part';
+import { RunPart } from './instance-part';
 
 /*
  * The render pipe of instanced draws. Pixi hands it the body of every view that draws instanced.
@@ -26,15 +26,8 @@ import { RunPart, type Shaded } from './instance-part';
 /** The name a renderer finds the pipe under. */
 export const INSTANCE_PIPE = 'marrowInstances';
 
-/** What the pipe hands the encoder of a renderer for one draw. */
-interface DrawCall {
-    geometry: Geometry;
-    shader: Shader;
-    state: State;
-    size: number;
-    start: number;
-    instanceCount: number;
-}
+/** Frames in a row a part of a run may draw nothing before it is freed. */
+const SPARE_FRAMES = 60;
 
 /**
  * The instruction of one run: views that draw instanced and follow each other in an instruction
@@ -65,8 +58,21 @@ export class InstanceRun implements Instruction {
             part = new RunPart();
             this.parts[index] = part;
         }
+        part.rested = 0;
 
         return part;
+    }
+
+    /**
+     * Ends a frame that drew with the first `used` parts. The others let go of what they drew
+     * with, and the last ones are freed once they have drawn nothing for {@link SPARE_FRAMES}.
+     */
+    settle(used: number): void {
+        const { parts } = this;
+
+        this.draws = used;
+        for (let i = used; i < parts.length; i++) parts[i]?.rest();
+        while (parts.length > used && (parts[parts.length - 1]?.rested ?? 0) > SPARE_FRAMES) parts.pop()?.destroy();
     }
 
     /** Takes a body out, when its view is destroyed. */
@@ -126,10 +132,6 @@ export class InstancePipe {
     /** Every book, so that the runs of a destroyed instruction set are freed. */
     private readonly all: RunBook[] = [];
     private readonly state = State.for2d();
-    /** What a draw asks a part for its shader: one object for every draw. */
-    private want: Shaded | undefined;
-    /** What a draw hands the encoder of the renderer: one object for every draw. */
-    private call: DrawCall | undefined;
 
     constructor(renderer: Renderer) {
         this.renderer = renderer;
@@ -190,7 +192,7 @@ export class InstancePipe {
             }
             i = this.drawFrom(renderer, run.part(parts++), members, i);
         }
-        run.draws = parts;
+        run.settle(parts);
     }
 
     /**
@@ -255,24 +257,9 @@ export class InstancePipe {
         if (layout === undefined || union === undefined || slot === undefined || union.count === 0) return;
         const { pool } = slot;
         const geometry = part.geometry(layout, union);
+        const shader = part.shade(layout, pool, pages, dark, renderer.roundPixels);
+        const draw = part.drawCall(geometry, shader, this.state, union.count, count);
 
-        this.want ??= { layout, pool, pages, dark, round: false };
-        const { want } = this;
-
-        want.layout = layout;
-        want.pool = pool;
-        want.pages = pages;
-        want.dark = dark;
-        want.round = renderer.roundPixels;
-        const shader = part.shade(want);
-
-        this.call ??= { geometry, shader, state: this.state, size: 0, start: 0, instanceCount: 0 };
-        const draw = this.call;
-
-        draw.geometry = geometry;
-        draw.shader = shader;
-        draw.size = union.count;
-        draw.instanceCount = count;
         pool.flush();
         part.upload();
         this.state.blendMode = first.groupBlendMode;
