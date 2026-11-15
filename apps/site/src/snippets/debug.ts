@@ -1,5 +1,8 @@
 import { MarrowSpine } from 'pixi-marrow';
+// #region import
 import { MarrowDebug } from 'pixi-marrow/debug';
+
+// #endregion
 
 const hero = await MarrowSpine.load({ skeleton: 'hero.skel', atlas: 'hero.atlas' });
 

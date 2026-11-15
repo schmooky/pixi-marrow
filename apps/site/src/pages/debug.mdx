@@ -21,6 +21,8 @@ npm install pixi-silk
 
 ## Turn layers on and off
 
+<Snippet source={more} regions="import" />
+
 <Snippet source={source} regions="overlay" />
 
 `MarrowDebug` adds itself to the skeleton, on top of what it draws, in its space. Lines keep their width on the screen whatever the scale.
@@ -34,6 +36,8 @@ The shapes are the ones the official runtime computes, to the bit. The overlay d
 ## Overdraw
 
 The `overdraw` layer fills every triangle that the skeleton draws with a color that adds where triangles overlap. Where it is bright, the GPU paints a pixel many times. It shows the triangles after the cuts of overdraw: hidden and covered slots are gone, and tight meshes show their polygons. That layer does not apply clipping.
+
+Use it to check the cuts. With outlines, the bright areas shrink. They do not shrink when the cuts are off, and [Performance caveats](/performance/caveats/#overdraw-cuts-that-are-off) lists what turns them off.
 
 ## Remove it
 
