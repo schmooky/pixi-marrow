@@ -1,4 +1,4 @@
-import type { Renderer } from 'pixi.js';
+import { Container, type Renderer } from 'pixi.js';
 import { describe, expect, it, vi } from 'vitest';
 import { Pacer } from '../../src/api/pacing';
 import { PERF_PRESETS, resolvePerf } from '../../src/api/presets';
@@ -11,8 +11,13 @@ import { fixtureAsset } from './helpers';
 
 const SCREEN = { screen: { x: 0, y: 0, width: 800, height: 600 } } as unknown as Renderer;
 
-/** Something rendered with the box it covers on the screen. */
-const at = (x: number, y: number, width: number, height = width) => ({ getBounds: () => ({ x, y, width, height }) });
+/** Something shown and rendered with the box it covers on the screen. */
+const at = (x: number, y: number, width: number, height = width) => ({
+    visible: true,
+    renderable: true,
+    parent: null,
+    getBounds: () => ({ x, y, width, height }),
+});
 
 /** Tells a display object that a render reached it, as Pixi does through the child that watches. */
 function rendered(spine: MarrowSpine): void {
@@ -227,6 +232,42 @@ describe('a display object with pacing', () => {
         spine.destroy();
     });
 
+    it('brings back the deform of an animation that mixed out while drawn small as it is without lod', async () => {
+        const asset = await fixtureAsset('4.2/goblins-pro.skel');
+        const spine = new MarrowSpine(asset, { autoUpdate: false, lod: 'auto' });
+        const reference = new MarrowSpine(asset, { autoUpdate: false });
+        const both = (times: number): void => {
+            for (let i = 0; i < times; i++) {
+                spine.update(1 / 60);
+                reference.update(1 / 60);
+            }
+        };
+        const deforms = (of: MarrowSpine): number[][] =>
+            of.engine.state.deform.map((deform, slot) => [
+                ...deform.subarray(0, Number(of.engine.state.deformLengths[slot])),
+            ]);
+
+        for (const of of [spine, reference]) {
+            of.skin = 'goblin';
+            of.play('walk', { loop: true });
+        }
+        rendered(spine);
+        both(12);
+        vi.spyOn(spine, 'getBounds').mockReturnValue({ x: 0, y: 0, width: 40, height: 40 } as never);
+        rendered(spine);
+        both(1);
+        expect(spine.pacingStatus().reduced).toBe(true);
+        spine.stop({ mix: 0.2 });
+        reference.stop({ mix: 0.2 });
+        both(30);
+        vi.spyOn(spine, 'getBounds').mockReturnValue({ x: 0, y: 0, width: 400, height: 400 } as never);
+        rendered(spine);
+        both(3);
+        expect(deforms(spine)).toEqual(deforms(reference));
+        spine.destroy();
+        reference.destroy();
+    });
+
     it('leaves a deform switch the game set alone without lod', async () => {
         const spine = new MarrowSpine(await fixtureAsset('4.2/cloud-pot.skel'), { autoUpdate: false });
 
@@ -254,6 +295,71 @@ describe('a display object with pacing', () => {
         // no reset runs the physics the game turned off
         expect(modes).toEqual(['none', 'none']);
         expect(spine.engine.deform).toBe(true);
+        spine.destroy();
+    });
+});
+
+describe('pacing and hidden skeletons', () => {
+    /** A skeleton on the screen of a stage, inside a popup, that updates by hand. */
+    async function inPopup(offscreen: 'pause' | 'throttle'): Promise<{ spine: MarrowSpine; popup: Container }> {
+        const spine = new MarrowSpine(await fixtureAsset('4.2/spineboy-pro.skel'), { autoUpdate: false, offscreen });
+        const stage = new Container();
+        const popup = new Container();
+
+        stage.addChild(popup);
+        popup.addChild(spine);
+        spine.position.set(400, 500);
+
+        return { spine, popup };
+    }
+
+    /** How many of a number of renders and updates posed the skeleton. */
+    function posed(spine: MarrowSpine, updates: number): number {
+        const update = vi.spyOn(spine.engine, 'update');
+
+        for (let i = 0; i < updates; i++) {
+            rendered(spine);
+            spine.update(1 / 60);
+        }
+        const calls = update.mock.calls.length;
+
+        update.mockRestore();
+
+        return calls;
+    }
+
+    it('pauses a skeleton that is hidden itself, which Pixi still calls onRender for', async () => {
+        const { spine } = await inPopup('pause');
+
+        expect(posed(spine, 3)).toBe(3);
+        spine.visible = false;
+        expect(posed(spine, 10)).toBe(0);
+        expect(spine.pacingStatus().hidden).toBe(true);
+        spine.visible = true;
+        expect(posed(spine, 3)).toBe(3);
+        spine.renderable = false;
+        expect(posed(spine, 10)).toBe(0);
+        spine.destroy();
+    });
+
+    it('pauses a skeleton under a hidden parent, whose bounds Pixi measures as shown', async () => {
+        const { spine, popup } = await inPopup('pause');
+
+        popup.visible = false;
+        expect(spine.getBounds().width).toBeGreaterThan(0);
+        expect(posed(spine, 10)).toBe(0);
+        popup.visible = true;
+        expect(posed(spine, 3)).toBe(3);
+        popup.renderable = false;
+        expect(posed(spine, 10)).toBe(0);
+        spine.destroy();
+    });
+
+    it('throttles a skeleton under a hidden parent to four updates a second', async () => {
+        const { spine, popup } = await inPopup('throttle');
+
+        popup.visible = false;
+        expect(posed(spine, 30)).toBe(2);
         spine.destroy();
     });
 });

@@ -1,6 +1,6 @@
 import { ImageSource, Texture } from 'pixi.js';
 import { MarrowAsset } from 'pixi-marrow';
-import type { PickedFile, RigFiles } from './files';
+import { MOST_PIXELS, type PickedFile, type RigFiles, tooLarge } from './files';
 
 /*
  * Loads the rigs of the playground from files in memory. The skeleton goes to pixi-marrow as
@@ -9,7 +9,10 @@ import type { PickedFile, RigFiles } from './files';
  * share its URL and its textures.
  */
 
-/** What the files of one drop hold in memory: the atlas URLs and the page textures. */
+/**
+ * What the files of one drop or pick hold in memory: the atlas URLs and the page textures. The
+ * playground frees it once no skeleton of its files is left in the scene.
+ */
 export class FileStore {
     private readonly urls = new Map<File, string>();
     private readonly textures = new Map<File, Promise<Texture>>();
@@ -38,10 +41,21 @@ export class FileStore {
         return texture;
     }
 
-    /** Frees the textures and the URLs. The assets that use them must be destroyed first. */
+    /**
+     * Frees the textures, the decoded images and the URLs. The assets that use them must be
+     * destroyed first. A texture that still decodes is freed once it is made.
+     */
     destroy(): void {
         for (const texture of this.textures.values()) {
-            void texture.then((loaded) => loaded.destroy(true)).catch(() => {});
+            void texture
+                .then((loaded) => {
+                    const image = loaded.source.resource;
+
+                    loaded.destroy(true);
+                    // an image without a source lets the browser drop its pixels before the image is collected
+                    if (image instanceof HTMLImageElement) image.removeAttribute('src');
+                })
+                .catch(() => {});
         }
         for (const url of this.urls.values()) URL.revokeObjectURL(url);
         this.textures.clear();
@@ -49,11 +63,43 @@ export class FileStore {
     }
 }
 
-/** A texture of an image at a URL. An image element keeps its pixels, so pixi-marrow can read outlines from it. */
+/** Waits until an image has loaded, which gives its size before its pixels are decoded. */
+const loaded = (image: HTMLImageElement): Promise<void> =>
+    new Promise((done, fail) => {
+        if (image.complete && image.naturalWidth > 0) {
+            done();
+
+            return;
+        }
+        image.addEventListener('load', () => done(), { once: true });
+        image.addEventListener('error', () => fail(new Error('no image')), { once: true });
+    });
+
+/**
+ * A texture of an image at a URL. An image element keeps its pixels, so pixi-marrow can read
+ * outlines from it. A file over the size limit, or an image with more pixels than the limit,
+ * is not decoded.
+ */
 async function decode(url: string, picked: PickedFile): Promise<Texture> {
+    const large = tooLarge(picked, 'image', 'a page image');
+
+    if (large !== null) throw new Error(large);
     const image = new Image();
 
     image.src = url;
+    try {
+        await loaded(image);
+    } catch {
+        throw new Error(await whyNoImage(picked));
+    }
+    const { naturalWidth: width, naturalHeight: height } = image;
+
+    if (width * height > MOST_PIXELS) {
+        image.removeAttribute('src');
+        throw new Error(
+            `${picked.path} is ${width}x${height} pixels. The playground takes page images of up to 8192x8192 pixels.`,
+        );
+    }
     try {
         await image.decode();
     } catch {
@@ -103,9 +149,13 @@ export function explain(error: unknown): string {
  */
 export async function loadRig(rig: RigFiles, store: FileStore, renderMode: 'auto' | 'mesh'): Promise<MarrowAsset> {
     const { skeleton } = rig;
-    const data = /\.json$/i.test(skeleton.path)
-        ? (JSON.parse(await skeleton.file.text()) as object)
-        : await skeleton.file.arrayBuffer();
+    const json = /\.json$/i.test(skeleton.path);
+    const large = json
+        ? tooLarge(skeleton, 'json', 'a skeleton JSON file')
+        : tooLarge(skeleton, 'skel', 'a binary skeleton');
+
+    if (large !== null) throw new Error(large);
+    const data = json ? (JSON.parse(await skeleton.file.text()) as object) : await skeleton.file.arrayBuffer();
     const entries = await Promise.all(
         [...rig.pages].map(async ([page, image]) => [page, await store.textureOf(image)] as const),
     );

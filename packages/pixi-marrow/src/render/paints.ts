@@ -34,8 +34,8 @@ export interface ViewPaintsOptions {
     readonly measure: () => Bounds;
     /** Whether the vertex shader of the mesh mode places the vertices from the bones where it can. */
     readonly gpu: boolean;
-    /** Whether a view of the mesh mode with `gpu` draws instanced where it can. */
-    readonly instancing: boolean;
+    /** Whether a view of the mesh mode with `gpu` draws instanced where it pays, where it can, or never. */
+    readonly instancing: 'auto' | 'on' | 'off';
 }
 
 /**

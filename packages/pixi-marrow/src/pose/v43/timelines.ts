@@ -1,7 +1,7 @@
 import type { EventKey } from '../../model/timelines';
 import { applyInherit, applyPair, applyRelative, applyScale, applyScalePair } from './timelines-bone';
 import { applyConstraintMixes, applyConstraintValue, applyIkConstraint } from './timelines-constraint';
-import { applyDeform } from './timelines-deform';
+import { applyDeform, applyHiddenDeform } from './timelines-deform';
 import { applyDrawOrder, applyDrawOrderFolder, applyEvent, applySequence } from './timelines-misc';
 import { applyPhysicsReset, applyPhysicsValue } from './timelines-physics';
 import { applyAlpha, applyAttachment, applyColor, applyColorWithoutDark } from './timelines-slot';
@@ -75,7 +75,8 @@ export function applyTimeline(
             applyAttachment(pose, timeline, from, out);
             break;
         case OP_DEFORM:
-            if (!pose.solve.deformOff) applyDeform(pose, timeline, from, add);
+            if (!pose.solve.deformOff) applyDeform(pose, pose.deformLengths, timeline, from, add);
+            else if (out) applyHiddenDeform(pose, timeline, from, add);
             break;
         case OP_SEQUENCE:
             applySequence(pose, timeline, from, out);

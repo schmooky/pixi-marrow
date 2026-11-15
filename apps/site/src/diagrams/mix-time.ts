@@ -3,10 +3,12 @@ import { defineDiagram } from './runtime';
 import { COLORS, lanes } from './shapes';
 
 /*
- * A mix on one track. Animation A moves the square right, animation B scales it. Every two
- * seconds the track plays the other one, with the mix that is picked. During the mix the
- * square blends from one to the other. What the new animation does not key goes back to the
- * setup pose over the mix: the square slides home as it starts to scale.
+ * A mix on one track. Animation A moves the square right, animation B scales it up. Every two
+ * seconds the track plays the other one from its start, with the mix that is picked. Each is
+ * replaced at its far end, A with the square at the right and B with the square grown, so with
+ * no mix the square jumps. During a mix the square blends from one to the other. What the new
+ * animation does not key goes back to the setup pose over the mix: the square slides home as
+ * B starts to scale it.
  */
 
 const MIXES = { '0 s': 0, '0.25 s': 0.25, '0.5 s': 0.5, '1 s': 1 } as const;
@@ -15,6 +17,12 @@ type MixName = keyof typeof MIXES;
 
 /** Seconds each animation plays before the track plays the other one. */
 const TURN = 2;
+
+/**
+ * Seconds of one loop of A and of B. Each reaches its far end after `TURN` seconds, where the
+ * track replaces it, and is back at the setup pose after this many.
+ */
+const LOOP = TURN * 2;
 
 export default defineDiagram({
     setup({ svg, narrow, onFrame, pick, say }) {
@@ -25,7 +33,7 @@ export default defineDiagram({
             svg,
             [
                 { label: 'A: moves right', color: COLORS.first, solid: false },
-                { label: 'B: scales', color: COLORS.second, solid: false },
+                { label: 'B: scales up', color: COLORS.second, solid: false },
                 { label: 'Track 0', color: COLORS.result, solid: true },
             ],
             narrow,
@@ -55,8 +63,9 @@ export default defineDiagram({
         drawBars();
         onFrame((seconds) => {
             time = (time + seconds) % (TURN * 2);
-            const a = { x: 140 * wave(time, 2) };
-            const b = { scale: 1 + 0.7 * wave(time, 1) };
+            // A starts with the track and B two seconds later, so each is at its own time here
+            const a = { x: 140 * wave(time, LOOP) };
+            const b = { scale: 1 + 0.7 * wave(time - TURN, LOOP) };
             const intoB = time >= TURN;
             const since = intoB ? time - TURN : time;
             const weight = duration === 0 ? 1 : Math.min(1, since / duration);
@@ -77,11 +86,15 @@ export default defineDiagram({
                     `Mix from {second:B} into {first:A}, ${share}. B's scale fades back to the setup pose as A moves the square right.`,
                 );
             } else if (duration === 0) {
-                show(`{${intoB ? 'second:B' : 'first:A'}} alone. With no mix, the square jumped to it in one frame.`);
+                show(
+                    intoB
+                        ? '{second:B} alone. With no mix, the square jumped home from the right in one frame.'
+                        : '{first:A} alone. With no mix, the grown square jumped back to its own size in one frame.',
+                );
             } else {
                 show(
                     intoB
-                        ? '{second:B} alone: it scales the square, and keys no position.'
+                        ? '{second:B} alone: it makes the square bigger, and keys no position.'
                         : '{first:A} alone: it moves the square right.',
                 );
             }

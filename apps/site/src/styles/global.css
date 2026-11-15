@@ -284,16 +284,34 @@ pre {
     width: 1.15rem;
     height: 1.15rem;
 }
+/*
+ * A browser drops a whole rule when one selector of it is unknown, and an older one knows no
+ * :popover-open. So each selector that names it has a rule of its own. The script of the bar
+ * marks it with data-menu-open in every browser, and opens the menu by .is-open where it has to.
+ */
 .nav-menu-button,
-.nav-menu-close,
+.nav-menu-close {
+    display: none;
+}
+.nav[data-menu-open] .nav-menu-open {
+    display: none;
+}
+.nav[data-menu-open] .nav-menu-close {
+    display: block;
+}
 .nav:has(.nav-menu:popover-open) .nav-menu-open {
     display: none;
 }
 .nav:has(.nav-menu:popover-open) .nav-menu-close {
     display: block;
 }
-/* on a phone the parts and the tools move into a menu that opens under the bar */
+/*
+ * On a phone the parts and the tools move into a menu that opens under the bar. It is hidden
+ * until it opens. Without popovers it is fixed below the bar, whose blur makes it the box of
+ * the menu: the menu still lies right under it.
+ */
 .nav-menu {
+    display: none;
     position: fixed;
     inset: 3.5rem 0 auto;
     width: auto;
@@ -305,6 +323,12 @@ pre {
     padding: 0.25rem 0 1rem;
     background: hsl(var(--background));
     color: hsl(var(--foreground));
+}
+.nav-menu.is-open {
+    display: block;
+}
+.nav-menu:popover-open {
+    display: block;
 }
 .nav-menu::backdrop {
     top: 3.5rem;
@@ -407,6 +431,7 @@ pre {
 
 .copy-cmd {
     display: inline-flex;
+    max-width: 100%;
     height: 2.6rem;
     align-items: center;
     gap: 0.75rem;
@@ -418,6 +443,10 @@ pre {
     font-size: 0.875rem;
 }
 .copy-cmd code {
+    /* a command wider than the screen ends with dots. The button still copies all of it */
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
 }
 @media (max-width: 420px) {
@@ -425,6 +454,16 @@ pre {
         gap: 0.5rem;
         padding-inline: 0.75rem;
         font-size: 0.78rem;
+    }
+}
+@media (max-width: 360px) {
+    .copy-cmd {
+        gap: 0.4rem;
+        padding-inline: 0.6rem;
+        font-size: 0.72rem;
+    }
+    .copy-cmd span:first-child {
+        display: none;
     }
 }
 .copy-cmd span:first-child,
@@ -712,7 +751,8 @@ pre {
 }
 .preview-chips button {
     border-width: 1px;
-    border-radius: 999px;
+    /* the radius of the joined buttons: no button of the site is a pill */
+    border-radius: 0.45rem;
     padding-inline: 0.75rem;
     font-family: var(--font-mono);
     font-size: 12px;
@@ -816,6 +856,8 @@ main:has(> .landing) {
     display: grid;
     flex: 1 0 auto;
     grid-template-areas: "head" "bee" "code" "actions";
+    /* one column as wide as the page, which no line of code or command widens */
+    grid-template-columns: minmax(0, 1fr);
     align-content: center;
     gap: 1.5rem;
     padding-block: 2.5rem 3rem;
@@ -843,6 +885,18 @@ main:has(> .landing) {
     position: absolute;
     inset: 0;
     display: block;
+}
+/* the line that stands in the box where the bee did not load */
+.landing-bee-note {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    text-align: center;
+    font-size: 0.9rem;
+    color: hsl(var(--muted-foreground));
 }
 .landing-code {
     grid-area: code;

@@ -136,7 +136,7 @@ export default defineDiagram({
             show(
                 pooled
                     ? `Made ${made} copies, and reused ${reused} from the pool.`
-                    : `Made ${made} copies. Without a pool, every symbol that enters is made new.`,
+                    : `Made ${made} copies. Without a pool, every symbol that enters is a new copy.`,
             );
         });
     },

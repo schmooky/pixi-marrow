@@ -9,9 +9,9 @@ hero.queue('idle', { loop: true });
 // #endregion
 
 // #region delay
-// the win starts half a second after the landing started
+// the landing takes a third of a second: the win starts 0.2 seconds after it started, before it is over
 hero.play('landing');
-hero.queue('win', { delay: 0.5 });
+hero.queue('win', { delay: 0.2 });
 // #endregion
 
 // #region mix

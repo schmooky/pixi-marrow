@@ -13,7 +13,7 @@ import { uploadsStretch } from './batch-upload';
 import { ClipMask } from './clip-mask';
 import type { ClipShape } from './clip-shape';
 import type { MeasuredGeometry } from './measured-geometry';
-import { createRangeMesh, type VertexBuffers } from './range-mesh';
+import { createRangeMesh, followSkin, type VertexBuffers } from './range-mesh';
 import { u8, u16 } from './read';
 import { createMaskShader, createViewShader, releaseShader } from './shader';
 import { MAX_PAGES, type Template } from './template';
@@ -28,20 +28,18 @@ import { NO_CLIP, type VisibleList } from './visible';
  * that has the clip polygon as its stencil mask. Pixi draws the mask before the container and
  * again after it, so a clip costs two draw calls on top of its ranges.
  *
- * Ranges and clip groups are created on first use and kept, so a rebuild allocates nothing once
- * it has run. The children of the container have a fixed order: at every position a clip group
- * comes first, then a range. A build walks that order and hides what it does not use, so no child
- * ever moves.
+ * Ranges and clip groups are created on first use and kept, so a rebuild allocates nothing once it has run.
+ * The children of the container have a fixed order: at every position a clip group comes first, then a
+ * range. A build walks that order and hides what it does not use, so no child ever moves.
  *
  * A slot that is skipped as covered keeps its place in that order and adds no index. The ranges,
  * their blend modes and their clip groups are therefore the same with and without skipped slots:
  * a change of the covered slots rewrites index data and nothing else. That matters when it
  * happens while Pixi draws, where the list of meshes can no longer change.
  *
- * The index buffer of a range is zero past the indices the range draws, on the GPU too: a Pixi
- * without `Geometry.indexCount` draws the whole buffer, and zeros are triangles without area. A
- * range therefore knows how far the GPU can hold other indices, see `DrawRange.held`, and every
- * upload reaches that far.
+ * The index buffer of a range is zero past the indices the range draws, on the GPU too: a Pixi without
+ * `Geometry.indexCount` draws the whole buffer, and zeros are triangles without area. A range therefore
+ * knows how far the GPU can hold other indices, see `DrawRange.held`, and every upload reaches that far.
  */
 
 /** Whether a buffer of this Pixi uploads at once when it is told that it changed, see `uploadsStretch`. */
@@ -178,6 +176,7 @@ export class DrawRanges {
         this.wide = template.vertexCount > 65535;
         this.bytes = 0;
         for (const range of this.all) {
+            followSkin(range.mesh, range.buffer, this.options);
             const fits = range.indices.length >= this.capacity && range.indices instanceof Uint32Array === this.wide;
 
             // the GPU keeps the indices of the layout before, until the next upload of the range zeroes them

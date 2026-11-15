@@ -8,7 +8,8 @@ import type { Scene } from './scene';
 /*
  * The word under the readout in the top left corner switches the skinning of every skeleton
  * between the CPU and the GPU. Under it a line says what is going on, and the skeletons that
- * could not load say why. Files come in by a drop anywhere on the page.
+ * could not load say why. Files come in by a drop anywhere on the page, or by the buttons at
+ * the bottom of the page.
  */
 
 /** Where the strip starts, and the most problems listed by name. */

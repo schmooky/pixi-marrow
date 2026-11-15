@@ -1,8 +1,12 @@
-import { type LabResult, ms, resultText, verdicts } from './report';
+import { type LabResult, ms, rendererText, resultText, verdicts } from './report';
 
 /*
  * What the page shows over the canvas: the status while a run goes, and the result at its end.
  * Every text comes from the run or from the browser, so it is set as text and never as HTML.
+ *
+ * A screen reader hears what a run does from a polite live region, which says each step once
+ * and not the numbers that change twice a second. At the end the focus moves to the heading
+ * of the result, so the result is read next.
  */
 
 /** An element with a class and a text. */
@@ -23,23 +27,47 @@ function element<K extends keyof HTMLElementTagNameMap>(
 export interface Status {
     /** Shows what runs now, and how much of the run is done, as a share. */
     show(text: string, done: number): void;
+    /** Tells a screen reader a step of the run, such as the start of the warm-up. */
+    say(text: string): void;
 }
 
-/** Fills the status box of the page. */
+/**
+ * Fills the status box of the page. The live region is part of the page from its start, as a
+ * screen reader hears only the changes of a region it knew before.
+ */
 export function status(host: HTMLElement): Status {
+    const spoken = host.querySelector<HTMLElement>('[data-lab-said]');
     const line = element('p', 'lab-status-line');
     const bar = element('div', 'lab-bar');
     const fill = element('div', 'lab-bar-fill');
 
+    bar.setAttribute('role', 'progressbar');
+    bar.setAttribute('aria-label', 'Progress of the run');
+    bar.setAttribute('aria-valuemin', '0');
+    bar.setAttribute('aria-valuemax', '100');
     bar.append(fill);
-    host.replaceChildren(line, bar);
+    for (const child of [...host.children]) if (child !== spoken) child.remove();
+    host.append(line, bar);
 
     return {
         show(text, done) {
+            const percent = Math.round(Math.min(1, Math.max(0, done)) * 100);
+
             line.textContent = text;
-            fill.style.width = `${Math.round(Math.min(1, Math.max(0, done)) * 100)}%`;
+            fill.style.width = `${percent}%`;
+            bar.setAttribute('aria-valuenow', String(percent));
+        },
+        say(text) {
+            if (spoken !== null) spoken.textContent = text;
         },
     };
+}
+
+/** Puts a card in the box of the result and moves the focus to its heading. */
+function present(host: HTMLElement, card: HTMLElement, title: HTMLElement): void {
+    title.tabIndex = -1;
+    host.replaceChildren(card);
+    title.focus();
 }
 
 /**
@@ -100,8 +128,9 @@ export function showResult(host: HTMLElement, result: LabResult, saved: string |
     const device = element(
         'p',
         'lab-device',
-        `${result.device.name}. ${result.device.gpu}. ${result.device.refresh} Hz. pixi.js ${result.device.pixi}, ${result.settings.renderer}.`,
+        `${result.device.name}. ${result.device.gpu}. ${result.device.refresh} Hz. pixi.js ${result.device.pixi}, ${rendererText(result)}.`,
     );
+    const title = element('h2', 'lab-card-title', `Result: ${result.title}`);
 
     if (result.grows) {
         boxes.append(box(`At ${result.device.refresh} fps`, String(result.count), result.noun));
@@ -114,8 +143,8 @@ export function showResult(host: HTMLElement, result: LabResult, saved: string |
         ),
         box(
             'CPU per frame',
-            `${ms(play.cpu)} ms`,
-            `update ${ms(play.update)}, render ${ms(play.render)}, 95th percentile ${ms(play.cpuP95)}`,
+            `${ms(result, play.cpu)} ms`,
+            `update ${ms(result, play.update)}, render ${ms(result, play.render)}, 95th percentile ${ms(result, play.cpuP95)}`,
         ),
         box('Draw calls', String(play.draws), `per frame, with ${result.count} ${result.noun}`),
     );
@@ -139,20 +168,20 @@ export function showResult(host: HTMLElement, result: LabResult, saved: string |
         buttons.append(share);
     }
     buttons.append(again, others);
-    card.append(element('h2', 'lab-card-title', `Result: ${result.title}`));
+    card.append(title);
     for (const line of verdicts(result)) card.append(element('p', 'lab-verdict', line));
     card.append(
         boxes,
         element(
             'p',
             'lab-note',
-            'Every skeleton has the settings a game gets when it sets none. The scene played at the rate of the screen. The CPU times are the update of the skeletons and the render call of Pixi.',
+            'Every skeleton has the settings a game gets when it sets none. The scene played at the rate of the screen. The CPU times measure the update of the skeletons and the render call of Pixi.',
         ),
         device,
     );
     if (saved !== null) card.append(element('p', 'lab-note', saved));
     card.append(buttons, area);
-    host.replaceChildren(card);
+    present(host, card, title);
 }
 
 /** Shows a run that failed, with its message to copy. */
@@ -160,10 +189,11 @@ export function showFailure(host: HTMLElement, message: string, actions: CardAct
     const card = element('section', 'lab-card');
     const again = element('button', 'lab-button lab-button-main', 'Run again');
     const area = element('textarea', 'lab-text');
+    const title = element('h2', 'lab-card-title', 'The run failed');
 
     area.readOnly = true;
     area.value = `${message}\n${navigator.userAgent}`;
     again.addEventListener('click', () => actions.again());
-    card.append(element('h2', 'lab-card-title', 'The run failed'), element('p', 'lab-verdict', message), again, area);
-    host.replaceChildren(card);
+    card.append(title, element('p', 'lab-verdict', message), again, area);
+    present(host, card, title);
 }

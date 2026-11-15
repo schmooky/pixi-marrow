@@ -1,7 +1,7 @@
 import type { Rectangle } from 'pixi.js';
 import { MarrowAsset, MarrowSpine } from 'pixi-marrow';
 
-const asset = await MarrowAsset.load({ skeleton: 'rigs/animation_a.skel', atlas: 'rigs/heros.atlas' });
+const asset = await MarrowAsset.load({ skeleton: 'rigs/animation_a.skel', atlas: 'rigs/symbols.atlas' });
 
 // #region measure
 /** The box of the setup pose of a skeleton, in skeleton units. Measure it once per asset. */

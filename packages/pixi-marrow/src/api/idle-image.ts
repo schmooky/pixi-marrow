@@ -1,13 +1,11 @@
 import { Bounds, Container, getLocalBounds, Matrix, type Renderer, RenderTexture, Texture } from 'pixi.js';
-import { i32 } from '../geometry/read';
-import { BLEND_MODES, type SkeletonModel } from '../model/model';
 import type { PoseState } from '../pose/state';
 import { ImageBody } from '../render/batch-image';
 import { linkRenderer } from '../render/batch-pipe';
 import { drawsPlain } from '../render/gate';
-import { u8 } from '../render/read';
 import type { SkeletonView } from '../render/skeleton-view';
 import type { IdleCache, IdleCode } from './idle-cache';
+import { blendsAlone, releaseStudio, unmasked } from './idle-gate';
 import {
     createPlacement,
     imageToSpace,
@@ -30,14 +28,24 @@ import {
  * display object. The body draws one quad in a batch of the batched mode, see
  * `render/batch-image.ts`, so that it shares a batch with the skeletons around it.
  *
- * The image is drawn on the pixel grid of the target, see `idle-place.ts`, so it equals the
- * live picture. The view keeps its own state up to date while it is hidden. The image is
- * dropped, and the view shows again in the same frame:
+ * The image is drawn on the pixel grid of the target, see `idle-place.ts`, so each pixel samples
+ * the color the live skeleton put there. It is close to the live picture and not equal to it: it
+ * blends the layers of a pixel at 8 bits once, and a pixel center on the edge of a triangle can
+ * fall to the other side. The pixel check allows 8 pixels a frame to differ by more than 1 and 2
+ * by more than 8, see `idle` in scripts/check-render.mjs. The view keeps its own state up to date
+ * while it is hidden. The image is dropped, and the view shows again in the same frame:
  *
  * - by an update that changes the pose, the layout or the render mode, or that attaches a container,
+ * - by a page texture that changes: a canvas or a video that updates, or a page that takes another source,
  * - by a render that puts the skeleton elsewhere than whole pixels away, by another renderer,
- *   after the WebGL context came back, with an alpha or a blend mode above it, or to a
- *   multisampled target.
+ *   after the WebGL context came back, with an alpha, a blend mode, a filter or a mask above it,
+ *   or to a multisampled target.
+ *
+ * A filter draws at a resolution of its own, 1 unless it says otherwise, so an image drawn on
+ * the grid of the target would be sampled between its texels. A mask keeps the skeleton live too.
+ *
+ * The images of all display objects together hold at most {@link IDLE_BUDGET} bytes. A skeleton
+ * whose image would pass that draws live and asks again after the wait.
  *
  * A multisampled target keeps the skeleton live. Its image would hold 4 samples a pixel, five
  * times the memory, and samples on the edge of a triangle tie far more often than pixel centers.
@@ -57,17 +65,22 @@ import {
 export const IDLE_WAIT = 30;
 /** The largest width and height of an image in pixels. A skeleton larger on the screen draws live. */
 export const IDLE_MAX_SIDE = 2048;
+/**
+ * The most bytes the images of all display objects hold together, at 4 bytes a pixel: 64 MB,
+ * four images of the largest size. A skeleton whose image would pass it draws live.
+ */
+export const IDLE_BUDGET: number = 64 * 1024 * 1024;
 /** Pixels added around the bounds of the skeleton, for an edge the rasterizer rounds outward. */
 const MARGIN = 1;
 const CLEAR: [number, number, number, number] = [0, 0, 0, 0];
-const MULTIPLY = BLEND_MODES.indexOf('multiply');
-const SCREEN = BLEND_MODES.indexOf('screen');
 
 /** The label of the body that shows the image, and that tools look for. */
 const IDLE_LABEL = 'marrow-idle';
 
 /** The container every view is drawn through into its image. A render group, made at the first image. */
 let studio: Container | undefined;
+/** The bytes of the images that show at the moment, of all display objects. */
+let imageBytes = 0;
 const bounds = new Bounds();
 const matrix = new Matrix();
 
@@ -98,6 +111,12 @@ function spareTexture(texture: RenderTexture): void {
     spares.push(texture);
 }
 
+/** A page texture or its source, as far as the idle cache listens to it. */
+type Heard = {
+    on(event: 'update', listener: () => void): unknown;
+    off(event: 'update', listener: () => void): unknown;
+};
+
 /** How often the WebGL context of a renderer came back. An image drawn before that holds nothing. */
 const restores = new WeakMap<Renderer, { count: number }>();
 
@@ -122,6 +141,8 @@ function restoresOf(renderer: Renderer): number {
 /** An image that shows, and where it was drawn. */
 interface Image {
     readonly texture: RenderTexture;
+    /** The bytes of its pixels, counted in {@link imageBytes}. */
+    readonly bytes: number;
     readonly place: Placement;
     readonly renderer: Renderer;
     /** The count of {@link restoresOf} of its renderer when it was drawn. */
@@ -155,18 +176,36 @@ class IdleImage implements IdleCache {
     private refused = false;
     private destroyed = false;
     private readonly onSeen = (renderer: Renderer): void => this.seen(renderer);
+    /** The page textures of the asset. */
+    private readonly pages: readonly Texture[];
+    /** The page textures and their sources, each once, that tell of a change while an image shows. */
+    private heard: Heard[] = [];
+    /** True when a page texture or its source changed since the last update. */
+    private paged = false;
+    private readonly onPage: () => void;
 
-    constructor(owner: Container, view: SkeletonView, state: PoseState) {
+    constructor(owner: Container, view: SkeletonView, state: PoseState, pages: readonly Texture[]) {
         this.owner = owner;
         this.view = view;
         this.state = state;
         this.dark = state.model.slots.hasDark.includes(1);
+        this.pages = pages;
+        // the pages live as long as the asset: what they hear must not keep a skeleton that was
+        // dropped without destroy() alive, so the listener holds this image weakly
+        const self = new WeakRef(this);
+
+        this.onPage = (): void => {
+            const image = self.deref();
+
+            if (image !== undefined) image.paged = true;
+        };
     }
 
     update(): void {
         const { view, state } = this;
         const { stats } = view;
         const same =
+            !this.paged &&
             state.version === this.version &&
             stats.templateBuilds === this.builds &&
             stats.renderMode === this.mode &&
@@ -201,10 +240,31 @@ class IdleImage implements IdleCache {
         this.body.destroy();
     }
 
+    /**
+     * Hears the pages while an image shows: a texture tells of another source or frame, a source
+     * of other pixels, as a canvas or a video does. Each is heard once, because `off` removes every
+     * copy of a listener.
+     */
+    private listen(): void {
+        this.quiet();
+        const heard = new Set<Heard>();
+
+        for (const page of this.pages) heard.add(page as Heard).add(page.source as Heard);
+        for (const it of heard) it.on('update', this.onPage);
+        this.heard = [...heard];
+    }
+
+    /** Stops hearing the pages. */
+    private quiet(): void {
+        for (const it of this.heard) it.off('update', this.onPage);
+        this.heard = [];
+    }
+
     /** Notes what the picture depends on now. */
     private note(): void {
         const { view } = this;
 
+        this.paged = false;
         this.version = this.state.version;
         this.builds = view.stats.templateBuilds;
         this.mode = view.stats.renderMode;
@@ -252,10 +312,12 @@ class IdleImage implements IdleCache {
         placeOf(owner, target.resolution, now);
         if (image !== null) {
             const kept =
+                !this.paged &&
                 renderer === image.renderer &&
                 restoresOf(renderer) === image.restores &&
                 !multisampled &&
                 drawsPlain(owner) &&
+                unmasked(owner) &&
                 this.untinted() &&
                 wholeMove(now, image.place);
 
@@ -273,7 +335,9 @@ class IdleImage implements IdleCache {
         last.set(now);
         this.lastBy = renderer;
         // an alpha or a blend mode above the skeleton blends each slot, which an image cannot
-        this.ready = still && !lost && !multisampled && drawsPlain(owner) && this.untinted() ? renderer : null;
+        const plain = drawsPlain(owner) && unmasked(owner) && this.untinted();
+
+        this.ready = still && !lost && !multisampled && plain ? renderer : null;
     }
 
     /**
@@ -298,7 +362,10 @@ class IdleImage implements IdleCache {
         this.ready = null;
         // a context lost since the render would leave the image empty: the next render asks again
         if ('gl' in renderer && renderer.gl.isContextLost()) return;
-        if (box.width <= 0 || box.height <= 0 || box.width > IDLE_MAX_SIDE || box.height > IDLE_MAX_SIDE) {
+        const bytes = box.width * box.height * 4;
+        const fits = box.width <= IDLE_MAX_SIDE && box.height <= IDLE_MAX_SIDE && imageBytes + bytes <= IDLE_BUDGET;
+
+        if (box.width <= 0 || box.height <= 0 || !fits) {
             this.rest = 0;
 
             return;
@@ -316,14 +383,15 @@ class IdleImage implements IdleCache {
             throw error;
         } finally {
             owner.addChildAt(container, index);
+            releaseStudio(studio, renderer);
         }
-        this.show(texture, box.x, box.y, renderer);
+        this.show(texture, box.x, box.y, renderer, bytes);
         // a draw can lay the vertex ranges out again, which changes no pixel
         this.note();
     }
 
     /** Hides the view and shows an image whose top left corner is at a pixel of the target. */
-    private show(texture: RenderTexture, x: number, y: number, renderer: Renderer): void {
+    private show(texture: RenderTexture, x: number, y: number, renderer: Renderer, bytes: number): void {
         const { owner, last } = this;
         const body = this.body ?? this.createBody();
         const { container } = this.view;
@@ -339,15 +407,19 @@ class IdleImage implements IdleCache {
             owner.removeChild(body);
             owner.addChildAt(body, owner.getChildIndex(container) + 1);
         }
-        this.image = { texture, place: Float64Array.from(last), renderer, restores: restoresOf(renderer) };
+        this.image = { texture, bytes, place: Float64Array.from(last), renderer, restores: restoresOf(renderer) };
+        this.listen();
+        imageBytes += bytes;
     }
 
     /** Shows the view again and lets go of the pixels of the image. */
     private drop(): void {
         const { image, body } = this;
 
+        this.quiet();
         if (image === null || body === undefined) return;
         this.image = null;
+        imageBytes -= image.bytes;
         this.view.container.visible = true;
         body.visible = false;
         body.texture = Texture.EMPTY;
@@ -356,31 +428,12 @@ class IdleImage implements IdleCache {
 }
 
 /**
- * Whether every visible slot of a view blends with the slots below it alone. Normal and additive
- * slots do: drawn into an empty image and then over the background, they give the same color as
- * drawn over the background one by one. A slot that multiplies or screens blends with what lies
- * behind the skeleton too, and an image has nothing behind it.
- */
-function blendsAlone(view: SkeletonView, model: SkeletonModel): boolean {
-    const { template, seen } = view.parts;
-    const { blendModes } = model.slots;
-
-    for (let i = 0; i < seen.count; i++) {
-        const blend = u8(blendModes, i32(template.slots, i32(seen.list, i)));
-
-        if (blend === MULTIPLY || blend === SCREEN) return false;
-    }
-
-    return true;
-}
-
-/**
  * Creates the idle cache of a display object.
  *
  * @example
- * const cache = idleCode.create(spine, view, engine.state);
+ * const cache = idleCode.create(spine, view, engine.state, asset.textures);
  * cache.update();
  */
 export const idleCode: IdleCode = {
-    create: (owner, view, state) => new IdleImage(owner, view, state),
+    create: (owner, view, state, pages) => new IdleImage(owner, view, state, pages),
 };

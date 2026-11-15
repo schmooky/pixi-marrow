@@ -50,7 +50,7 @@ function atSample(engine: PoseEngine): boolean {
 /**
  * `times` updates on both. The events must be equal after each. The poses must be equal after
  * each update the engine posed, and after each baked one at a sample time: between samples a
- * baked pose shows the frame before. Returns how many updates played baked.
+ * baked pose shows the nearest frame. Returns how many updates played baked.
  */
 function updates(pair: Pair, times: number, what: string, exact = false): number {
     const start = pair.tally.baked;

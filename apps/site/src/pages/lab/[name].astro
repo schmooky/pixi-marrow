@@ -16,7 +16,7 @@ const test = testInfo(String(Astro.params.name));
         <h1 class="lab-title">{test.title}</h1>
         <p class="lab-question">{test.question}</p>
         <p class="lab-scene" data-lab-scene>{test.scene(test.count)}</p>
-        <div class="lab-status" data-lab-status></div>
+        <div class="lab-status" data-lab-status><p class="sr-only" role="status" data-lab-said></p></div>
     </header>
     <div class="lab-result" data-lab-result data-lab={test.name}></div>
 </Lab>

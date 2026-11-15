@@ -6,15 +6,15 @@ description: A screen is a grid of pixels, and motion is a new picture many time
 
 import Diagram from '../../components/Diagram.astro';
 
-This part explains the computer graphics that a Spine runtime stands on, from the ground up. You need no graphics background. Each page shows the idea moving first, and then says what it means for animation and for speed.
+This part explains the computer graphics that a Spine runtime stands on, from the ground up. You need no graphics background. Every topic starts with the idea in motion. Then the text says what it means for animation and for speed.
 
 ## A screen is a grid of pixels
 
-<Diagram name="pixels-grid" height={360} rows={1} caption="A circle moves over a small screen. In every frame each pixel whose centre lies inside the circle is lit. Pick a finer screen." />
+<Diagram name="pixels-grid" height={360} rows={1} caption="A circle moves over a small screen. In every frame the screen lights each pixel whose centre lies inside the circle. Pick a finer screen." />
 
 A screen is a grid of small squares, the pixels, and each pixel shows one color. To show a circle, the computer decides for every pixel whether it lies inside the circle, and colors it. A finer grid gives a smoother edge, and more pixels to decide.
 
-Nothing stays on the screen by itself. The circle moves because in every frame the grid is decided again, with the circle somewhere else. A phone screen has about 2.5 million pixels, and each of them is decided again in every frame.
+Nothing stays on the screen by itself. The circle moves because in every frame the computer decides the grid again, with the circle somewhere else. A phone screen has about 2.5 million pixels, and the computer decides each of them again in every frame.
 
 ## Motion is a new picture many times a second
 
@@ -22,7 +22,7 @@ Nothing stays on the screen by itself. The circle moves because in every frame t
 
 A screen at 60 Hz shows a new picture 60 times a second, one every 16.7 milliseconds. That picture is a frame. A game has to make each frame within those 16.7 milliseconds: run its logic, update its animations, and draw.
 
-When the work fits, every refresh shows a new picture, and motion is smooth. When it does not fit, the screen shows the old picture again while the game finishes, and motion stutters. At 20 milliseconds of work, every frame takes two refreshes, so the game runs at 30 frames a second. That is why everything a runtime does in a frame counts: its time comes out of those 16.7 milliseconds.
+When the work fits, every refresh shows a new picture, and motion is smooth. When it does not fit, the screen shows the old picture again while the game finishes, and motion stutters. At 20 milliseconds of work, every frame takes two refreshes, so the game runs at 30 frames a second. That is why everything a runtime does in a frame counts: it uses part of those 16.7 milliseconds.
 
 ## What this means for animation
 

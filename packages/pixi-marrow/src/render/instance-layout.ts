@@ -1,12 +1,13 @@
 import { Buffer, BufferUsage, type Shader, type TextureSource } from 'pixi.js';
 import { i16, i32 } from '../geometry/read';
 import type { SkeletonModel } from '../model/model';
+import { createAttachmentLookup } from '../pose/shared/lookup';
 import { InstancePool, NO_ENTRY, type PoolShape, type PoolSlot } from './instance-pool';
 import { createInstanceShader } from './instance-shader';
 import { ownsStatics } from './layouts';
 import { u8, u16 } from './read';
 import type { SkinLayout } from './skin-layout';
-import { MAX_PAGES, type Template } from './template';
+import { findEntry, MAX_PAGES, type Template } from './template';
 
 /*
  * What the instanced views of one layout share, next to its skin data: the vertex buffers of an
@@ -18,6 +19,9 @@ import { MAX_PAGES, type Template } from './template';
  * multiplies or screens and the atlas has at most 8 pages. A layout that needs more ranges does
  * not draw instanced: one draw per range would draw the second range of the first instance
  * after the first range of the second one. Where instances overlap, the picture would change.
+ *
+ * The pools grow with the views that draw instanced at one time. Once no view holds a slot, the
+ * pools go, after the code that runs at the moment: a burst of views leaves no large textures.
  */
 
 /** Why the views of a layout draw alone: a slot multiplies or screens, more than 8 pages, or too many entries. */
@@ -111,7 +115,7 @@ function blockOf(template: Template, model: SkeletonModel, pages: number): Layou
 export class InstanceLayout {
     /** Why its views draw alone, or null when they can draw instanced. */
     readonly block: LayoutBlock | null;
-    /** `aSkin`, the skin data of the layout. */
+    /** `aSkin`, the buffer of the skin data of the layout, which the views drawing alone share too. */
     readonly skin: Buffer;
     /** `aUV` and `aFlags`. A region with a sequence takes its texture coordinates from its texel. */
     readonly statics: Buffer;
@@ -123,7 +127,8 @@ export class InstanceLayout {
     readonly shape: PoolShape;
     /** The pools, in the order they were made. */
     readonly pools: InstancePool[] = [];
-    private readonly template: Template;
+    /** The template the index buffers are laid out from, until the layout is destroyed. */
+    private template: Template | undefined;
     private readonly unions: Union[] = [];
     /** The page arrays of the views, one for each set of page textures. */
     private readonly pageSets: (readonly TextureSource[])[] = [];
@@ -131,6 +136,9 @@ export class InstanceLayout {
     /** The pool of each shader. */
     private readonly users = new Map<Shader, InstancePool>();
     private readonly wide: boolean;
+    /** True while the pools are due to go, once no view holds a slot. */
+    private emptying = false;
+    private destroyed = false;
 
     constructor(template: Template, model: SkeletonModel, skin: SkinLayout, pages: number) {
         const usage = BufferUsage.VERTEX | BufferUsage.COPY_DST;
@@ -163,16 +171,19 @@ export class InstanceLayout {
 
         this.shape = { bones: model.bones.count, slots: model.slots.count, cpuTexels, cpuAt };
         this.influences = skin.influences;
-        this.skin = new Buffer({ data: skin.vertices, label: 'marrow-skin', usage });
+        this.skin = skin.buffer;
         this.statics = new Buffer({ data: statics, label: 'marrow-uvs', usage });
         this.entries = new Buffer({ data, label: 'marrow-entries', usage });
     }
 
-    /** The bytes the views of the layout share: the buffers, the index buffers and the room of the pools no view takes. */
+    /**
+     * The bytes the views of the layout share: the buffers, the index buffers and the room of the
+     * pools no view takes. The skin data is counted with the skin data of the layout.
+     */
     get bytes(): number {
         // the statics of the template are counted with the template, unless the layout holds a copy
-        const own = this.statics.data === this.template.statics ? 0 : this.statics.data.byteLength;
-        let bytes = this.skin.data.byteLength + own + this.entries.data.byteLength;
+        const own = this.statics.data === this.template?.statics ? 0 : (this.statics.data?.byteLength ?? 0);
+        let bytes = own + this.entries.data.byteLength;
 
         for (const union of this.unions) bytes += union.buffer.data.byteLength;
         for (const pool of this.pools) bytes += pool.bytes - pool.used * pool.slotBytes;
@@ -194,6 +205,21 @@ export class InstanceLayout {
         if (slot === undefined) throw new RangeError('A pool of instances has no room for one slot.');
 
         return slot;
+    }
+
+    /**
+     * Gives the slot of a view back. Once no view holds a slot, the pools, their textures and
+     * their shaders go after the code that runs at the moment, unless a view takes a slot first.
+     */
+    give(slot: PoolSlot): void {
+        slot.release();
+        if (this.emptying || this.pools.some((pool) => pool.used > 0)) return;
+        this.emptying = true;
+        // draws earlier in a render that runs now may have bound the textures, and WebGPU submits them at its end
+        queueMicrotask(() => {
+            this.emptying = false;
+            if (!this.destroyed && this.pools.every((pool) => pool.used === 0)) this.empty();
+        });
     }
 
     /** The index buffer of a draw order, for one more view that draws with it. Give it back with {@link drop}. */
@@ -275,19 +301,26 @@ export class InstanceLayout {
         });
     }
 
-    /** Frees the buffers, the pools and the shaders. The skin data belongs to the layout. */
+    /** Frees the buffers, the pools and the shaders, and lets go of the template. The skin data and its buffer belong to the layout. */
     destroy(): void {
-        // the shaders let go of the textures before those are destroyed
-        for (const shader of this.shaders.values()) shader.destroy();
-        this.skin.destroy();
+        this.destroyed = true;
+        this.empty();
         this.statics.destroy();
         this.entries.destroy();
         for (const union of this.unions) union.buffer.destroy();
-        for (const pool of this.pools) pool.destroy();
         this.unions.length = 0;
+        this.template = undefined;
+    }
+
+    /** Frees the pools and their shaders, and forgets the page arrays. No view holds a slot. */
+    private empty(): void {
+        // the shaders let go of the textures before those are destroyed. Every shader is one of a pool
+        for (const shader of this.shaders.values()) shader.destroy();
+        for (const pool of this.pools) pool.destroy();
         this.pools.length = 0;
         this.shaders.clear();
         this.users.clear();
+        this.pageSets.length = 0;
     }
 
     /** Lays out the index buffer of a draw order: for each slot in that order, every entry it has. */
@@ -295,6 +328,7 @@ export class InstanceLayout {
         const { template } = this;
         let count = 0;
 
+        if (template === undefined) throw new RangeError('The instance layout was destroyed.');
         for (let entry = 0; entry < template.slots.length; entry++) {
             if (i32(template.counts, entry) > 0) count += template.triangles[entry]?.length ?? 0;
         }
@@ -389,4 +423,69 @@ export function instanceLayout(
     skin.instances = made;
 
     return made;
+}
+
+/**
+ * How many times the vertices of what the setup pose shows the union of a layout may have, before
+ * `instancing: 'auto'` lets its views draw alone. An instanced draw runs every vertex of the union
+ * per instance, and drops those of the entries a slot does not show.
+ */
+const MOST_SPREAD = 2;
+
+/** Per skin data of a layout: whether its union has more than {@link MOST_SPREAD} times the vertices a pose shows, see {@link setupVertices}. */
+const spreads = new WeakMap<SkinLayout, boolean>();
+
+/**
+ * The vertices a pose of the template shows at a guess. A slot with a setup attachment counts
+ * that attachment, found in the skin of the template and then in the default skin. A slot that
+ * is empty in the setup pose counts its largest attachment, because an animation fills it. A rig
+ * of effects is often empty in the setup pose, and shows most of what it has once it plays.
+ *
+ * @example
+ * console.log(setupVertices(template, model), template.vertexCount);
+ */
+export function setupVertices(template: Template, model: SkeletonModel): number {
+    const lookup = createAttachmentLookup(model);
+    const largest = new Int32Array(model.slots.count);
+    let count = 0;
+
+    for (let entry = 0; entry < template.slots.length; entry++) {
+        const slot = i32(template.slots, entry);
+
+        largest[slot] = Math.max(i32(largest, slot), i32(template.counts, entry));
+    }
+    for (let slot = 0; slot < model.slots.count; slot++) {
+        const name = model.slots.attachments[slot] ?? null;
+
+        if (name === null || name === '') {
+            count += i32(largest, slot);
+            continue;
+        }
+        const attachment = lookup.find(template.skin, slot, name);
+        const entry = attachment === undefined ? -1 : findEntry(template, slot, attachment);
+
+        if (entry >= 0) count += i32(template.counts, entry);
+    }
+
+    return count;
+}
+
+/**
+ * Whether the union of a layout has more than twice the vertices that a pose shows, as
+ * {@link setupVertices} guesses them.
+ * `instancing: 'auto'` then lets its views draw alone: speedy-ess, at 108 against 44, ran 2.45
+ * times the visible vertices per instance.
+ *
+ * @example
+ * if (mode === 'auto' && unionSpread(template, model, skinLayout)) why = 'vertices';
+ */
+export function unionSpread(template: Template, model: SkeletonModel, skin: SkinLayout): boolean {
+    let spread = spreads.get(skin);
+
+    if (spread === undefined) {
+        spread = template.vertexCount > MOST_SPREAD * setupVertices(template, model);
+        spreads.set(skin, spread);
+    }
+
+    return spread;
 }

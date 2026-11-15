@@ -1,8 +1,9 @@
-import { type Geometry, type Instruction, type InstructionSet, type Renderer, type Shader, State } from 'pixi.js';
+import { type Instruction, type InstructionSet, type Renderer, State } from 'pixi.js';
 import { contextLost, watchContext } from './context-watch';
 import { bendsEdges } from './gate';
+import { INSTANCE_PIPE } from './instance-id';
 import type { InstanceBody } from './instance-paint';
-import { RunPart, type Shaded } from './instance-part';
+import { RunPart } from './instance-part';
 
 /*
  * The render pipe of instanced draws. Pixi hands it the body of every view that draws instanced.
@@ -23,18 +24,8 @@ import { RunPart, type Shaded } from './instance-part';
  * its first instanced body, see {@link linkInstancePipe}.
  */
 
-/** The name a renderer finds the pipe under. */
-export const INSTANCE_PIPE = 'marrowInstances';
-
-/** What the pipe hands the encoder of a renderer for one draw. */
-interface DrawCall {
-    geometry: Geometry;
-    shader: Shader;
-    state: State;
-    size: number;
-    start: number;
-    instanceCount: number;
-}
+/** Frames in a row a part of a run may draw nothing before it is freed. */
+const SPARE_FRAMES = 60;
 
 /**
  * The instruction of one run: views that draw instanced and follow each other in an instruction
@@ -65,8 +56,21 @@ export class InstanceRun implements Instruction {
             part = new RunPart();
             this.parts[index] = part;
         }
+        part.rested = 0;
 
         return part;
+    }
+
+    /**
+     * Ends a frame that drew with the first `used` parts. The others let go of what they drew
+     * with, and the last ones are freed once they have drawn nothing for {@link SPARE_FRAMES}.
+     */
+    settle(used: number): void {
+        const { parts } = this;
+
+        this.draws = used;
+        for (let i = used; i < parts.length; i++) parts[i]?.rest();
+        while (parts.length > used && (parts[parts.length - 1]?.rested ?? 0) > SPARE_FRAMES) parts.pop()?.destroy();
     }
 
     /** Takes a body out, when its view is destroyed. */
@@ -74,6 +78,12 @@ export class InstanceRun implements Instruction {
         const at = this.members.indexOf(body);
 
         if (at >= 0) this.members.splice(at, 1);
+    }
+
+    /** A new build takes the run again, or not: it lets go of its members and of what its parts drew with. */
+    clear(): void {
+        this.members.length = 0;
+        for (const part of this.parts) part.release();
     }
 
     /** Frees the buffers of the parts. */
@@ -120,16 +130,14 @@ interface RunBook {
  * const pipe = linkInstancePipe(renderer);
  * pipe.addRenderable(body, instructionSet);
  */
+export { INSTANCE_PIPE };
+
 export class InstancePipe {
     private renderer: Renderer | null;
     private readonly books = new WeakMap<InstructionSet, RunBook>();
     /** Every book, so that the runs of a destroyed instruction set are freed. */
     private readonly all: RunBook[] = [];
     private readonly state = State.for2d();
-    /** What a draw asks a part for its shader: one object for every draw. */
-    private want: Shaded | undefined;
-    /** What a draw hands the encoder of the renderer: one object for every draw. */
-    private call: DrawCall | undefined;
 
     constructor(renderer: Renderer) {
         this.renderer = renderer;
@@ -190,7 +198,7 @@ export class InstancePipe {
             }
             i = this.drawFrom(renderer, run.part(parts++), members, i);
         }
-        run.draws = parts;
+        run.settle(parts);
     }
 
     /**
@@ -255,24 +263,9 @@ export class InstancePipe {
         if (layout === undefined || union === undefined || slot === undefined || union.count === 0) return;
         const { pool } = slot;
         const geometry = part.geometry(layout, union);
+        const shader = part.shade(layout, pool, pages, dark, renderer.roundPixels);
+        const draw = part.drawCall(geometry, shader, this.state, union.count, count);
 
-        this.want ??= { layout, pool, pages, dark, round: false };
-        const { want } = this;
-
-        want.layout = layout;
-        want.pool = pool;
-        want.pages = pages;
-        want.dark = dark;
-        want.round = renderer.roundPixels;
-        const shader = part.shade(want);
-
-        this.call ??= { geometry, shader, state: this.state, size: 0, start: 0, instanceCount: 0 };
-        const draw = this.call;
-
-        draw.geometry = geometry;
-        draw.shader = shader;
-        draw.size = union.count;
-        draw.instanceCount = count;
         pool.flush();
         part.upload();
         this.state.blendMode = first.groupBlendMode;
@@ -298,10 +291,12 @@ export class InstancePipe {
         }
         const { last } = book;
 
-        // a new build: the run added last is no longer where it was put. The runs let go of their members
+        // a new build: the run added last is no longer where it was put. The runs the build before
+        // did not take are freed, and the others let go of their members and of what they drew with
         if (last === undefined || last.at >= set.instructionSize || set.instructions[last.at] !== last) {
+            for (const old of book.runs.splice(book.used)) old.destroy();
             book.used = 0;
-            for (const old of book.runs) old.members.length = 0;
+            for (const old of book.runs) old.clear();
         }
         let run = book.runs[book.used];
 
@@ -329,12 +324,13 @@ export function linkInstancePipe(renderer: Renderer): InstancePipe {
     const found: unknown = Reflect.get(renderer.renderPipes, INSTANCE_PIPE);
 
     if (found instanceof InstancePipe) return found;
+    // first: a renderer of WebGL1 counts as lost, so its skeletons draw nothing
+    watchContext(renderer);
     const pipe = new InstancePipe(renderer);
 
     // what a renderer does with the pipes it finds at its creation
     Reflect.set(renderer.renderPipes, INSTANCE_PIPE, pipe);
     renderer.runners.destroy.add(pipe);
-    watchContext(renderer);
 
     return pipe;
 }

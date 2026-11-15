@@ -3,7 +3,7 @@ import type { ConstraintData } from '../model/constraints';
 import type { PhysicsMode } from '../pose/engine';
 import { type PerfEntry, plural, type ReportSource, slotNames } from './report-base';
 import { cutRows } from './report-cuts';
-import { instancedDrawRow, instancingRow } from './report-instancing';
+import { instancedDrawRow, instancedUploadsRow, instancingRow } from './report-instancing';
 import { pacingRow, perfRow } from './report-perf';
 
 /*
@@ -339,8 +339,11 @@ function verticesRow({ stats, view }: ReportSource): PerfEntry {
     };
 }
 
-function uploadsRow({ stats }: ReportSource): PerfEntry {
+function uploadsRow(source: ReportSource): PerfEntry {
+    const { stats } = source;
     const { boneUploads } = stats;
+
+    if (source.view.instancing.why === null) return instancedUploadsRow(source);
     // the vertex shader of `skinning: 'gpu'` places what hangs on bones: an update that moves uploads the bones
     const updates = Math.max(stats.positionUploads, boneUploads);
     const rate = (uploads: number): number => Math.round((uploads / updates) * 100) / 100;

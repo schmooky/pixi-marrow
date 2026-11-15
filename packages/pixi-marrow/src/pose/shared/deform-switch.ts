@@ -1,9 +1,14 @@
 /*
  * What `PoseEngine.deform` keeps of the deforms it hides. Off, the length of every deform of a
  * pose is kept here and set to 0 in the pose, so that every mesh shows its setup vertices. The
- * numbers stay in their arrays, because nothing writes a deform while the switch is off. On,
- * every hidden deform comes back. A deform the official runtime would have cleared meanwhile
- * stays cleared: a slot that showed another attachment forgets its hidden deform.
+ * numbers stay in their arrays. On, every hidden deform comes back. A deform the official
+ * runtime would have cleared meanwhile stays cleared: a slot that showed another attachment
+ * forgets its hidden deform.
+ *
+ * While the switch is off, the deform timelines of the entries that play are left out. Those of
+ * an entry that mixes out still run, on the hidden deforms. They mix from the setup shape, so
+ * what they write does not depend on the deforms that were left out. A deform that mixes out
+ * while hidden comes back as the official runtime leaves it: at the setup shape.
  *
  * The lengths are kept by the array of lengths they belong to. A 4.3 engine with sliders has
  * two such arrays, one for the animated pose and one for the applied pose.
@@ -48,6 +53,17 @@ export function showDeforms(lengths: Int32Array, changed: (slot: number) => void
         lengths[slot] = length;
         changed(slot);
     }
+}
+
+/**
+ * The hidden lengths of a pose while the switch is off, or undefined while it is on. The deform
+ * timelines of an entry that mixes out write these in place of the lengths of the pose.
+ *
+ * @example
+ * const hidden = hiddenLengths(state.deformLengths);
+ */
+export function hiddenLengths(lengths: Int32Array): Int32Array | undefined {
+    return HIDDEN.get(lengths);
 }
 
 /**

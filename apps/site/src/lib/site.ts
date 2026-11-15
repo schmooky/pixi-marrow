@@ -42,7 +42,7 @@ export const PAGES: readonly DocsPage[] = [
     {
         href: '/basics/transforms/',
         title: 'Coordinates and transforms',
-        description: 'Move, turn and scale, and how a child takes its parent along.',
+        description: 'Move, turn and scale, and how a child moves with its parent.',
         section: 'Basics',
     },
     {
@@ -84,7 +84,7 @@ export const PAGES: readonly DocsPage[] = [
     {
         href: '/guide/play/',
         title: 'Play',
-        description: 'Loops, speed, stopping, poses that hold, and knowing when an animation ends.',
+        description: 'Loops, speed, how to stop, poses that hold, and how to know when an animation ends.',
         section: 'Guide',
     },
     {
@@ -120,7 +120,7 @@ export const PAGES: readonly DocsPage[] = [
     {
         href: '/how/anatomy/',
         title: 'Anatomy of a skeleton',
-        description: 'Bones, slots, attachments, skins and the atlas, taken apart live.',
+        description: 'Bones, slots, attachments, skins and the atlas, shown one by one on a live skeleton.',
         section: 'How it works',
     },
     {
@@ -132,7 +132,7 @@ export const PAGES: readonly DocsPage[] = [
     {
         href: '/how/pose/',
         title: 'The pose',
-        description: 'Local and world transforms, what follows a bone, constraints, and what is skipped.',
+        description: 'Local and world transforms, what follows a bone, constraints, and what the runtime skips.',
         section: 'How it works',
     },
     {
@@ -150,7 +150,7 @@ export const PAGES: readonly DocsPage[] = [
     {
         href: '/how/fast/',
         title: 'Why it is fast',
-        description: 'What a frame leaves out, shown live, and what still makes a scene slow.',
+        description: 'What a frame skips, shown live, and what still makes a scene slow.',
         section: 'How it works',
     },
     {
@@ -174,7 +174,7 @@ export const PAGES: readonly DocsPage[] = [
     {
         href: '/reels/',
         title: 'Example: reels',
-        description: 'The reels of a slot game, spun by pixi-reels and drawn by pixi-marrow.',
+        description: 'The reels of a slot game: pixi-reels spins them, and pixi-marrow draws them.',
         section: 'Reference',
     },
 ];
@@ -196,7 +196,7 @@ export interface TopLink {
 const SECTION_NOTES: Record<DocsSection, string> = {
     Basics: 'The computer graphics a runtime stands on.',
     Guide: 'Load, play, mix and follow animations.',
-    'How it works': 'The runtime taken apart, one frame at a time.',
+    'How it works': 'The parts of the runtime, one frame at a time.',
     Reference: 'Performance, debugging, details and an example.',
 };
 

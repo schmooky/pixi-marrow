@@ -9,8 +9,10 @@ import type { Bounds, Container, Matrix } from 'pixi.js';
  *
  * The image is drawn on the grid of those pixels. A sprite then covers whole pixels, and each
  * pixel samples the center of one texel, which is the value the live skeleton put there. So the
- * image is exact for its placement, and for every placement that moves it by whole pixels. Any
- * other placement would sample between texels.
+ * image is close to the live picture for its placement, and for every placement that moves it by
+ * whole pixels. It is not equal to it: the layers of a pixel are blended at 8 bits once, and a
+ * pixel center on the edge of a triangle can round to the other side. The pixel check bounds the
+ * difference, see `idle` in scripts/check-render.mjs. Any other placement would sample between texels.
  */
 
 /** Six numbers of an affine map, as described at the top of this file. */
@@ -80,7 +82,7 @@ export function placeOf(container: Container, resolution: number, out: Placement
 
 /**
  * Whether a placement is another one moved by whole pixels: the same scale, rotation and skew,
- * and a move that lands on the pixel grid. An image drawn for one is exact for the other.
+ * and a move that lands on the pixel grid. An image drawn for one samples the same texels for the other.
  *
  * @example
  * if (!wholeMove(now, image.place)) dropImage();

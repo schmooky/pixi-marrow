@@ -8,7 +8,7 @@ import Diagram from '../components/Diagram.astro';
 import Snippet from '../components/Snippet.astro';
 import source from '../snippets/performance.ts?raw';
 
-Most of the speed of pixi-marrow needs no option. See [what is automatic](/good-to-know/#what-is-automatic). The settings on this page change the timing, the memory or the picture, so each one waits until you ask for it.
+Most of the speed of pixi-marrow needs no option. See [what is automatic](/good-to-know/#what-is-automatic). The settings on this page change the timing, the memory or the picture, so each one stays off until you ask for it.
 
 ## Presets
 
@@ -27,37 +27,39 @@ Most of the speed of pixi-marrow needs no option. See [what is automatic](/good-
 | `skinning` | `auto` | `auto` | `auto` |
 | `instancing` | `off` | `off` | `off` |
 
-The presets set when a skeleton updates, and nothing else. `tightMesh: 'on'`, `bake`, `idleCache`, `lod` and `instancing` cost memory, vertices or draw calls in a way that depends on the device and the scene, so set each by name where it pays.
+The presets set when a skeleton updates, and nothing else. `tightMesh: 'on'`, `bake`, `idleCache`, `lod` and `instancing` cost memory, vertices or draw calls. That cost depends on the device and the scene, so set each by name where it pays.
 
 ## Change one setting
 
 <Snippet source={source} regions="settings" />
 
-A `perf` object starts from its `preset` and changes the settings it names. An option given by name wins over both. A value that does not exist throws a `MarrowError` with the closest valid name.
+A `perf` object starts from its `preset` and changes the settings it names. An option that you give by name wins over both. For a value that does not exist, the runtime throws a `MarrowError` with the closest valid name.
 
 ## How pacing works
 
-The presets change how often a skeleton is posed, and nothing else. A skeleton that is posed less often costs less, and moves in steps:
+The presets change how often the runtime poses a skeleton, and nothing else. A skeleton that the runtime poses less often costs less, and moves in steps:
 
-<Diagram name="perf-pacing" height={230} rows={0} caption="One second at 60 frames, slowed down. A tick marks each frame in which the skeleton is posed, and the square moves with the time it was posed at." />
+<Diagram name="perf-pacing" height={230} rows={0} caption="One second at 60 frames, played slower. A tick marks each frame in which the runtime poses the skeleton. The square moves with the time of that pose." />
 
-On the screen the skeleton is posed in every frame. Off the screen, `throttle` poses it 4 times a second with all the time that passed, so its square steps, and the event key at 0.4 seconds fires at 0.5. `pause` stops its time until it comes back on the screen. `updateRate: 30` poses it every other frame, which halves the work and steps the motion at 30 frames a second.
+On the screen, the runtime poses the skeleton in every frame. Off the screen, `throttle` poses it 4 times a second with all the time that passed. So its square steps, and the event key at 0.4 seconds fires at 0.5. `pause` stops its time until it is on the screen again. `updateRate: 30` poses it every other frame. That halves the work and steps the motion at 30 frames a second.
 
 ## The settings
 
-- **`offscreen`.** A skeleton is off the screen when its bounds lie outside the screen, or when no render reached it for a tenth of a second. `throttle` updates it 4 times a second with the time that passed, so events fire late. `pause` stops its time until it is back.
-- **`updateRate`.** A number poses the skeleton at most that many times a second, with the time of the frames in between. Motion steps at low rates. The rate of `fast` applies to batched skeletons only, unless you set it by name.
-- **`lod`.** `auto` leaves physics and deform out while the skeleton is drawn smaller than 96 pixels across. Meshes then show their setup shape. Both come back at 120 pixels, physics with a reset, so nothing jumps.
-- **`idleCache`.** `auto` draws a skeleton that rested for 30 updates as one image, until its pose or its place changes. The image takes 4 bytes per pixel of its box on the screen. A slot that multiplies or screens keeps the skeleton live. Every image is a texture of its own, so many images split a batch into more draw calls. On a low-end phone 120 small resting symbols drew slower with the cache than without.
-- **`tightMesh`.** `on` draws every region as the polygon around its visible pixels. Some pixels move by 1 of 255 levels. It needs the outlines of the atlas, and adds 13 to 94 percent vertices on the rigs of the bench.
-- **`bake`.** `auto` plays an animation from frames baked once, while it plays alone on track 0. A clip keeps 23 KB to 0.9 MB per animation and skin. The engine still runs the tracks and fires the events. Between two frames, 60 a second, the frame before is shown. A skin with physics or a slider is never baked.
-- **`skinning`.** `gpu` places the vertices of the mesh mode in the vertex shader from the bones, so a moving skeleton uploads its bones and not its vertices. With `instancing: 'auto'` copies of one rig that follow each other in the display list then draw in one instanced call. That pays for many copies of one rig. A grid of different symbols draws in fewer calls in the batched mode, so `auto` stays `cpu`.
+- **`offscreen`.** A skeleton is off the screen when its bounds lie outside the screen, or when no render reached it for a tenth of a second. `throttle` updates it 4 times a second with the time that passed, so events fire late. `pause` stops its time until it is on the screen again.
+- **`updateRate`.** With a number, the runtime poses the skeleton at most that many times a second, with the time of the frames in between. Motion steps at low rates. The rate of `fast` applies to batched skeletons only, unless you set it by name.
+- **`lod`.** `auto` skips physics and deform while the skeleton draws smaller than 96 pixels across. Meshes then show their setup shape. Both return at 120 pixels, physics with a reset, so nothing jumps.
+- **`idleCache`.** `auto` draws a skeleton that rested for 30 updates as one image, until its pose or its place changes. The image takes 4 bytes per pixel of its box on the screen. A slot that multiplies or screens keeps the skeleton live. Every image is a texture of its own, so many images split a batch into more draw calls. On a Galaxy A05, a low-end phone, 120 small resting symbols took 13.5 ms a frame with the cache and 11.9 ms without.
+- **`tightMesh`.** `on` draws every region as the polygon around its visible pixels. Some pixels move by 1 of 255 levels. It needs the outlines of the atlas. On the rigs of the bench, it adds 13 to 94 percent more vertices.
+- **`bake`.** `auto` bakes an animation in idle time the first time it plays alone on track 0, and plays it live until the clip is ready. From then on it plays from the frames while it plays alone. A clip keeps 23 KB to 0.9 MB per animation and skin. The engine still runs the tracks and fires the events. Between two frames, 60 a second, the skeleton shows the nearest frame.
+  - `auto` does not bake an animation with another one queued after it.
+  - `auto` never bakes a skin with physics or a slider.
+- **`skinning`.** `gpu` places the vertices of the mesh mode in the vertex shader, from the bones. So a moving skeleton uploads its bones and not its vertices. With `instancing: 'auto'`, copies of one rig that follow each other in the display list then draw in one instanced call. That pays for many copies of one rig. A grid of different symbols draws in fewer calls in the batched mode, so `auto` stays `cpu`.
 
 ## Bake at build time
 
 <Snippet source={source} regions="bake" />
 
-`bakeAnimations` of `pixi-marrow/bake` runs in Node too, so the clips can be baked at build time and shipped as a file. `addBakedClips` hands them to an asset, and its instances play them in place of baking. A clip costs 23 KB to 0.9 MB on the example rigs.
+`bakeAnimations` of `pixi-marrow/bake` runs in Node too. So you can bake the clips at build time and ship them as a file. `addBakedClips` gives them to an asset, and its instances play them instead of baking. A clip costs 23 KB to 0.9 MB on the example rigs.
 
 ## See which are in effect
 
@@ -67,6 +69,6 @@ The first two rows of the report are `perf` and `pacing`. `perf` names the prese
 
 ## Not measured yet
 
-The presets were measured on one desktop machine. There are no numbers for phones yet, so `skinning: 'auto'` stays on the CPU and no preset changes it.
+The numbers for the presets come from one desktop machine. The only phone measured so far is the Galaxy A05, for the idle cache above. GPU skinning has no numbers for phones. So `skinning: 'auto'` stays on the CPU, and no preset changes it.
 
-The [lab](/lab/) shows how pixi-marrow plays on the device that opens it, with the settings a game gets when it sets none. Each test plays a scene at the rate of the screen and shows the frame rate and the time per frame. How many finds the number of symbols the device plays at its full rate.
+The [lab](/lab/) shows how pixi-marrow plays on the device that opens it, with the settings a game gets when it sets none. Each test plays a scene at the rate of the screen and shows the frame rate and the time per frame. The How many test finds the number of symbols that the device plays at its full rate.

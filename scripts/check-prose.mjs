@@ -7,11 +7,17 @@
  * - No hype or filler words.
  * - Docs prose (Markdown outside code, and the library's JSDoc): no semicolons, at most one colon per
  *   sentence and at most 32 words per sentence. Short sentences, one idea each.
+ * - Markdown and MDX docs, captions of MDX components included, follow ASD-STE100, Simplified
+ *   Technical English, in the STE-flavored mode of the asd-ste100 skill: at most 25 words a
+ *   sentence and 6 sentences a paragraph, no soft phrasal verbs (spin up, kick off) and no action
+ *   frozen into a noun (perform an analysis). The changelog and released changesets keep their history.
+ * - With --advisory it also prints what needs a judgment and does not fail: possible passive
+ *   voice, compound tenses (has shown, had moved), and one action named by several verbs in a file.
  *
  * Symbols that are content stay allowed: letters with accents, Greek letters, degree, plus-minus.
  * A line containing `prose-ignore` is skipped.
  *
- * usage: node scripts/check-prose.mjs [files...]   (default: every doc and source file in scope)
+ * usage: node scripts/check-prose.mjs [--advisory] [files...]   (default: every doc and source file in scope)
  */
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { extname, join, relative } from 'node:path';
@@ -125,6 +131,55 @@ const HYPE = [
 const HYPE_RE = new RegExp(`\\b(${HYPE.join('|')})\\b`, 'gi');
 const MAX_WORDS = 32;
 
+/*
+ * ASD-STE100 for the Markdown and MDX docs. The patterns follow scripts/ste-lint.py of the
+ * asd-ste100 skill (MIT, github.com/danyuchn/asd-ste100-skill), which applies the structural rules
+ * of the standard without its dictionary.
+ */
+const STE_MAX_WORDS = 25;
+const STE_MAX_SENTENCES = 6;
+const STE_RULES = [
+    [
+        /\b(spin(?:ning|s)? up|spun up|reach(?:ing|es|ed)? out|div(?:e|es|ing|ed) into|dove into|kick(?:ing|s|ed)? off|circl(?:e|es|ing|ed) back|touch(?:ing|es|ed)? base)\b/gi,
+        'soft phrasal verb: use one plain verb (start, contact, read, begin)',
+    ],
+    [
+        /\b(perform|performs|performed|conduct|conducts|conducted|carry out|carries out|carried out)\s+(?:a|an|the)\s+\w+(?:tion|sion|ment|ance|ence|ysis)\b/gi,
+        'an action frozen into a noun: use the verb',
+    ],
+];
+const PARTICIPLES =
+    'given|taken|made|done|found|seen|known|shown|written|built|sent|set|run|read|kept|held|left|put|cut|let|split|spread|begun|become|come|gone|got|gotten|lost|met|paid|said|sold|told|thought|brought|caught|taught|won|drawn|grown|thrown|flown|driven|risen|chosen|broken|spoken|frozen|hidden|forgotten|fallen|understood|stood|stuck|hung|led|fed|bound|spun|slid|lit';
+const STE_ADVISORY = [
+    [
+        new RegExp(
+            `\\b(is|are|was|were|been|being)\\s+(\\w+ed|${PARTICIPLES})\\b(?!\\s+(?:to|for|by)\\s+\\w+ing)`,
+            'gi',
+        ),
+        'possible passive voice: name who acts, unless no one matters',
+    ],
+    [
+        new RegExp(
+            `(?<!\\b(?:may|might|could|should|would|must) )\\b(has|have|had)\\s+(?:been\\s+)?(?:\\w+ed|${PARTICIPLES})\\b`,
+            'gi',
+        ),
+        'compound tense: use the simple past or present, unless the result now is the point',
+    ],
+];
+/** Verbs that name one action. A file uses one of each group. "display object" and "pixel check" are names, not verbs. */
+const SYNONYMS = [
+    ['check', 'verify', 'confirm', 'validate'],
+    ['delete', 'remove', 'erase'],
+    ['start', 'launch', 'begin', 'initiate'],
+    ['stop', 'halt', 'terminate'],
+    ['show', 'display'],
+    ['use', 'utilize', 'employ'],
+    ['fix', 'repair', 'correct'],
+    ['change', 'modify', 'alter'],
+];
+const NAMES = /\b(display (?:objects?|lists?)|pixel checks?|the check|a check)\b/gi;
+const ADVISORY = process.argv.includes('--advisory');
+
 function walk(path) {
     const rel = relative(root, path);
 
@@ -151,7 +206,7 @@ function markdownProse(text) {
     let buffer = [];
     let start = 0;
     const flush = () => {
-        if (buffer.length) out.push({ line: start + 1, text: buffer.join(' ') });
+        if (buffer.length) out.push({ line: start + 1, text: buffer.join(' '), kind: 'paragraph' });
         buffer = [];
     };
 
@@ -163,7 +218,7 @@ function markdownProse(text) {
             // titles and descriptions are read in search results: check them like prose
             const field = line.match(/^(title|seoTitle|description):\s*['"]?(.*?)['"]?$/);
 
-            if (field) out.push({ line: i + 1, text: field[2] });
+            if (field) out.push({ line: i + 1, text: field[2], kind: 'meta' });
 
             return;
         }
@@ -173,15 +228,24 @@ function markdownProse(text) {
 
             return;
         }
-        if (fence || line === '' || /^(import|export) /.test(line) || /^#/.test(line) || /^<[^>]*>$/.test(line)) {
+        if (fence || line === '' || /^(import|export) /.test(line) || /^#/.test(line)) {
             flush();
+
+            return;
+        }
+        // a component: what a reader sees of it is its caption
+        if (/^<[^>]*>$/.test(line)) {
+            flush();
+            const caption = line.match(/\bcaption="([^"]*)"/);
+
+            if (caption) out.push({ line: i + 1, text: caption[1], kind: 'caption' });
 
             return;
         }
         if (line.startsWith('|')) {
             flush();
             for (const cell of line.split('|'))
-                if (cell.trim() && !/^[-: ]+$/.test(cell)) out.push({ line: i + 1, text: cell });
+                if (cell.trim() && !/^[-: ]+$/.test(cell)) out.push({ line: i + 1, text: cell, kind: 'cell' });
 
             return;
         }
@@ -235,11 +299,10 @@ const jsdocMarkdown = (comment) =>
         .map((l) => l.replace(/^\s*\* ?/, ''))
         .join('\n')
         .replace(/@example[\s\S]*?(?=\n@|$)/g, '');
-const files =
-    process.argv.length > 2
-        ? process.argv.slice(2).map((f) => join(process.cwd(), f))
-        : SCOPE.flatMap((p) => walk(join(root, p)));
+const named = process.argv.slice(2).filter((a) => a !== '--advisory');
+const files = named.length > 0 ? named.map((f) => join(process.cwd(), f)) : SCOPE.flatMap((p) => walk(join(root, p)));
 const problems = [];
+const advice = [];
 const report = (file, line, message) => problems.push(`${relative(root, file)}:${line}  ${message}`);
 
 for (const file of files) {
@@ -248,6 +311,8 @@ for (const file of files) {
     const ignored = new Set(lines.flatMap((l, i) => (l.includes('prose-ignore') ? [i + 1] : [])));
     const ext = extname(file);
     const isDoc = ext === '.md' || ext === '.mdx';
+    // the changelog, and the changesets a release already took into it, keep their history as written
+    const isSte = isDoc && !file.endsWith('CHANGELOG.md') && !/\.changeset\/pre\//.test(file);
     // the library's JSDoc is the API reference
     const isLibrary = /packages\/pixi-marrow\/src\//.test(file);
 
@@ -260,7 +325,7 @@ for (const file of files) {
         ? markdownProse(text)
               // an agent skill's description is a trigger list for the agent, not prose: punctuation rules only
               .filter((f) => !(file.endsWith('SKILL.md') && f.line === descriptionLine(text)))
-              .map((f) => ({ ...f, text: readable(f.text), prose: true }))
+              .map((f) => ({ ...f, text: readable(f.text), prose: true, ste: isSte }))
         : sourceText(text, ext === '.astro').flatMap((p) => {
               const line = lineAt(text, p.index);
 
@@ -283,18 +348,46 @@ for (const file of files) {
               return [{ line, text: prose ? readable(p.text) : p.text, prose }];
           });
 
-    for (const { line, text: fragment, prose } of fragments) {
+    const verbs = new Map();
+
+    for (const { line, text: fragment, prose, ste, kind } of fragments) {
         if (ignored.has(line)) continue;
         for (const m of fragment.matchAll(HYPE_RE)) report(file, line, `"${m[0]}": cut it or say what it means`);
         if (!prose || /^https?:/.test(fragment)) continue;
-        for (const s of sentences(fragment.replace(/^['"`]|['"`],?$/g, ''))) {
+        const all = sentences(fragment.replace(/^['"`]|['"`],?$/g, ''));
+        const most = ste ? STE_MAX_WORDS : MAX_WORDS;
+
+        for (const s of all) {
             if (s.includes('; ')) report(file, line, `semicolon: split into two sentences ("${s.slice(0, 60)}")`);
             if ((s.match(/:\s/g) ?? []).length > 1)
                 report(file, line, `two colons in one sentence ("${s.slice(0, 60)}")`);
-            if (words(s) > MAX_WORDS) report(file, line, `${words(s)} words: split it ("${s.slice(0, 60)}")`);
+            if (words(s) > most) report(file, line, `${words(s)} words: split it ("${s.slice(0, 60)}")`);
         }
+        if (!ste) continue;
+        if ((kind === 'paragraph' || kind === 'caption') && all.length > STE_MAX_SENTENCES)
+            report(file, line, `${all.length} sentences in one paragraph: at most ${STE_MAX_SENTENCES}, one topic`);
+        for (const [re, message] of STE_RULES)
+            for (const m of fragment.matchAll(re)) report(file, line, `"${m[0]}": ${message}`);
+        for (const [re, message] of STE_ADVISORY)
+            for (const m of fragment.matchAll(re))
+                advice.push(`${relative(root, file)}:${line}  "${m[0]}": ${message}`);
+        const plain = fragment.replace(NAMES, ' ').toLowerCase();
+
+        for (const group of SYNONYMS)
+            for (const verb of group)
+                if (new RegExp(`\\b${verb}(s|es|ed|d|ing)?\\b`).test(plain) && !verbs.has(verb)) verbs.set(verb, line);
+    }
+    for (const group of SYNONYMS) {
+        const used = group.filter((verb) => verbs.has(verb));
+
+        if (used.length > 1)
+            advice.push(
+                `${relative(root, file)}:${verbs.get(used[1])}  "${used.join('", "')}" name one action: pick one`,
+            );
     }
 }
+
+if (ADVISORY) for (const a of advice) console.log(`advisory: ${a}`);
 
 for (const p of problems) console.log(p);
 console.log(`check-prose: ${files.length} files, ${problems.length} problems`);

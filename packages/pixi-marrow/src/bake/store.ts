@@ -25,8 +25,11 @@ export interface PreparedClip {
     readonly needs: Uint8Array | undefined;
 }
 
-/** Bakes an animation of the model with these skins, by name. */
-export type Baker = (animation: number, skins: readonly string[]) => BakedClip;
+/**
+ * Bakes an animation of the model with these skins, by name, outside the frame. It calls `done`
+ * once, with the clip or with the error that ended the bake. A baker of tests can call it at once.
+ */
+export type Baker = (animation: number, skins: readonly string[], done: (clip: BakedClip | Error) => void) => void;
 
 /** True when two lists of names are the same. */
 const sameNames = (a: readonly string[], b: readonly string[]): boolean =>
@@ -83,6 +86,8 @@ export class ModelBakes {
     private readonly bySkin = new Map<number, (PreparedClip | null | undefined)[]>();
     /** Per skin index, per animation: why it cannot play baked, when it cannot. */
     private readonly reasons = new Map<number, string[]>();
+    /** Per skin index, per animation: the bake that runs, as a token that its answer must match. */
+    private readonly running = new Map<number, Map<number, object>>();
 
     constructor(model: SkeletonModel) {
         this.model = model;
@@ -90,7 +95,13 @@ export class ModelBakes {
         onSkinFreed(createAttachmentLookup(model), (index) => {
             this.bySkin.delete(index);
             this.reasons.delete(index);
+            this.running.delete(index);
         });
+    }
+
+    /** True while a bake of an animation of the model runs outside the frame. */
+    get baking(): boolean {
+        return this.running.size > 0;
     }
 
     /** The bytes of every clip held, prepared or handed over. Each clip counts once. */
@@ -104,6 +115,8 @@ export class ModelBakes {
 
     /** Why an animation of a skin does not play baked, or undefined when it does or was not looked at. */
     reason(skin: number, animation: number): string | undefined {
+        if (this.running.get(skin)?.has(animation) === true) return 'its clip is being baked in idle time';
+
         return this.reasons.get(skin)?.[animation];
     }
 
@@ -118,31 +131,50 @@ export class ModelBakes {
             if (same >= 0) this.given.splice(same, 1);
             this.given.push(clip);
         }
-        // the next look finds the clips that were handed over
+        // the next look finds the clips that were handed over, and a bake that runs is of no use
         this.bySkin.clear();
         this.reasons.clear();
+        this.running.clear();
     }
 
     /**
      * The clip of an animation for a skin, ready to play, or null. A clip that was handed over
-     * comes first. Without one `bake` bakes it, and without `bake` there is none. The answer is
-     * kept, except a null for want of a baker: another instance may bake it.
+     * comes first. Without one `bake` bakes it outside the frame, and the answer is null until
+     * the clip is there. Without `bake` there is none. The answer is kept, except a null for
+     * want of a baker: another instance may bake it.
      */
     find(skin: number, animation: number, bake: Baker | null): PreparedClip | null {
+        const known = this.rowOf(skin)[animation];
+
+        if (known !== undefined) return known;
+        if (this.running.get(skin)?.has(animation) === true) return null;
+        const prepared = this.prepare(skin, animation, bake);
+
+        if (prepared !== undefined) this.rowOf(skin)[animation] = prepared;
+
+        // a bake that ended at once has answered
+        return this.rowOf(skin)[animation] ?? null;
+    }
+
+    private rowOf(skin: number): (PreparedClip | null | undefined)[] {
         let row = this.bySkin.get(skin);
 
         if (row === undefined) {
             row = [];
             this.bySkin.set(skin, row);
         }
-        const known = row[animation];
 
-        if (known !== undefined) return known;
-        const prepared = this.prepare(skin, animation, bake);
+        return row;
+    }
 
-        if (prepared !== undefined) row[animation] = prepared;
+    /** Notes why an animation of a skin does not play baked, and returns the null of that answer. */
+    private cannot(skin: number, animation: number, reason: string): null {
+        const reasons = this.reasons.get(skin) ?? [];
 
-        return prepared ?? null;
+        reasons[animation] = reason;
+        this.reasons.set(skin, reasons);
+
+        return null;
     }
 
     private prepare(skin: number, animation: number, bake: Baker | null): PreparedClip | null | undefined {
@@ -151,29 +183,46 @@ export class ModelBakes {
         const name = model.animations[animation]?.name ?? '';
         const skins = lookup.parts(skin).map((index) => model.skins[index]?.name ?? '');
         const blocked = bakeBlocker(model, lookup.skin(skin));
-        const cannot = (reason: string): null => {
-            const reasons = this.reasons.get(skin) ?? [];
 
-            reasons[animation] = reason;
-            this.reasons.set(skin, reasons);
+        if (blocked !== null) return this.cannot(skin, animation, blocked);
+        const clip = this.given.find((held) => held.animation === name && sameNames(held.skins, skins));
 
-            return null;
-        };
+        if (clip !== undefined) return this.ready(clip, skin, animation);
+        if (bake !== null) this.bakeLater(skin, animation, skins, bake);
 
-        if (blocked !== null) return cannot(blocked);
-        let clip = this.given.find((held) => held.animation === name && sameNames(held.skins, skins));
+        return undefined;
+    }
 
-        if (clip === undefined) {
-            if (bake === null) return undefined;
-            try {
-                clip = bake(animation, skins);
-            } catch (error) {
-                return cannot(error instanceof Error ? error.message : String(error));
-            }
+    /**
+     * Starts the bake of an animation for a skin. Its answer is kept when it comes, unless the
+     * skin was freed meanwhile or a game handed clips over: then the next look starts again.
+     */
+    private bakeLater(skin: number, animation: number, skins: readonly string[], bake: Baker): void {
+        const token = {};
+        let bakes = this.running.get(skin);
+
+        if (bakes === undefined) {
+            bakes = new Map();
+            this.running.set(skin, bakes);
         }
-        const attachments = attachmentsOf(model, clip, skin);
+        bakes.set(animation, token);
+        bake(animation, skins, (clip) => {
+            const now = this.running.get(skin);
 
-        if (attachments === undefined) return cannot('an attachment of the clip is not in the skins');
+            if (now?.get(animation) !== token) return;
+            now.delete(animation);
+            if (now.size === 0) this.running.delete(skin);
+            this.rowOf(skin)[animation] =
+                clip instanceof Error ? this.cannot(skin, animation, clip.message) : this.ready(clip, skin, animation);
+        });
+    }
+
+    /** A clip made ready for a skin, or null when a name that a frame shows finds no attachment. */
+    private ready(clip: BakedClip, skin: number, animation: number): PreparedClip | null {
+        const attachments = attachmentsOf(this.model, clip, skin);
+
+        if (attachments === undefined)
+            return this.cannot(skin, animation, 'an attachment of the clip is not in the skins');
 
         return {
             clip,
@@ -182,14 +231,20 @@ export class ModelBakes {
             last: clip.frames - 1,
             skin,
             attachments,
-            needs: needsOf(model, clip, skin),
+            needs: needsOf(this.model, clip, skin),
         };
     }
 }
 
-/** Throws a `MarrowError` when a clip was not baked from this skeleton, or its arrays do not fit its counts. */
+/**
+ * Throws a `MarrowError` when a clip was not baked from this skeleton, or its arrays do not fit
+ * its counts. A JSON export can lack the editor hash, so the duration of the animation is
+ * compared too: a clip of an animation that was edited since lasts another time, most often.
+ * The two compare at 32 bits, as a binary export holds a time.
+ */
 function checkFits(model: SkeletonModel, clip: BakedClip): void {
-    animationIndex(model, clip.animation);
+    const duration = model.animations[animationIndex(model, clip.animation)]?.duration ?? 0;
+
     skinIndices(model, clip.skins);
     const fail = (why: string): never => {
         throw new MarrowError('invalid-data', `The baked clip "${clip.animation}" ${why}.`, {
@@ -204,6 +259,9 @@ function checkFits(model: SkeletonModel, clip: BakedClip): void {
     }
     if (clip.hash !== null && model.hash !== null && clip.hash !== model.hash)
         fail('is of another export of the skeleton');
+    if (Math.fround(clip.duration) !== Math.fround(duration)) {
+        fail(`lasts ${clip.duration} seconds, and the animation of the skeleton ${duration}`);
+    }
     if (clip.frames !== frameCount(clip.duration, clip.fps)) fail('has the wrong number of frames for its duration');
     const frames = clip.frames;
     const sizes: [ArrayLike<number>, number][] = [
@@ -228,6 +286,25 @@ function checkFits(model: SkeletonModel, clip: BakedClip): void {
 const within = (values: ArrayLike<number>, low: number, high: number): boolean =>
     Array.prototype.every.call(values, (value: number) => Number.isInteger(value) && value >= low && value < high);
 
+/** True when every draw order of `slots` slot indices holds each slot once. The indices are in range. */
+function eachSlotOnce(orders: Int16Array, slots: number): boolean {
+    // a skeleton without slots has empty draw orders, and a step of 0 would never end
+    if (slots === 0) return true;
+    const seen = new Uint8Array(slots);
+
+    for (let at = 0; at + slots <= orders.length; at += slots) {
+        seen.fill(0);
+        for (let i = at; i < at + slots; i++) {
+            const slot = Number(orders[i]);
+
+            if (seen[slot] === 1) return false;
+            seen[slot] = 1;
+        }
+    }
+
+    return true;
+}
+
 /** Why the arrays of a clip do not fit together, or null when they do. */
 function misfit(clip: BakedClip): string | null {
     const { boneCount, slotCount, deformStarts, deformLengths, deforms, drawOrders } = clip;
@@ -250,6 +327,7 @@ function misfit(clip: BakedClip): string | null {
     }
     if (slotCount > 0 && drawOrders.length % slotCount !== 0) return 'has draw orders of the wrong length';
     if (!within(drawOrders, 0, slotCount)) return 'has a draw order with a slot the skeleton lacks';
+    if (!eachSlotOnce(drawOrders, slotCount)) return 'has a draw order that does not hold each slot once';
     if (!within(clip.drawOrderFrames, 0, slotCount > 0 ? drawOrders.length / slotCount : 0)) {
         return 'shows a draw order it does not hold';
     }

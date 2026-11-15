@@ -1,14 +1,14 @@
 ---
 layout: ../layouts/Docs.astro
 title: Start
-description: Install pixi-marrow, load a Spine skeleton and play an animation. The rest of the guide builds on these three calls.
+description: Install pixi-marrow, load a Spine skeleton and play an animation. The rest of the guide starts from these three calls.
 ---
 
 import Diagram from '../components/Diagram.astro';
 import Snippet from '../components/Snippet.astro';
 import source from '../snippets/start.ts?raw';
 
-This guide shows how to load, play and control Spine animations in PixiJS with pixi-marrow, one step at a time. You need no experience with Spine. If pixels, transforms, triangles and draw calls are new to you, read the [Basics](/basics/pixels/) first: five short pages with animations. Its examples use the symbols of the slot game Bzzz, which ship with this site, so many of them look like slot symbols. Nothing in the guide is specific to slots.
+This guide shows how to load, play and control Spine animations in PixiJS with pixi-marrow, one step at a time. You need no experience with Spine. If pixels, transforms, triangles and draw calls are new to you, read the [Basics](/basics/pixels/) first: five short pages with animations. The examples of the guide use the symbols of the slot game Bzzz, which this site includes. So many examples look like slot symbols, but nothing in the guide is specific to slots.
 
 ## What Spine is
 
@@ -18,7 +18,7 @@ There are two ways to animate a 2D character. Watch the same wave made both ways
 
 **Frame by frame**, an artist draws every picture of the motion, and the game shows them one after the other. The left side has 8 pictures, and the arm jumps from one to the next. More smoothness means more pictures, and more pictures mean more memory and longer loading.
 
-**Skeletal animation**, which Spine does, splits the character into parts: a body, an arm. A bone holds each part, and the animation stores only a few numbers per bone, such as "the arm turns from -35 to 55 degrees". In every frame the runtime computes where each bone is and draws the parts there. So the motion is smooth at any frame rate, the files stay small, and two animations can blend into each other, which pictures cannot.
+**Skeletal animation**, which Spine does, splits the character into parts: a body, an arm. A bone holds each part. The animation stores only a few numbers per bone, such as "the arm turns from -35 to 55 degrees". In every frame the runtime computes where each bone is and draws the parts there. So the motion is smooth at any frame rate, and the files stay small. Two animations can also blend into each other, which pictures cannot.
 
 ## What a runtime does
 
@@ -28,7 +28,13 @@ The Spine editor exports three kinds of files:
 - An atlas file, `.atlas`, that says where each part lies in the images.
 - The images, such as `.png`, `.webp` or `.avif`, with all parts packed into one or a few pages.
 
-A runtime reads these files and does the work in every frame. It finds the pose of each bone at the current time, places the parts, and has the GPU draw them. pixi-marrow is a runtime for PixiJS v8. [One frame](/how/frame/) shows the whole way from the time to the pixels.
+A runtime reads these files and does the work in every frame:
+
+1. It finds the pose of each bone at the current time.
+2. It places the parts.
+3. It has the GPU draw them.
+
+pixi-marrow is a runtime for PixiJS v8. [One frame](/how/frame/) shows the whole way from the time to the pixels.
 
 ## Install
 
@@ -36,13 +42,13 @@ A runtime reads these files and does the work in every frame. It finds the pose 
 npm install pixi-marrow@next pixi.js
 ```
 
-`pixi.js` is the one peer dependency, from version 8.21. The package is a pre-release, on the `next` tag of npm.
+`pixi.js` is the peer dependency that pixi-marrow needs, from version 8.21. `pixi-silk` is an optional peer. Only the [debug overlays](/debug/) need it. The package is a pre-release, on the `next` tag of npm.
 
 ## Load
 
 <Snippet source={source} regions="import load" />
 
-`skeleton` is a `.skel` or `.json` export of Spine 4.1, 4.2 or 4.3. The page images load from next to the atlas.
+`skeleton` is a `.skel` or `.json` export of Spine 4.1, 4.2 or 4.3. The page images load from the same place as the atlas.
 
 `hero` is a Pixi `Container`. Move it, scale it and add it to the stage like any other.
 
@@ -50,18 +56,18 @@ npm install pixi-marrow@next pixi.js
 
 <Snippet source={source} regions="play" />
 
-`play` starts an animation now. `loop: true` repeats it until something else plays. A name the skeleton lacks throws a `MarrowError` that lists the valid names.
+`play` starts an animation now. `loop: true` repeats it until something else plays. For a name that the skeleton lacks, `play` throws a `MarrowError` that lists the valid names.
 
 ## Next
 
-The guide goes on in this order:
+The guide continues in this order:
 
 1. [Assets and copies](/guide/assets/): load once, show many times, load with Pixi `Assets`.
 2. [Size and units](/guide/size/): fit a skeleton to a place on the screen.
-3. [Play](/guide/play/): tracks, loops, poses that hold, and knowing when an animation ends.
+3. [Play](/guide/play/): tracks, loops, poses that hold, and how to know when an animation ends.
 4. [Mix and queue](/guide/mix/): blend one animation into the next, and layer them.
 5. [Events](/guide/events/): keys that the animator placed, and the life of a track.
-6. [Skins and slots](/skins-and-slots/): swap images, tint slots, go back to the setup pose.
+6. [Skins and slots](/skins-and-slots/): swap images, tint slots, return to the setup pose.
 7. [Bones and attachments](/bones-and-placeholders/): follow a bone, and put your own objects into a skeleton.
 
-[How it works](/how/anatomy/) takes a skeleton apart and shows what the runtime does in every frame, and why.
+[How it works](/how/anatomy/) shows the parts of a skeleton, what the runtime does in every frame, and why.

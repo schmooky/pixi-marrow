@@ -163,8 +163,14 @@ describe('Pixi Assets', () => {
         const first = MarrowAsset.get(options);
 
         expect(MarrowAsset.get(options)).toBe(first);
-        expect(MarrowAsset.get({ ...options, outlines: 'off' })).not.toBe(first);
-        expect(MarrowAsset.get({ ...options, outlines: 'off' }).outlinesState).toBe('off');
+        // no outlines by default: the page images are not read
+        expect(first.outlinesState).toBe('off');
+        expect(MarrowAsset.get({ ...options, outlines: 'off' })).toBe(first);
+        const scanned = MarrowAsset.get({ ...options, outlines: 'auto' });
+
+        expect(scanned).not.toBe(first);
+        expect(scanned.outlinesState).toBe('scanning');
+        scanned.destroy();
         first.destroy();
         expect(MarrowAsset.get(options)).not.toBe(first);
     });

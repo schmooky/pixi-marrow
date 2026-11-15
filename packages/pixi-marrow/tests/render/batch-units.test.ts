@@ -7,6 +7,7 @@ import { CoverTest } from '../../src/render/cover';
 import { batcherOf, createStage } from './batch-stage';
 import { type CoverSlot, coverRig } from './cover-rig';
 import { PENTAGON, setPolygon } from './cuts';
+import { outputMask, RANGED_UPLOADS, STATES_OUTPUTS } from './pixi-version';
 import { loadRig, step } from './rig';
 
 /** A buffer that notes what it is told to upload, as byte offset and byte count. */
@@ -155,8 +156,9 @@ describe('what a batch buffer uploads', () => {
         const { buffer, uploads } = noting(100_000);
         const pending = new PendingUpload(uploadsStretch((size?: number) => void size, VERSION));
 
-        expect(uploadsStretch(buffer.update, VERSION)).toBe(true);
-        expect(uploadsStretch(Buffer.prototype.update, VERSION)).toBe(true);
+        // the version under test decides: a stretch from pixi.js 8.23 on, the whole buffer before
+        expect(uploadsStretch(buffer.update, VERSION)).toBe(RANGED_UPLOADS);
+        expect(uploadsStretch(Buffer.prototype.update, VERSION)).toBe(RANGED_UPLOADS);
         // pixi.js 8.20 to 8.22 takes an offset, and its WebGL buffers upload when they are bound:
         // a second stretch before that would replace the first, so stretches upload from 8.23 on
         for (const [version, ranged] of [
@@ -231,7 +233,7 @@ describe('createBatchShader', () => {
             expect(glProgram.vertex).not.toContain(name);
             expect(gpuProgram.vertex?.source).not.toContain(name);
         }
-        expect(gpuProgram.fragmentOutputMask).toBe(1);
+        expect(outputMask(gpuProgram)).toBe(STATES_OUTPUTS ? 1 : undefined);
     });
 
     it('writes the colors of the mesh mode, with the tint as an attribute', () => {

@@ -1,5 +1,6 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import type { BakeTally } from '../../src/bake/playback';
+import { bakesOf } from '../../src/bake/store';
 import type { PoseSource } from '../../src/core';
 import { type MarrowAsset, MarrowError, MarrowSpine, type Track } from '../../src/index';
 import { FRAME, fixtureAsset, VERSIONS } from './helpers';
@@ -7,13 +8,18 @@ import { FRAME, fixtureAsset, VERSIONS } from './helpers';
 /*
  * The `bake` setting of a display object: the code of baked playback loads on demand, the object
  * plays without it until it is there, and then plays baked where it can, with the events of an
- * object that does not bake.
+ * object that does not bake. A clip is baked in idle time, and the object plays live until then.
  */
 
 /** Waits until the chunk of baked playback is there and the objects that asked for it took it. */
 async function codeLoaded(): Promise<void> {
     await import('../../src/bake/playback');
     await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+/** Waits until no bake of an asset runs. In Node a bake runs in slices on a timer. */
+async function bakedInIdleTime(asset: MarrowAsset): Promise<void> {
+    while (bakesOf(asset.model).baking) await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 /** True for the source that baked playback gives an engine: it keeps a tally. */
@@ -60,22 +66,32 @@ describe.each(VERSIONS)('baked playback of a Spine %s display object', (version)
         await codeLoaded();
         expect(tallyOf(baked.engine.source)).toBeDefined();
         expect(plain.engine.source).toBeNull();
+        const both = (times: number): void => {
+            for (let i = 0; i < times; i++) {
+                baked.update(FRAME);
+                plain.update(FRAME);
+            }
+        };
+
         for (const spine of [baked, plain]) spine.play('walk', { loop: true });
-        for (let i = 0; i < 90; i++) {
-            baked.update(FRAME);
-            plain.update(FRAME);
-        }
+        // the first update starts the bake and plays live, and so does the one that finds the clip
+        both(1);
+        expect(bakesOf(asset.model).baking).toBe(true);
+        expect(tallyOf(baked.engine.source)?.last).toBe('"walk" posed: its clip is being baked in idle time');
+        await bakedInIdleTime(asset);
+        both(89);
         expect(seen.baked).toEqual(seen.plain);
         expect(seen.plain).toContain('complete walk');
-        expect(tallyOf(baked.engine.source)?.baked).toBe(89);
+        expect(tallyOf(baked.engine.source)?.baked).toBe(88);
         // the first walk loop of 60 frames ends on a sample: the pose is the frame
         const world = (spine: MarrowSpine) => Array.from(spine.engine.state.world, (value) => Math.fround(value));
 
         for (const spine of [baked, plain]) spine.play('run', { loop: false });
-        for (let i = 0; i < 12; i++) {
-            baked.update(FRAME);
-            plain.update(FRAME);
-        }
+        // the first update still ends the walk, the second starts the bake
+        both(2);
+        await bakedInIdleTime(asset);
+        both(10);
+        expect(tallyOf(baked.engine.source)?.last).toBe('"run" baked');
         expect(world(baked)).toEqual(world(plain));
         expect(baked.stats.renderMode).toBe(plain.stats.renderMode);
     });
@@ -88,7 +104,11 @@ describe.each(VERSIONS)('baked playback of a Spine %s display object', (version)
         for (let i = 0; i < 10; i++) spine.update(FRAME);
         expect(tallyOf(spine.engine.source)?.baked).toBe(0);
         spine.play('run', { loop: true });
-        for (let i = 0; i < 10; i++) spine.update(FRAME);
+        // the first update still ends the walk, the second starts the bake
+        spine.update(FRAME);
+        spine.update(FRAME);
+        await bakedInIdleTime(asset);
+        for (let i = 0; i < 8; i++) spine.update(FRAME);
         expect(tallyOf(spine.engine.source)?.baked).toBeGreaterThan(5);
         const wrong = (() => {
             try {
@@ -107,6 +127,13 @@ describe.each(VERSIONS)('baked playback of a Spine %s display object', (version)
     });
 
     it('says in the perf report what baked playback did', async () => {
+        const warm = create({ bake: 'auto' });
+
+        // an object that has the clip of run baked first
+        await codeLoaded();
+        warm.play('run', { loop: true });
+        warm.update(FRAME);
+        await bakedInIdleTime(asset);
         const baked = create({ bake: 'auto' });
         const plain = create();
 

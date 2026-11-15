@@ -58,3 +58,55 @@
 body.pg-dragging .pg-drop {
     display: flex;
 }
+
+/* the buttons that choose files and a folder, for a phone and a keyboard, where nothing is dropped */
+.pg-pick {
+    position: fixed;
+    left: calc(env(safe-area-inset-left) + 0.75rem);
+    bottom: calc(env(safe-area-inset-bottom) + 0.75rem);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+.pg-button {
+    display: inline-flex;
+    height: 2.25rem;
+    align-items: center;
+    border-width: 1px;
+    border-radius: 0.45rem;
+    background: hsl(var(--card));
+    padding-inline: 0.85rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+    cursor: pointer;
+}
+.pg-button:hover {
+    background: hsl(var(--accent));
+}
+.pg-button:focus-visible {
+    outline: 2px solid hsl(var(--marrow));
+    outline-offset: 2px;
+}
+.pg-button:disabled {
+    cursor: progress;
+    opacity: 0.6;
+}
+
+/* what the page says once the browser took the WebGL context away */
+.pg-lost {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 1.5rem;
+    background: hsl(var(--background));
+    text-align: center;
+}
+.pg-lost p {
+    max-width: 30rem;
+    line-height: 1.5;
+}

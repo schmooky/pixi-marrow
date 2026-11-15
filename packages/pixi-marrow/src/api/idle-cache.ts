@@ -1,4 +1,4 @@
-import type { Container } from 'pixi.js';
+import type { Container, Texture } from 'pixi.js';
 import type { PoseState } from '../pose/state';
 import type { SkeletonView } from '../render/skeleton-view';
 
@@ -19,7 +19,8 @@ export interface IdleCache {
 
 /** What the chunk of the idle cache creates the cache of one display object with. */
 export interface IdleCode {
-    create(owner: Container, view: SkeletonView, state: PoseState): IdleCache;
+    /** @param pages The page textures of the asset. A change of one drops the image. */
+    create(owner: Container, view: SkeletonView, state: PoseState, pages: readonly Texture[]): IdleCache;
 }
 
 let code: IdleCode | undefined;
@@ -49,13 +50,14 @@ export function loadIdleCode(): Promise<void> {
  * The idle cache of a display object for its `idleCache` setting, or undefined with `off`.
  *
  * @example
- * this.idle = createIdleCache(this, view, engine.state, settings.idleCache);
+ * this.idle = createIdleCache(this, view, engine.state, settings.idleCache, asset.textures);
  */
 export function createIdleCache(
     owner: Container,
     view: SkeletonView,
     state: PoseState,
     mode: 'off' | 'auto',
+    pages: readonly Texture[],
 ): IdleCache | undefined {
     if (mode === 'off') return undefined;
     let cache: IdleCache | undefined;
@@ -64,7 +66,7 @@ export function createIdleCache(
 
     return {
         update(): void {
-            cache ??= code?.create(owner, view, state);
+            cache ??= code?.create(owner, view, state, pages);
             cache?.update();
         },
         destroy(): void {

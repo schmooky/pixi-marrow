@@ -1,7 +1,7 @@
 {
   "what": "Numbers of one run of pnpm bench:ab, for the verdict of later runs. Times are ms: median, smallest and largest run.",
   "date": "2026-11-12T10:09:20.270Z",
-  "command": "node scripts/bench/ab.mjs --dist=/private/tmp/claude-501/-Users-user-Library-Application-Support-Claude-scratch-workspaces-69ac347c-62e1-4421-908c-16738c6cb031-14f6ce8d-55a7-455a-8fd8-1977d9368b4b-scratch-2026-11-11-88afdb/eccc2275-eeb4-49d4-8ca7-fc43ddbd31a5/scratchpad/m6-K/pkg-m5 --scene=all --instances=200 --runs=5 --memory=off --write-baseline --out=/private/tmp/claude-501/-Users-user-Library-Application-Support-Claude-scratch-workspaces-69ac347c-62e1-4421-908c-16738c6cb031-14f6ce8d-55a7-455a-8fd8-1977d9368b4b-scratch-2026-11-11-88afdb/eccc2275-eeb4-49d4-8ca7-fc43ddbd31a5/scratchpad/m6-K/bench-baseline",
+  "command": "node scripts/bench/ab.mjs --dist=<folder> --scene=all --instances=200 --runs=5 --memory=off --write-baseline --out=<folder>",
   "build": "M5 behaviour: commit 669da75 with the stamp fields of src/pose/state.ts and nothing else of M6, built on 2026-11-12 and kept as a folder for --dist",
   "machine": {
     "cpu": "Apple M4",

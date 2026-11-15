@@ -9,8 +9,8 @@ const RING = conic([0x64d2ff, 0xbf5af2, 0xff375f]);
 
 /**
  * Two shapes of pixi-silk in the bee of the slot game Bzzz. The ring is attached to the slot
- * `bee_sp`, which lies between the wings and the body in the draw order. The mark follows the
- * bone of the head and stays on top of the skeleton.
+ * `bee_sp`, which comes after the wings, the left leg and the left hand in the draw order, and
+ * before the body. The mark follows the bone of the head and stays on top of the skeleton.
  */
 export default definePreview({
     size: [760, 440],

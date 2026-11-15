@@ -89,36 +89,16 @@ function nameAttachments(recording: Recording, state: PoseState): void {
     }
 }
 
-/**
- * Plays an animation once on a new engine of a model and keeps every frame. That is the official
- * `setAnimation` on track 0 from the setup pose, and an update of no time for frame 0. Then
- * comes one update of `1 / fps` seconds per frame, and one to the end for the last frame.
- */
-function record(
-    createEngine: PoseEngineFactory,
-    model: SkeletonModel,
-    animation: number,
-    fps: number,
-    options: BakeOptions,
-): Recording {
-    const engine = createEngine();
-
-    try {
-        return recordOn(engine, model, animation, fps, options);
-    } finally {
-        // a combined skin stays while an engine shows it
-        if (engine.skins.length > 1) engine.setSkin(-1);
-    }
+/** Gives back a combined skin that an engine shows, which stays while an engine shows it. */
+function release(engine: PoseEngine | undefined): void {
+    if (engine !== undefined && engine.skins.length > 1) engine.setSkin(-1);
 }
 
-/** See {@link record}: the recording on an engine of its own. */
-function recordOn(
-    engine: PoseEngine,
-    model: SkeletonModel,
-    animation: number,
-    fps: number,
-    options: BakeOptions,
-): Recording {
+/**
+ * The start of a recording on an engine of its own. It keeps the pose before the animation at
+ * index 0, then calls the official `setAnimation` on track 0 and updates by no time.
+ */
+function startRecording(engine: PoseEngine, model: SkeletonModel, animation: number, options: BakeOptions): Recording {
     const { state } = engine;
     const [x, y, scaleX, scaleY] = options.placement ?? DISPLAY_PLACEMENT;
     const skins = skinIndices(model, options.skins ?? []);
@@ -141,7 +121,7 @@ function recordOn(
     engine.update(0);
     engine.physics = 'update';
     const duration = model.animations[animation]?.duration ?? 0;
-    const frames = frameCount(duration, fps);
+    const frames = frameCount(duration, Number(options.fps ?? 60));
     const poses = frames + 1;
     const bones = model.bones.count;
     const slots = model.slots.count;
@@ -162,16 +142,99 @@ function recordOn(
     keep(recording, state, 0);
     engine.setAnimation(0, animation, false);
     engine.update(0);
-    for (let frame = 0; frame < frames; frame++) {
-        // the last frame is at the end of the animation, however far the steps before got
-        if (frame === frames - 1 && frame > 0) engine.update(duration + 1);
-        else if (frame > 0) engine.update(1 / fps);
-        engine.takeEvents();
-        keep(recording, state, frame + 1);
-    }
-    nameAttachments(recording, state);
 
     return recording;
+}
+
+/** A bake that goes on step by step, so that its work can wait for idle time. */
+export interface ClipRecorder {
+    /**
+     * Does the next part of the bake: the start, one frame, or the clip after the last frame.
+     * Returns true once the clip is there. Throws what the bake throws, and then is over.
+     */
+    step(): boolean;
+    /** The clip, once {@link step} returned true. */
+    readonly clip: BakedClip | undefined;
+}
+
+/**
+ * A bake of an animation with an engine of the factory, in steps. The first step creates the
+ * engine and starts the playback, each next one records a frame, and the last packs the clip.
+ * There is one update of `1 / fps` seconds per frame, and one to the end for the last frame.
+ * Throws a `MarrowError` for a rate that is not one.
+ *
+ * @example
+ * const recorder = recordClip(createEngine, model, 0, { fps: 60 });
+ * while (!recorder.step());
+ * console.log(recorder.clip?.frames);
+ */
+export function recordClip(
+    createEngine: PoseEngineFactory,
+    model: SkeletonModel,
+    animation: number,
+    options: BakeOptions = {},
+): ClipRecorder {
+    const fps = options.fps ?? 60;
+
+    if (!Number.isFinite(fps) || fps <= 0) {
+        throw new MarrowError('invalid-data', `fps ${fps} is not a rate.`, {
+            fix: 'Pass a number of frames a second above 0.',
+        });
+    }
+    const placement = [...(options.placement ?? DISPLAY_PLACEMENT)] as const;
+    const duration = model.animations[animation]?.duration ?? 0;
+    let engine: PoseEngine | undefined;
+    let recording: Recording | undefined;
+    let frame = 0;
+    let clip: BakedClip | undefined;
+    let failed = false;
+    const advance = (): boolean => {
+        if (clip !== undefined) return true;
+        if (engine === undefined || recording === undefined) {
+            engine = createEngine();
+            recording = startRecording(engine, model, animation, { ...options, fps, placement });
+
+            return false;
+        }
+        if (frame < recording.frames) {
+            // the last frame is at the end of the animation, however far the steps before got
+            if (frame === recording.frames - 1 && frame > 0) engine.update(duration + 1);
+            else if (frame > 0) engine.update(1 / fps);
+            engine.takeEvents();
+            keep(recording, engine.state, frame + 1);
+            frame++;
+
+            return false;
+        }
+        nameAttachments(recording, engine.state);
+        release(engine);
+        clip = packClip(recording, {
+            animation: model.animations[animation]?.name ?? '',
+            skins: [...(options.skins ?? [])],
+            fps,
+            duration,
+            placement: Float64Array.from(placement),
+        });
+
+        return true;
+    };
+
+    return {
+        step() {
+            if (failed) return true;
+            try {
+                return advance();
+            } catch (error) {
+                // a bake that failed is over, and gives its combined skin back
+                failed = true;
+                release(engine);
+                throw error;
+            }
+        },
+        get clip() {
+            return clip;
+        },
+    };
 }
 
 /**
@@ -184,21 +247,11 @@ export function bakeWith(
     animation: number,
     options: BakeOptions = {},
 ): BakedClip {
-    const fps = options.fps ?? 60;
+    const recorder = recordClip(createEngine, model, animation, options);
+    let clip: BakedClip | undefined;
 
-    if (!Number.isFinite(fps) || fps <= 0) {
-        throw new MarrowError('invalid-data', `fps ${fps} is not a rate.`, {
-            fix: 'Pass a number of frames a second above 0.',
-        });
-    }
-    const recording = record(createEngine, model, animation, fps, options);
-    const [x, y, scaleX, scaleY] = options.placement ?? DISPLAY_PLACEMENT;
+    // a step that fails throws, so the loop ends with the clip
+    while (clip === undefined) clip = recorder.step() ? recorder.clip : undefined;
 
-    return packClip(recording, {
-        animation: model.animations[animation]?.name ?? '',
-        skins: [...(options.skins ?? [])],
-        fps,
-        duration: model.animations[animation]?.duration ?? 0,
-        placement: Float64Array.of(x, y, scaleX, scaleY),
-    });
+    return clip;
 }

@@ -20,17 +20,18 @@ import type { VisibleList } from './visible';
  * - `off`: the option `instancing` is `off`.
  * - `cpu`: the CPU places the vertices, without `skinning: 'gpu'`.
  * - `blend`, `pages`, `size`: the layout needs more than one draw range, or has too many entries.
+ * - `vertices`: with `auto`, the layout has more than twice the vertices the setup pose shows.
  * - `clip`: a clipping attachment cuts a visible slot, which takes a stencil mask.
  * - `attached`: a container that is attached to a slot is drawn between the slots.
  * - `deform`: a mesh deforms that the layout keeps no texels for.
  */
-export type InstanceWhy = 'off' | 'cpu' | LayoutBlock | 'clip' | 'attached' | 'deform' | null;
+export type InstanceWhy = 'off' | 'cpu' | LayoutBlock | 'vertices' | 'clip' | 'attached' | 'deform' | null;
 
 /** Puts the pipe of instanced draws into the renderer that is about to draw a body. */
 function link(this: InstanceBody, renderer: Renderer): void {
     if (renderer === this.linked) return;
-    this.linked = renderer;
     linkInstancePipe(renderer);
+    this.linked = renderer;
 }
 
 /**
@@ -142,9 +143,9 @@ export class InstancePaint {
 
     /** Stops to draw instanced: gives the slot and the index buffer back and hides the body. */
     leave(): void {
-        const { layout, union } = this;
+        const { layout, union, slot } = this;
 
-        this.slot?.release();
+        if (layout !== undefined && slot !== undefined) layout.give(slot);
         if (layout !== undefined && union !== undefined) layout.drop(union);
         this.slot = undefined;
         this.union = undefined;

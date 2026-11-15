@@ -2,7 +2,7 @@ import type { BufferImageSource } from 'pixi.js';
 import { f32, i32 } from '../geometry/read';
 import { WORLD_STRIDE } from '../pose/state';
 import { u8 } from './read';
-import { dataRoom, dataTexture } from './skin-layout';
+import { dataRoom, dataTexture, uploadTexels } from './skin-layout';
 import type { SkinStore } from './skin-store';
 import { STATIC_STRIDE, type Template } from './template';
 
@@ -70,6 +70,8 @@ export class InstancePool {
     used = 0;
     /** Slots the pool has room for. */
     room = 0;
+    /** Uploads of the two textures so far: one stretch each in a frame that wrote to it. */
+    uploads = 0;
     private readonly slots: (PoolSlot | undefined)[] = [];
     private readonly free: number[] = [];
     /** The stretches written since the last upload, in texels, empty when the low end is past the high one. */
@@ -147,25 +149,30 @@ export class InstancePool {
         let uploads = 0;
 
         if (this.poseLow < this.poseHigh) {
-            this.pose.update(this.poseLow, this.poseHigh);
+            uploadTexels(this.pose, this.poseLow, this.poseHigh);
             uploads++;
         }
         if (this.paletteLow < this.paletteHigh) {
-            this.palette.update(this.paletteLow, this.paletteHigh);
+            uploadTexels(this.palette, this.paletteLow, this.paletteHigh);
             uploads++;
         }
         this.poseLow = this.paletteLow = Number.POSITIVE_INFINITY;
         this.poseHigh = this.paletteHigh = 0;
+        this.uploads += uploads;
 
         return uploads;
     }
 
-    /** Frees the textures. No shader may bind them any more. */
+    /** Frees the textures and the arrays. No shader may bind them any more. */
     destroy(): void {
         for (const texture of this.retired) texture.destroy();
         this.retired.length = 0;
         this.pose.destroy();
         this.palette.destroy();
+        this.poseData = new Float32Array(0);
+        this.paletteData = new Uint8Array(0);
+        this.room = 0;
+        this.used = 0;
         this.slots.length = 0;
         this.free.length = 0;
     }

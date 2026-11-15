@@ -18,7 +18,7 @@ const STAGES = ['Time', 'Animation', 'Bones', 'Vertices', 'Buffer', 'Pixels'] as
 const SAYS = [
     (frame: Frame) => `the frame is at ${frame.time.toFixed(2)} s of the animation`,
     (frame: Frame) => `the keys around that time give a rotation of ${frame.turn.toFixed(1)} degrees`,
-    () => 'the bones turn by it, and each takes the turn of its parent along',
+    () => 'the bones turn by it, and each one also turns with its parent',
     () => 'the picture on the second bone puts its 4 corners where the bone is',
     () => 'the corners become 8 numbers in a buffer, which goes to the GPU',
     (frame: Frame) => `the GPU fills the ${frame.pixels} pixels that its 2 triangles cover`,
@@ -281,9 +281,25 @@ export default defineDiagram({
         let mode: 'slow' | 'as a game does' = 'slow';
         let time = 0;
 
+        /** Lights the stage that the slow mode shows at a time of its pass, in milliseconds. */
+        const stageAt = (milliseconds: number): void => {
+            const index = Math.min(Math.floor(milliseconds / STAGE_MS), STEPS.length * STAGES.length - 1);
+            const frame = compute(STEPS[Math.floor(index / STAGES.length)] ?? 0);
+
+            draw(frame);
+            light(index % STAGES.length, frame);
+        };
+
+        // the runtime plays the timeline while the diagram plays, in the slow mode only
         own({
             play: () => (mode === 'slow' ? timeline.play() : undefined),
             pause: () => timeline.pause(),
+            // a paused diagram shows the first stage of the slow mode
+            seek: (milliseconds) => {
+                timeline.seek(milliseconds);
+                if (mode === 'slow') stageAt(milliseconds);
+            },
+            still: 0,
             get speed() {
                 return timeline.speed;
             },
@@ -296,8 +312,7 @@ export default defineDiagram({
             ['slow', 'as a game does'] as const,
             (next) => {
                 mode = next;
-                if (next === 'slow') timeline.play();
-                else timeline.pause();
+                if (next !== 'slow') timeline.pause();
             },
             'slow',
         );

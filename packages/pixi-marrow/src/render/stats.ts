@@ -26,7 +26,11 @@ export interface ViewStats {
      * the batched mode they are written into the index buffer of the batch, where they are.
      */
     indexRebuilds: number;
-    /** How often vertex positions were handed on: uploaded in the mesh mode, written to the batch in the batched mode. */
+    /**
+     * How often vertex positions were handed on: uploaded in the mesh mode, written to the batch
+     * in the batched mode. This and the next three count nothing while the view draws instanced:
+     * the pool of its layout uploads for all its views, and `perf.report()` gives that count.
+     */
     positionUploads: number;
     /** How often vertex colors were handed on. With `skinning: 'gpu'` that is the palette of the slots. */
     colorUploads: number;

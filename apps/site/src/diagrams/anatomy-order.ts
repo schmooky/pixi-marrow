@@ -62,7 +62,7 @@ export default defineDiagram({
             canvas.replaceChildren(...nodes);
             for (const [index, node] of nodes.entries()) {
                 timeline.call(
-                    () => show(`Step ${index + 1} of 3: the ${order[index]} is painted over what is already there.`),
+                    () => show(`Step ${index + 1} of 3: the ${order[index]} paints over what is already there.`),
                     index * 900,
                 );
                 timeline.add(node, { opacity: [0, 1], duration: 400 }, index * 900);
@@ -70,17 +70,19 @@ export default defineDiagram({
             timeline.call(
                 () =>
                     show(
-                        `Done. The ${order[order.length - 1]} was painted last, so it covers the others where they overlap.`,
+                        `Done. The ${order[order.length - 1]} paints last, so it covers the others where they overlap.`,
                     ),
                 2700,
             );
             timeline.add(nodes, { opacity: 0, duration: 300 }, 4600);
-            timeline.play();
         };
 
+        // the runtime plays the timeline while the diagram plays, and a paused one shows the three painted
         own({
             play: () => timeline.play(),
             pause: () => timeline.pause(),
+            seek: (milliseconds) => timeline.seek(milliseconds),
+            still: 3000,
             get speed() {
                 return rate;
             },

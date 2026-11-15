@@ -2,6 +2,7 @@ import { Texture, TextureSource } from 'pixi.js';
 import { describe, expect, it } from 'vitest';
 import { meshSource } from '../../src/pose/shared/lookup';
 import { nextVersion, touchPose } from '../../src/pose/state';
+import { inspectView, layoutArrayBytes } from '../../src/render/inspect';
 import { SkeletonView } from '../../src/render/skeleton-view';
 import { listFixtures } from '../parity/fixtures';
 import { type CoverSlot, coverRig, moveSlot } from './cover-rig';
@@ -272,10 +273,21 @@ describe('skinning on the GPU', () => {
         expect(influences).toBeDefined();
         expect(influences).toBe(theirs?.uInfluences);
         expect(bones).not.toBe(theirs?.uBones);
+        // one buffer aSkin for the layout, which the bytes shared by the instances count
+        const skin = meshes(rig.view)[0]?.geometry.getBuffer('aSkin');
+
+        expect(skin).toBeDefined();
+        expect(meshes(other).every((mesh) => mesh.geometry.getBuffer('aSkin') === skin)).toBe(true);
+        const [shared, alone] = [rig.view, other].map((view) => inspectView(view).layoutBytes);
+
+        expect(shared).toBe(alone);
+        expect(shared).toBeGreaterThanOrEqual(layoutArrayBytes(rig.view.parts.template) + (skin?.data.byteLength ?? 0));
         other.destroy();
         expect(influences.destroyed).toBe(false);
+        expect(skin?.destroyed).toBe(false);
         rig.view.destroy();
         expect(influences.destroyed).toBe(true);
+        expect(skin?.destroyed).toBe(true);
         expect(bones.destroyed).toBe(true);
     });
 
@@ -292,11 +304,15 @@ describe('skinning on the GPU', () => {
         step(rig, 0.2);
         expect(rig.view.stats.templateBuilds).toBe(builds + 1);
         const after = skinData(rig).sources.influences;
+        const buffer = meshes(rig.view)[0]?.geometry.getBuffer('aSkin');
 
         expect(after).not.toBe(before);
         // no other view held the layout before, so its data is freed
         expect(before.destroyed).toBe(true);
         for (const mesh of meshes(rig.view)) expect(mesh.shader?.resources.uInfluences).toBe(after);
+        // every range reads the buffer of the new layout, and none the freed one
+        expect(buffer?.destroyed).toBe(false);
+        for (const mesh of meshes(rig.view)) expect(mesh.geometry.getBuffer('aSkin')).toBe(buffer);
         expect(expectSkinned(rig).some((item) => !item.cpu)).toBe(true);
     });
 

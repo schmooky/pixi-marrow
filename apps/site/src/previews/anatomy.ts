@@ -103,7 +103,7 @@ export default definePreview({
             view = next;
             built = 0;
             clock = 0;
-            showSlot(next === 'slots' ? 'Builds up from the back' : 'Pick slots to build the symbol up');
+            showSlot(next === 'slots' ? 'Builds the symbol from the back' : 'Pick slots to build the symbol');
             if (shown === null) return;
             const { hero, debug } = shown;
 

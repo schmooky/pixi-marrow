@@ -37,10 +37,15 @@ import Lab from '../../layouts/Lab.astro';
         </ul>
         <h2 class="lab-subtitle">How it measures</h2>
         <p class="lab-question">
-            A scene plays at the rate of the screen, as in a game, after two seconds to warm up. The lab counts the frames the screen got and the
-            ones it dropped, and times the work of the CPU in each frame: the update of every skeleton and the render call of Pixi. Nothing waits
-            for the GPU on purpose, so a GPU that cannot keep up shows as dropped frames. How many adds symbols every few seconds while the frames
-            keep the rate of the screen.
+            A scene plays at the rate of the screen, as in a game, after a warm-up of two seconds. The lab counts the frames the screen got and the
+            ones it dropped. It also times the work of the CPU in each frame: the update of every skeleton and the render call of Pixi. Nothing
+            waits for the GPU on purpose, so a GPU that is too slow shows as dropped frames. The How many test adds symbols every few seconds while
+            the frames keep the rate of the screen. Then it searches for the limit between the last number that kept the rate and the first that
+            did not.
+        </p>
+        <p class="lab-question">
+            The lab reads the rate of the screen from the frames of the run. The result says when that rate differs from the rate before the run.
+            A browser rounds its timer, Safari and Firefox to about 1 ms, so every time shows only the decimals that its timer can tell.
         </p>
     </main>
 </Lab>

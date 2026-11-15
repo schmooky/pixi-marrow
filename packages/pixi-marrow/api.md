@@ -234,7 +234,7 @@ export type PerfPreset = "exact" | "balanced" | "fast";
 export interface PerfSettings {
   tightMesh: "auto" | "on" | "off";
   skinning: SkinningMode;
-  instancing: "auto" | "off";
+  instancing: "auto" | "on" | "off";
   bake: BakeMode;
   idleCache: "off" | "auto";
   offscreen: OffscreenMode;

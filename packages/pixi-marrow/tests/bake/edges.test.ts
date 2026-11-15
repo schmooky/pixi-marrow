@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addBakedClips, bakeAnimation, decodeBakedClips, encodeBakedClips } from '../../src/bake';
+import { addBakedClips, bakeAnimation, bakeAnimations, decodeBakedClips, encodeBakedClips } from '../../src/bake';
 import { playBaked } from '../../src/bake/playback';
 import { bakesOf } from '../../src/bake/store';
 import { importSkeleton, MarrowError, type PoseEngine } from '../../src/core';
@@ -94,9 +94,20 @@ describe('combined skins and baking', () => {
             engine.clearTracks();
             engine.setSkin(-1);
         }
-        // the last 8 that no engine shows wait, as without baking
-        expect(skins.filter((index) => lookup.skin(index) !== undefined).length).toBeLessThanOrEqual(8);
+        // the last 8 that no engine shows wait, as without baking, and the others gave their index on
+        const live = skins.filter((index) => lookup.skin(index) !== undefined);
+        const lists = new Set(live.map((index) => lookup.parts(index).join()));
+
+        expect(lists.size).toBeLessThanOrEqual(8);
+        expect(lookup.skinCount).toBeLessThanOrEqual(model.skins.length + 9);
         expect(bakesOf(model).bytes).toBeGreaterThan(0);
+        // a used index finds the clip of the skin it holds now, or none
+        for (const index of new Set(skins)) {
+            const clip = bakesOf(model).find(index, 0, null)?.clip;
+            const names = lookup.parts(index).map((skin) => model.skins[skin]?.name);
+
+            if (clip !== undefined) expect(clip.skins).toEqual(names);
+        }
     });
 });
 
@@ -113,6 +124,43 @@ describe('clips that do not fit together', () => {
             (clip) => Object.assign(clip, { placement: new Float64Array(3) }),
         ],
     ];
+
+    it('throws a MarrowError at the hand-over for a draw order that holds a slot twice', async () => {
+        const model = await modelOf('4.2/coin-pro.skel');
+        const clips = await bakeAnimations(model);
+        const clip = decodeBakedClips(encodeBakedClips(clips)).find((each) => each.drawOrders.length > 0);
+
+        if (clip === undefined) throw new Error('no clip keeps a draw order');
+        expect(() => addBakedClips({ model }, [clip])).not.toThrow();
+        clip.drawOrders[1] = Number(clip.drawOrders[0]);
+        expect(() => addBakedClips({ model }, [clip])).toThrow(/does not hold each slot once/);
+    });
+
+    it('takes the clips of a skeleton without slots, whose draw orders are empty', async () => {
+        const json = {
+            skeleton: { spine: '4.2.00' },
+            bones: [{ name: 'root' }, { name: 'arm', parent: 'root', length: 10 }],
+            animations: { swing: { bones: { arm: { rotate: [{ time: 0 }, { time: 1, value: 40 }] } } } },
+        };
+        const model = await importSkeleton(JSON.stringify(json));
+        const clip = await bakeAnimation(model, 'swing');
+
+        expect(model.slots.count).toBe(0);
+        // a draw order of 0 slots once looped for ever in the check of the hand-over
+        expect(() => addBakedClips({ model }, [clip])).not.toThrow();
+    });
+
+    it('throws a MarrowError at the hand-over for a clip of an animation that lasts another time', async () => {
+        const model = await modelOf('4.2/spineboy-pro.skel');
+        const idle = await bakeAnimation(model, 'idle');
+        const walk = model.animations.find(({ name }) => name === 'walk');
+        // a JSON export without the editor hash, of an animation that lasts another time since
+        const stale = { ...idle, animation: 'walk', hash: null };
+
+        expect(walk?.duration).not.toBe(idle.duration);
+        expect(() => addBakedClips({ model }, [{ ...idle, hash: null }])).not.toThrow();
+        expect(() => addBakedClips({ model }, [stale])).toThrow(/lasts .* seconds, and the animation/);
+    });
 
     for (const [what, needs, damage] of damaged) {
         it(`throws a MarrowError at the hand-over for ${what}`, async () => {

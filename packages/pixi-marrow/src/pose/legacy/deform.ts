@@ -1,3 +1,4 @@
+import { hiddenLengths } from '../shared/deform-switch';
 import type { PoseState } from '../state';
 import { ALPHA, curvePercent, SHARED, search, TIME } from './curves';
 import { factsOf, type Rig } from './rig';
@@ -7,9 +8,10 @@ import { ADD, FIRST, type LegacyTimeline, SETUP } from './timelines';
 /**
  * Sets how many numbers of a slot's deform are in use: the official `deform.length = length`.
  * Numbers that were not in use before read as NaN, as the holes of the official array do in sums.
+ * `lengths` are the lengths of the pose, or the hidden ones of `shared/deform-switch.ts`.
  */
-function resizeDeform(pose: PoseState, slot: number, length: number): Float64Array {
-    const used = pose.deformLengths[slot] ?? 0;
+function resizeDeform(pose: PoseState, lengths: Int32Array, slot: number, length: number): Float64Array {
+    const used = lengths[slot] ?? 0;
     let deform = pose.deform[slot] ?? new Float64Array(0);
 
     if (deform.length < length) {
@@ -20,7 +22,7 @@ function resizeDeform(pose: PoseState, slot: number, length: number): Float64Arr
         deform = longer;
     }
     if (length > used) deform.fill(Number.NaN, used, length);
-    pose.deformLengths[slot] = length;
+    lengths[slot] = length;
 
     return deform;
 }
@@ -137,6 +139,7 @@ function mixDeformToSetup(deform: Float64Array, count: number, setup: Float32Arr
 /** The deform before the first key of a timeline: cleared, or moved toward the setup shape for blend `first`. */
 function deformBeforeFirstKey(
     pose: PoseState,
+    lengths: Int32Array,
     slot: number,
     count: number,
     blend: number,
@@ -146,10 +149,10 @@ function deformBeforeFirstKey(
 
     if (blend === SETUP || (blend === FIRST && alpha === 1)) {
         // a slot without a deform stays as it is
-        if (pose.deformLengths[slot] !== 0) stampSlot(pose, slot);
-        pose.deformLengths[slot] = 0;
+        if (lengths[slot] !== 0) stampSlot(pose, slot);
+        lengths[slot] = 0;
     } else if (blend === FIRST) {
-        mixDeformToSetup(resizeDeform(pose, slot, count), count, setup);
+        mixDeformToSetup(resizeDeform(pose, lengths, slot, count), count, setup);
         stampSlot(pose, slot);
     }
 }
@@ -184,10 +187,14 @@ function deformFromKeys(
     else mixDeform(deform, count, from, to, values);
 }
 
-/** The official `DeformTimeline.apply`. `values` is scratch space. */
+/**
+ * The official `DeformTimeline.apply`. `values` is scratch space. `lengths` are the deform lengths
+ * of the pose, or the hidden ones while `PoseEngine.deform` is off.
+ */
 export function applyDeform(
     rig: Rig,
     pose: PoseState,
+    lengths: Int32Array,
     timeline: LegacyTimeline,
     mixBlend: number,
     values: Float64Array,
@@ -203,14 +210,30 @@ export function applyDeform(
     // the slot must show an attachment that takes its timelines from the one this timeline deforms
     if (facts.timeline !== timeline.attachment || facts.geometry === null) return;
     // a slot without a deform starts from the setup shape
-    const blend = pose.deformLengths[slot] === 0 ? SETUP : mixBlend;
+    const blend = lengths[slot] === 0 ? SETUP : mixBlend;
     const setup = facts.geometry.bones === null ? facts.geometry.vertices : null;
 
     if (time < Number(timeline.frames[0])) {
-        deformBeforeFirstKey(pose, slot, first.length, blend, setup);
+        deformBeforeFirstKey(pose, lengths, slot, first.length, blend, setup);
     } else {
-        deformFromKeys(resizeDeform(pose, slot, first.length), timeline, first, blend, setup, values);
+        deformFromKeys(resizeDeform(pose, lengths, slot, first.length), timeline, first, blend, setup, values);
         // the vertices are not compared: a deform between two keys is a new one in nearly every update
         stampSlot(pose, slot);
     }
+}
+
+/**
+ * The deform timeline of an entry that mixes out while `PoseEngine.deform` is off. It writes the
+ * hidden deforms, as `shared/deform-switch.ts` explains.
+ */
+export function applyHiddenDeform(
+    rig: Rig,
+    pose: PoseState,
+    timeline: LegacyTimeline,
+    mixBlend: number,
+    values: Float64Array,
+): void {
+    const hidden = hiddenLengths(pose.deformLengths);
+
+    if (hidden !== undefined) applyDeform(rig, pose, hidden, timeline, mixBlend, values);
 }

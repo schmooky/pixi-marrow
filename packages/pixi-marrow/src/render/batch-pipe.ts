@@ -163,6 +163,8 @@ export function linkRenderer(renderer: Renderer): MarrowPipe {
     const found: unknown = Reflect.get(renderer.renderPipes, PIPE_ID);
 
     if (found instanceof MarrowPipe) return found;
+    // first: a renderer of WebGL1 counts as lost, so its skeletons draw nothing
+    watchContext(renderer);
     if (!registered) {
         registered = true;
         extensions.add(MarrowBatcher, MarrowDarkBatcher);
@@ -172,7 +174,6 @@ export function linkRenderer(renderer: Renderer): MarrowPipe {
     // what a renderer does with the pipes it finds at its creation
     Reflect.set(renderer.renderPipes, PIPE_ID, pipe);
     renderer.runners.destroy.add(pipe);
-    watchContext(renderer);
 
     return pipe;
 }

@@ -8,7 +8,7 @@ import type { ViewStats } from '../render/stats';
 import { MarrowAsset, type MarrowLoadOptions } from './asset';
 import type { MarrowAssetsOptions } from './assets';
 import { bakingEngine } from './baking';
-import { namedIndex, renderMode } from './checks';
+import { namedIndex, renderMode, warnWithoutOutlines } from './checks';
 import { EventPump } from './events';
 import { createIdleCache, type IdleCache } from './idle-cache';
 import type { MarrowNames, MarrowSpineOptions, PlayOptions, QueueOptions, StopOptions, UpdateProbe } from './options';
@@ -93,6 +93,7 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
             skinning: settings.skinning,
             instancing: settings.instancing,
         });
+        warnWithoutOutlines(asset, settings, options.occlusion);
         this.addChild(this.skeletonView.container);
         this.linkTo({ engine: this.engine, state: this.engine.state, model: asset.model, view: this.skeletonView });
         registerView(this, this.skeletonView);
@@ -111,7 +112,7 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
             watch.onRender = (renderer) => this.pacer.seen(this, renderer);
             this.addChild(watch);
         }
-        this.idle = createIdleCache(this, this.skeletonView, this.engine.state, settings.idleCache);
+        this.idle = createIdleCache(this, this.skeletonView, this.engine.state, settings.idleCache, asset.textures);
         this.autoUpdate = options.autoUpdate ?? true;
     }
 

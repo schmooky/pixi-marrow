@@ -33,7 +33,8 @@ export interface MarrowLoadOptions {
     /**
      * Where the outlines of the atlas regions come from. With them a slot behind an opaque one
      * is skipped and a region without a visible pixel is not drawn. The picture stays the same.
-     * `tightMesh: 'on'` of a display object also needs them.
+     * `tightMesh: 'on'` of a display object also needs them. Without them `tightMesh` and
+     * `occlusion` do nothing, and a display object that sets one of them by name warns once.
      *
      * - `off` (the default) loads none: every region stays a quad and every slot is drawn.
      * - A string is the URL of the file that `pixi-marrow outlines` wrote. It is fetched during the load.
@@ -79,7 +80,7 @@ export interface MarrowAssetData {
  * - `scanned`: they were read from the page images after the load.
  * - `scanning`: the page images are being read at the moment, and there are none yet.
  * - `unread`: the scan ended and could read no page image. Every region keeps its quad.
- * - `off`: the asset was loaded with `outlines: 'off'`.
+ * - `off`: the asset was loaded with `outlines: 'off'`, the default.
  */
 export type OutlinesState = 'given' | 'scanned' | 'scanning' | 'unread' | 'off';
 
@@ -323,8 +324,8 @@ export class MarrowAsset {
      * `MarrowError` when a file does not load or is not valid. Every constraint of the skeleton
      * is solved: IK, transform, path, physics and sliders.
      *
-     * The outlines of the atlas regions are read from the page images after the load, in idle
-     * time, unless `outlines` names a file, gives them or is `off`.
+     * The asset has no outlines of the atlas regions unless `outlines` names a file, gives them
+     * or is `auto`, which reads them from the page images in idle time after the load.
      *
      * @example
      * const asset = await MarrowAsset.load({ skeleton: 'hero.json', atlas: 'hero.atlas' });
@@ -369,7 +370,8 @@ export class MarrowAsset {
     /**
      * Gets the asset of a skeleton and an atlas that Pixi `Assets` loaded, by their aliases.
      * Synchronous: the pose code loaded with the skeleton. Calls with the same aliases and
-     * outlines share one asset. Unloading the atlas from `Assets` destroys the asset.
+     * outlines share one asset. Unloading the atlas from `Assets` destroys the asset. The asset
+     * has no outlines unless `outlines` is `auto`.
      *
      * The code of the mesh mode starts to load here when the instances need it. They draw in a
      * batch until it is there. Throws a `MarrowError` for an alias that holds nothing pixi-marrow

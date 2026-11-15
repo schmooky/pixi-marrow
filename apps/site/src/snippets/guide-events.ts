@@ -19,13 +19,21 @@ coin.on('end', (track: Track) => console.log('left its track', track.animation))
 
 // #region cut
 const win = coin.play('win');
-let cut = false;
+let replaced = false;
+let completed = false;
 const onInterrupt = (track: Track): void => {
-    if (track === win) cut = true;
+    if (track === win) replaced = true;
+};
+// an animation that mixes out can still reach its end: that one does not count
+const onComplete = (track: Track): void => {
+    if (track === win && !replaced) completed = true;
 };
 
 coin.on('interrupt', onInterrupt);
+coin.on('complete', onComplete);
 await win.finished;
 coin.off('interrupt', onInterrupt);
-if (!cut) coin.play('idle', { loop: true });
+coin.off('complete', onComplete);
+// the win reached its end before anything replaced it, stopped it or destroyed the coin
+if (completed) coin.play('idle', { loop: true });
 // #endregion

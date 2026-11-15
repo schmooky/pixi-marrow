@@ -14,12 +14,13 @@ import { isNewer, type PoseState } from '../pose/state';
 import { uploadStretch, uploadsStretch } from './batch-upload';
 import { clipCode, clipCodeMissing } from './clip-code';
 import { bendsEdges, type DrawGate } from './gate';
-import { instanceBlock, instanceLayout } from './instance-layout';
+import { instanceBlock, instanceLayout, setupVertices, unionSpread } from './instance-layout';
 import { InstancePaint, type InstanceWhy } from './instance-paint';
 import type { MeshCode } from './mesh-code';
 import { linkMeshPipe } from './mesh-pipe';
 import { vertexBuffer } from './pages';
 import { type PosePass, poseEntries } from './pose-pass';
+import type { VertexBuffers } from './range-mesh';
 import { DrawRanges, type DrawRangesOptions } from './ranges';
 import { MeshSkin } from './skin-paint';
 import type { ViewStats } from './stats';
@@ -43,8 +44,8 @@ export interface MeshPaintOptions extends Omit<DrawRangesOptions, 'buffers' | 'b
     readonly model: SkeletonModel;
     /** Whether the vertex shader places the vertices from the bones where it can: `skinning: 'gpu'`. */
     readonly gpu: boolean;
-    /** Whether the view draws instanced where it can, with `gpu`: `instancing: 'auto'`. */
-    readonly instancing: boolean;
+    /** Whether the view draws instanced with `gpu`: where it pays, where it can, or never. */
+    readonly instancing: 'auto' | 'on' | 'off';
     /** The view, which the pipe of instanced draws asks before every draw. */
     readonly gate: DrawGate;
 }
@@ -75,6 +76,8 @@ export class MeshPaint {
     private readonly colors: Buffer | undefined;
     /** What the vertex shader places the vertices from, with `gpu`. */
     private readonly skin: MeshSkin | undefined;
+    /** The buffers the draw ranges read. The buffer of the skin data is that of the layout of the view. */
+    private readonly buffers: VertexBuffers;
     /** The child that calls the view before every draw. It exists once the view cuts. */
     private probe: RenderContainer | undefined;
     /** The renderer that drew the paint last. It has a pipe for meshes and says when its context is lost. */
@@ -83,7 +86,7 @@ export class MeshPaint {
     private instance: InstancePaint | undefined;
     /** Why the view drew alone in its last update. */
     private blocked: InstanceWhy;
-    private readonly instancing: boolean;
+    private readonly instancing: 'auto' | 'on' | 'off';
     private readonly gate: DrawGate;
     private readonly measure: () => Bounds;
     private readonly pages: readonly TextureSource[];
@@ -107,17 +110,23 @@ export class MeshPaint {
         // a renderer that was created before this code loaded may have no pipe for meshes
         this.container.onRender = (renderer): void => {
             if (renderer === this.linked) return;
-            this.linked = renderer;
             linkMeshPipe(renderer);
+            this.linked = renderer;
         };
         this.positions = vertexBuffer(template.positions, 'marrow-positions');
         this.statics = vertexBuffer(template.statics, 'marrow-uvs');
         this.skin = gpu ? new MeshSkin(model, template, rest.pages, rest.dark) : undefined;
         this.colors = gpu ? undefined : vertexBuffer(template.colors, 'marrow-colors');
+        this.buffers = {
+            positions: this.positions,
+            statics: this.statics,
+            colors: this.colors,
+            skin: this.skin?.buffer,
+        };
         this.ranges = new DrawRanges({
             ...rest,
             blendModes: model.slots.blendModes,
-            buffers: { positions: this.positions, statics: this.statics, colors: this.colors, skin: this.skin?.buffer },
+            buffers: this.buffers,
             shade: this.skin?.shade,
         });
         this.resize(template);
@@ -126,6 +135,11 @@ export class MeshPaint {
     /** The bytes of the bone and palette textures, with `gpu`. */
     get skinBytes(): number {
         return this.skin?.bytes ?? 0;
+    }
+
+    /** The bytes of the skin data of the layout, with `gpu`, which the views of the layout share. */
+    get sharedSkinBytes(): number {
+        return this.skin?.sharedBytes ?? 0;
     }
 
     /** Whether the vertex shader places the vertices from the bones where it can: `skinning: 'gpu'`. */
@@ -143,6 +157,11 @@ export class MeshPaint {
         return this.instanced === undefined ? this.blocked : null;
     }
 
+    /** The vertices the setup pose shows with the skin of a template, which `instancing: 'auto'` weighs. */
+    setupVertices(template: Template): number {
+        return setupVertices(template, this.model);
+    }
+
     /** Points the buffers at the data of other vertex ranges and makes room for their indices. */
     resize(template: Template): void {
         // the slot belongs to a pool of the layout before. The next update takes one of the new layout
@@ -151,6 +170,8 @@ export class MeshPaint {
         this.statics.data = template.statics;
         if (this.colors !== undefined) this.colors.data = template.colors;
         this.skin?.resize(template);
+        // the ranges take the buffer of the skin data of the new layout
+        this.buffers.skin = this.skin?.buffer;
         this.ranges.resize(template);
         this.counted = 0;
         this.recount();
@@ -338,10 +359,11 @@ export class MeshPaint {
         const { skin } = this;
 
         if (skin === undefined) return 'cpu';
-        if (!this.instancing) return 'off';
+        if (this.instancing === 'off') return 'off';
         const block = instanceBlock(template, this.model, skin.skinLayout, this.pages.length);
 
         if (block !== null) return block;
+        if (this.instancing === 'auto' && unionSpread(template, this.model, skin.skinLayout)) return 'vertices';
         const shared = instanceLayout(template, this.model, skin.skinLayout, this.pages.length);
 
         if (seen.clipped > 0) return 'clip';
