@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { apiEntries } from './api-reference';
 import { pageRoutes, SITE_ROOT } from './routes';
 import { INSTALL, ORIGIN } from './seo';
 import { PAGES, SECTIONS, SITE } from './site';
@@ -226,7 +227,11 @@ export function llmsIndex(): string {
         '',
         `- [Lab](${ORIGIN}/lab/): tests that play Spine scenes on the device that opens them, and how they measure.`,
         `- [Playground](${ORIGIN}/playground/): plays the Spine files that a visitor drops on it.`,
-        `- [Changelog](${SITE.repository}/blob/main/packages/pixi-marrow/CHANGELOG.md): what each version changed.`,
+        `- [Changelog](${ORIGIN}/changelog.md): what each version changed.`,
+        ...apiEntries().map(
+            (entry) =>
+                `- [API of ${entry.name}](${ORIGIN}/api/${entry.slug}.md): every export of the entry \`${entry.name}\`.`,
+        ),
         '',
     );
 
