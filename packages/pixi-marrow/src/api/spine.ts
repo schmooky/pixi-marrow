@@ -111,7 +111,7 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
             watch.onRender = (renderer) => this.pacer.seen(this, renderer);
             this.addChild(watch);
         }
-        this.idle = createIdleCache(this, this.skeletonView, this.engine.state, settings.idleCache);
+        this.idle = createIdleCache(this, this.skeletonView, this.engine.state, settings.idleCache, asset.textures);
         this.autoUpdate = options.autoUpdate ?? true;
     }
 

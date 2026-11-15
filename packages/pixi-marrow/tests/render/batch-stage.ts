@@ -69,6 +69,8 @@ export interface Stage {
      * @param note False notes no draw call, so that the stage itself allocates nothing.
      */
     render(note?: boolean): void;
+    /** Renders another container that is a render group, as `renderer.render({ container })` does. */
+    draw(container: Container): void;
 }
 
 /** What a stage renders with. */
@@ -237,6 +239,9 @@ export function createStage(options: StageOptions = {}): Stage {
             counts.draws.length = 0;
             for (let i = 0; i < before.length; i++) before[i]?.prerender();
             system.draw(frame);
+        },
+        draw(container: Container): void {
+            system.draw({ container, transform: undefined as never });
         },
     };
 }

@@ -1,9 +1,20 @@
-import { Bounds, Container, getLocalBounds, Matrix, type Renderer, RenderTexture, Texture } from 'pixi.js';
+import {
+    Batch,
+    Bounds,
+    Container,
+    getLocalBounds,
+    Matrix,
+    type Renderer,
+    RenderTexture,
+    Texture,
+    type TextureSource,
+} from 'pixi.js';
 import { i32 } from '../geometry/read';
 import { BLEND_MODES, type SkeletonModel } from '../model/model';
 import type { PoseState } from '../pose/state';
 import { ImageBody } from '../render/batch-image';
 import { linkRenderer } from '../render/batch-pipe';
+import { MarrowBatcher } from '../render/batcher';
 import { drawsPlain } from '../render/gate';
 import { u8 } from '../render/read';
 import type { SkeletonView } from '../render/skeleton-view';
@@ -30,14 +41,24 @@ import {
  * display object. The body draws one quad in a batch of the batched mode, see
  * `render/batch-image.ts`, so that it shares a batch with the skeletons around it.
  *
- * The image is drawn on the pixel grid of the target, see `idle-place.ts`, so it equals the
- * live picture. The view keeps its own state up to date while it is hidden. The image is
- * dropped, and the view shows again in the same frame:
+ * The image is drawn on the pixel grid of the target, see `idle-place.ts`, so each pixel samples
+ * the color the live skeleton put there. It is close to the live picture and not equal to it: it
+ * blends the layers of a pixel at 8 bits once, and a pixel center on the edge of a triangle can
+ * fall to the other side. The pixel check allows 8 pixels a frame to differ by more than 1 and 2
+ * by more than 8, see `idle` in scripts/check-render.mjs. The view keeps its own state up to date
+ * while it is hidden. The image is dropped, and the view shows again in the same frame:
  *
  * - by an update that changes the pose, the layout or the render mode, or that attaches a container,
+ * - by a page texture that changes: a canvas or a video that updates, or a page that takes another source,
  * - by a render that puts the skeleton elsewhere than whole pixels away, by another renderer,
- *   after the WebGL context came back, with an alpha or a blend mode above it, or to a
- *   multisampled target.
+ *   after the WebGL context came back, with an alpha, a blend mode, a filter or a mask above it,
+ *   or to a multisampled target.
+ *
+ * A filter draws at a resolution of its own, 1 unless it says otherwise, so an image drawn on
+ * the grid of the target would be sampled between its texels. A mask keeps the skeleton live too.
+ *
+ * The images of all display objects together hold at most {@link IDLE_BUDGET} bytes. A skeleton
+ * whose image would pass that draws live and asks again after the wait.
  *
  * A multisampled target keeps the skeleton live. Its image would hold 4 samples a pixel, five
  * times the memory, and samples on the edge of a triangle tie far more often than pixel centers.
@@ -57,6 +78,11 @@ import {
 export const IDLE_WAIT = 30;
 /** The largest width and height of an image in pixels. A skeleton larger on the screen draws live. */
 export const IDLE_MAX_SIDE = 2048;
+/**
+ * The most bytes the images of all display objects hold together, at 4 bytes a pixel: 64 MB,
+ * four images of the largest size. A skeleton whose image would pass it draws live.
+ */
+export const IDLE_BUDGET: number = 64 * 1024 * 1024;
 /** Pixels added around the bounds of the skeleton, for an edge the rasterizer rounds outward. */
 const MARGIN = 1;
 const CLEAR: [number, number, number, number] = [0, 0, 0, 0];
@@ -68,6 +94,8 @@ const IDLE_LABEL = 'marrow-idle';
 
 /** The container every view is drawn through into its image. A render group, made at the first image. */
 let studio: Container | undefined;
+/** The bytes of the images that show at the moment, of all display objects. */
+let imageBytes = 0;
 const bounds = new Bounds();
 const matrix = new Matrix();
 
@@ -119,9 +147,46 @@ function restoresOf(renderer: Renderer): number {
     return seen.count;
 }
 
+/**
+ * Lets the studio go of what its last render built: the instructions, the renderables, and the
+ * elements and textures in the batches of ours. They hold the view of the last capture and its
+ * skeleton. The next capture builds them again, since the studio gets another child.
+ */
+function releaseStudio(group: Container): void {
+    const renderGroup = group.renderGroup;
+
+    if (renderGroup === null || renderGroup === undefined) return;
+    const set = renderGroup.instructionSet;
+
+    for (let i = 0; i < set.instructionSize; i++) {
+        const instruction = set.instructions[i];
+
+        if (instruction instanceof Batch && instruction.batcher instanceof MarrowBatcher) instruction.batcher.release();
+    }
+    set.instructions.length = 0;
+    set.instructionSize = 0;
+    set.renderables.length = 0;
+    renderGroup.childrenRenderablesToUpdate.list.length = 0;
+    renderGroup.childrenRenderablesToUpdate.index = 0;
+}
+
+/**
+ * Whether no container from the display object up has a filter or a mask. A filter draws at a
+ * resolution of its own, so an image on the grid of the target would be sampled between texels.
+ */
+function unmasked(owner: Container): boolean {
+    for (let node: Container | null = owner; node !== null; node = node.parent) {
+        if (node.mask != null || (node.filters?.length ?? 0) > 0) return false;
+    }
+
+    return true;
+}
+
 /** An image that shows, and where it was drawn. */
 interface Image {
     readonly texture: RenderTexture;
+    /** The bytes of its pixels, counted in {@link imageBytes}. */
+    readonly bytes: number;
     readonly place: Placement;
     readonly renderer: Renderer;
     /** The count of {@link restoresOf} of its renderer when it was drawn. */
@@ -155,18 +220,32 @@ class IdleImage implements IdleCache {
     private refused = false;
     private destroyed = false;
     private readonly onSeen = (renderer: Renderer): void => this.seen(renderer);
+    /** The page textures, and the source each one had at the last look. */
+    private readonly pages: readonly Texture[];
+    private readonly sources: TextureSource[];
+    /** True when a page texture or its source changed since the last update. */
+    private paged = false;
+    private readonly onPage = (): void => {
+        this.paged = true;
+    };
 
-    constructor(owner: Container, view: SkeletonView, state: PoseState) {
+    constructor(owner: Container, view: SkeletonView, state: PoseState, pages: readonly Texture[]) {
         this.owner = owner;
         this.view = view;
         this.state = state;
         this.dark = state.model.slots.hasDark.includes(1);
+        this.pages = pages;
+        this.sources = pages.map((page) => page.source);
+        // a texture tells of another source or frame, a source of other pixels: a canvas or a video
+        for (const page of pages) page.on('update', this.onPage);
+        for (const source of this.sources) source.on('update', this.onPage);
     }
 
     update(): void {
         const { view, state } = this;
         const { stats } = view;
         const same =
+            !this.paged &&
             state.version === this.version &&
             stats.templateBuilds === this.builds &&
             stats.renderMode === this.mode &&
@@ -174,6 +253,7 @@ class IdleImage implements IdleCache {
         // a container between the slots draws on its own, and a skeleton that shows nothing needs no image
         const fits = (view.inserts?.containers.length ?? 0) === 0 && stats.drawCalls > 0;
 
+        if (this.paged) this.repage();
         if (!same || !fits) {
             this.note();
             this.drop();
@@ -196,9 +276,27 @@ class IdleImage implements IdleCache {
         if (this.destroyed) return;
         this.destroyed = true;
         this.drop();
+        for (const page of this.pages) page.off('update', this.onPage);
+        for (const source of this.sources) source.off('update', this.onPage);
         if (this.body === undefined) return;
         this.body.onRender = null;
         this.body.destroy();
+    }
+
+    /** Hears the source a page texture has now, after one took another. */
+    private repage(): void {
+        const { pages, sources } = this;
+
+        this.paged = false;
+        for (let i = 0; i < pages.length; i++) {
+            const now = pages[i]?.source;
+            const was = sources[i];
+
+            if (now === undefined || now === was) continue;
+            was?.off('update', this.onPage);
+            now.on('update', this.onPage);
+            sources[i] = now;
+        }
     }
 
     /** Notes what the picture depends on now. */
@@ -252,10 +350,12 @@ class IdleImage implements IdleCache {
         placeOf(owner, target.resolution, now);
         if (image !== null) {
             const kept =
+                !this.paged &&
                 renderer === image.renderer &&
                 restoresOf(renderer) === image.restores &&
                 !multisampled &&
                 drawsPlain(owner) &&
+                unmasked(owner) &&
                 this.untinted() &&
                 wholeMove(now, image.place);
 
@@ -273,7 +373,9 @@ class IdleImage implements IdleCache {
         last.set(now);
         this.lastBy = renderer;
         // an alpha or a blend mode above the skeleton blends each slot, which an image cannot
-        this.ready = still && !lost && !multisampled && drawsPlain(owner) && this.untinted() ? renderer : null;
+        const plain = drawsPlain(owner) && unmasked(owner) && this.untinted();
+
+        this.ready = still && !lost && !multisampled && plain ? renderer : null;
     }
 
     /**
@@ -298,7 +400,10 @@ class IdleImage implements IdleCache {
         this.ready = null;
         // a context lost since the render would leave the image empty: the next render asks again
         if ('gl' in renderer && renderer.gl.isContextLost()) return;
-        if (box.width <= 0 || box.height <= 0 || box.width > IDLE_MAX_SIDE || box.height > IDLE_MAX_SIDE) {
+        const bytes = box.width * box.height * 4;
+        const fits = box.width <= IDLE_MAX_SIDE && box.height <= IDLE_MAX_SIDE && imageBytes + bytes <= IDLE_BUDGET;
+
+        if (box.width <= 0 || box.height <= 0 || !fits) {
             this.rest = 0;
 
             return;
@@ -316,14 +421,15 @@ class IdleImage implements IdleCache {
             throw error;
         } finally {
             owner.addChildAt(container, index);
+            releaseStudio(studio);
         }
-        this.show(texture, box.x, box.y, renderer);
+        this.show(texture, box.x, box.y, renderer, bytes);
         // a draw can lay the vertex ranges out again, which changes no pixel
         this.note();
     }
 
     /** Hides the view and shows an image whose top left corner is at a pixel of the target. */
-    private show(texture: RenderTexture, x: number, y: number, renderer: Renderer): void {
+    private show(texture: RenderTexture, x: number, y: number, renderer: Renderer, bytes: number): void {
         const { owner, last } = this;
         const body = this.body ?? this.createBody();
         const { container } = this.view;
@@ -339,7 +445,8 @@ class IdleImage implements IdleCache {
             owner.removeChild(body);
             owner.addChildAt(body, owner.getChildIndex(container) + 1);
         }
-        this.image = { texture, place: Float64Array.from(last), renderer, restores: restoresOf(renderer) };
+        this.image = { texture, bytes, place: Float64Array.from(last), renderer, restores: restoresOf(renderer) };
+        imageBytes += bytes;
     }
 
     /** Shows the view again and lets go of the pixels of the image. */
@@ -348,6 +455,7 @@ class IdleImage implements IdleCache {
 
         if (image === null || body === undefined) return;
         this.image = null;
+        imageBytes -= image.bytes;
         this.view.container.visible = true;
         body.visible = false;
         body.texture = Texture.EMPTY;
@@ -378,9 +486,9 @@ function blendsAlone(view: SkeletonView, model: SkeletonModel): boolean {
  * Creates the idle cache of a display object.
  *
  * @example
- * const cache = idleCode.create(spine, view, engine.state);
+ * const cache = idleCode.create(spine, view, engine.state, asset.textures);
  * cache.update();
  */
 export const idleCode: IdleCode = {
-    create: (owner, view, state) => new IdleImage(owner, view, state),
+    create: (owner, view, state, pages) => new IdleImage(owner, view, state, pages),
 };
