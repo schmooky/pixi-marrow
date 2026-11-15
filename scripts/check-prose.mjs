@@ -152,11 +152,17 @@ const PARTICIPLES =
     'given|taken|made|done|found|seen|known|shown|written|built|sent|set|run|read|kept|held|left|put|cut|let|split|spread|begun|become|come|gone|got|gotten|lost|met|paid|said|sold|told|thought|brought|caught|taught|won|drawn|grown|thrown|flown|driven|risen|chosen|broken|spoken|frozen|hidden|forgotten|fallen|understood|stood|stuck|hung|led|fed|bound|spun|slid|lit';
 const STE_ADVISORY = [
     [
-        new RegExp(`\\b(is|are|was|were|been|being)\\s+(\\w+ed|${PARTICIPLES})\\b(?!\\s+(?:to|for|by)\\s+\\w+ing)`, 'gi'),
+        new RegExp(
+            `\\b(is|are|was|were|been|being)\\s+(\\w+ed|${PARTICIPLES})\\b(?!\\s+(?:to|for|by)\\s+\\w+ing)`,
+            'gi',
+        ),
         'possible passive voice: name who acts, unless no one matters',
     ],
     [
-        new RegExp(`(?<!\\b(?:may|might|could|should|would|must) )\\b(has|have|had)\\s+(?:been\\s+)?(?:\\w+ed|${PARTICIPLES})\\b`, 'gi'),
+        new RegExp(
+            `(?<!\\b(?:may|might|could|should|would|must) )\\b(has|have|had)\\s+(?:been\\s+)?(?:\\w+ed|${PARTICIPLES})\\b`,
+            'gi',
+        ),
         'compound tense: use the simple past or present, unless the result now is the point',
     ],
 ];
@@ -363,7 +369,8 @@ for (const file of files) {
         for (const [re, message] of STE_RULES)
             for (const m of fragment.matchAll(re)) report(file, line, `"${m[0]}": ${message}`);
         for (const [re, message] of STE_ADVISORY)
-            for (const m of fragment.matchAll(re)) advice.push(`${relative(root, file)}:${line}  "${m[0]}": ${message}`);
+            for (const m of fragment.matchAll(re))
+                advice.push(`${relative(root, file)}:${line}  "${m[0]}": ${message}`);
         const plain = fragment.replace(NAMES, ' ').toLowerCase();
 
         for (const group of SYNONYMS)
@@ -374,7 +381,9 @@ for (const file of files) {
         const used = group.filter((verb) => verbs.has(verb));
 
         if (used.length > 1)
-            advice.push(`${relative(root, file)}:${verbs.get(used[1])}  "${used.join('", "')}" name one action: pick one`);
+            advice.push(
+                `${relative(root, file)}:${verbs.get(used[1])}  "${used.join('", "')}" name one action: pick one`,
+            );
     }
 }
 

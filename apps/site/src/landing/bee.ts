@@ -16,9 +16,9 @@ import { MarrowSpine } from 'pixi-marrow';
 
 /** Share of the element that the bee fills, across or down, whichever runs out first. */
 const FILL = 0.9;
-/** What the box says where the bee did not load, and where the browser took her context away. */
+/** What the box says where the bee did not load, and where the browser removed her context. */
 const NO_BEE = 'The bee did not load. The code beside her is the same.';
-const LOST = 'The browser took the WebGL context of the bee away.';
+const LOST = 'The browser removed the WebGL context of the bee.';
 
 /** Puts a line of text in the box in place of the bee. The box is then no picture. */
 function say(host: HTMLElement, text: string): void {
