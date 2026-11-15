@@ -37,8 +37,8 @@ export const CATALOG: readonly LabInfo[] = [
     },
     {
         name: 'crowd',
-        title: 'Many copies',
-        question: 'Do many copies of one rig play at the full frame rate of this device?',
+        title: 'Many instances',
+        question: 'Do many instances of one rig play at the full frame rate of this device?',
         scene: (count) => `${count} bees play their idle loop, each at another point of it.`,
         count: 100,
         noun: 'bees',

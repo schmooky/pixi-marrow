@@ -1,0 +1,42 @@
+---
+layout: ../../layouts/Docs.astro
+title: API reference
+description: Every export of pixi-marrow, by entry point, with its signature, its description and its example. The build makes these pages from the declarations of the package.
+---
+
+import ApiEntries from '../../components/ApiEntries.astro';
+
+The API reference lists every export of every entry point of pixi-marrow. Each export has its signature, its description and its example. Start with [`pixi-marrow`](/api/pixi-marrow/), the entry point with `MarrowSpine`.
+
+## Entry points
+
+An entry point is a path that a game imports from, such as `pixi-marrow` or `pixi-marrow/core`. Each one has a page:
+
+<ApiEntries />
+
+The first cell of a row leads to the page of that entry point. Each page is at `/api/` plus the last part of the import path, and `/api/pixi-marrow/` is the root import.
+
+## How to link a name
+
+Each export has an anchor: its name in lower case. Each member of a class or an interface has the name of its owner before it.
+
+| Name | Address |
+|---|---|
+| The class `MarrowSpine` | [/api/pixi-marrow/#marrowspine](/api/pixi-marrow/#marrowspine) |
+| The method `MarrowSpine.play` | [/api/pixi-marrow/#marrowspine-play](/api/pixi-marrow/#marrowspine-play) |
+| The property `Track.finished` | [/api/pixi-marrow/#track-finished](/api/pixi-marrow/#track-finished) |
+| The option `PlayOptions.loop` | [/api/pixi-marrow/#playoptions-loop](/api/pixi-marrow/#playoptions-loop) |
+
+A class also lists the public members of the classes of the package that it extends. So `MarrowSpine` has `bone`, `slot`, `attach` and `timeScale` on its own page section.
+
+## Where the pages come from
+
+Nobody writes these pages by hand. The build of the site reads the entry points from the `exports` of the `package.json` of the package. For each one it reads the built declaration files, with their comments. A new export or a new entry point shows with the next build.
+
+The text of an export is its comment in the source. So a wrong text here is a wrong comment there: report it as a bug.
+
+Each page has a Markdown twin for tools, such as [/api/pixi-marrow.md](/api/pixi-marrow.md). The file `packages/pixi-marrow/api.md` in the repo is the snapshot of the same surface that reviews read.
+
+## What is stable
+
+pixi-marrow is a pre-release. An export can change or go in the next pre-release. [Changelog](/changelog/) names each such change.

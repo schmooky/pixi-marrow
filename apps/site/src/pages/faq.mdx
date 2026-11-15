@@ -1,0 +1,156 @@
+---
+layout: ../layouts/Docs.astro
+title: Questions and answers
+description: Short answers about pixi-marrow, a Spine runtime for PixiJS v8. Versions, renderers, draw calls, size, speed, the licence and how ready it is.
+---
+
+import FaqData from '../components/FaqData.astro';
+import Snippet from '../components/Snippet.astro';
+import source from '../snippets/faq.ts?raw';
+
+<FaqData />
+
+Each answer starts with the short form. The links lead to the page with the details. The facts are those of the `main` branch on 15 November 2026.
+
+## Is pixi-marrow a drop-in replacement for spine-pixi-v8?
+
+No. pixi-marrow plays the same Spine files, but it has its own API, and it does not give a game the `spine-core` objects.
+
+`spine.state.setAnimation(0, 'run', true)` becomes `hero.play('run', { loop: true })`. [Migrate](/migrate/) maps each call and lists what is not there.
+
+## Which Spine versions does pixi-marrow play?
+
+pixi-marrow plays exports of Spine 4.1, 4.2 and 4.3, as `.json` or `.skel` files, also mixed in one scene.
+
+An export of Spine 4.0 or earlier does not load. The runtime reads the version from each file and throws a `MarrowError` for a version that it does not play.
+
+## Which PixiJS versions does pixi-marrow need?
+
+pixi-marrow needs PixiJS 8.21 or later. `pixi.js` is its one required peer dependency.
+
+On PixiJS 8.21 and 8.22, the mesh mode and the textures of `skinning: 'gpu'` upload whole buffers. From PixiJS 8.23 they upload only the part that changed.
+
+## Does pixi-marrow work with PixiJS v7?
+
+No. pixi-marrow needs PixiJS 8.21 or later and does not run on PixiJS v7.
+
+For PixiJS v7 and earlier there is [pixi-spine](https://github.com/pixijs-userland/spine). Its README names Spine 3.7, 3.8, 4.0 and 4.1.
+
+## Does pixi-marrow work on WebGPU?
+
+Yes. pixi-marrow draws on the WebGPU renderer and on the WebGL2 renderer of PixiJS v8, with the same code in the game.
+
+The pixel check of the repo compares both renderers with the official runtime. [Spine on PixiJS WebGPU](/webgpu/) says what differs.
+
+## Does pixi-marrow work on WebGL1 or the Canvas renderer?
+
+No. On WebGL1 and on the Canvas renderer, pixi-marrow draws no skeleton and warns once in the console.
+
+The rest of the app goes on. The official runtime has a Canvas renderer. So a game that must run without WebGL2 needs the official runtime.
+
+## How many draw calls does a Spine skeleton take in PixiJS?
+
+With pixi-marrow, one draw call can hold many skeletons: 200 instances of a small rig drew in 1 draw call in the bench.
+
+A draw call is one command from the CPU to the GPU to draw triangles. The runtime batches a skeleton of up to 1024 vertices with the skeletons next to it in the display list. A larger skeleton gets meshes of its own, which is one draw call per instance or more.
+
+`hero.stats.drawCalls` says how many draw calls one skeleton takes. [Benchmarks](/benchmarks/) has the counts for five rigs, next to the official runtime.
+
+## Why do my draw calls go up?
+
+Most often because something ends a batch. These are the common causes:
+
+- A Pixi object, such as a sprite or a text, lies between two skeletons in the draw order.
+- A slot multiplies or screens. A slot that adds does not end a batch.
+- The skeletons next to each other use more than 16 atlas pages.
+- `attach` put a container into a skeleton. It costs one draw call.
+- A skeleton has more than 1024 vertices, so it draws in the mesh mode.
+- A skeleton in the mesh mode has a clipping attachment.
+- Skeletons with a dark tint and without one alternate in the draw order.
+
+`await hero.perf.report()` says what the runtime decided for one skeleton, and why. [Performance rules](/performance/rules/) gives each cause an id and a fix. [Performance caveats](/performance/caveats/) and [Draw order and batches](/how/batches/) explain them.
+
+## How do I move or fade many skeletons without a cost?
+
+Put them into a container with `isRenderGroup: true`, and move or fade that container.
+
+<Snippet source={source} regions="group" />
+
+In the batched mode, the CPU writes the place and the tint of a parent into each vertex. So a parent that moves makes each skeleton below it place all its vertices again, also at rest. A parent whose alpha or tint changes makes each skeleton write its static data again.
+
+Pixi applies the transform and the alpha of a render group on the GPU. The skeletons in it write nothing again.
+
+<Snippet source={source} regions="stats" />
+
+`stats.transformReplaces` and `stats.tintRewrites` count the frames that paid this cost. `stats.frameBytes` is 0 after a frame in which nothing moved.
+
+## How big is pixi-marrow?
+
+The import of `MarrowSpine` is 31 kB gzipped, and a game loads about 72 to 74 kB before its first skeleton shows.
+
+The rest loads on demand:
+
+| Code | Gzipped | Loads when |
+|---|---|---|
+| The import of `MarrowSpine` | 31 kB | The game starts |
+| A reader of skeleton files | 8.6 to 9.1 kB | The first file of that format and version loads |
+| The pose engine for 4.1 and 4.2 | 32 kB | The first 4.1 or 4.2 skeleton loads |
+| The pose engine for 4.3 | 34 kB | The first 4.3 skeleton loads |
+| The mesh mode | 18 kB | A skeleton draws in the mesh mode |
+| Clipping | 7.4 kB | A skeleton has a clipping attachment |
+
+The package has no dependencies and does not ship `spine-core`. That is more code than the official runtime of one Spine version: [Compare runtimes](/compare/spine-pixi-v8/) has both numbers.
+
+## Is pixi-marrow faster than spine-pixi-v8?
+
+Yes, for the CPU time of a frame on one desktop machine. There, 200 instances took 0.23 to 0.77 times the CPU time of the official runtime.
+
+That is one Apple M4 with Chrome 157, on 15 November 2026. The `update` call alone is slower in pixi-marrow on most rigs, because it places its vertices there. No phone ran the bench. [Benchmarks](/benchmarks/) has every row and the method.
+
+## Do I need a Spine licence?
+
+The README says: "Each user of pixi-marrow needs their own Spine Editor licence, as for the official runtimes."
+
+The same section of the README says more:
+
+> The Spine Runtimes License, in LICENSE. The pose core of pixi-marrow is a port of the official Spine Runtimes, so pixi-marrow is a derivative work of them.
+
+> A copy of pixi-marrow in any form must include the licence and its copyright notice.
+
+This page does not explain the licence. Read the [README](https://github.com/schmooky/pixi-marrow/blob/main/README.md#licence) and the [LICENSE](https://github.com/schmooky/pixi-marrow/blob/main/LICENSE) file.
+
+## Is pixi-marrow production ready?
+
+Not yet, by its own label: pixi-marrow is a pre-release, version `0.1.0-next.1` on the npm tag `next`.
+
+What that means today:
+
+- An API can change or go in the next pre-release. [Changelog](/changelog/) names each such change.
+- Only the newest version on npm gets fixes.
+- The numbers for speed come from one desktop machine. Numbers for phones do not exist yet.
+- CI does not run the pixel check against the official runtime, because its runners have no GPU. The maintainer runs it on a local machine.
+- The parity suite runs in CI. It compares each pose with the official `spine-core` of the same Spine version, and they must be equal to the bit.
+
+[Compare runtimes](/compare/spine-pixi-v8/) lists what the official runtime has and pixi-marrow does not.
+
+## How do I use pixi-marrow with an AI coding agent?
+
+Give the agent [llms.txt](/llms.txt), the list of the docs pages, or [llms-full.txt](/llms-full.txt), all pages in one file.
+
+Each docs page also has a Markdown twin: `/guide/play.md` is the twin of `/guide/play/`. The [API reference](/api/) comes from the declarations of the package, so it holds every export.
+
+For a slow scene, let the agent read the numbers and not guess. `hero.stats` and `await hero.perf.report()` say what one skeleton costs. From the entry `pixi-marrow/diagnose`, `inspect(hero)` gives the numbers of one skeleton as plain data. `diagnose(root)` walks a Pixi scene and names the rules that it breaks. [Performance rules](/performance/rules/) has one anchor per rule id.
+
+## How do I report a bug?
+
+Open an issue at [github.com/schmooky/pixi-marrow/issues](https://github.com/schmooky/pixi-marrow/issues) with the bug form.
+
+The form asks for these:
+
+1. What happens, and what you expected. A difference from the official runtime is a bug.
+2. The smallest code that shows it, with the skeleton and the atlas if you can share them.
+3. The versions of pixi-marrow, of pixi.js and of the Spine editor that exported the skeleton.
+4. The renderer, the browser and the device.
+5. The whole text of a `MarrowError`, with its code and its fix.
+
+Report a security problem in private. [SECURITY.md](https://github.com/schmooky/pixi-marrow/blob/main/SECURITY.md) says how.

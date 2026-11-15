@@ -1,0 +1,122 @@
+---
+import { Code } from 'astro:components';
+import Docs from '../../layouts/Docs.astro';
+import { type ApiDoc, type ApiEntry, apiEntries, apiLink } from '../../lib/api-reference';
+import { renderMarkdown } from '../../lib/markdown';
+import { SITE } from '../../lib/site';
+
+/*
+ * One page of the API reference per entry point of the package. `src/lib/api-reference.ts`
+ * reads the entry points and their exports from the built declarations, so this file needs no
+ * change when an export or an entry point arrives.
+ */
+
+export function getStaticPaths() {
+    return apiEntries().map((entry) => ({ params: { entry: entry.slug }, props: { entry } }));
+}
+
+interface Props {
+    entry: ApiEntry;
+}
+const { entry } = Astro.props;
+const html = (text: string): string => renderMarkdown(text, { link: apiLink }).html;
+const count = entry.symbols.length;
+const title = `API: ${entry.name}`;
+const description = `The API of ${entry.name}, an entry point of the Spine runtime for PixiJS v8: ${count} exports, each with its signature, its description and its example.`;
+const headings = entry.symbols.map((symbol) => ({ depth: 2, slug: symbol.anchor, text: symbol.name }));
+const named = entry.symbols.filter((symbol) => !symbol.typeOnly).map((symbol) => symbol.name);
+const usage = `import { ${(named.length > 0 ? named : entry.symbols.map((symbol) => symbol.name)).slice(0, 3).join(', ')} } from '${entry.name}';`;
+const hasDoc = (doc: ApiDoc): boolean => doc.text !== '' || doc.params.length > 0 || doc.examples.length > 0;
+---
+
+<Docs frontmatter={{ title, description }} headings={headings}>
+    <Fragment set:html={html(entry.doc.text)} />
+    <Code code={usage} lang="ts" theme="github-dark-dimmed" />
+    <p>
+        The build reads this page from the declarations of version {SITE.version}, so it lists what the package exports. The
+        <a href="/api/">API reference</a> lists the other entry points, and <a href={`/api/${entry.slug}.md`}>this page as Markdown</a> is for tools.
+    </p>
+    <table>
+        <thead>
+            <tr><th>Export</th><th>Kind</th><th>What it is</th></tr>
+        </thead>
+        <tbody>
+            {entry.symbols.map((symbol) => (
+                <tr>
+                    <td><a href={`#${symbol.anchor}`}><code>{symbol.name}</code></a></td>
+                    <td>{symbol.kind}</td>
+                    <td set:html={html(symbol.doc.summary).replace(/^<p>|<\/p>$/g, '')} />
+                </tr>
+            ))}
+        </tbody>
+    </table>
+    {entry.symbols.map((symbol) => (
+        <section class="api-symbol">
+            <h2 id={symbol.anchor}>{symbol.name}</h2>
+            <p class="api-kind">{symbol.kind}{symbol.typeOnly ? ', exported as a type' : ''}</p>
+            <Code code={symbol.signature} lang="ts" theme="github-dark-dimmed" />
+            <Fragment set:html={html(symbol.doc.text)} />
+            {symbol.doc.params.length > 0 && (
+                <ul>
+                    {symbol.doc.params.map((param) => (
+                        <li><code>{param.name}</code>: <Fragment set:html={html(param.text).replace(/^<p>|<\/p>$/g, '')} /></li>
+                    ))}
+                </ul>
+            )}
+            {symbol.doc.examples.map((example) => (
+                <Fragment>
+                    <p class="api-label">Example</p>
+                    <Code code={example} lang="ts" theme="github-dark-dimmed" />
+                </Fragment>
+            ))}
+            {symbol.members.map((member) => (
+                <div class="api-member">
+                    <h3 id={member.anchor}><code>{member.title}</code></h3>
+                    {member.from && <p class="api-kind">from <a href={apiLink(member.from) ?? `#${symbol.anchor}`}><code>{member.from}</code></a></p>}
+                    <Code code={member.signature} lang="ts" theme="github-dark-dimmed" />
+                    {hasDoc(member.doc) && <Fragment set:html={html(member.doc.text)} />}
+                    {member.doc.params.length > 0 && (
+                        <ul>
+                            {member.doc.params.map((param) => (
+                                <li><code>{param.name}</code>: <Fragment set:html={html(param.text).replace(/^<p>|<\/p>$/g, '')} /></li>
+                            ))}
+                        </ul>
+                    )}
+                    {member.doc.examples.map((example) => (
+                        <Fragment>
+                            <p class="api-label">Example</p>
+                            <Code code={example} lang="ts" theme="github-dark-dimmed" />
+                        </Fragment>
+                    ))}
+                </div>
+            ))}
+        </section>
+    ))}
+</Docs>
+
+<style>
+    .api-kind,
+    .api-label {
+        margin: 0.2rem 0 0.6rem;
+        font-size: 0.8125rem;
+        color: hsl(var(--muted-foreground));
+    }
+    .api-label {
+        margin-top: 1rem;
+        font-weight: 600;
+    }
+    .api-symbol h2 {
+        margin-bottom: 0.2rem;
+        border-top-width: 1px;
+        padding-top: 2rem;
+        overflow-wrap: anywhere;
+    }
+    .api-member h3 {
+        margin-bottom: 0.3rem;
+        overflow-wrap: anywhere;
+    }
+    .api-member {
+        border-left-width: 1px;
+        padding-left: 1rem;
+    }
+</style>
