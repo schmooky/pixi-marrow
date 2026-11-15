@@ -4,7 +4,7 @@ import type { PoseState } from '../pose/state';
 import type { BakedClip } from './clip';
 import { showsClipAttachments, writeFrame } from './frame';
 import { bakeInIdleTime, type SteppedWork } from './later';
-import { recordClip } from './record';
+import { type ClipRecorder, recordClip } from './record';
 import { type Baker, bakesOf, type ModelBakes, type PreparedClip } from './store';
 
 /** What baked playback needs of an asset: its model and the factory of its engines. A `MarrowAsset` is one. */
@@ -150,14 +150,14 @@ class BakedPlayback implements PoseSource, BakeTally {
         this.allowed = allowed === null ? null : new Set(allowed);
         // a clip is baked where the first instance that plays it stands, and shared
         this.baker = (animation, skins, done) => {
-            const recorder = recordClip(createEngine, model, animation, {
-                skins,
-                placement: [state.x, state.y, state.scaleX, state.scaleY],
-            });
+            const placement = [state.x, state.y, state.scaleX, state.scaleY] as const;
+            let recorder: ClipRecorder | undefined;
 
             later({
                 step() {
                     try {
+                        // a recorder that throws at once answers with its error, as one that throws later
+                        recorder ??= recordClip(createEngine, model, animation, { skins, placement });
                         if (!recorder.step()) return false;
                         if (recorder.clip !== undefined) done(recorder.clip);
                     } catch (error) {
