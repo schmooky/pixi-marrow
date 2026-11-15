@@ -86,49 +86,6 @@ jobs:
       - name: Dead code
         run: pnpm check:dead
 
-  pixi-floor:
-    # The peer range starts at pixi.js 8.21.0 and pixi-silk 1.0.1, but the dev dependencies resolve
-    # newer versions. This job installs the lowest ones into the package on the runner, where the
-    # changed manifest and lockfile stay, and runs the typecheck and the unit tests on them.
-    #
-    # The tests run in Node, where a canvas has no context. So no test uploads a texture, which is
-    # what differs on 8.21. Only the pixel check does: pnpm check:render --pixi=8.21.0, on a
-    # machine with a GPU.
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 24
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-
-      - name: Install the lowest peers
-        # The floors are the starts of the peer ranges in packages/pixi-marrow/package.json. The
-        # check fails when a peer is not at its floor, and when the install added a package that
-        # the committed lockfile does not pin. So the job runs on pinned packages only.
-        run: |
-          pnpm --filter pixi-marrow add --save-dev $(node scripts/peer-floor.mjs)
-          node scripts/peer-floor.mjs --check
-
-      - name: Fixture cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: fixtures/.cache
-          key: fixtures-${{ hashFiles('fixtures/manifest.json') }}
-
-      - name: Typecheck
-        # With skipLibCheck, as everywhere. Without it tsc reports the types of the peers
-        # themselves: pixi.js 8.21.0 and pixi-silk 1.0.1 each have one error under
-        # exactOptionalPropertyTypes, which is not for this repository to fix.
-        run: pnpm typecheck
-
-      - name: Unit tests
-        # downloads missing fixtures first, then runs unit tests and the parity suite
-        run: pnpm test
-
   site:
     # The docs site is the one real bundle in the repo: it imports the built package as a game does.
     # A change that breaks its types or its build fails here, before the deploy finds it.

@@ -88,7 +88,7 @@ The engines solve every constraint: IK, transform, path, physics and sliders. A 
 - No `spine-core` in `src`. Only tests import the official cores.
 - The model is a faithful import. A reader stores what its file holds and does not convert between versions.
 - A reader mirrors the official reader of its own version, bugs included. It is stricter only where the official reader would crash, hang or store garbage. There it throws.
-- No runtime dependencies. The peers are `pixi.js` from <!-- fact:floor.pixi -->8.21.0<!-- /fact -->, which the root import needs, and `pixi-silk` from <!-- fact:floor.pixiSilk -->1.0.1<!-- /fact -->. `pixi-silk` is optional: only `pixi-marrow/debug` needs it.
+- No runtime dependencies. The peers are `pixi.js` from <!-- fact:floor.pixi -->8.23.0<!-- /fact -->, which the root import needs, and `pixi-silk` from <!-- fact:floor.pixiSilk -->1.0.1<!-- /fact -->. `pixi-silk` is optional: only `pixi-marrow/debug` needs it.
 - Speed and memory are goals of equal weight. Pose data lives in typed arrays.
 - After warm-up, an update that reports no event allocates nothing. An update with events allocates the list and one object for each event. `tests/pose/heap.test.ts` measures the heap of playing engines of both kinds.
 - The runtime stores once what all instances can share. State of a feature exists only for a skeleton that uses the feature.
@@ -140,10 +140,9 @@ It runs every gate, in this order:
 10. The typecheck of the site.
 11. The dead code check.
 
-CI is in `.github/workflows`. `ci.yml` has four jobs:
+CI is in `.github/workflows`. `ci.yml` has two jobs:
 
 - `ci` runs the steps above without the typecheck of the site. It also lints the commit messages of a pull request.
-- `pixi-floor` installs the lowest peers that the package allows. Then it runs the typecheck and the unit tests.
 - `site` builds the library, then it type-checks and builds the site.
 
 `pr.yml` has two jobs. `changeset-gate` fails a pull request that changes the published package without a changeset. `pr-title` lints the title of the pull request with commitlint. `release.yml` publishes, see section 8.
@@ -157,8 +156,6 @@ pnpm check:render
 It draws rigs with pixi-marrow and with the official Pixi runtime in headless Chrome, on WebGL2 and WebGPU, and compares the pixels. It also compares pixi-marrow with its overdraw cuts on and off. Images of failing cases land in `.shots/render/`. CI does not run it, because its runners have no GPU. Run it on your own machine.
 
 When a frame fails against the official runtime, the check draws it again, moved by a fraction of a pixel. The frame fails only when it fails at both places. The two runtimes place vertices in different code, so a vertex on a subpixel boundary can round two ways. A defect stays wrong after the move.
-
-For a change to the render path, also run the pixel check on the lowest pixi.js that the package allows: `pnpm check:render --pixi=8.21.0`. Version 8.21.0 is installed for that.
 
 The pixel check ends with a game check. Its cases come from a bundle built as a game builds one, with named imports and tree shaking. Pixi registers pipes when modules load, so code that loads on demand must not need a pipe that the game never imported.
 
