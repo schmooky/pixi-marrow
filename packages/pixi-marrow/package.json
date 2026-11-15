@@ -1,7 +1,7 @@
 {
   "name": "pixi-marrow",
   "version": "0.1.0-next.1",
-  "description": "A Spine runtime for PixiJS v8 with its own pose core. Plays Spine 4.1, 4.2 and 4.3 skeletons.",
+  "description": "A fast Spine runtime for PixiJS v8 with its own pose core. Plays Spine 4.1, 4.2 and 4.3 skeletons on WebGL2 and WebGPU.",
   "license": "LicenseRef-LICENSE",
   "type": "module",
   "sideEffects": false,
@@ -96,7 +96,23 @@
     "runtime",
     "webgl",
     "webgpu",
-    "typescript"
+    "typescript",
+    "spine-runtime",
+    "spine-runtimes",
+    "spine-pixi",
+    "pixi-spine",
+    "pixi-v8",
+    "pixijs-v8",
+    "spine-animation",
+    "2d-animation",
+    "animation",
+    "skeletal",
+    "skeleton",
+    "gamedev",
+    "game-development",
+    "html5-game",
+    "slots",
+    "performance"
   ],
   "peerDependenciesMeta": {
     "pixi-silk": {
