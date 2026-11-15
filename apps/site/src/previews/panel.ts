@@ -89,7 +89,11 @@ export function panel(bar: HTMLElement): Panel {
     let host = bar;
     /** The choices of a row, which is made when its label is named for the first time. */
     const row = (label: string, kind: string, role: string): HTMLElement => {
-        const id = `${bar.id}-${label.toLowerCase()}`;
+        // an id has no spaces: "Track 1" is track-1
+        const id = `${bar.id}-${label
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-|-$/g, '')}`;
         let choices = host.querySelector<HTMLElement>(`[data-row="${label}"] > div`);
 
         if (choices === null) {
