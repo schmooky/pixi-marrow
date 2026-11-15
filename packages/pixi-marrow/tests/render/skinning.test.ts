@@ -5,7 +5,7 @@ import { nextVersion, touchPose } from '../../src/pose/state';
 import { inspectView, layoutArrayBytes } from '../../src/render/inspect';
 import { SkeletonView } from '../../src/render/skeleton-view';
 import { listFixtures } from '../parity/fixtures';
-import { type CoverSlot, coverRig, moveSlot } from './cover-rig';
+import { type CoverSlot, coverRig, framesUntilCovered, moveSlot } from './cover-rig';
 import {
     createRig,
     drawPose,
@@ -396,5 +396,44 @@ describe('skinning on the GPU', () => {
         expect(rig.view.stats.coveredSlots).toBe(0);
         expect(positions).toEqual([]);
         expect(expectSkinned(rig).map((item) => item.cpu)).toEqual([false, false]);
+    });
+
+    it('places on the CPU only for a search while nothing is covered, and still finds what goes behind', async () => {
+        const apart: readonly CoverSlot[] = [
+            { name: 'small', shows: 'small', at: [300, 0] },
+            { name: 'big', shows: 'big' },
+        ];
+        const rig = await coverRig(apart, { skinning: 'gpu', instancing: 'off' });
+        const { state } = rig.engine;
+        const { template } = rig.view.parts;
+        const first = (template.first[0] ?? 0) * 2;
+        let placed = 0;
+        let last = template.positions[first];
+
+        redraw(rig);
+        expect(rig.view.stats.coveredSlots).toBe(0);
+        // the small slot moves in every frame, far from the big one: the shader places it
+        for (let frame = 0; frame < 64; frame++) {
+            moveSlot(rig, 'small', 300 + frame, 0);
+            drawPose(rig.view, state);
+            if (template.positions[first] !== last) placed++;
+            last = template.positions[first];
+        }
+        // the CPU placed it for the searches alone, which come once in 4 to 64 updates
+        expect(placed).toBeGreaterThan(0);
+        expect(placed).toBeLessThan(12);
+        expect(rig.view.stats.coveredSlots).toBe(0);
+        // it goes behind the big slot: a search places it, and finds it covered
+        moveSlot(rig, 'small', 0, 0);
+        expect(framesUntilCovered(rig, 1, () => drawPose(rig.view, state))).toBeLessThanOrEqual(64);
+        // from then on every pose is tested, so the CPU follows every move
+        moveSlot(rig, 'small', 2, 0);
+        drawPose(rig.view, state);
+        const moved = template.positions[first];
+
+        moveSlot(rig, 'small', 4, 0);
+        drawPose(rig.view, state);
+        expect(template.positions[first]).not.toBe(moved);
+        expect(rig.view.stats.coveredSlots).toBe(1);
     });
 });

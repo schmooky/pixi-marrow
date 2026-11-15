@@ -51,12 +51,11 @@ export class CoverTest {
     /**
      * Brings the marks in line with a pose that a view is about to draw. Most frames have no
      * work, see `CoverSearch.follow`. Returns whether a mark changed, which asks for new index
-     * buffers.
+     * buffers. Before a search, `paint` places on the CPU the vertices that a vertex shader places.
      *
      * @param container The container of the view. Asked about only when there is work.
      * @param moved Whether a vertex moved or the list changed.
      * @param relisted Whether the list, a clip or a hiding alpha changed.
-     * @param paint What places on the CPU, before a search, the vertices that a vertex shader places.
      */
     follow(
         template: Template,

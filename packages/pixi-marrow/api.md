@@ -376,6 +376,11 @@ export interface ViewStats {
   skips: number;
   placedSlots: number;
   coloredSlots: number;
+  transformReplaces: number;
+  tintRewrites: number;
+  instructionBuilds: number;
+  uploadBytes: UploadBytes;
+  frameBytes: number;
 }
 ```
 

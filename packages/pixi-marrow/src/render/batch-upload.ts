@@ -69,9 +69,10 @@ export class PendingUpload {
      * Uploads what changed, the cheaper way: the stretches one by one, or the first `used` items
      * of the buffer. Returns the bytes it uploaded.
      *
+     * With `each` false the upload is one stretch from the first change to the last. That is for
+     * a buffer that keeps one stretch until it is bound, see {@link uploadsStretch}.
+     *
      * @param itemBytes The bytes of one item.
-     * @param each False where a buffer keeps one stretch until it is bound, see {@link uploadsStretch}:
-     *   the upload is then one stretch from the first change to the last.
      */
     flush(buffer: Buffer, itemBytes: number, used: number, each: boolean): number {
         const { stretches } = this;

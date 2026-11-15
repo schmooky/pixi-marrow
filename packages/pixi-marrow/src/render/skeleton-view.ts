@@ -199,16 +199,15 @@ export class SkeletonView implements DrawGate {
      */
     update(state: PoseState): void {
         checkPose(this.destroyed, state.model === this.model);
-        const { pass, paints, seen } = this;
+        const { pass, paints, seen, stats } = this;
         const stale = this.outdated() || state.skin !== this.template.skin;
         const same = state === this.last && state.version === pass.seen && !pass.all;
         const arrived = paints.waits && meshCode() !== undefined;
 
-        this.stats.frameBytes = 0;
+        stats.frameBytes = 0;
         if (same && !stale && !this.restyle && !this.cover.owes && !arrived) {
-            this.stats.skips++;
+            stats.skips++;
             pass.skipped = true;
-
             return;
         }
         if (state !== this.last) pass.all = true;

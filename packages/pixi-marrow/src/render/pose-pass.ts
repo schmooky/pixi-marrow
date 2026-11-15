@@ -215,7 +215,7 @@ export function colorEntry(
  * @example
  * if (!moved && recolorEntry(pass, template, state, model.slots.hasDark, entry, slot, undefined)) continue;
  */
-export function recolorEntry(
+function recolorEntry(
     pass: PosePass,
     template: Template,
     state: PoseState,

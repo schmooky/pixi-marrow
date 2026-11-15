@@ -398,7 +398,6 @@ export class DrawRanges {
         // an upload that waits for a draw can be replaced by the next one, which must then reach as far
         range.held = AT_ONCE ? written : Math.max(written, range.held);
         range.mesh.visible = true;
-
         return drawn;
     }
 

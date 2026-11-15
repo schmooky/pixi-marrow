@@ -164,12 +164,12 @@ export class CoverSearch {
      *
      * Nothing is covered while Pixi does not draw the skeleton as its vertices say, see
      * `drawsPlain`. A pose that moved can cover other slots, and a search finds them some updates
-     * later: {@link owes} says that it is still to come.
+     * later: {@link owes} says that it is still to come. Before a search, `paint` places on the
+     * CPU the vertices that a vertex shader places.
      *
      * @param container The container of the view. `drawsPlain` is asked about it only when there is work.
      * @param moved Whether a vertex moved or the list changed since the call before.
      * @param relisted The `moved` of {@link begin}.
-     * @param paint What draws the view in the mesh mode. It places every position the search reads.
      */
     follow(
         template: Template,
