@@ -18,3 +18,23 @@ export const ROOT_IMPORT_LIMIT = 32.5 * 1024;
 
 /** The import of scripts/size-check.mjs, and the entry of ci/size-baseline.json, that the limit is for. */
 export const ROOT_IMPORT_ENTRY = 'root (MarrowSpine)';
+
+/**
+ * The most bytes, gzipped, of code that loads on demand: what a game downloads the first time a
+ * skeleton needs a reader, a pose engine, the mesh mode or the code for clips. The keys are those
+ * of `ON_DEMAND` in scripts/size-measure.mjs. Each limit is the size of 2026-11-15 plus 3 percent,
+ * rounded up to half a kilobyte.
+ *
+ * The root import stays small because code moves into these chunks. Without a limit they can
+ * grow without a word. Raise one as the root limit is raised: in a commit of its own that says why.
+ */
+export const ON_DEMAND_LIMITS = {
+    'on demand (reader of 4.1 and 4.2 JSON)': 9 * 1024,
+    'on demand (reader of 4.1 and 4.2 binary)': 9 * 1024,
+    'on demand (reader of 4.3 JSON)': 8.5 * 1024,
+    'on demand (reader of 4.3 binary)': 8.5 * 1024,
+    'on demand (pose engine of 4.1 and 4.2)': 32 * 1024,
+    'on demand (pose engine of 4.3)': 33 * 1024,
+    'on demand (mesh mode)': 18 * 1024,
+    'on demand (clipping)': 8 * 1024,
+};
