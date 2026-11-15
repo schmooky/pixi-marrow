@@ -71,9 +71,9 @@ const SEO: Readonly<Record<string, SeoEntry>> = {
             'Run npm install pixi-marrow@next pixi.js, load a Spine skeleton with its atlas, and play an animation in PixiJS v8. The guide starts from these calls.',
     },
     '/guide/assets/': {
-        seoTitle: 'Load Spine assets once in PixiJS v8 and show many copies',
+        seoTitle: 'Load Spine assets once in PixiJS v8 and show many instances',
         seoDescription:
-            'Load a Spine skeleton and its atlas once, then show as many copies as a scene needs. Load with pixi-marrow or with PixiJS Assets.',
+            'Load a Spine skeleton and its atlas once, then show as many instances as a scene needs. Load with pixi-marrow or with PixiJS Assets.',
     },
     '/guide/size/': {
         seoTitle: 'Size and scale of a Spine skeleton in PixiJS v8',
@@ -160,6 +160,56 @@ const SEO: Readonly<Record<string, SeoEntry>> = {
         seoDescription:
             'The reels of a slot game with line wins, as a live example. pixi-reels spins the reels, and pixi-marrow draws the Spine symbols in PixiJS v8.',
     },
+    '/compare/spine-pixi-v8/': {
+        seoTitle: 'pixi-marrow vs spine-pixi-v8 vs pixi-spine: Spine in PixiJS',
+        seoDescription:
+            'For PixiJS v8 there are two Spine runtimes: the official spine-pixi-v8 and pixi-marrow. A table of versions, draw calls, size, features and maturity.',
+    },
+    '/benchmarks/': {
+        seoTitle: 'Spine PixiJS v8 benchmarks: pixi-marrow vs spine-pixi-v8',
+        seoDescription:
+            'On an Apple M4, 200 Spine skeletons in PixiJS 8.23 took 0.23 to 0.77 times the CPU time of spine-pixi-v8. All rows, the method and the date: 2026-11-15.',
+    },
+    '/migrate/': {
+        seoTitle: 'Migrate from spine-pixi-v8 or pixi-spine: Spine, PixiJS v8',
+        seoDescription:
+            'pixi-marrow is not a drop-in replacement. Each call of spine-pixi-v8 and pixi-spine, such as state.setAnimation, with its call in pixi-marrow for PixiJS v8.',
+    },
+    '/faq/': {
+        seoTitle: 'pixi-marrow FAQ: a Spine runtime for PixiJS v8, answered',
+        seoDescription:
+            'pixi-marrow plays Spine 4.1 to 4.3 in PixiJS 8.21 or later, on WebGL2 and WebGPU. Short answers on draw calls, size, speed, the licence and readiness.',
+    },
+    '/webgpu/': {
+        seoTitle: 'Spine on PixiJS WebGPU: what works with pixi-marrow',
+        seoDescription:
+            'pixi-marrow draws Spine skeletons on the WebGPU renderer of PixiJS v8, from 8.21. See what differs from WebGL2: uploads, the mesh limit and a lost device.',
+    },
+    '/api/': {
+        seoTitle: 'API reference of pixi-marrow, Spine runtime for PixiJS v8',
+        seoDescription:
+            'Every export of pixi-marrow, a Spine runtime for PixiJS v8, by entry point: signature, description and example, made from the declarations at each build.',
+    },
+    '/changelog/': {
+        seoTitle: 'Changelog of pixi-marrow, a Spine runtime for PixiJS v8',
+        seoDescription:
+            'What each version of pixi-marrow changed, what waits for the next release, and what can still change before 1.0. A Spine runtime for PixiJS v8.',
+    },
+    '/performance/caveats/': {
+        seoTitle: 'Spine performance in PixiJS: draw calls, uploads, overdraw',
+        seoDescription:
+            'What makes a PixiJS v8 scene with Spine skeletons slow: moving parents, batch breaks, clipping, filters, memory. See each cause in pixi-marrow and fix it.',
+    },
+    '/performance/rules/': {
+        seoTitle: 'Spine performance rules for PixiJS v8, MARROW001 and up',
+        seoDescription:
+            'Each performance rule of pixi-marrow has an id from MARROW001, a sign in the PixiJS scene or the stats, a cost and a fix. For Spine skeletons in PixiJS v8.',
+    },
+    '/warnings/': {
+        seoTitle: 'pixi-marrow warnings and MarrowError codes: Spine in PixiJS',
+        seoDescription:
+            'Every console warning and every MarrowError code of pixi-marrow, the Spine runtime for PixiJS v8, with its text, its cause and the fix.',
+    },
     '/lab/': {
         seoTitle: 'Lab: test Spine performance in PixiJS v8 on your device',
         seoDescription:
@@ -172,6 +222,9 @@ const SEO: Readonly<Record<string, SeoEntry>> = {
     },
 };
 
+/** The route of a page of the API reference: one per entry point of the package, made at build time. */
+const API_ENTRY = /^\/api\/[^/]+\/$/;
+
 /** Routes that search engines must not index: the lab tests, the playground and the 404 page. */
 const NOINDEX: readonly RegExp[] = [/^\/lab\/[^/]+\/$/, /^\/playground\/$/, /^\/404(\.html|\/)?$/];
 
@@ -183,6 +236,8 @@ export function seoTitle(route: string, pageTitle?: string): string {
     const entry = SEO[route];
 
     if (entry?.seoTitle !== undefined) return entry.seoTitle;
+    // a page of the API reference has the name of its entry point as its title, such as `API: pixi-marrow/core`
+    if (API_ENTRY.test(route) && pageTitle !== undefined) return `${pageTitle}, Spine runtime for PixiJS v8`;
     if (pageTitle === undefined) return `pixi-marrow, a Spine runtime for PixiJS v8`;
 
     return `${pageTitle} ${TITLE_SUFFIX}`;
