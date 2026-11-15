@@ -1,5 +1,25 @@
-/** Why a {@link MarrowError} was thrown. Stable across releases, so code can branch on it. */
-export type MarrowErrorCode = 'invalid-data' | 'unsupported-version' | 'unsupported-feature' | 'unknown-name';
+/**
+ * Why a {@link MarrowError} was thrown. Stable across releases, so code can branch on it.
+ *
+ * - `invalid-data`: a file or a value made from one is not what its format says.
+ * - `unsupported-version` and `unsupported-feature`: the data is valid, and this library does not read it.
+ * - `unknown-name`: the skeleton has no animation, skin, bone, slot or attachment of that name.
+ * - `invalid-option`: an option, a setter or an argument got a key or a value it does not take.
+ * - `not-found`: a file did not load.
+ * - `not-registered`: a call needs `registerMarrowAssets()` first.
+ * - `not-loaded`: Pixi `Assets` does not hold what a call asks for.
+ * - `destroyed`: the display object or the asset was destroyed.
+ */
+export type MarrowErrorCode =
+    | 'invalid-data'
+    | 'unsupported-version'
+    | 'unsupported-feature'
+    | 'unknown-name'
+    | 'invalid-option'
+    | 'not-found'
+    | 'not-registered'
+    | 'not-loaded'
+    | 'destroyed';
 
 /** What a {@link MarrowError} carries besides its message. */
 export interface MarrowErrorDetails {
@@ -8,7 +28,9 @@ export interface MarrowErrorDetails {
     /** The values that would have been accepted, when the error is about a name or a version. */
     validNames?: readonly string[];
     /** The accepted value closest to the one that was passed. */
-    closest?: string;
+    closest?: string | undefined;
+    /** The address of the docs page about the error. */
+    docs?: string;
 }
 
 /**
@@ -31,6 +53,8 @@ export class MarrowError extends Error {
     readonly validNames: readonly string[];
     /** The accepted value closest to the one that was passed. */
     readonly closest: string | undefined;
+    /** The address of the docs page about the error, when it has one. */
+    readonly docs: string | undefined;
 
     constructor(code: MarrowErrorCode, message: string, details: MarrowErrorDetails) {
         super(`[pixi-marrow:${code}] ${message} ${details.fix}`);
@@ -38,5 +62,6 @@ export class MarrowError extends Error {
         this.fix = details.fix;
         this.validNames = details.validNames ?? [];
         this.closest = details.closest;
+        this.docs = details.docs;
     }
 }
