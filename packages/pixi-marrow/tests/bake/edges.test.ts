@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addBakedClips, bakeAnimation, decodeBakedClips, encodeBakedClips } from '../../src/bake';
+import { addBakedClips, bakeAnimation, bakeAnimations, decodeBakedClips, encodeBakedClips } from '../../src/bake';
 import { playBaked } from '../../src/bake/playback';
 import { bakesOf } from '../../src/bake/store';
 import { importSkeleton, MarrowError, type PoseEngine } from '../../src/core';
@@ -124,6 +124,29 @@ describe('clips that do not fit together', () => {
             (clip) => Object.assign(clip, { placement: new Float64Array(3) }),
         ],
     ];
+
+    it('throws a MarrowError at the hand-over for a draw order that holds a slot twice', async () => {
+        const model = await modelOf('4.2/coin-pro.skel');
+        const clips = await bakeAnimations(model);
+        const clip = decodeBakedClips(encodeBakedClips(clips)).find((each) => each.drawOrders.length > 0);
+
+        if (clip === undefined) throw new Error('no clip keeps a draw order');
+        expect(() => addBakedClips({ model }, [clip])).not.toThrow();
+        clip.drawOrders[1] = Number(clip.drawOrders[0]);
+        expect(() => addBakedClips({ model }, [clip])).toThrow(/does not hold each slot once/);
+    });
+
+    it('throws a MarrowError at the hand-over for a clip of an animation that lasts another time', async () => {
+        const model = await modelOf('4.2/spineboy-pro.skel');
+        const idle = await bakeAnimation(model, 'idle');
+        const walk = model.animations.find(({ name }) => name === 'walk');
+        // a JSON export without the editor hash, of an animation that lasts another time since
+        const stale = { ...idle, animation: 'walk', hash: null };
+
+        expect(walk?.duration).not.toBe(idle.duration);
+        expect(() => addBakedClips({ model }, [{ ...idle, hash: null }])).not.toThrow();
+        expect(() => addBakedClips({ model }, [stale])).toThrow(/lasts .* seconds, and the animation/);
+    });
 
     for (const [what, needs, damage] of damaged) {
         it(`throws a MarrowError at the hand-over for ${what}`, async () => {

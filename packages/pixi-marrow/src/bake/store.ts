@@ -236,9 +236,15 @@ export class ModelBakes {
     }
 }
 
-/** Throws a `MarrowError` when a clip was not baked from this skeleton, or its arrays do not fit its counts. */
+/**
+ * Throws a `MarrowError` when a clip was not baked from this skeleton, or its arrays do not fit
+ * its counts. A JSON export can lack the editor hash, so the duration of the animation is
+ * compared too: a clip of an animation that was edited since lasts another time, most often.
+ * The two compare at 32 bits, as a binary export holds a time.
+ */
 function checkFits(model: SkeletonModel, clip: BakedClip): void {
-    animationIndex(model, clip.animation);
+    const duration = model.animations[animationIndex(model, clip.animation)]?.duration ?? 0;
+
     skinIndices(model, clip.skins);
     const fail = (why: string): never => {
         throw new MarrowError('invalid-data', `The baked clip "${clip.animation}" ${why}.`, {
@@ -253,6 +259,9 @@ function checkFits(model: SkeletonModel, clip: BakedClip): void {
     }
     if (clip.hash !== null && model.hash !== null && clip.hash !== model.hash)
         fail('is of another export of the skeleton');
+    if (Math.fround(clip.duration) !== Math.fround(duration)) {
+        fail(`lasts ${clip.duration} seconds, and the animation of the skeleton ${duration}`);
+    }
     if (clip.frames !== frameCount(clip.duration, clip.fps)) fail('has the wrong number of frames for its duration');
     const frames = clip.frames;
     const sizes: [ArrayLike<number>, number][] = [
@@ -277,6 +286,23 @@ function checkFits(model: SkeletonModel, clip: BakedClip): void {
 const within = (values: ArrayLike<number>, low: number, high: number): boolean =>
     Array.prototype.every.call(values, (value: number) => Number.isInteger(value) && value >= low && value < high);
 
+/** True when every draw order of `slots` slot indices holds each slot once. The indices are in range. */
+function eachSlotOnce(orders: Int16Array, slots: number): boolean {
+    const seen = new Uint8Array(slots);
+
+    for (let at = 0; at + slots <= orders.length; at += slots) {
+        seen.fill(0);
+        for (let i = at; i < at + slots; i++) {
+            const slot = Number(orders[i]);
+
+            if (seen[slot] === 1) return false;
+            seen[slot] = 1;
+        }
+    }
+
+    return true;
+}
+
 /** Why the arrays of a clip do not fit together, or null when they do. */
 function misfit(clip: BakedClip): string | null {
     const { boneCount, slotCount, deformStarts, deformLengths, deforms, drawOrders } = clip;
@@ -299,6 +325,7 @@ function misfit(clip: BakedClip): string | null {
     }
     if (slotCount > 0 && drawOrders.length % slotCount !== 0) return 'has draw orders of the wrong length';
     if (!within(drawOrders, 0, slotCount)) return 'has a draw order with a slot the skeleton lacks';
+    if (!eachSlotOnce(drawOrders, slotCount)) return 'has a draw order that does not hold each slot once';
     if (!within(clip.drawOrderFrames, 0, slotCount > 0 ? drawOrders.length / slotCount : 0)) {
         return 'shows a draw order it does not hold';
     }
