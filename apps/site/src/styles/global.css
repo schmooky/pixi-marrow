@@ -964,9 +964,6 @@ main:has(> .landing) {
     text-decoration: underline;
     text-underline-offset: 3px;
 }
-.docs-side nav a code {
-    font-size: 0.8125rem;
-}
 .docs-side-part + .docs-side-part {
     margin-top: 1.75rem;
 }
