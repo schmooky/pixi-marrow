@@ -5,6 +5,9 @@ import { DOCS_LINKS, SITE, TOOL_LINKS } from '../lib/site';
  * The bar at the top of every page of the docs. On a wide screen it shows the parts of the docs as
  * tabs, and the tools apart from them on the right. On a phone the parts and the tools move into
  * a menu that opens under the bar, each with a line on what it holds.
+ *
+ * The menu is a popover, which opens without a script. A browser without popovers ignores the
+ * attribute, so the script below opens and closes the menu there, by the class `is-open`.
  */
 
 const path = Astro.url.pathname;
@@ -51,7 +54,7 @@ const TOOL_ICONS: Record<string, string> = {
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d={github} /></svg>
             <span class="sr-only">GitHub repository</span>
         </a>
-        <button type="button" class="nav-icon nav-menu-button" popovertarget="nav-menu">
+        <button type="button" class="nav-icon nav-menu-button" popovertarget="nav-menu" aria-controls="nav-menu">
             <svg class="nav-menu-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
             <svg class="nav-menu-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
             <span class="sr-only">Menu</span>
@@ -84,3 +87,40 @@ const TOOL_ICONS: Record<string, string> = {
         </nav>
     </div>
 </header>
+<script>
+    const nav = document.querySelector<HTMLElement>('.nav');
+    const menu = document.querySelector<HTMLElement>('#nav-menu');
+    const button = document.querySelector<HTMLButtonElement>('.nav-menu-button');
+
+    if (nav !== null && menu !== null && button !== null) {
+        /** Marks the bar while the menu is open, so that the button shows the icon that closes it. */
+        const mark = (open: boolean): void => {
+            nav.toggleAttribute('data-menu-open', open);
+            button.setAttribute('aria-expanded', String(open));
+        };
+
+        if ('popover' in HTMLElement.prototype) {
+            menu.addEventListener('toggle', (event) => mark((event as ToggleEvent).newState === 'open'));
+        } else {
+            // no popovers: the menu opens by a class, and closes by Escape or a press outside it
+            const set = (open: boolean): void => {
+                menu.classList.toggle('is-open', open);
+                mark(open);
+            };
+
+            mark(false);
+            button.addEventListener('click', () => set(!menu.classList.contains('is-open')));
+            document.addEventListener('keydown', (event) => {
+                if (event.key !== 'Escape' || !menu.classList.contains('is-open')) return;
+                set(false);
+                button.focus();
+            });
+            document.addEventListener('pointerdown', (event) => {
+                const target = event.target;
+
+                if (!(target instanceof Node) || menu.contains(target) || button.contains(target)) return;
+                set(false);
+            });
+        }
+    }
+</script>
