@@ -38,3 +38,15 @@ export const ON_DEMAND_LIMITS = {
     'on demand (mesh mode)': 18 * 1024,
     'on demand (clipping)': 8 * 1024,
 };
+
+/**
+ * The most bytes, gzipped, of an entry point that a development build imports whole. The keys
+ * are those of `IMPORTS` in scripts/size-check.mjs.
+ *
+ * `pixi-marrow/diagnose` is for development builds, for PixiJS DevTools and for coding agents,
+ * so its size is no cost of a released game. The limit keeps it from growing without a word:
+ * the size of 2026-11-15 plus 3 percent, rounded up to half a kilobyte.
+ */
+export const ENTRY_LIMITS = {
+    'diagnose (everything)': 14.5 * 1024,
+};

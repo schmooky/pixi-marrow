@@ -164,6 +164,7 @@ describe('the uniforms of the mesh mode on WebGPU', () => {
         expect(renderer.encoder.draw).toHaveBeenCalledTimes(2);
         expect(warn).toHaveBeenCalledTimes(1);
         expect(String(warn.mock.calls[0]?.[0])).toMatch(/pixi\.js 8\.\d+\.\d+ has no renderPipes\.uniformBatch/);
+        expect(String(warn.mock.calls[0]?.[0])).toMatch(/ https:\S+\/performance\/rules\/#marrow024$/);
         // the one report was given: a renamed adaptor says nothing more
         watchUniformBatch({ ...renderer, renderPipes: { mesh: {} } } as never);
         expect(warn).toHaveBeenCalledTimes(1);

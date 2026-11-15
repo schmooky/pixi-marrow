@@ -99,7 +99,7 @@ describe('the code of the mesh mode', () => {
 
         spine.update(FRAME);
         expect(spine.stats).toMatchObject({ renderMode: 'batched', drawCalls: 1 });
-        expect((await spine.perf.report()).find(isModeRow)).toEqual({
+        expect((await spine.perf.report()).find(isModeRow)).toMatchObject({
             feature: 'renderMode',
             value: 'batched',
             reason: 'the option renderMode is "mesh". The code of the mesh mode is loading, and until it is there the skeleton draws in a batch',
@@ -118,7 +118,7 @@ describe('the code of the mesh mode', () => {
         spine.update(FRAME);
         expect(spine.stats).toMatchObject({ renderMode: 'mesh', drawCalls: 1 });
         expect(run.time).toBeCloseTo(time + FRAME, 10);
-        expect((await spine.perf.report()).find(isModeRow)).toEqual({
+        expect((await spine.perf.report()).find(isModeRow)).toMatchObject({
             feature: 'renderMode',
             value: 'mesh',
             reason: `the option renderMode is "mesh". ${OWNS}`,

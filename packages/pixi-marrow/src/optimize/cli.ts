@@ -30,6 +30,12 @@ const USAGE = [
     '      Without --out the file lands next to the atlas, as <name>.outlines.json.',
     '      The tool reads PNG only. For an atlas with WebP or AVIF pages, --pages names the folder',
     '      with the PNG sources of the pages: hero.webp is read from <dir>/hero.png.',
+    '  pixi-marrow rules [--json]',
+    '      Print the performance rules: the id, the level, the cause, the fix and the docs address of each.',
+    '  pixi-marrow diagnose <tree.json> [--json]',
+    '      Print the causes of cost in a scene tree, each with its rule id, the path of the skeleton and the fix.',
+    '      <tree.json> holds what serializeTree of pixi-marrow/diagnose wrote in the running game:',
+    '      JSON.stringify(__PIXI_MARROW__.tree()). The tool runs the rules that one look at a tree finds.',
     '',
     '<skeleton> is a .json or .skel file exported from Spine 4.1, 4.2 or 4.3.',
     '<atlas> is a .atlas file. Its page images are PNG files in the same folder, or in --pages <dir>.',
@@ -169,10 +175,53 @@ async function runSkeleton(
     return 0;
 }
 
+/** Prints the catalogue of the performance rules. Its code loads on demand, as for `diagnose`. */
+async function runRules(args: readonly string[], host: CliHost): Promise<number> {
+    const { RULES } = await import('../diagnose/rules-data');
+
+    if (args.includes('--json')) host.print(JSON.stringify(RULES, null, 2));
+    else {
+        for (const { id, severity, title, fix, docs } of RULES) {
+            host.print(`${id}  ${severity.padEnd(4)}  ${title}\n    Fix: ${fix}\n    ${docs}`);
+        }
+    }
+
+    return 0;
+}
+
+/** Runs the static rules on a tree dump that a game wrote, and prints the hits. */
+async function runDiagnose(args: readonly string[], file: string, host: CliHost): Promise<number> {
+    const bytes = host.read(file);
+    const text = typeof bytes === 'string' ? bytes : new TextDecoder().decode(bytes);
+    const fix = 'Write the file in the running game: JSON.stringify(__PIXI_MARROW__.tree()).';
+    let dump: unknown;
+
+    try {
+        dump = JSON.parse(text);
+    } catch {
+        throw new MarrowError('invalid-data', `${file} is not JSON.`, { fix });
+    }
+    const { diagnoseTree, isTreeDump } = await import('../diagnose/static');
+
+    if (!isTreeDump(dump)) throw new MarrowError('invalid-data', `${file} is no tree dump of pixi-marrow.`, { fix });
+    const { formatHit } = await import('../diagnose/hits');
+    const result = diagnoseTree(dump);
+
+    if (args.includes('--json')) host.print(JSON.stringify(result, null, 2));
+    else {
+        host.print(`${result.skeletons} skeletons, ${result.scene.drawn} drawn, ${result.hits.length} causes of cost`);
+        for (const hit of result.hits) host.print(formatHit(hit));
+    }
+
+    return 0;
+}
+
 async function run(args: readonly string[], host: CliHost): Promise<number> {
     const [command, file] = args;
 
+    if (command === 'rules') return runRules(args, host);
     if (file !== undefined && !file.startsWith('--')) {
+        if (command === 'diagnose') return runDiagnose(args, file, host);
         if (command === 'info' || command === 'typegen') return runSkeleton(command, args, file, host);
         if (command === 'outlines') return runOutlines(args, file, host);
     }
@@ -183,12 +232,14 @@ async function run(args: readonly string[], host: CliHost): Promise<number> {
 
 /**
  * Runs the `pixi-marrow` command line tool. Returns the exit code: 0 on success, 1 when a
- * skeleton, an atlas or a page image cannot be read, 2 when the arguments are wrong.
+ * skeleton, an atlas, a page image or a tree dump cannot be read, 2 when the arguments are wrong.
+ * `diagnose` returns 0 also when it finds causes of cost.
  *
  * @example
  * const code = await runCli(['typegen', 'hero.skel', '--out', 'hero.names.ts'], host);
  * await runCli(['outlines', 'art/hero.atlas'], host); // writes art/hero.outlines.json
  * await runCli(['outlines', 'dist/hero.webp.atlas', '--pages', 'raw'], host); // reads raw/hero.png
+ * await runCli(['diagnose', 'tree.json'], host); // prints one line per cause of cost
  */
 export async function runCli(args: readonly string[], host: CliHost): Promise<number> {
     try {

@@ -148,6 +148,7 @@ describe('the code behind perf.report and perf.memory', () => {
         'api/report-base.ts',
         'api/report-cuts.ts',
         'api/report-instancing.ts',
+        'api/report-motion.ts',
         'api/report.ts',
         'render/inspect.ts',
     ];
@@ -171,14 +172,16 @@ describe('the code behind perf.report and perf.memory', () => {
         expect(perfTools).not.toMatch(/^import \{/m);
     });
 
-    it('is imported at run time by no module outside of it', () => {
+    it('is imported at run time by no module outside of it, but by the entry pixi-marrow/diagnose', () => {
         const lazy = new Set(LAZY.map((file) => join(srcDir, file)));
         const importers = sourceFiles(srcDir)
             .filter((file) => !lazy.has(file))
             .filter((file) => imports(file, true).files.some((target) => lazy.has(target)))
             .map((file) => relative(srcDir, file));
 
-        expect(importers).toEqual([]);
+        // `inspect` of pixi-marrow/diagnose reads an instance with the same code, and is no part of the root import
+        expect(importers).toEqual(['diagnose/inspect.ts']);
+        expect(reach('index.ts').files.has('diagnose/inspect.ts')).toBe(false);
     });
 
     it('is kept out of the root import by the size check, with a reason only the report has', () => {

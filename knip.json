@@ -13,6 +13,7 @@
         "src/perf.ts",
         "src/debug.ts",
         "src/bake.ts",
+        "src/diagnose.ts",
         "tests/**/*.test.ts"
       ],
       "project": ["src/**/*.ts", "tests/**/*.ts"],

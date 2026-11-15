@@ -59,6 +59,14 @@ export interface PerfMemory {
     gpuTextures: number;
 }
 
+/** What `pixi-marrow/diagnose` reads of a display object: its owner, its view and its containers. */
+export interface PerfParts {
+    readonly owner: PerfOwner;
+    readonly view: SkeletonView;
+    /** The containers that follow a bone or are attached to a slot at the moment. */
+    readonly links: readonly Link[];
+}
+
 /** What the perf tools read of the display object they belong to. */
 export interface PerfOwner {
     readonly asset: MarrowAsset;
@@ -97,8 +105,21 @@ export class MarrowPerf {
     }
 
     /**
+     * What the entry `pixi-marrow/diagnose` reads the instance from. Not stable: use `inspect` of
+     * that entry, which returns plain data.
+     *
+     * @internal
+     */
+    parts(): PerfParts {
+        return { owner: this.owner, view: this.view, links: this.links() };
+    }
+
+    /**
      * Every decision the runtime made for this instance, with its reason and the counters behind
-     * it, as plain objects. The rows come in a fixed order, one per feature.
+     * it, as plain objects. The rows come in a fixed order, one per feature. A row that names a
+     * cause of cost carries the id of its rule in `rule` and the address of the rule in `docs`.
+     *
+     * @see https://pixi-marrow.schmooky.dev/performance/rules/
      *
      * The instance is read when the promise resolves. The first call loads the code first, which
      * takes a moment: the rows then show the instance as its last update before that left it.

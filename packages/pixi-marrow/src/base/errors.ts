@@ -21,6 +21,27 @@ export type MarrowErrorCode =
     | 'not-loaded'
     | 'destroyed';
 
+/** The address of the docs site. A docs address in a warning or an error starts with it. */
+export const DOCS_SITE = 'https://pixi-marrow.schmooky.dev/';
+
+/**
+ * The address of a performance rule in the docs: its heading on the page of the rules.
+ *
+ * @example
+ * ruleDocs('MARROW001'); // 'https://pixi-marrow.schmooky.dev/performance/rules/#marrow001'
+ */
+export function ruleDocs(id: string): string {
+    return `${DOCS_SITE}performance/rules/#${id.toLowerCase()}`;
+}
+
+/** The docs page about a cause, for each code that has one page for all its errors. */
+const PAGES: Partial<Record<MarrowErrorCode, string>> = {
+    'unsupported-version': 'good-to-know/#versions',
+    'unknown-name': 'guide/play/#know-the-names',
+    'not-registered': 'guide/assets/#load-with-pixi-assets',
+    'not-loaded': 'guide/assets/#load-with-pixi-assets',
+};
+
 /** What a {@link MarrowError} carries besides its message. */
 export interface MarrowErrorDetails {
     /** What to change so the call works. */
@@ -29,12 +50,13 @@ export interface MarrowErrorDetails {
     validNames?: readonly string[];
     /** The accepted value closest to the one that was passed. */
     closest?: string | undefined;
-    /** The address of the docs page about the error. */
+    /** The address of the docs page about the error. Default: the page of the code, when it has one. */
     docs?: string;
 }
 
 /**
- * The one error type this library throws. The message states the cause and the fix.
+ * The one error type this library throws. The message states the cause and the fix. `docs` is
+ * the address of the docs page about the cause, for the codes that have one.
  *
  * @example
  * try {
@@ -62,6 +84,8 @@ export class MarrowError extends Error {
         this.fix = details.fix;
         this.validNames = details.validNames ?? [];
         this.closest = details.closest;
-        this.docs = details.docs;
+        const page = PAGES[code];
+
+        this.docs = details.docs ?? (page === undefined ? undefined : DOCS_SITE + page);
     }
 }

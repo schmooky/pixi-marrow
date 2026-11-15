@@ -22,8 +22,14 @@ const NO_PACING = {
     size: Number.POSITIVE_INFINITY,
     reduced: false,
 } as const;
-/** What the source of baked playback says of itself, read by shape: its code is a chunk of its own. */
-function readBake(source: PoseSource | null): BakeReading | null {
+/**
+ * What the source of baked playback says of itself, read by shape: its code is a chunk of its own.
+ *
+ * @example
+ * const bake = readBake(hero.engine.source);
+ * console.log(bake?.baked, bake?.unbaked);
+ */
+export function readBake(source: PoseSource | null): BakeReading | null {
     if (source === null || !('baked' in source && 'unbaked' in source && 'last' in source && 'bytes' in source)) {
         return null;
     }

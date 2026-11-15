@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Copies the repo's README and LICENSE into packages/pixi-marrow for publishing.
+ * Copies the repo's README and LICENSE into packages/pixi-marrow for publishing, and the guide
+ * for coding agents from packages/pixi-marrow/agent/AGENTS.md to the root of the package.
  *
  * `files` in the package manifest lists both, but npm silently drops an entry that
  * matches nothing, so without this the tarball would ship no README (a blank page on
@@ -11,6 +12,11 @@
  * the same link points nowhere. So the copy gets every relative link as a link to the file on
  * GitHub, on the default branch: a page for a link, the raw file for an image.
  *
+ * The AGENTS.md of the tarball is for the users of the package. It is not the AGENTS.md at the
+ * root of the repo, which is for work on the repo. So it has a source path of its own, and a
+ * copy at the root of the package would shadow nothing: an agent that works in the repo reads the
+ * file of the folder it is in.
+ *
  * While the package is private there is no LICENSE yet, and its absence is not an error.
  */
 import { existsSync, readFileSync } from 'node:fs';
@@ -20,7 +26,9 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const PKG = join(ROOT, 'packages/pixi-marrow');
-const FILES = ['README.md', 'LICENSE'];
+const FILES = ['README.md', 'LICENSE', 'AGENTS.md'];
+/** Where a staged file comes from when that is not the root of the repo. */
+const SOURCES = { 'AGENTS.md': join(PKG, 'agent/AGENTS.md') };
 const BRANCH = 'main';
 const clean = process.argv.includes('--clean');
 const manifest = JSON.parse(readFileSync(join(PKG, 'package.json'), 'utf8'));
@@ -103,11 +111,11 @@ for (const name of FILES) {
         staged.push(name);
         continue;
     }
-    const src = join(ROOT, name);
+    const src = SOURCES[name] ?? join(ROOT, name);
 
     if (!existsSync(src)) {
         if (name === 'LICENSE' && isPrivate) continue;
-        console.error(`stage-package-files: ${name} is missing at the repo root. The published package needs it.`);
+        console.error(`stage-package-files: ${src} is missing. The published package needs it.`);
         process.exit(1);
     }
     if (name === 'README.md') {

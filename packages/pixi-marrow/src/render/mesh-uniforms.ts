@@ -12,6 +12,7 @@ import {
     VERSION,
     type WebGPURenderer,
 } from 'pixi.js';
+import { ruleDocs } from '../base/errors';
 import { RangeMesh } from './range-mesh';
 
 /*
@@ -49,7 +50,9 @@ let reported = false;
 function reportMissing(part: string, cost: string): void {
     if (reported) return;
     reported = true;
-    console.warn(`pixi-marrow: pixi.js ${VERSION} has no ${part}. ${cost} Report this with the version of pixi.js.`);
+    console.warn(
+        `pixi-marrow: pixi.js ${VERSION} has no ${part}. ${cost} Report this with the version of pixi.js. ${ruleDocs('MARROW024')}`,
+    );
 }
 
 /** The uniforms of the mesh pipe, as Pixi fills them for a mesh. */
