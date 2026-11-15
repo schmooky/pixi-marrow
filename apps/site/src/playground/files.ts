@@ -50,7 +50,7 @@ export const MOST_BYTES = {
 export const MOST_PIXELS = 8192 * 8192;
 
 /** A size in bytes as people read it, as in 2 MB and 600 KB. */
-export function sizeText(bytes: number): string {
+function sizeText(bytes: number): string {
     if (bytes >= 1024 * 1024) return `${Number((bytes / 1024 / 1024).toFixed(1))} MB`;
 
     return `${Math.ceil(bytes / 1024)} KB`;

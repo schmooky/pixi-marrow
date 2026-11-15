@@ -17,5 +17,7 @@ export const RANGED_UPLOADS = uploadsStretch(Buffer.prototype.update, VERSION);
 export const outputMask = (program: object): number | undefined =>
     (program as { fragmentOutputMask?: number }).fragmentOutputMask;
 
-/** True when the programs of this pixi.js state the outputs of the fragment shader. */
-export const STATES_OUTPUTS = RANGED_UPLOADS;
+const [major = 0, minor = 0] = VERSION.split('.').map(Number);
+
+/** True when the programs of this pixi.js state the outputs of the fragment shader, from 8.23 on. */
+export const STATES_OUTPUTS = major > 8 || (major === 8 && minor >= 23);
