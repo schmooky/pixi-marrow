@@ -211,7 +211,8 @@ function loadAttachCode(PIXI, lib, asset, slot) {
  * `skinning` is the `skinning` option of every instance, `gpu` for example, or null for none.
  *
  * `instancing: 'off'` draws a mesh instance alone, where it would draw instanced with
- * `skinning: 'gpu'`. Without it the instance has the default, which is `auto`.
+ * `skinning: 'gpu'`. Without it an instance with `skinning: 'gpu'` asks for `auto`, and any other
+ * instance has the default, which is `off`.
  *
  * `bake: 'auto'` plays from baked frames where it can. The code of baked playback is a chunk
  * too, and the instance plays without it until it is there, so `create` waits for it.
