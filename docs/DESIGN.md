@@ -2,6 +2,8 @@
 
 Draft 3, 2026-11-11. A Spine runtime for PixiJS v8 with its own pose core and its own render path. It plays 4.1, 4.2 and 4.3 skeletons.
 
+This document records the design and its history. Sections 4, 5, 6, 12, 13 and 14 hold plans that the code overtook, and each says so at its top. For names, the truth is `packages/pixi-marrow/api.md`. For numbers, it is `scripts/facts.json` and `scripts/size-limit.mjs`.
+
 Change from draft 1: the runtime does not ship `spine-core`. The pose core is ours. Only the tests use the official cores. The tests compare every frame against them.
 
 Change from draft 2: memory is a goal of the same weight as speed (section 8.6). Milestone M0 is complete.
@@ -19,6 +21,8 @@ Change with M4: the engines solve physics constraints and sliders, so they solve
 Change with M5: the runtime has the batched render mode, and `renderMode: 'auto'` picks it for every skeleton of up to 1024 batch vertices (section 7.2). In that mode a port of the official clipper cuts clips on the CPU (section 7.5). The instances of an asset share the static part of a layout (section 8.6). The heap numbers of M4 were wrong, and section 16.1 fixes them.
 
 Change with M6: work follows change. A pose state carries a version and stamps per bone and slot. The engines skip what would repeat, and a view does only what a stamp asks for (sections 2, 5.3 and 7.3). A skeleton at rest costs close to nothing and uploads nothing. The mesh mode, the clip code and the cuts of overdraw load on demand (section 11). The runtime does not share one pose between instances and has no keyframe cursor, for the reasons in section 2.
+
+Found in the audit of 2026-11-15: at rest a batched skeleton still uploads when a display object above it moves or fades, see 7.3.
 
 Change after M6: the display object has bone handles, `follow` and `attach` (section 7.6), and there is a first docs site (section 13). The symbol rigs of a real slot game are fixtures now (section 15). A tree-shaken game could not use the mesh mode: the project fixed that and added a check for it (section 15).
 
@@ -50,7 +54,7 @@ This document is the plan. Every performance number in it is an estimate until t
 | The official Pixi runtime runs a full pose and vertex pass every tick, even with nothing playing | `_updateAndApplyState` sets `_stateChanged` unconditionally (4.3.13). |
 | It computes vertices for alpha 0 slots, and each visibility flip rebuilds the instructions | `transformAttachments` in 4.3.13. |
 
-Not checked: anything in a browser, any timing, and behaviour on rigs other than the official examples.
+Not checked when draft 1 was written: anything in a browser, any timing, and behaviour on rigs other than the official examples. Sections 15 and 16 say what the project checked since.
 
 ## 1. Goals and non-goals
 
@@ -87,8 +91,8 @@ What an own core makes possible that a wrapped core does not:
 | Item | Official core | Own core | Exact |
 |---|---|---|---|
 | Keyframe lookup | Linear scan from the first key on every call | The same scan. In M6 the project measured a cursor. A lookup scans 2.4 keys on average, and the ceiling is 8.6 percent of an update on two animations. A trial build was inside the noise. Not built. | |
-| Data layout | One object per bone, slot, pose | Typed arrays. The renderer reads them directly, with no copy step. | Yes, within float tolerance |
-| Allocation | The core mostly reuses its arrays. The Pixi layer allocates in places, for example a new clipper per bounds call. | None after warm-up, proven by a test | Yes |
+| Data layout | One object per bone, slot, pose | Typed arrays. The renderer reads them directly, with no copy step. | Yes, to the bit (section 15) |
+| Allocation | The core mostly reuses its arrays. The Pixi layer allocates in places, for example a new clipper per bounds call. | None in an update that reports no event, after warm-up. `tests/pose/heap.test.ts` measures it on playing engines. An update with events allocates the list and one object for each event. | Yes |
 | Constant timelines | Evaluated every frame | Since M6 the engines skip an apply that would repeat the one before. That is an entry past its end, or a clip whose timelines all hold one value. The engines still apply a constant timeline inside a clip that moves. | Yes |
 | Bones that did not change | Every bone transformed every frame | Since M6 the engines pose a bone again only when its own pose, its parent or the placement of the skeleton changed. The engines never skip a bone for the reason that nobody looks at it. The pose state is public and equals the official one in every number. | Yes |
 | Timelines nobody needs | All applied | All applied while the pose changes, for the same reason. | |
@@ -113,17 +117,19 @@ Price:
 | Atlas pages | Batch by texture, up to the batcher limit | The same in batched mode. In mesh mode up to 8 pages in one draw per skeleton. |
 | Vertex data | All attributes repacked each frame | UVs, indices and weights uploaded once. Positions only when needed. |
 | Attachment or draw-order key | Full instruction rebuild | Index rewrite in place, in both modes. No instruction rebuild. |
-| Rigid region attachments | Positions computed on CPU and uploaded | Placed in the vertex shader from bone matrices (GPU mode) |
+| Rigid region attachments | Positions computed on CPU and uploaded | On the CPU by default, and only when their bone moved. With `skinning: 'gpu'` in the mesh mode, the vertex shader places them from bone matrices. |
 | Hidden slots (alpha 0) | Not in the batch, but the official runtime still computes their vertices, and each change of visibility rebuilds the instructions | Skipped by an index rewrite. No vertex work, no rebuild. |
 | Overdraw | Quads as authored | Invisible regions and covered slots skipped. Tight outlines as an option. |
 | Clipping | CPU triangle clipping always, so vertex counts change every frame and Pixi rebuilds the instructions | Batched mode: CPU clipping into a room of constant size, no rebuild. Mesh mode: stencil mask. |
-| Idle skeleton | Full pose and vertex pass every tick | Sleeps: no pose work, no upload |
+| Idle skeleton | Full pose and vertex pass every tick | Sleeps: no pose work, no upload. In the batched mode a parent that moves or fades still costs a write of every vertex, unless it is a render group (section 7.3). |
 | Pose work | Every timeline and every bone, every frame | Only what can change the picture (section 2) |
 | Setup | Extensions register on import | Nothing to call. First use registers. |
 | Errors | Throws from deep inside the parser | Typed errors with cause, fix and valid names |
 | Names | Plain strings | Plain strings, or generated literal types |
 
 ## 4. Architecture
+
+The diagram records the plan. The code has no `PoseProgram` and no `DrawPlan`, and its `MarrowPipe` serves the batched mode alone. Two pose engines pose a `PoseState`, and a `SkeletonView` draws it in the mesh mode or the batched mode (sections 5.3, 5.4 and 7.2).
 
 ```
 file bytes
@@ -163,24 +169,26 @@ Layers and the rule between them. A layer imports only from layers above it in t
 | api | `src/api` | `MarrowSpine`, handles, options |
 | features | `src/bake`, `src/debug`, `src/perf`, `src/optimize` | Optional entry points |
 
-`base`, `model`, `formats` and `pose` never import Pixi. They form `pixi-marrow/core`, which runs in Node. CI checks the rule.
+`base`, `model`, `formats`, `pose` and `geometry` never import Pixi. They form `pixi-marrow/core`, which runs in Node. `pnpm check:source` checks the rule, and CI runs it.
 
 ## 5. Classes
 
 ### 5.1 Public (root import)
 
+The table names the main symbols. `packages/pixi-marrow/api.md` is the full list.
+
 | Symbol | Kind | Responsibility |
 |---|---|---|
-| `MarrowSpine` | class, extends Pixi `ViewContainer` | The display object. Play, queue, skins, bones, slots, events, perf. |
+| `MarrowSpine` | class, extends Pixi `Container` through `SpineLinks` and `SpinePhysics` | The display object. Play, queue, skins, bones, slots, events, perf. Its view is a child container. |
 | `MarrowAsset` | class | Model, atlas textures, geometry template and analysis flags. Shared by all instances. |
-| `Track` | class | One playing or queued animation. Loop, speed, alpha, mix, promise for completion. |
+| `Track` | interface | One playing or queued animation. Loop, speed, alpha, and `finished`, a promise that resolves with the reason the animation ended. |
 | `Bone` | class | Read and write local transform, read world transform, convert points. Built after M6, points since the slot handle. |
 | `Slot` | class | Attachment, tint, alpha and dark tint of one slot. Built after the first pre-release. A slot has no visibility of its own in Spine: no attachment or an alpha of 0 hides it. |
-| `MarrowError` | class | `code`, message with cause and fix, `validNames` when a name was wrong. |
-| `MarrowOptions`, `PlayOptions`, `PerfOptions`, `PerfReport`, `SkeletonInfo`, `MarrowNames` | types | Options and results. Literal unions, no numeric enums. |
+| `MarrowError` | class | `code`, one of nine, a message with cause and fix, `fix`, `validNames` and `closest` when a name was wrong, and an optional `docs` address. |
+| `MarrowSpineOptions`, `MarrowLoadOptions`, `PlayOptions`, `PerfOptions`, `PerfEntry`, `PerfMemory`, `ViewStats`, `SkeletonInfo`, `MarrowNames` | types | Options and results. Literal unions, no numeric enums. |
 | `registerMarrowAssets` | function | Optional: adds parsers to Pixi `Assets` for aliases, manifests, bundles and the output of AssetPack. `MarrowSpine.from` then takes the aliases and returns at once. |
 
-Target: at most 20 exported symbols from the root.
+The first target was at most 20 exported symbols from the root. The root exports 57 today, and most of them are types.
 
 ### 5.2 Model and formats
 
@@ -249,7 +257,7 @@ Measured on an Apple M4, in Node 24: the whole update of each rig's longest anim
 | 4.1 and 4.2, rigs without physics | 8 | 80 to 99 percent |
 | 4.2, rigs with physics | 4 | 77 to 88 percent |
 
-An update that fires no event allocates nothing once V8 optimizes the path. The official cores allocate 17 to 8,359 bytes per update on the same rigs. The same trigonometry calls limit the rigs nearest to the official time. A physics step is mostly `cos`, `sin`, `atan2` and `pow`, and both runtimes call them with the same arguments.
+An update that fires no event allocates nothing once V8 optimizes the path. That was not true before the audit of 2026-11-15: a walking spineboy allocated about 1,400 bytes in each update. `tests/pose/heap.test.ts` now measures the heap of playing engines of both kinds. The official cores allocate 17 to 8,359 bytes per update on the same rigs. The same trigonometry calls limit the rigs nearest to the official time. A physics step is mostly `cos`, `sin`, `atan2` and `pow`, and both runtimes call them with the same arguments.
 
 One step goes beyond the official code and stays exact. The official 4.2 runtime computes the applied transform of a bone after every physics constraint. The 4.2 engine does that only when a later bone update or constraint reads it. A test runs every physics fixture both ways and compares the world transforms to the bit.
 
@@ -267,7 +275,7 @@ What it costs and what it does not reach:
 - Physics in mode `update` does not rest. The official arithmetic almost never reaches a fixed point: the world becomes still, but the offsets and velocities keep changing in their last bits. An engine that parked it would differ. The engine skips a physics group only when one more step gives the same bits, which happens for physics that was never disturbed. The stamps stay tight there, so the view rests while the engine works.
 - The engines hold 5.7 percent more bytes per instance for the stamps and the notes of what changed.
 
-Planned for the later milestones:
+The next table records the plan of draft 1. The code has none of these classes, apart from an `EventQueue` in the 4.3 engine. Each engine in `src/pose/legacy` and `src/pose/v43` ports the player, the timelines and the solvers of its official runtime as functions.
 
 | Class | Responsibility |
 |---|---|
@@ -281,6 +289,8 @@ Planned for the later milestones:
 | `EventQueue` | Preallocated ring of fired events. |
 
 ### 5.4 Geometry and render
+
+The table records the plan. Of its names the code has `MarrowPipe` and `MarrowBatcher`, both for the batched mode. The paragraph after the table names what the code has.
 
 | Class | Responsibility |
 |---|---|
@@ -300,6 +310,8 @@ Built so far, under other names: `SkeletonView` with its template, ranges and sh
 
 ### 5.5 Control and features
 
+The table records the plan. The code has `bakeAnimation`, `BakedClip` and `createProbe`. It has no `SleepController`, `Optimizer` or `InstanceGroup`. The stamps of the pose state, the `perf` settings and the instance pipe of the mesh mode do that work.
+
 | Class | Responsibility |
 |---|---|
 | `SleepController` | Decides when an instance needs no update. |
@@ -309,6 +321,8 @@ Built so far, under other names: `SkeletonView` with its template, ranges and sh
 | `PerfProbe` | Timers and counters per bucket for spine-benchmark. Built in M4: `createProbe` of `pixi-marrow/perf`. |
 
 ## 6. Life of a frame
+
+This section records the plan, with its planned class names. The page One frame of the docs site says what the code does in a frame.
 
 Load, once per asset:
 
@@ -460,8 +474,9 @@ Since M6 a view follows the stamps of the pose state (section 5.3):
 
 - The version is the one the view saw: `update` returns at once. No vertex, no color, no pack, no upload, and the view does not tell Pixi that anything changed. That costs 13 nanoseconds per instance.
 - The view places a slot again when it or one of its bones has a newer stamp. A weighted mesh keeps the list of its bones for that test. The view writes colors for newer slots only. It makes the visible list again for a newer draw order, another attachment or an alpha that reached or left zero.
-- Uploads follow: only buffers that changed, and from pixi.js 8.23 only the stretch that changed. In a batch that is the stretch of the slots that moved. Pixi's own batcher uploads the whole buffer of a batch when one element changed.
+- Uploads follow: only buffers that changed. In a batch that is the stretch of the slots that moved, on every pixi.js that the package allows. WebGPU writes each stretch. WebGL on 8.21 and 8.22 writes one stretch per buffer, from the first change to the last. The mesh mode uploads whole buffers below 8.23. Pixi's own batcher uploads the whole buffer of a batch when one element changed.
 - A move of the display object alone places no vertex again in skeleton space.
+- In the batched mode the batch holds positions in the space of the render group. So a display object above the skeleton that moves makes the view place every vertex again, also for a pose at rest. A tint or an alpha above it that changes makes the view write its static data again. `stats.transformReplaces` and `stats.tintRewrites` count those frames. A parent with `isRenderGroup: true` moves and fades in the shader, and costs neither.
 
 For 200 instances at rest the update takes 0.02 ms. In M5 it took 52 to 95 percent of the update while playing. In M5 up to 1.3 MB also went to the GPU per frame for an unchanged picture.
 
@@ -483,7 +498,9 @@ Outlines and opaque rectangles come from the atlas pixels, as `AtlasOutlines`. T
 
 Since after M9 there are none unless the load asks, through `MarrowAsset.load`, `MarrowAsset.from` and Pixi `Assets` alike. A display object that sets `tightMesh` or `occlusion` by name on an asset without outlines warns once per asset, because they do nothing then.
 
-The scan draws every page into a canvas. For a page of 2048 by 2048 that takes 32 MB for a moment, and a phone with little memory can fail there. The scan reads a premultiplied page through a WebGL context, because a 2D canvas loses color under alpha 0, and that color adds light. A page that the scan cannot read keeps its quads.
+The scan draws a page into a canvas and reads 4 bytes for each pixel back. For a page of 2048 by 2048 that takes 32 MB for a moment, and a phone with little memory can fail there. The scan reads a premultiplied page through a WebGL context, because a 2D canvas loses color under alpha 0, and that color adds light. A page that the scan cannot read keeps its quads.
+
+Since the audit of 2026-11-15 the work is kept per page image. Assets that draw from one image share one scan of it. The scans read one page at a time through one WebGL context, and free it when no page waits. The regions of a page are outlined in slices of 4 ms. Before, 17 assets on one atlas opened 17 contexts.
 
 Built in M3. Measurements on the 34 example rigs of the pixel check:
 
@@ -540,7 +557,7 @@ Built after M6, for games that put their own Pixi objects into a rig.
 - `hero.follow(bone, container)`: the container gets the transform of the bone after every update, in the space of the display object, so it belongs inside it. It stays where it is in the display list. It costs no draw call.
 - `hero.attach(slot, container)`: the container becomes a part of the skeleton. It draws at the place of the slot in the draw order, after the attachment of that slot. It moves with the bone of the slot and its alpha is that of the slot. `followAttachment` hides it while the slot is empty, `followColor` tints it.
 - `attach` mirrors `addSlotObject` of the official runtime. A slot holds one container. A clip does not clip it.
-- Cost of `attach`: one more draw call for each container that Pixi draws, in both render modes, because a foreign object ends a batch. A draw order key that moves slots across an attached slot rewrites indices and rebuilds nothing. The official runtime rebuilds 15 times in the scene that measures this.
+- Cost of `attach`: each attached slot costs one more draw call of the skeleton, plus the draw calls of the container. That holds in both render modes, because a foreign object ends a batch. A draw order key that moves slots across an attached slot rewrites indices and rebuilds nothing. The official runtime rebuilds 15 times in the scene that measures this.
 - A skeleton at rest with containers still rests: a container moves only when the stamp of its bone is newer.
 - The code that draws attached containers is a chunk of 1.4 kB that loads with the first `attach` of a web page. The container does not show for a frame or two until then.
 
@@ -562,8 +579,8 @@ Pose:
 - The engines skip an apply that would repeat the one before (M6)
 - The engines pose a bone again only when its own pose, its parent or the placement of the skeleton changed (M6)
 - The engines skip a constraint and the bones it writes while nothing it reads changed (M6)
-- Sleep when idle: a view whose pose version did not change places, colors and uploads nothing (M6)
-- No allocation per update after warm-up
+- Sleep when idle: a view whose pose version did not change places, colors and uploads nothing (M6). The exception is a parent that moves or fades above a batched skeleton, see 7.3.
+- No allocation in an update that reports no event, after warm-up
 - One model shared by all instances
 
 Planned here and not built, each with its measurement in section 2:
@@ -574,7 +591,7 @@ Planned here and not built, each with its measurement in section 2:
 
 The pose state is public and must equal the official one in every number.
 
-A check holds each item. Pose parity is exact, with the stamp check after every call. A test proves that an update allocates nothing. The pixel check compares both render modes with the official runtime.
+A check holds each item. Pose parity is exact, with the stamp check after every call. `tests/pose/heap.test.ts` measures that a playing update without events allocates nothing. The pixel check compares both render modes with the official runtime.
 
 ### 8.2 Automatic with override
 
@@ -599,7 +616,7 @@ All six exist. `idleCache`, `offscreen`, `updateRate` and `lod` came in M9. Each
 | `tightMesh: 'on'` | | Regions drawn as polygons around their visible pixels. Less fill, more vertices. Some pixels move by 1 of 255 levels, a few edge pixels by more (section 7.4). |
 | `bake` | `off`, `auto`, list of animations | No pose cost. Loses long mixes and runtime bone control on baked clips. `auto` bakes only eligible animations, in idle time: no physics, no handle writes, no layered tracks. |
 | `idleCache` | `off`, `auto` | Idle skeleton drawn as one quad. Uses texture memory. |
-| `offscreen` | `update`, `throttle`, `pause` | Less work off screen. Events fire late or not at all while paused. |
+| `offscreen` | `update`, `throttle`, `pause` | Less work off screen. Under `throttle` events fire late. Under `pause` the time, the events and `finished` go on, and nothing is posed or drawn. |
 | `updateRate` | `display` or a number of Hz | Fewer pose updates. Motion steps at low rates. |
 | `lod` | `off`, `auto` | Drops physics and deform below 96 pixels on the screen. Visible on close inspection. |
 
@@ -623,9 +640,11 @@ A JSON export can lack the editor hash, so the duration catches most stale clips
 
 The bake runs in idle time on an engine of its own, one frame of the animation or more per slice. A slice comes from `requestIdleCallback` with a wait of at most 1 second, else from a timer. When there is no idle deadline, a slice works 4 ms. The clip equals the one that an immediate bake makes.
 
-Two bakes keep no answer: the bake of a combined skin that the runtime freed meanwhile, and a bake that clips handed over made useless. Clips stay for the life of the asset. The clips of a combined skin stay until the runtime frees the skin. The clips grow with the duration of the animations and the skins that play them.
+Two bakes keep no answer: the bake of a combined skin that the runtime freed meanwhile, and a bake that clips handed over made useless.
 
-`idleCache: 'auto'` waits 30 updates in which the pose version, the layout and the render mode did not change, then two renders at the same place. It then draws the skeleton once into a render texture on the pixel grid of its target. A quad with that texture shows it in place of the view.
+Clips from `addBakedClips` stay for the life of the asset. Clips that a game bakes while it plays hold at most 4 MB per skeleton. The clip that played longest ago goes first, and a clip in use never goes. `setBakeBudget` of `pixi-marrow/bake` sets the limit. The clips of a combined skin stay until the runtime frees the skin. The clips grow with the duration of the animations and the skins that play them.
+
+`idleCache: 'auto'` waits 30 updates in which the pose version, the layout and the render mode did not change, then two renders at the same place. At most 4 images are drawn between two renders, over all display objects. It then draws the skeleton once into a render texture on the pixel grid of its target. A quad with that texture shows it in place of the view.
 
 The quad is an element of the batches of the batched mode, so it shares a batch with the skeletons around it. At first a sprite of Pixi drew it, in Pixi's own batch. The reels of the site have symbols at rest and in play side by side. There the sprite made a frame of a win take 10 to 14 draw calls in place of 3 or 4.
 
@@ -664,7 +683,7 @@ On a Galaxy A05 with a Mali-G52, the scene was 120 Bzzz symbols at rest, one pla
 
 An empty box counts as on the screen, so a skeleton that shows nothing for a while shows again. Pixi still calls `onRender` for a hidden skeleton, and its bounds are empty or ignore the parents. An empty child of the display object hears the renders, so `onRender` stays the game's.
 
-`throttle` updates a skeleton off the screen 4 times a second with the time that passed. `pause` loses the time. `updateRate` gathers the time of the updates it skips. `play`, `queue` and `stop` pose the gathered time first, so the events of what the tracks held fire.
+`throttle` updates a skeleton off the screen 4 times a second with the time that passed. `pause` keeps the time moving: the tracks, the events and `Track.finished` go on, and nothing is posed or drawn. Before the audit of 2026-11-15 the time stood still, so `await hero.play('win').finished` could wait for ever. `updateRate` gathers the time of the updates it skips. `play`, `queue` and `stop` pose the gathered time first, so the events of what the tracks held fire.
 
 `lod: 'auto'` runs the engine with physics `none` and its deform timelines off below 96 pixels across. Every mesh then shows its setup vertices, and a baked frame writes no deform. Both return at 120 pixels. Physics returns with a reset, so that nothing jumps.
 
@@ -703,7 +722,7 @@ Off, the engine update of 200 instances took 0.64 of the time for goblins-pro `w
 ]
 ```
 
-Built in M4 with 15 rows. They cover draw calls, blend ranges, pages, clipping, tight meshes, covered slots, outlines and dark tint. The other rows are physics, constraints by kind, bones, slots, vertices, uploads and the layout. The report reads every reason from the state of the instance when the call resolves.
+Built in M4 with 15 rows, and it has 22 today: `PerfFeature` in `src/api/report-base.ts` lists them. They cover draw calls, blend ranges, pages, clipping, tight meshes, covered slots, outlines and dark tint. The other rows are physics, constraints by kind, bones, slots, vertices, uploads and the layout. The report reads every reason from the state of the instance when the call resolves.
 
 M7 to M9 added rows. `perf` and `pacing` come first and name the settings in effect and how often the skeleton updates now. `bake` counts the updates that played baked and says why the last one did or did not. `uploads` counts the uploads of the bones under `skinning: 'gpu'`, and `renderMode` names who places the vertices.
 
@@ -780,7 +799,7 @@ await shot.finished;
 hero.queue('run', { loop: true, mix: 0.2 });
 
 hero.skins = ['base', 'armor'];
-hero.on('event', (e) => console.log(e.name, e.track.animation));
+hero.on('event', (event, track) => console.log(event.name, track.animation));
 
 const gun = hero.bone('gun');
 gun.rotation += 10;
@@ -799,6 +818,9 @@ Rules the API follows:
 - The runtime checks play options before anything plays: a wrong type or an unknown key throws and the track stays as it was.
 - The common track options have plain names: `loop`, `mix`, `speed`, `alpha`, `reverse`, `additive`, `start`, `end`. The rest of the official `TrackEntry` is reachable by its official names through `entry` and `track.configure`.
 - No required setup call. No import for side effects.
+- `Track.finished` resolves with the reason: `complete`, `interrupted`, `stopped` or `destroyed`. It never rejects.
+- After `destroy()` a display object throws a `MarrowError` with the code `destroyed` for a call that would change it.
+- `MarrowSpine.load` gives its hold on the asset to the display object, so `hero.destroy()` unloads the asset when no other holder is left.
 - `hero.info` returns a JSON description: version, bones, slots, skins, animations with duration and flags, events, features used.
 
 Typed names, optional:
@@ -845,14 +867,18 @@ One package. Few entry points. No runtime dependencies.
 |---|---|
 | `pixi-marrow` | Load, play, render, perf report |
 | `pixi-marrow/core` | Model, importers and pose without Pixi. Runs in Node. Used by the optimizer, by spine-benchmark and by tests. |
-| `pixi-marrow/bake` | Baked playback and instancing |
+| `pixi-marrow/bake` | `bakeAnimation` and `bakeAnimations`, the codec of clips, `addBakedClips` and `setBakeBudget` |
 | `pixi-marrow/debug` | Bone, mesh, bounds and overdraw overlays. Optional peer: `pixi-silk`. Built after the slot handle. |
 | `pixi-marrow/perf` | Probes and cost buckets for spine-benchmark |
 | `pixi-marrow/optimize` | Node API and CLI: tight meshes, sidecar files, typegen, reports |
 
-Peer: `pixi.js`. Dev dependencies only: the three official cores and `spine-pixi-v8`, under npm aliases.
+Peers: `pixi.js`, and `pixi-silk` as an optional peer for `pixi-marrow/debug`. Dev dependencies only: the three official cores and `spine-pixi-v8`, under npm aliases.
 
-Importers are separate modules loaded by version, so a game that ships 4.3 binary files does not carry the JSON or 4.1 readers. Since the bone handles the root import is 28.9 kB gzipped: handles and `follow` must work at once and weigh 2 kB. In M6 it was 26.9 kB, from 31.1 kB in M5. The limit the bench checks went from 27 to 29 kB for that.
+Importers are separate modules loaded by version, so a game that ships 4.3 binary files does not carry the JSON or 4.1 readers.
+
+The rest of this section is history: the sizes in the order they changed. The sizes of today are in `scripts/facts.json`. The root import alone does not show a skeleton: a reader and a pose engine load before the first one.
+
+Since the bone handles the root import is 28.9 kB gzipped: handles and `follow` must work at once and weigh 2 kB. In M6 it was 26.9 kB, from 31.1 kB in M5. The limit the bench checks went from 27 to 29 kB for that.
 
 The support for Pixi `Assets` came with the first pre-release. `registerMarrowAssets` adds the parsers, because the import registers nothing. Only that call reaches the code that reads `Assets`, so a game that never makes the call carries 0.2 kB of the support. A game that imports `MarrowSpine` alone has a root import of 29.2 kB. A game that also registers the parsers has 30.3 kB. The limit the bench checks was 30 kB then, for the first of the two.
 
@@ -864,15 +890,16 @@ Instancing put 6.2 kB into the chunk of the mesh mode, from 8.9 to 15.1 kB gzip.
 
 After M9 and instancing, `lod` for deform and the images of the idle cache in our batches took it to 31.94 kB. That is 63 bytes under the limit. The root import knows the quad of an image by its type alone. Its code loads with the idle cache, which grew from 2.25 to 3.17 kB.
 
-Three parts load on demand:
+These parts load on demand, at the sizes of that time:
 
+- A reader and a pose engine load with the first skeleton of their format and version.
 - The mesh mode (15.1 kB with GPU skinning and instancing) loads with an asset that `auto` draws with meshes or that asks for them.
 - The clip code (7.3 kB) loads with an asset that has a clipping attachment.
 - The cuts of overdraw (2.6 kB) load with the outlines.
 
 An instance that asks for the mesh mode before its chunk is there draws batched until it arrives. The two pose engines grew with the skipping, from 47.8 to 58.4 kB on demand for both together. A game loads one of them.
 
-Size budget for the root import with one importer: 60 KB gzipped. It is a target to check at M2, and CI checks it after that.
+The first budget was 60 KB gzipped for the root import with one importer. No check ever enforced that number. `pnpm size:check` enforces the limits of `scripts/size-limit.mjs`.
 
 The fixes of the audit of 2026-11-15 took the root import to 32.17 kB. The new code must run at once:
 
@@ -880,9 +907,11 @@ The fixes of the audit of 2026-11-15 took the root import to 32.17 kB. The new c
 - pacing that sees a hidden parent
 - a skin set again as a no-op
 
-The reuse of freed skin indices and the hook of the outline warning are also in the root. The limit is now 32.5 kB. It lives in `scripts/size-limit.mjs`. `pnpm size:check` fails above it in CI, and the verdict of M6 reads it from there.
+The reuse of freed skin indices and the hook of the outline warning are also in the root. The limit is now 32.5 kB. It lives in `scripts/size-limit.mjs`. `pnpm size:check` fails above it in CI, and the verdict of M6 reads it from there. Since the second audit each reader, each pose engine, the mesh mode and the clip code has a limit there too.
 
 ## 12. Repo setup, compared with pixi-silk
+
+The table records the plan. Three rows differ in the repo of today. `scripts/facts.mjs` writes blocks and numbers into README.md and AGENTS.md and writes `scripts/facts.json`. The build of the site writes the llms files. No check counts words per page: `pnpm lint:prose` checks sentences and paragraphs. The package ships no skill.
 
 Measured on pixi-silk today. Docs: 33 guide pages with 27,700 words, `llms-full.txt` with 34,800 words, 9 skills with 7,500 words. Code: about 40 entry points, 30 test files in a node environment, a largest source file of 2,520 lines. Casts: 4 `any` and 9 `as unknown as` in 36,000 lines.
 
@@ -907,14 +936,14 @@ Measured on pixi-silk today. Docs: 33 guide pages with 27,700 words, `llms-full.
 
 Budget: at most 10 guide pages and 6,000 words in total. Each page has one runnable example and at most one table.
 
-Change after M9: the user asked for docs that guide and explain, not only list the API. So the site has three parts, and the budget above no longer holds. On 2026-11-14 they were 18 pages and about 8,000 words:
+Change after M9: the user asked for docs that guide and explain, not only list the API. So the site has four parts, and the budget above no longer holds. On 2026-11-14 they were 18 pages and about 8,000 words:
 
 - **Basics**, 5 pages: pixels and frames, coordinates and transforms (with an interactive pixi-silk gizmo), triangles and textures, the GPU and draw calls, transparency and blending. Computer graphics from zero, for readers who never wrote any.
 - **Guide**, 8 pages: start, assets and copies, size and units, play, mix and queue, events, skins and slots, bones and attachments. It is about animation in general. Its examples use the Bzzz slot symbols, because most users come from slot games.
 - **How it works**, 6 pages: anatomy of a skeleton, an animation, the pose, vertices, draw order and batches, why it is fast. Each has a live preview that shows the runtime part by part on the Bzzz rigs. They explain why the runtime does what it does, and what makes a scene slow.
 - **Reference**, 4 pages: performance, debug overlays, good to know, an example with reels.
 
-The top bar names the three parts, the playground and the lab. The sidebar lists the pages of each part.
+The top bar names the parts, the playground and the lab. The sidebar lists the pages of each part.
 
 1. Start: install, load, play
 2. Animations: tracks, queue, mix, events
@@ -933,9 +962,11 @@ Every code block is a region of a file that is type-checked against the built pa
 
 The API reference comes from TSDoc. Every public symbol has a one-line summary and an `@example`. No hand-written API prose.
 
-Every code block in the docs is a file under `examples/`. The file is type-checked, and the render check runs it. A doc cannot show code that does not work.
+Every code block of the site is a region of a file under `apps/site/src/snippets` or `apps/site/src/previews`. `pnpm site:typecheck` checks these files against the built package, so a page cannot show code that does not compile. No check runs the snippets.
 
 ## 14. AI experience
+
+The table records the plan. What exists today: the build of the site writes `llms.txt`, `llms-full.txt` and a Markdown twin of each docs page, from `apps/site/src/lib/content.ts`, with no word limit. `MarrowError`, `hero.info`, `perf.report()`, `typegen` and `pixi-marrow/core` exist as the table says. The package ships no skill. `AGENTS.md` has no line limit.
 
 | Item | What it gives an agent |
 |---|---|
@@ -958,7 +989,7 @@ The pose core is only as good as its proof. The project builds the parity suite 
 | Test | Runs in | Proves |
 |---|---|---|
 | Model parity | Node | After import, counts, names, setup values, timelines and keys equal the official `SkeletonData` of the same file |
-| Pose parity | Node | It steps every fixture and animation at 60 Hz. Bone world matrices, slot colors, attachment names, draw order, deform and events equal the official core of the file's version, within float tolerance |
+| Pose parity | Node | It steps every fixture and animation at 60 Hz. Bone world matrices, slot colors, attachment names, draw order, deform and events equal the official core of the file's version, to the bit |
 | Mix parity | Node | The same for scripted mixes: A to B at several points, queues, multiple tracks, interruptions |
 | Random play parity | Node | Seeded random sequences of play, queue, skin and time-scale calls on both engines. Any divergence prints the seed. |
 | Optimization parity | Node | Every item in 8.1 produces the same pose with the item on and off |
@@ -967,8 +998,8 @@ The pose core is only as good as its proof. The project builds the parity suite 
 | Cut parity | Headless Chrome | Our frame with the exact overdraw cuts equals our frame without them, in every pixel. With tight meshes it stays within stated bounds. At most 0.25 percent of pixels are off by more than 1 level, and 0.01 percent by more than 8. |
 | Premultiplied parity | Headless Chrome | Straight and premultiplied exports of one rig match |
 | Plan stability | Node | Attachment and draw-order keys cause zero template rebuilds |
-| Allocation | Node | A played loop allocates nothing after warm-up |
-| Docs examples | Node and Chrome | Every example compiles and renders |
+| Allocation | Node | A playing update that reports no event allocates nothing after warm-up: `tests/pose/heap.test.ts` |
+| Docs examples | `tsc` | Every code block of the site compiles against the built package |
 | Mode parity | Headless Chrome | The batched mode equals the official frame under the rules of pixel parity. The two modes differ from each other by 6 levels at most, on 0.05 percent of pixels by more than 1. |
 | Scenes | Headless Chrome | 19 scenes with many instances draw like the official runtime in both modes. They cover overlap, two rigs interleaved, a Pixi object in between, and parents with alpha, tint, mask, filter and render group. The scenes add, remove, move and destroy instances between frames. |
 | Clip parity | Node | The CPU clip kernel writes the vertices and indices of the official `clipTriangles`, bit for bit, in all three versions |
@@ -1165,7 +1196,7 @@ Your three must-haves: fewer batch breaks and the premultiplied pipeline land in
 | Older solvers differ from 4.3 in ways a mode flag cannot cover | Per-constraint experiment first (section 10). Fallback: a separate kernel per version for that constraint. |
 | Physics drifts from the official result | It does not: the port keeps the order of the official arithmetic, and physics parity is exact equality like the rest (M4). |
 | A new Spine release changes the solver | The parity suite shows exactly which frames diverge. Port, then extend the model. |
-| Pixi internals used by a custom pipe and batcher change between minors | Section 7.2 lists the parts used, with the private fields of the mesh mode on WebGPU. The project checked them against the source of 8.16.0 or 8.21.0 and 8.23.0. The runtime reports a missing private field once in the console. Not done: a CI run against the lowest supported Pixi. |
+| Pixi internals used by a custom pipe and batcher change between minors | Section 7.2 lists the parts used, with the private fields of the mesh mode on WebGPU. The project checked them against the source of 8.16.0 or 8.21.0 and 8.23.0. The runtime reports a missing private field once in the console. The job `pixi-floor` of CI runs the typecheck and the unit tests on the lowest pixi.js that the package allows. It runs in Node, so it draws nothing. |
 | WebGPU and WebGL2 differ on stencil or data textures | Both renderers in pixel parity from M2 |
 | Tight outlines cost load time | Sidecar from the optimizer. Load-time scan only in idle frames. |
 | More than 65,535 vertices in one template | 32-bit indices when needed |
