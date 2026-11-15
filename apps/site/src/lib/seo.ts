@@ -13,8 +13,8 @@ export const ORIGIN = 'https://pixi-marrow.schmooky.dev';
 /** What follows the title of a page that has no entry in `SEO`. */
 const TITLE_SUFFIX = '| pixi-marrow, Spine runtime for PixiJS';
 
-/** The command that installs the pre-release, as the start page and the README have it. */
-export const INSTALL = 'npm install pixi-marrow@next pixi.js';
+/** The command that installs the package, as the start page and the README have it. */
+export const INSTALL = 'npm install pixi-marrow pixi.js';
 
 /** The handle on GitHub that owns the repository. The structured data names nobody else. */
 export const OWNER = { name: 'schmooky', url: 'https://github.com/schmooky' };
@@ -68,7 +68,7 @@ const SEO: Readonly<Record<string, SeoEntry>> = {
     '/start/': {
         seoTitle: 'Get started: play a Spine animation in PixiJS v8',
         seoDescription:
-            'Run npm install pixi-marrow@next pixi.js, load a Spine skeleton with its atlas, and play an animation in PixiJS v8. The guide starts from these calls.',
+            'Run npm install pixi-marrow pixi.js, load a Spine skeleton with its atlas, and play an animation in PixiJS v8. The guide starts from these calls.',
     },
     '/guide/assets/': {
         seoTitle: 'Load Spine assets once in PixiJS v8 and show many instances',

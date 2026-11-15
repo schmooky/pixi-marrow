@@ -26,7 +26,7 @@ Check these four points first:
 
 ```bash
 npm uninstall @esotericsoftware/spine-pixi-v8
-npm install pixi-marrow@next pixi.js
+npm install pixi-marrow pixi.js
 ```
 
 Do not register two Spine runtimes in one game. Both claim the same file extensions in Pixi `Assets`. The official runtime registers its loaders when a file imports it. pixi-marrow registers nothing at import: `registerMarrowAssets()` does it, once.

@@ -20,7 +20,7 @@ name: Release
 # 2. Wait for the CI run of the merge commit on main.
 # 3. Run this workflow on main with the version as `version`. Leave `dry-run` set for a rehearsal:
 #    it runs every gate and packs the tarball, and publishes nothing.
-# 4. Run it again with `dry-run` off. It publishes with the tag of .changeset/pre.json, which is
+# 4. Run it again with `dry-run` off. It publishes with the tag latest, or in pre mode with the tag of .changeset/pre.json, which is
 #    `next`, then makes the git tag and the GitHub Release.
 # 5. Until 1.0, move `latest` by hand: npm dist-tag add pixi-marrow@<version> latest. Trusted
 #    publishing covers `npm publish` only, so this step needs your login.

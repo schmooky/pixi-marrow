@@ -19,7 +19,7 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 const pkgDir = join(root, 'packages/pixi-marrow');
 
 export const STATUS =
-    'Pre-release, published as `pixi-marrow@next`. Skeletons of Spine 4.1, 4.2 and 4.3 load, play and draw in PixiJS v8 with every constraint solved: IK, transform, path, physics and sliders. The poses equal the official cores to the bit, and the picture matches the official Pixi runtime. Small skeletons share draw calls, and a skeleton at rest costs close to nothing.';
+    'Version 0.2, published as `pixi-marrow`. Before 1.0, a minor version can change an API. Skeletons of Spine 4.1, 4.2 and 4.3 load, play and draw in PixiJS v8 with every constraint solved: IK, transform, path, physics and sliders. The poses equal the official cores to the bit, and the picture matches the official Pixi runtime. Small skeletons share draw calls, and a skeleton at rest costs close to nothing.';
 
 /** One row per subpath export of packages/pixi-marrow/package.json. */
 export const ENTRY_POINTS = [

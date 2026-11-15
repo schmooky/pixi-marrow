@@ -26,7 +26,7 @@ export const RULES: readonly PerfRule[] = [
         source: 'src/render/batch-element.ts',
         check: '`totals.transformReplaces` grows from frame to frame.',
         fix: "Set `isRenderGroup: true` on the container that moves, or set `renderMode: 'mesh'` on the skeleton.",
-        since: '0.1.0-next.2',
+        since: '0.2.0',
         docs: 'https://pixi-marrow.schmooky.dev/performance/rules/#marrow001',
     },
     {
@@ -42,7 +42,7 @@ export const RULES: readonly PerfRule[] = [
         source: 'src/render/batch-element.ts',
         check: '`totals.tintRewrites` grows from frame to frame.',
         fix: "Fade a container that has `isRenderGroup: true`, fade slots with `hero.slot(name).alpha`, or set `renderMode: 'mesh'`.",
-        since: '0.1.0-next.2',
+        since: '0.2.0',
         docs: 'https://pixi-marrow.schmooky.dev/performance/rules/#marrow002',
     },
     {
@@ -58,7 +58,7 @@ export const RULES: readonly PerfRule[] = [
         source: 'src/render/gate.ts',
         check: '`cuts.blockedBy` holds `alpha-or-blend`, and `cuts.coveredSlots` is 0.',
         fix: 'Keep the alpha at 1 and the blend mode at `normal` while the skeleton is at rest. Fade for a short time only.',
-        since: '0.1.0-next.2',
+        since: '0.2.0',
         docs: 'https://pixi-marrow.schmooky.dev/performance/rules/#marrow003',
     },
     {
@@ -74,7 +74,7 @@ export const RULES: readonly PerfRule[] = [
         source: 'src/render/batcher.ts',
         check: '`render.sharedBy` is lower than the number of batched skeletons in the layer.',
         fix: 'Put the skeletons into one container and the other objects into a container above or below it.',
-        since: '0.1.0-next.2',
+        since: '0.2.0',
         docs: 'https://pixi-marrow.schmooky.dev/performance/rules/#marrow004',
     },
     {
@@ -90,7 +90,7 @@ export const RULES: readonly PerfRule[] = [
         source: 'src/render/batcher.ts',
         check: '`render.sharedBy` is lower than the number of batched skeletons in the container.',
         fix: 'Give the skeletons one range of `zIndex` values, or put them into a layer of their own.',
-        since: '0.1.0-next.2',
+        since: '0.2.0',
         docs: 'https://pixi-marrow.schmooky.dev/performance/rules/#marrow005',
     },
     {
@@ -106,7 +106,7 @@ export const RULES: readonly PerfRule[] = [
         source: 'src/render/batch-element.ts',
         check: '`render.blendSlots` counts the slots, and `render.runs` counts the draws of the skeleton.',
         fix: 'Use additive slots where the art allows it. Put skeletons with the same blend mode next to each other in the draw order.',
-        since: '0.1.0-next.2',
+        since: '0.2.0',
         docs: 'https://pixi-marrow.schmooky.dev/performance/rules/#marrow006',
     },
     {
@@ -122,7 +122,7 @@ export const RULES: readonly PerfRule[] = [
         source: 'src/render/batch-layout.ts',
         check: '`counts.atlasPages` against 16 in the batched mode and 8 in the mesh mode.',
         fix: 'Pack the atlas into fewer pages, or share one atlas between the skeletons of a layer.',
-        since: '0.1.0-next.2',
+        since: '0.2.0',
         docs: 'https://pixi-marrow.schmooky.dev/performance/rules/#marrow007',
     },
     {
@@ -137,7 +137,7 @@ export const RULES: readonly PerfRule[] = [
         source: 'src/render/batch-body.ts',
         check: '`render.modeReason` is `limit`.',
         fix: 'Pack the atlas into fewer pages than the device samples in one batch.',
-        since: '0.1.0-next.2',
+        since: '0.2.0',
         docs: 'https://pixi-marrow.schmooky.dev/performance/rules/#marrow008',
     },
     {
@@ -153,7 +153,7 @@ export const RULES: readonly PerfRule[] = [
         source: 'src/render/mode.ts',
         check: '`render.mode` is `mesh`, `render.instancing.active` is false, and `render.instancing.why` gives the reason.',
         fix: "Set `skinning: 'gpu'` and `instancing: 'auto'`, or use a skeleton with fewer vertices.",
-        since: '0.1.0-next.2',
+        since: '0.2.0',
         docs: 'https://pixi-marrow.schmooky.dev/performance/rules/#marrow009',
     },
     {
@@ -168,7 +168,7 @@ export const RULES: readonly PerfRule[] = [
         source: 'src/render/batch-clip.ts',
         check: '`render.clips` is above 0 and `render.mode` is `batched`.',
         fix: 'Remove the clipping attachment in the Spine editor, or keep the clipped slots few and small.',
-        since: '0.1.0-next.2',
+        since: '0.2.0',
         docs: 'https://pixi-marrow.schmooky.dev/performance/rules/#marrow010',
     },
     {
@@ -183,7 +183,7 @@ export const RULES: readonly PerfRule[] = [
         source: 'src/render/clip-mask.ts',
         check: '`render.maskDraws` is above 0.',
         fix: "Remove the clipping attachment in the Spine editor, or set `renderMode: 'batched'` for a small skeleton.",
-        since: '0.1.0-next.2',
+        since: '0.2.0',
         docs: 'https://pixi-marrow.schmooky.dev/performance/rules/#marrow011',
     },
     {
@@ -198,7 +198,7 @@ export const RULES: readonly PerfRule[] = [
         source: 'src/render/attach-work.ts',
         check: '`render.attached` is above 0.',
         fix: 'Use `hero.follow(bone, container)` where the container can draw above or below the whole skeleton.',
-        since: '0.1.0-next.2',
+        since: '0.2.0',
         docs: 'https://pixi-marrow.schmooky.dev/performance/rules/#marrow012',
     },
     {
@@ -214,7 +214,7 @@ export const RULES: readonly PerfRule[] = [
         source: 'src/render/batch-pipe.ts',
         check: '`render.darkTint` differs between two skeletons that follow each other.',
         fix: 'Draw a skeleton with dark colors first in the layer, or keep the two kinds in separate layers.',
-        since: '0.1.0-next.2',
+        since: '0.2.0',
         docs: 'https://pixi-marrow.schmooky.dev/performance/rules/#marrow013',
     },
     {
@@ -230,7 +230,7 @@ export const RULES: readonly PerfRule[] = [
         source: 'src/render/batch-element.ts',
         check: '`totals.instructionBuilds` grows from second to second.',
         fix: 'Keep display objects in a pool and move them off the screen. Give a layer that changes often a render group of its own.',
-        since: '0.1.0-next.2',
+        since: '0.2.0',
         docs: 'https://pixi-marrow.schmooky.dev/performance/rules/#marrow014',
     },
     {
@@ -246,7 +246,7 @@ export const RULES: readonly PerfRule[] = [
         source: 'src/api/pacing.ts',
         check: '`pacing.drawn` is false, or `pacing.onScreen` is false, while the upload counters of `totals` grow.',
         fix: "Set `perf: 'balanced'` or `offscreen: 'pause'`, or stop the `update()` calls for a hidden skeleton.",
-        since: '0.1.0-next.2',
+        since: '0.2.0',
         docs: 'https://pixi-marrow.schmooky.dev/performance/rules/#marrow015',
     },
     {
@@ -262,7 +262,7 @@ export const RULES: readonly PerfRule[] = [
         source: 'src/render/gate.ts',
         check: '`cuts.blockedBy` holds `roundPixels` or `multisample`.',
         fix: 'Turn `roundPixels` and `antialias` off, or accept the overdraw.',
-        since: '0.1.0-next.2',
+        since: '0.2.0',
         docs: 'https://pixi-marrow.schmooky.dev/performance/rules/#marrow016',
     },
     {
@@ -277,7 +277,7 @@ export const RULES: readonly PerfRule[] = [
         source: 'src/api/idle-gate.ts',
         check: 'The tree shows `filters` or `mask` on the path from the skeleton to the root.',
         fix: 'Put the filter or the mask on the smallest container that needs it, and remove it when its effect ends.',
-        since: '0.1.0-next.2',
+        since: '0.2.0',
         docs: 'https://pixi-marrow.schmooky.dev/performance/rules/#marrow017',
     },
     {
@@ -292,7 +292,7 @@ export const RULES: readonly PerfRule[] = [
         source: 'pixi.js: scene/container/RenderGroupSystem',
         check: 'The tree shows `cacheAsTexture` on the path from the skeleton to the root.',
         fix: "Cache only containers whose skeletons are at rest. For one skeleton at rest, use `idleCache: 'auto'`.",
-        since: '0.1.0-next.2',
+        since: '0.2.0',
         docs: 'https://pixi-marrow.schmooky.dev/performance/rules/#marrow018',
     },
     {
@@ -308,7 +308,7 @@ export const RULES: readonly PerfRule[] = [
         source: 'src/api/idle-image.ts',
         check: '`idle.showing` changes between samples, and `totals.instructionBuilds` grows.',
         fix: "Set `idleCache: 'off'` for a skeleton that does not rest for seconds.",
-        since: '0.1.0-next.2',
+        since: '0.2.0',
         docs: 'https://pixi-marrow.schmooky.dev/performance/rules/#marrow019',
     },
     {
@@ -323,7 +323,7 @@ export const RULES: readonly PerfRule[] = [
         source: 'src/api/no-effect.ts',
         check: '`cuts.outlines` is `off` or `unread`.',
         fix: 'Run `pixi-marrow outlines <atlas>` at build time and pass the file as the `outlines` option of the load.',
-        since: '0.1.0-next.2',
+        since: '0.2.0',
         docs: 'https://pixi-marrow.schmooky.dev/performance/rules/#marrow020',
     },
     {
@@ -339,7 +339,7 @@ export const RULES: readonly PerfRule[] = [
         source: 'src/render/page-block.ts',
         check: '`cuts.pageBlocks` names the page and the reason.',
         fix: 'Load the page textures at the size of the atlas, with no mipmaps, no anisotropy and no repeat.',
-        since: '0.1.0-next.2',
+        since: '0.2.0',
         docs: 'https://pixi-marrow.schmooky.dev/performance/rules/#marrow021',
     },
     {
@@ -354,7 +354,7 @@ export const RULES: readonly PerfRule[] = [
         source: 'src/pose/legacy/physics-rest.ts',
         check: '`physics.constraints` is above 0 and `physics.mode` is `update`.',
         fix: "Set `hero.physics = 'none'` for small or far skeletons, or set `lod: 'auto'`.",
-        since: '0.1.0-next.2',
+        since: '0.2.0',
         docs: 'https://pixi-marrow.schmooky.dev/performance/rules/#marrow022',
     },
     {
@@ -369,7 +369,7 @@ export const RULES: readonly PerfRule[] = [
         source: 'src/render/skeleton-view.ts',
         check: '`totals.templateBuilds` grows from second to second.',
         fix: 'Set the skins once. To change one attachment, use `hero.slot(name).attachment`.',
-        since: '0.1.0-next.2',
+        since: '0.2.0',
         docs: 'https://pixi-marrow.schmooky.dev/performance/rules/#marrow023',
     },
     {
@@ -384,7 +384,7 @@ export const RULES: readonly PerfRule[] = [
         source: 'src/render/mesh-uniforms.ts',
         check: 'The sum of `render.drawCalls` over the skeletons in the mesh mode.',
         fix: "Use the batched mode for small skeletons, or `skinning: 'gpu'` with `instancing: 'auto'` for large ones.",
-        since: '0.1.0-next.2',
+        since: '0.2.0',
         docs: 'https://pixi-marrow.schmooky.dev/performance/rules/#marrow024',
     },
     {
@@ -400,7 +400,7 @@ export const RULES: readonly PerfRule[] = [
         source: 'src/pose/v43/player.ts',
         check: 'The `start` events of the skeleton outnumber its `end` events from frame to frame.',
         fix: 'Let a mix end before the next change, or change with `mix: 0`.',
-        since: '0.1.0-next.2',
+        since: '0.2.0',
         docs: 'https://pixi-marrow.schmooky.dev/performance/rules/#marrow025',
     },
 ];

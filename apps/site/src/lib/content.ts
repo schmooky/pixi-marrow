@@ -199,7 +199,7 @@ function summary(): string {
         '',
         '## Key facts',
         '',
-        `- Version: ${SITE.version}, a pre-release on the \`next\` tag of npm.`,
+        `- Version: ${SITE.version}. Before 1.0, a minor version can change an API.`,
         `- Install: \`${INSTALL}\``,
         '- Spine versions: 4.1, 4.2 and 4.3, as JSON or binary exports. Spine 3.8 and 4.0 do not load.',
         '- PixiJS: version 8, from 8.23. `pixi.js` is the one required peer dependency.',

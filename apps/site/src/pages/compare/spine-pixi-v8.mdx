@@ -6,7 +6,7 @@ description: Which Spine runtime for PixiJS v8. A table of versions, renderers, 
 
 For PixiJS v8 there are two Spine runtimes: the official `@esotericsoftware/spine-pixi-v8`, and pixi-marrow. Take the official runtime when you need a released runtime, the Canvas renderer or the full `spine-core` API. Take pixi-marrow when many skeletons, or skeletons at rest, cost your game too much frame time. pixi-spine is for PixiJS v7 and earlier.
 
-pixi-marrow is a pre-release. Its version is `0.1.0-next.1`, and its API can still change. Read [what pixi-marrow does not have](#not-in-pixi-marrow) before you choose it.
+pixi-marrow is before version 1.0. Its version is `0.2.0`, and its API can still change. Read [what pixi-marrow does not have](#not-in-pixi-marrow) before you choose it.
 
 ## How this page was checked
 
@@ -21,7 +21,7 @@ A skeleton is the bones, slots, skins and animations of one Spine export. A draw
 | | pixi-marrow | spine-pixi-v8 | pixi-spine |
 |---|---|---|---|
 | Made by | schmooky, on GitHub | Esoteric Software, the maker of Spine | The `pixijs-userland` organization on GitHub |
-| State | Pre-release `0.1.0-next.1`, on the npm tag `next` | Released. Checked here: 4.2.120 and 4.3.13 | Not checked |
+| State | Version `0.2.0`, before 1.0 | Released. Checked here: 4.2.120 and 4.3.13 | Not checked |
 | Spine versions | 4.1, 4.2 and 4.3 in one package, also mixed in one scene | One per package version: 4.2.x for Spine 4.2, 4.3.x for Spine 4.3 | 3.7, 3.8, 4.0 and 4.1 |
 | PixiJS versions | 8.23 or later | 8.16 or later | v5 to v7 |
 | WebGL2 | Yes | Yes | Not checked |
@@ -67,7 +67,7 @@ The official numbers are from a bundle of `import { Spine } from '@esotericsoftw
 
 The official runtime has these, and pixi-marrow does not:
 
-- A release. pixi-marrow is `0.1.0-next.1`, and a pre-release can break an API.
+- A version 1.0. pixi-marrow is `0.2.0`, and a minor version before 1.0 can break an API.
 - Support from the maker of Spine.
 - The Canvas renderer.
 - PixiJS 8.16 to 8.20.
