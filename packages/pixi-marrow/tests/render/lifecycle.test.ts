@@ -112,6 +112,7 @@ describe('destroy', () => {
         // a second call does nothing, an update says what is wrong
         expect(() => rig.view.destroy()).not.toThrow();
         expect(() => drawPose(rig.view, rig.engine.state)).toThrow(MarrowError);
+        expect(() => drawPose(rig.view, rig.engine.state)).toThrow(expect.objectContaining({ code: 'destroyed' }));
     });
 
     it('destroys a view that never drew', async () => {

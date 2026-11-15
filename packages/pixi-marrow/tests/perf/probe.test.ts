@@ -313,10 +313,10 @@ describe('a perf probe', () => {
         const twice = thrownBy(() => createProbe(spine));
         const late = thrownBy(() => createProbe(gone));
 
-        expect(twice.code).toBe('invalid-data');
+        expect(twice.code).toBe('invalid-option');
         expect(twice.message).toContain('The display object has a probe that measures its updates.');
         expect(twice.fix).toBe('Call stop() on that probe first, or read that one.');
-        expect(late.code).toBe('invalid-data');
+        expect(late.code).toBe('destroyed');
         expect(late.message).toContain('The display object was destroyed and updates no more.');
         expect(gone.updateProbe).toBeNull();
     });

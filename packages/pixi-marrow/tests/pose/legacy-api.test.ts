@@ -112,10 +112,10 @@ describe.each(['4.1', '4.2'] as const)('the calls of the legacy engine on a %s s
             { mixBlend: 3 },
             { delay: true },
         ]) {
-            expect(codeOf(() => engine.configure(entry, { timeScale: 3, ...fields }))).toBe('invalid-data');
+            expect(codeOf(() => engine.configure(entry, { timeScale: 3, ...fields }))).toBe('invalid-option');
         }
         expect([entry.alpha, entry.timeScale, entry.loop, entry.delay]).toEqual([1, 1, false, 0]);
-        expect(codeOf(() => engine.configure({ ...entry }, { alpha: 0.5 }))).toBe('invalid-data');
+        expect(codeOf(() => engine.configure({ ...entry }, { alpha: 0.5 }))).toBe('invalid-option');
     });
 
     it('refuses animations, tracks and skins that do not exist', async () => {
@@ -132,7 +132,7 @@ describe.each(['4.1', '4.2'] as const)('the calls of the legacy engine on a %s s
             () => engine.setSkin(-2),
         ];
 
-        for (const call of calls) expect(codeOf(call)).toBe('invalid-data');
+        for (const call of calls) expect(codeOf(call)).toBe('invalid-option');
         // clearing a track that never held anything is not an error
         engine.clearTrack(-1);
         engine.clearTrack(7);
@@ -151,7 +151,7 @@ describe.each(['4.1', '4.2'] as const)('the calls of the legacy engine on a %s s
         }
         const wrong: string = 'paused';
 
-        expect(codeOf(() => Object.assign(engine, { physics: wrong }))).toBe('invalid-data');
+        expect(codeOf(() => Object.assign(engine, { physics: wrong }))).toBe('invalid-option');
         expect(engine.physics).toBe('pose');
     });
 

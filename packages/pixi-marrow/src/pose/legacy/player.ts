@@ -111,7 +111,7 @@ export function clearNext(player: LegacyPlayer, entry: LegacyEntry): void {
 /** The official `expandToIndex`: the current entry of a track. Tracks up to `index` are created. */
 function expandToIndex(player: LegacyPlayer, index: number): LegacyEntry | null {
     if (!Number.isInteger(index) || index < 0) {
-        throw new MarrowError('invalid-data', `${index} is not a track index.`, {
+        throw new MarrowError('invalid-option', `${index} is not a track index.`, {
             fix: 'Pass a whole number from 0 up.',
         });
     }

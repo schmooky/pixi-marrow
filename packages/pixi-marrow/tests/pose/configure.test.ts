@@ -62,11 +62,11 @@ describe.each(['4.1', '4.2', '4.3'])('configure of a Spine %s entry', (version) 
         expect(error.validNames).toContain('alpha');
     });
 
-    it('throws invalid-data for a value of the wrong type', async () => {
+    it('throws invalid-option for a value of the wrong type', async () => {
         const { engine, entry } = await playing(version);
 
         for (const fields of [{ alpha: '1' }, { loop: 1 }, { delay: true }, { reverse: null }, { trackEnd: null }]) {
-            expect(errorOf(() => engine.configure(entry, loose(fields))).code).toBe('invalid-data');
+            expect(errorOf(() => engine.configure(entry, loose(fields))).code).toBe('invalid-option');
         }
         expect(errorOf(() => engine.configure(entry, loose({ alpha: '1' }))).message).toContain('takes a number');
         expect(errorOf(() => engine.configure(entry, loose({ loop: 1 }))).message).toContain('takes true or false');

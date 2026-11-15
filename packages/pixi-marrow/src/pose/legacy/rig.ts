@@ -345,7 +345,7 @@ export function clipOf(rig: Rig, index: number): Clip {
     if (animation === undefined || !Number.isInteger(index)) {
         const count = rig.model.animations.length;
 
-        throw new MarrowError('invalid-data', `The skeleton has no animation ${index}. It has ${count} animations.`, {
+        throw new MarrowError('invalid-option', `The skeleton has no animation ${index}. It has ${count} animations.`, {
             fix: 'Pass an index into the animation list of the model.',
         });
     }

@@ -74,7 +74,7 @@ const HEAT_ALPHA = 0.25;
 function checkLayers(values: Partial<Record<string, unknown>> | undefined, what: string): void {
     for (const name of Object.keys(values ?? {})) {
         if (!LAYER_NAMES.includes(name as DebugLayer)) {
-            throw new MarrowError('invalid-data', `MarrowDebug has no layer "${name}" for ${what}.`, {
+            throw new MarrowError('invalid-option', `MarrowDebug has no layer "${name}" for ${what}.`, {
                 fix: `Use one of: ${LAYER_NAMES.join(', ')}.`,
                 validNames: LAYER_NAMES,
             });

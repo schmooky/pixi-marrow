@@ -95,7 +95,7 @@ export function showSequence(template: Template, state: PoseState, entry: number
  */
 export function checkPose(destroyed: boolean, sameModel: boolean): void {
     if (destroyed) {
-        throw new MarrowError('invalid-data', 'The view was destroyed and cannot draw a pose.', {
+        throw new MarrowError('destroyed', 'The view was destroyed and cannot draw a pose.', {
             fix: 'Create a new SkeletonView, or stop updating this one.',
         });
     }
