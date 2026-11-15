@@ -27,6 +27,7 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 const SCOPE = [
     'README.md',
     'AGENTS.md',
+    'SECURITY.md',
     'docs',
     '.changeset',
     '.github',
