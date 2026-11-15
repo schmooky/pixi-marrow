@@ -213,7 +213,7 @@ export class SelectionControls {
         const left = MARGIN;
         const right = Math.max(MARGIN, width - card.width - MARGIN);
         const top = this.scene.topInset;
-        const bottom = Math.max(top, height - card.height - MARGIN);
+        const bottom = Math.max(top, height - card.height - MARGIN - this.scene.bottomInset);
         const sides = centre > width / 2 ? [left, right] : [right, left];
         const corners = [top, bottom].flatMap((y) => sides.map((x) => ({ x, y })));
         const bars = [
@@ -298,7 +298,7 @@ export class SelectionControls {
         const half = (size: RowsSize): number => size.width / 2 + MARGIN;
         const top = scene.topInset;
 
-        const [aboveY, belowY] = this.stripsAt(box, top, height - MARGIN);
+        const [aboveY, belowY] = this.stripsAt(box, top, height - MARGIN - scene.bottomInset);
 
         this.above.position.set(
             Math.round(clamp(centre, half(this.aboveSize), width - half(this.aboveSize))),

@@ -68,8 +68,12 @@ export class Scene {
     options: MarrowSpineOptions = {};
     /** Space at the top of the canvas that the readout and the strip under it take, in CSS pixels. */
     topInset = 64;
+    /** Space at the bottom of the canvas that the buttons of the page take, in CSS pixels. */
+    bottomInset = 0;
     /** Called when the selection changes. */
     onSelect: (entry: Entry | null) => void = () => {};
+    /** Called when the last skeleton of an asset left the scene. The asset can be freed then. */
+    onUnused: (asset: MarrowAsset) => void = () => {};
     /** Screen space above the skeletons and the gizmo, for the buttons of the playground. */
     readonly ui = new Container({ label: 'ui' });
     private readonly world = new Container({ label: 'world' });
@@ -100,11 +104,28 @@ export class Scene {
         app.ticker.add(() => this.render(), undefined, UPDATE_PRIORITY.LOW);
     }
 
-    /** Makes the app in an element and the scene in it. */
-    static async create(host: HTMLElement): Promise<Scene> {
+    /**
+     * Makes the app in an element and the scene in it.
+     *
+     * @param lost Called once when the browser took the WebGL context away. The scene has stopped by then.
+     */
+    static async create(host: HTMLElement, lost: () => void): Promise<Scene> {
         const app = new Application();
+        const canvas = document.createElement('canvas');
+        let gone = false;
 
+        // as in the previews: Pixi answers a lost context by asking for a new one, which a browser
+        // that cannot make one answers again and again. This listener comes first and ends the event
+        canvas.addEventListener('webglcontextlost', (event) => {
+            event.stopImmediatePropagation();
+            if (gone) return;
+            gone = true;
+            // the ticker exists once the app is made, and a context can go away before that
+            app.ticker?.stop();
+            lost();
+        });
         await app.init({
+            canvas,
             resizeTo: host,
             background: BACKGROUND,
             preference: 'webgl',
@@ -112,6 +133,8 @@ export class Scene {
             autoDensity: true,
             resolution: Math.min(window.devicePixelRatio, 2),
         });
+        // Pixi draws on a lost context and throws when it compiles a shader there
+        if (gone) app.ticker.stop();
         host.append(app.canvas);
 
         return new Scene(app);
@@ -240,9 +263,14 @@ export class Scene {
 
     /** Frames every skeleton. */
     fit(): void {
-        // room for the readout above and the labels below
-        if (this.entries.length > 0)
-            this.camera.fit(this.world, { top: this.topInset + 16, right: 32, bottom: 72, left: 32 }, true);
+        // room for the readout above, and the labels and the buttons of the page below
+        if (this.entries.length > 0) {
+            this.camera.fit(
+                this.world,
+                { top: this.topInset + 16, right: 32, bottom: 72 + this.bottomInset, left: 32 },
+                true,
+            );
+        }
     }
 
     /** Frames one skeleton. */
@@ -280,7 +308,7 @@ export class Scene {
         }
     }
 
-    /** Takes a skeleton away. */
+    /** Takes a skeleton away. Its asset is unused once no other skeleton has it. */
     remove(entry: Entry): void {
         const at = this.entries.indexOf(entry);
 
@@ -289,11 +317,22 @@ export class Scene {
         this.entries.splice(at, 1);
         entry.spine.destroy();
         entry.label.destroy();
+        if (!this.entries.some((other) => other.asset === entry.asset)) this.onUnused(entry.asset);
     }
 
     /** Takes every skeleton away. */
     clear(): void {
         for (const entry of [...this.entries]) this.remove(entry);
+    }
+
+    /** Takes every skeleton away and frees the app. */
+    destroy(): void {
+        this.clear();
+        const webgl = 'gl' in this.app.renderer ? this.app.renderer : null;
+
+        // Pixi loses the context when it destroys a renderer. A browser warns when that is asked of a lost one
+        if (webgl?.gl.isContextLost()) Reflect.set(webgl.context.extensions, 'loseContext', null);
+        this.app.destroy({ removeView: true }, { children: true });
     }
 
     /** Selects a skeleton, or none. The gizmo follows the selection. */

@@ -35,6 +35,34 @@ export interface Sorted {
     ignored: number;
 }
 
+/**
+ * The largest file of each kind the playground reads, in bytes, so that a wrong file does not
+ * fill the memory of the tab. An atlas is text of some kilobytes, and the skeletons of a big
+ * game stay far below these.
+ */
+export const MOST_BYTES = {
+    atlas: 2 * 1024 * 1024,
+    json: 64 * 1024 * 1024,
+    skel: 32 * 1024 * 1024,
+    image: 64 * 1024 * 1024,
+} as const;
+/** The most pixels a page image may have, 8192 by 8192, which take 256 MB once decoded. */
+export const MOST_PIXELS = 8192 * 8192;
+
+/** A size in bytes as people read it, as in 2 MB and 600 KB. */
+export function sizeText(bytes: number): string {
+    if (bytes >= 1024 * 1024) return `${Number((bytes / 1024 / 1024).toFixed(1))} MB`;
+
+    return `${Math.ceil(bytes / 1024)} KB`;
+}
+
+/** Says why a file is too large to read, or null for a file within its limit. */
+export function tooLarge({ file, path }: PickedFile, kind: keyof typeof MOST_BYTES, what: string): string | null {
+    if (file.size <= MOST_BYTES[kind]) return null;
+
+    return `${path} is ${sizeText(file.size)}. The playground reads ${what} of up to ${sizeText(MOST_BYTES[kind])}.`;
+}
+
 const IMAGE = /\.(png|jpe?g|webp|avif)$/i;
 const ATLAS = /\.atlas(\.txt)?$/i;
 const SKEL = /\.skel(\.bytes)?$/i;
@@ -52,8 +80,14 @@ const stemOf = (path: string): string =>
         .replace(/\.(skel\.bytes|atlas\.txt|skel|atlas|json|png|jpe?g|webp|avif)$/i, '')
         .toLowerCase();
 
-/** The files of a file list, as a drop without folder entries hands them over. */
-function fromFileList(list: FileList): PickedFile[] {
+/**
+ * The files of a file list, as a file picker, a folder picker or a drop without folder entries
+ * hands them over. A folder picker gives each file its path below the folder.
+ *
+ * @example
+ * input.addEventListener('change', () => console.log(fromFileList(input.files)));
+ */
+export function fromFileList(list: FileList): PickedFile[] {
     return Array.from(list, (file) => ({ file, path: file.webkitRelativePath || file.name }));
 }
 
@@ -205,7 +239,9 @@ async function matchRig(skeleton: PickedFile, name: string, kinds: Kinds): Promi
         return { name, reason };
     }
     let pages = kinds.pagesOf.get(atlas);
+    const large = tooLarge(atlas, 'atlas', 'an atlas');
 
+    if (large !== null) return { name, reason: large };
     if (pages === undefined) {
         pages = pageNames(await atlas.file.text());
         kinds.pagesOf.set(atlas, pages);
