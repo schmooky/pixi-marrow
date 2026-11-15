@@ -1,4 +1,4 @@
-import type { EventKey } from '../../model/timelines';
+import type { Fired } from '../shared/fired';
 import {
     applyInherit,
     applyRelative,
@@ -147,7 +147,7 @@ export function slotIsActive(player: LegacyPlayer, slot: number): boolean {
 export function applyTimeline(
     player: LegacyPlayer,
     timeline: LegacyTimeline,
-    fired: EventKey[] | null,
+    fired: Fired | null,
     blend: number,
     direction: number,
 ): void {

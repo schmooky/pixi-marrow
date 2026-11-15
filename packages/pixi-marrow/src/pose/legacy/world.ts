@@ -1,6 +1,5 @@
 import { LOCAL_STRIDE, type PoseState, WORLD_STRIDE } from '../state';
 import {
-    COS_QUARTER,
     DEG_RAD,
     NO_ROTATION_OR_REFLECTION,
     NO_SCALE,
@@ -9,7 +8,9 @@ import {
     ONLY_TRANSLATION,
     QUARTER,
     RAD_DEG,
-    SIN_QUARTER,
+    START,
+    START_COS,
+    START_SIN,
 } from './math';
 
 /*
@@ -19,7 +20,7 @@ import {
  * Many bones of a rig are not turned. Their x axis is at an angle of 0 and their y axis at a
  * quarter turn. The cosine and the sine of those two angles are not computed: `Math.cos(0)` is 1
  * and `Math.sin(0)` is the 0 it is given, by the language, and those of the quarter turn are
- * `COS_QUARTER` and `SIN_QUARTER`. The results are the same numbers, bit for bit.
+ * in `START` of math.ts. The results are the same numbers, bit for bit.
  */
 
 /** Scratch of mode `noRotationOrReflection`: the parent matrix a, b, c, d without its rotation, then that rotation. */
@@ -37,8 +38,8 @@ function rootBone(pose: PoseState, local: Float64Array, o: number, w: number): v
     const ry = (rotation + 90 + Number(local[o + 6])) * DEG_RAD;
     let cosX = 1;
     let sinX = rx;
-    let cosY = COS_QUARTER;
-    let sinY = SIN_QUARTER;
+    let cosY = Number(START[START_COS]);
+    let sinY = Number(START[START_SIN]);
 
     if (rx !== 0) {
         cosX = Math.cos(rx);
@@ -78,8 +79,8 @@ function normalBone(local: Float64Array, world: Float64Array, o: number, w: numb
     const ry = (rotation + 90 + Number(local[o + 6])) * DEG_RAD;
     let cosX = 1;
     let sinX = rx;
-    let cosY = COS_QUARTER;
-    let sinY = SIN_QUARTER;
+    let cosY = Number(START[START_COS]);
+    let sinY = Number(START[START_SIN]);
 
     if (rx !== 0) {
         cosX = Math.cos(rx);
@@ -109,8 +110,8 @@ function onlyTranslationBone(local: Float64Array, world: Float64Array, o: number
     const ry = (rotation + 90 + Number(local[o + 6])) * DEG_RAD;
     let cosX = 1;
     let sinX = rx;
-    let cosY = COS_QUARTER;
-    let sinY = SIN_QUARTER;
+    let cosY = Number(START[START_COS]);
+    let sinY = Number(START[START_SIN]);
 
     if (rx !== 0) {
         cosX = Math.cos(rx);
@@ -239,8 +240,8 @@ function noScaleBone(pose: PoseState, local: Float64Array, o: number, w: number,
     const shearY = (90 + Number(local[o + 6])) * DEG_RAD;
     let cosX = 1;
     let sinX = shearX;
-    let cosY = COS_QUARTER;
-    let sinY = SIN_QUARTER;
+    let cosY = Number(START[START_COS]);
+    let sinY = Number(START[START_SIN]);
 
     if (shearX !== 0) {
         cosX = Math.cos(shearX);

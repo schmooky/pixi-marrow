@@ -1,5 +1,6 @@
 import type { EventKey } from '../../model/timelines';
 import type { PoseEvent, PoseEventType } from '../engine';
+import { createFired, type Fired } from '../shared/fired';
 import { Entry } from './entry';
 import type { Pose43 } from './types';
 
@@ -25,15 +26,19 @@ export interface Player43 {
     /** The official `attachmentState` of each slot. */
     readonly attachmentStates: Float64Array;
     /** The events the timelines of one entry fired, until they are queued. */
-    readonly fired: EventKey[];
+    readonly fired: Fired;
     /** True when entries started or ended since the timeline modes were computed. */
     animationsChanged: boolean;
     /** Entries that ended, for reuse. The official `trackEntryPool`. */
     readonly pool: Entry[];
-    /** The official `EventQueue`, as three lists of the same length. */
+    /**
+     * The official `EventQueue`, as three lists. Only the first `queueCount` places are queued. The
+     * lists keep their room when the queue is emptied: see `Fired`.
+     */
     readonly queueTypes: number[];
     readonly queueEntries: Entry[];
     readonly queueKeys: (EventKey | null)[];
+    queueCount: number;
     drainDisabled: boolean;
     /** The listener calls since the last `takeEvents`. */
     listened: PoseEvent[];
@@ -58,12 +63,13 @@ export function createPlayer(pose: Pose43): Player43 {
         mixes: new Map(),
         unkeyedState: 0,
         attachmentStates: new Float64Array(pose.rig.model.slots.count),
-        fired: [],
+        fired: createFired(),
         animationsChanged: false,
         pool: [],
         queueTypes: [],
         queueEntries: [],
         queueKeys: [],
+        queueCount: 0,
         drainDisabled: false,
         listened: [],
         rested: null,
@@ -78,9 +84,11 @@ export function obtainEntry(player: Player43): Entry {
 }
 
 function push(player: Player43, type: number, entry: Entry, key: EventKey | null): void {
-    player.queueTypes.push(type);
-    player.queueEntries.push(entry);
-    player.queueKeys.push(key);
+    const at = player.queueCount++;
+
+    player.queueTypes[at] = type;
+    player.queueEntries[at] = entry;
+    player.queueKeys[at] = key;
 }
 
 /** Queues the `start` call of an entry. */
@@ -172,14 +180,12 @@ export function drain(player: Player43): void {
     const { queueTypes, queueEntries, queueKeys } = player;
 
     // most updates queue nothing: setting the length of an empty list is not free
-    if (player.drainDisabled || queueTypes.length === 0) return;
+    if (player.drainDisabled || player.queueCount === 0) return;
 
-    for (let i = 0; i < queueTypes.length; i++) {
+    for (let i = 0; i < player.queueCount; i++) {
         const entry = queueEntries[i];
 
         if (entry !== undefined) report(player, queueTypes[i] ?? EVENT, entry, queueKeys[i] ?? null);
     }
-    queueTypes.length = 0;
-    queueEntries.length = 0;
-    queueKeys.length = 0;
+    player.queueCount = 0;
 }

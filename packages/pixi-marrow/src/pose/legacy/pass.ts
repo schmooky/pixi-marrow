@@ -2,7 +2,7 @@ import { LOCAL_STRIDE, type PoseState, WORLD_STRIDE } from '../state';
 import { C_IK, C_PATH, C_PHYSICS, C_TRANSFORM, type LegacyConstraint } from './constraints';
 import { SHARED, STAMP, STAMPED } from './curves';
 import { solveIk } from './ik';
-import { COS_QUARTER, DEG_RAD, NORMAL, QUARTER, SIN_QUARTER } from './math';
+import { DEG_RAD, NORMAL, QUARTER, START, START_COS, START_SIN } from './math';
 import { solvePath } from './path';
 import { solvePhysics } from './physics';
 import { physicsStays, restEveryPhysics, restPhysics, watchPhysics } from './physics-rest';
@@ -87,8 +87,12 @@ function kept(world: Float64Array, w: number): boolean {
     return true;
 }
 
-/** True when what the entry at cache position `i` reads has changed in this update. `stamp` is the version of the update. */
-function entryNeeds(solver: Solver, i: number, entry: number, stamp: number): boolean {
+/**
+ * True when what the entry at cache position `i` reads has changed in this update. The functions
+ * of a pass read the version of the update from `SHARED`: as an argument it would be allocated.
+ */
+function entryNeeds(solver: Solver, i: number, entry: number): boolean {
+    const stamp = Number(SHARED[STAMP]);
     const { pose, moved, noted, rig } = solver;
     const { boneStamps } = pose;
     const { readStart, reads } = solver.cache.groups;
@@ -126,7 +130,8 @@ function solveConstraint(solver: Solver, constraint: LegacyConstraint): void {
  * group runs again in the next update. After its last entry the group ends: it has to run in the
  * next update when this run changed something.
  */
-function endEntry(solver: Solver, i: number, group: number, stamp: number, entry: number): void {
+function endEntry(solver: Solver, i: number, group: number, entry: number): void {
+    const stamp = Number(SHARED[STAMP]);
     const { world, boneStamps } = solver.pose;
     const { settleStart, settled, last, entryStart } = solver.cache.groups;
     // a list is asked only for a place it can have: a miss below zero is slow
@@ -153,7 +158,7 @@ function endEntry(solver: Solver, i: number, group: number, stamp: number, entry
 }
 
 /** Runs the entry of a group at cache position `i`, as the official update would. */
-function runEntry(solver: Solver, i: number, group: number, stamp: number): void {
+function runEntry(solver: Solver, i: number, group: number): void {
     const { rig, pose } = solver;
     const entry = Number(solver.cache.entries[i]);
     const constraint = entry < 0 ? rig.plan.constraints[-1 - entry] : undefined;
@@ -161,7 +166,7 @@ function runEntry(solver: Solver, i: number, group: number, stamp: number): void
     if (asking && constraint?.kind === C_PHYSICS) watchPhysics(solver, constraint);
     if (constraint !== undefined) solveConstraint(solver, constraint);
     else updateBone(pose, solver.applied, rig.model.bones.parents, entry, rig.v41);
-    if (solver.cache.groups.checks[i] !== 0) endEntry(solver, i, group, stamp, entry);
+    if (solver.cache.groups.checks[i] !== 0) endEntry(solver, i, group, entry);
 }
 
 /**
@@ -170,7 +175,8 @@ function runEntry(solver: Solver, i: number, group: number, stamp: number): void
  * new stamp. Those of a group with a physics constraint do not: their world transforms are kept
  * to compare with.
  */
-function startGroup(solver: Solver, group: number, i: number, stamp: number): void {
+function startGroup(solver: Solver, group: number, i: number): void {
+    const stamp = Number(SHARED[STAMP]);
     const { applied, pose, moved } = solver;
     const { local, world, boneStamps } = pose;
     const { boneStart, bones, entryStart, entries } = solver.cache.groups;
@@ -196,7 +202,7 @@ function startGroup(solver: Solver, group: number, i: number, stamp: number): vo
     ran[group] = passId;
     changed[group] = 0;
     for (let at = Number(entryStart[group]); Number(entries[at]) < i; at++) {
-        runEntry(solver, Number(entries[at]), group, stamp);
+        runEntry(solver, Number(entries[at]), group);
         worked++;
     }
 }
@@ -206,11 +212,11 @@ function startGroup(solver: Solver, group: number, i: number, stamp: number): vo
  * starts it. A group at rest starts when the entry reads something new. The entries before it
  * read nothing new. A group that stays at rest to its last entry has the time of its physics counted.
  */
-function groupStarts(solver: Solver, group: number, i: number, entry: number, stamp: number): boolean {
+function groupStarts(solver: Solver, group: number, i: number, entry: number): boolean {
     const { physicsStart, physics, last } = solver.cache.groups;
 
-    if (solver.restless[group] !== 0 || entryNeeds(solver, i, entry, stamp)) {
-        startGroup(solver, group, i, stamp);
+    if (solver.restless[group] !== 0 || entryNeeds(solver, i, entry)) {
+        startGroup(solver, group, i);
 
         return true;
     }
@@ -283,7 +289,7 @@ function poseChanges(solver: Solver): void {
         const from = group >= 0 ? applied : local;
 
         if (group >= 0) {
-            if (ran[group] !== passId && !groupStarts(solver, group, i, entry, stamp)) continue;
+            if (ran[group] !== passId && !groupStarts(solver, group, i, entry)) continue;
         } else if (moved[entry + 1] === 0 && (parent < 0 || boneStamps[parent] !== stamp)) {
             continue;
         } else {
@@ -293,7 +299,7 @@ function poseChanges(solver: Solver): void {
         }
         worked++;
         if (entry < 0 || parent < 0 || inherit[entry] !== NORMAL) {
-            if (group >= 0) runEntry(solver, i, group, stamp);
+            if (group >= 0) runEntry(solver, i, group);
             else updateBone(pose, local, parents, entry, rig.v41);
             continue;
         }
@@ -312,8 +318,8 @@ function poseChanges(solver: Solver): void {
         const ry = (rotation + 90 + Number(from[o + 6])) * DEG_RAD;
         let cosX = 1;
         let sinX = rx;
-        let cosY = COS_QUARTER;
-        let sinY = SIN_QUARTER;
+        let cosY = Number(START[START_COS]);
+        let sinY = Number(START[START_SIN]);
 
         if (rx !== 0) {
             cosX = Math.cos(rx);
@@ -334,7 +340,7 @@ function poseChanges(solver: Solver): void {
         world[w + 1] = pa * lb + pb * ld;
         world[w + 2] = pc * la + pd * lc;
         world[w + 3] = pc * lb + pd * ld;
-        if (group >= 0 && checks[i] !== 0) endEntry(solver, i, group, stamp, entry);
+        if (group >= 0 && checks[i] !== 0) endEntry(solver, i, group, entry);
     }
     if (free > 0) SHARED[STAMPED] = 1;
     moved[0] = 0;
@@ -349,7 +355,8 @@ function poseChanges(solver: Solver): void {
 }
 
 /** Stamps the bones whose world transform is not the one that was saved before the pass. */
-function stampChanged(pose: PoseState, stamp: number): void {
+function stampChanged(pose: PoseState): void {
+    const stamp = Number(SHARED[STAMP]);
     const { world, boneStamps } = pose;
 
     for (let bone = 0, w = 0, n = world.length; w < n; bone++, w += WORLD_STRIDE) {
@@ -415,8 +422,8 @@ function poseAll(solver: Solver, compares: boolean): void {
         const ry = (rotation + 90 + Number(applied[o + 6])) * DEG_RAD;
         let cosX = 1;
         let sinX = rx;
-        let cosY = COS_QUARTER;
-        let sinY = SIN_QUARTER;
+        let cosY = Number(START[START_COS]);
+        let sinY = Number(START[START_SIN]);
 
         if (rx !== 0) {
             cosX = Math.cos(rx);
@@ -438,7 +445,7 @@ function poseAll(solver: Solver, compares: boolean): void {
         world[w + 2] = pc * la + pd * lc;
         world[w + 3] = pc * lb + pd * ld;
     }
-    if (compares) stampChanged(pose, stamp);
+    if (compares) stampChanged(pose);
     else {
         for (let at = 0, n = unlisted.length; at < n; at++) boneStamps[Number(unlisted[at])] = stamp;
         SHARED[STAMPED] = 1;

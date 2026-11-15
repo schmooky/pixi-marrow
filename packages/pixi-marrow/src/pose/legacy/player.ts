@@ -1,6 +1,7 @@
 import { MarrowError } from '../../base/errors';
 import type { EventKey } from '../../model/timelines';
 import type { PoseEvent, PoseEventType } from '../engine';
+import { createFired, type Fired } from '../shared/fired';
 import type { PoseState } from '../state';
 import { LegacyEntry } from './entry';
 import { clipOf, type Rig } from './rig';
@@ -44,7 +45,7 @@ export class LegacyPlayer {
     /** The official `Slot.attachmentState` of each slot. */
     readonly attachmentState: Float64Array;
     /** The events the timelines of one entry fired. Emptied after each entry. */
-    readonly fired: EventKey[] = [];
+    readonly fired: Fired = createFired();
     /** The listener calls since the last `takeEvents`. */
     events: PoseEvent[] = [];
     /** Scratch: the property ids seen while hold modes are computed. */

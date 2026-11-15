@@ -1,7 +1,7 @@
 import { LOCAL_STRIDE, WORLD_STRIDE } from '../state';
 import { CONSTRAINT_STRIDE, IK_BEND, IK_MIX, IK_SOFTNESS, IK_STRETCH, type LegacyConstraint } from './constraints';
 import { ik1, noParent } from './ik1';
-import { NORMAL, PI, RAD_DEG } from './math';
+import { NORMAL, RAD_DEG, START, START_PI } from './math';
 import type { Solver } from './solver';
 import { updateBone } from './world';
 
@@ -228,7 +228,7 @@ function ik2EllipseEnds(solver: Solver, constraint: LegacyConstraint): void {
     const a = Number(t[PSX]) * l2;
     const b = Number(t[PSY]) * l2;
     const ta = Math.atan2(Number(t[TY2]), Number(t[TX2]));
-    let minAngle = PI;
+    let minAngle = Number(START[START_PI]);
     let minX = l1 - a;
     let minDist = minX * minX;
     let minY = 0;

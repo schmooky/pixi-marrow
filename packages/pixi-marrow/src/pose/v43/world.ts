@@ -1,6 +1,5 @@
 import { LOCAL_STRIDE, type PoseState, WORLD_STRIDE } from '../state';
 import {
-    COS_QUARTER,
     DEG_RAD,
     EPSILON2,
     NO_ROTATION_OR_REFLECTION,
@@ -9,7 +8,9 @@ import {
     ONLY_TRANSLATION,
     QUARTER,
     RAD_DEG,
-    SIN_QUARTER,
+    START,
+    START_COS,
+    START_SIN,
 } from './math';
 
 /*
@@ -20,7 +21,7 @@ import {
  * Many bones of a rig are not turned. Their x axis is at an angle of 0 and their y axis at a
  * quarter turn. The cosine and the sine of those two angles are not computed: `Math.cos(0)` is 1
  * and `Math.sin(0)` is the 0 it is given, by the language, and those of the quarter turn are
- * `COS_QUARTER` and `SIN_QUARTER`. The results are the same numbers, bit for bit.
+ * in `START` of math.ts. The results are the same numbers, bit for bit.
  */
 
 /** Writes a, b, c, d of a bone that takes its rotation, scale and shear from its own numbers alone. */
@@ -37,8 +38,8 @@ function writeOwnAxes(state: PoseState, local: Float64Array, bone: number): void
     const ry = (rotation + 90 + Number(local[l + 6])) * DEG_RAD;
     let cosX = 1;
     let sinX = rx;
-    let cosY = COS_QUARTER;
-    let sinY = SIN_QUARTER;
+    let cosY = Number(START[START_COS]);
+    let sinY = Number(START[START_SIN]);
 
     if (rx !== 0) {
         cosX = Math.cos(rx);
@@ -140,8 +141,8 @@ function inheritNoScale(
     let sin = r;
     let cosX = 1;
     let sinX = rx;
-    let cosY = COS_QUARTER;
-    let sinY = SIN_QUARTER;
+    let cosY = Number(START[START_COS]);
+    let sinY = Number(START[START_SIN]);
 
     if (r !== 0) {
         cos = Math.cos(r);

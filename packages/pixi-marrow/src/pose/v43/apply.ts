@@ -1,5 +1,5 @@
 import type { AttachmentData } from '../../model/attachments';
-import type { EventKey } from '../../model/timelines';
+import type { Fired } from '../shared/fired';
 import { LOCAL_STRIDE } from '../state';
 import { eventsReverse, queueEvents } from './apply-events';
 import {
@@ -175,7 +175,7 @@ function noteBones(pose: Pose43, entry: Entry): void {
 }
 
 /** Applies an entry on track 0 at full alpha: every timeline replaces the setup pose. */
-function applyFromSetup(player: Player43, entry: Entry, events: EventKey[] | null): void {
+function applyFromSetup(player: Player43, entry: Entry, events: Fired | null): void {
     const pose = player.pose;
     const timelines = entry.clip.timelines;
 
@@ -191,7 +191,7 @@ function applyFromSetup(player: Player43, entry: Entry, events: EventKey[] | nul
 }
 
 /** Applies the current entry of a track with the modes of its timelines, at the alpha in `SHARED`. */
-function applyMixed(player: Player43, entry: Entry, events: EventKey[] | null): void {
+function applyMixed(player: Player43, entry: Entry, events: Fired | null): void {
     const pose = player.pose;
     const timelines = entry.clip.timelines;
     const count = timelines.length;
@@ -254,7 +254,7 @@ function leavesDrawOrder(timeline: Timeline43, mode: number, drawOrder: boolean)
 function applyMixedOut(
     player: Player43,
     from: Entry,
-    events: EventKey[] | null,
+    events: Fired | null,
     attachments: boolean,
     drawOrder: boolean,
 ): void {
@@ -356,7 +356,7 @@ function applyMixingFrom(player: Player43, to: Entry, from: Entry): void {
     if (to.mixDuration > 0) {
         if (from.reverse && fires) eventsReverse(player, from);
         queueEvents(player, from);
-    } else if (player.fired.length > 0) player.fired.length = 0;
+    } else player.fired.count = 0;
     from.nextAnimationLast = Number(SHARED[ANIMATION_TIME]);
     from.nextTrackLast = from.trackTime;
 }
