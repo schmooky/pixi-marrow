@@ -1,8 +1,8 @@
-import { type Batch, type BatchableElement, extensions, type InstructionSet, type Renderer, VERSION } from 'pixi.js';
+import { type Batch, type BatchableElement, extensions, type InstructionSet, type Renderer } from 'pixi.js';
 import type { BatchBody } from './batch-body';
 import { BatchElement, PIPE_ID } from './batch-element';
 import type { ImageBody } from './batch-image';
-import { uploadsStretch } from './batch-upload';
+import { AT_ONCE } from './batch-upload';
 import { MarrowBatcher } from './batcher';
 import { contextLost, watchContext } from './context-watch';
 import { MarrowDarkBatcher } from './dark-batcher';
@@ -27,9 +27,6 @@ export interface BatchTail {
 
 /** Whether a body is the one of an image, see `batch-image.ts`. Its class loads with the idle cache. */
 const isImageBody = (body: BatchBody | ImageBody): body is ImageBody => 'quad' in body.element;
-
-/** Whether the buffers of this Pixi upload at once when a batcher tells them what changed. */
-const AT_ONCE = uploadsStretch(VERSION);
 
 /** True once the batchers are among the extensions of Pixi. */
 let registered = false;

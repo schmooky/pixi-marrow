@@ -18,7 +18,7 @@ import { BATCHER, BatchElement, type BatchHome, type BatchPart, DARK_BATCHER, PI
 import type { ImageElement } from './batch-image';
 import { GROUP_PAGES, POSITION_WORDS, STATIC_WORDS } from './batch-layout';
 import { createBatchShader } from './batch-shader';
-import { PendingUpload } from './batch-upload';
+import { AT_ONCE, PendingUpload } from './batch-upload';
 
 /*
  * The batcher of the batched mode. Pixi creates one per render group when the first skeleton of
@@ -150,9 +150,10 @@ export class MarrowBatcher extends Batcher implements BatchHome {
         super.begin();
         this.serial++;
         this.used = 0;
-        // Pixi uploads the positions and the indices at the end of a build
-        this.positionsPending.clear();
-        this.indicesPending.clear();
+        // Pixi tells the positions and the indices to upload whole at the end of a build. Where that
+        // waits until they are bound, a stretch that a skeleton notes before would take its place
+        this.positionsPending.clear(!AT_ONCE);
+        this.indicesPending.clear(!AT_ONCE);
         this.pending.fill(undefined, 0, this.waiting);
         this.waiting = 0;
     }

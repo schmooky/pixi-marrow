@@ -1,6 +1,7 @@
 import { Container } from 'pixi.js';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { nextVersion } from '../../src/pose/state';
+import { POSITIONS_CHANGED } from '../../src/render/batch-pack';
 import { loadMeshCode } from '../../src/render/mesh-code';
 import { expectBatch, loadFamily } from './batch-check';
 import { batcherOf, createStage, elementOf, watchUploads } from './batch-stage';
@@ -230,6 +231,44 @@ describe('what a batch uploads for small changes', () => {
         stage.render();
         expect(uploads.positions).toBe(1);
         expect(uploads.positionBytes).toBeLessThanOrEqual(elementOf(rig.view).attributeSize * 8);
+    });
+
+    it('uploads a buffer whole after a build, also when a skeleton writes a stretch before it is bound', async () => {
+        const { stage, rigs } = await crowd(4);
+        const rig = rigs[1];
+
+        if (rig === undefined) throw new Error('no rig');
+        const batcher = batcherOf(rig.view);
+        const [positions] = batcher.geometry.buffers;
+        const told: [number, number][] = [];
+
+        if (positions === undefined) throw new Error('no positions');
+        const update = positions.update.bind(positions);
+
+        positions.update = (size?: number, offset?: number): void => {
+            told.push([offset ?? 0, size ?? positions.data.byteLength]);
+            update(size, offset);
+        };
+        // a build, and in the same frame a skeleton that moves when Pixi is about to draw it
+        rigs[3]?.view.container.removeFromParent();
+        const { beforeDraw } = rig.view;
+
+        rig.view.beforeDraw = (bends): void => {
+            const element = elementOf(rig.view);
+            const entry = rig.view.parts.seen.list[2] ?? 0;
+
+            // as a pose that placed one slot again
+            element.state[element.changedAt + entry] = POSITIONS_CHANGED;
+            element.dirty = true;
+            beforeDraw.call(rig.view, bends);
+        };
+        stage.render();
+        rig.view.beforeDraw = beforeDraw;
+        expect(stage.counts.builds).toBe(2);
+        // A WebGL buffer before pixi.js 8.23 keeps the last stretch it was told until it is bound:
+        // that must be all of the buffer, or the skeletons the build moved would keep old vertices
+        if (!RANGED_UPLOADS) expect(told.at(-1)).toEqual([0, batcher.attributeSize * 4]);
+        expect(told.some(([from, size]) => from === 0 && size === batcher.attributeSize * 4)).toBe(true);
     });
 
     it('keeps a skeleton that shows nothing in its batch, so that Pixi builds nothing again', async () => {

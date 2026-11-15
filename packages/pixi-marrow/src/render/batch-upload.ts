@@ -1,4 +1,4 @@
-import type { Buffer } from 'pixi.js';
+import { type Buffer, VERSION } from 'pixi.js';
 
 /*
  * What a batch buffer has to upload before the next draw. Skeletons change their static vertex
@@ -34,6 +34,9 @@ export function uploadsStretch(version: string): boolean {
     return major > 8 || (major === 8 && minor >= AT_ONCE_MINOR);
 }
 
+/** What {@link uploadsStretch} says about the Pixi that is installed. */
+export const AT_ONCE: boolean = uploadsStretch(VERSION);
+
 /**
  * The stretches of one buffer that changed since its last upload.
  *
@@ -59,9 +62,13 @@ export class PendingUpload {
         this.stretches[this.count++ * 2 + 1] = from + size;
     }
 
-    /** Forgets what was noted: the buffer was uploaded by other means. */
-    clear(): void {
-        this.whole = false;
+    /**
+     * Forgets what was noted: the buffer was uploaded by other means, or it uploads whole.
+     *
+     * @param whole Whether the whole buffer must upload.
+     */
+    clear(whole: boolean = false): void {
+        this.whole = whole;
         this.count = 0;
     }
 
