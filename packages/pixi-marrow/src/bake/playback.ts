@@ -1,7 +1,7 @@
 import type { SkeletonModel } from '../model/model';
 import type { PhysicsMode, PoseEngine, PoseEngineFactory, PoseSource, TrackEntry } from '../pose/engine';
 import type { PoseState } from '../pose/state';
-import { type BakedClip, SAMPLE_SLACK } from './clip';
+import type { BakedClip } from './clip';
 import { showsClipAttachments, writeFrame } from './frame';
 import { bakeWith } from './record';
 import { type Baker, bakesOf, type ModelBakes, type PreparedClip } from './store';
@@ -93,12 +93,15 @@ function timeOf(entry: TrackEntry, duration: number): void {
 /** The frame a prepared clip shows at the time in {@link TIME}: `frameAt`, written out. Returns a whole number only. */
 function frameOf(prepared: PreparedClip): number {
     const time = Number(TIME[0]);
-    const { last } = prepared;
+    const { last, fps, duration } = prepared;
 
-    if (time >= prepared.duration) return last;
-    const frame = Math.floor(time * prepared.fps + SAMPLE_SLACK);
+    if (time >= duration || last === 0) return last;
+    const frame = Math.round(time * fps);
 
-    return frame < 0 ? 0 : frame < last ? frame : last;
+    if (frame < last - 1) return frame > 0 ? frame : 0;
+
+    // the last frame is at the duration, which can be nearer to the frame before than 1 / fps
+    return time * 2 >= (last - 1) / fps + duration ? last : last - 1;
 }
 
 /**

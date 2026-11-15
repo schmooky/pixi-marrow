@@ -109,7 +109,8 @@ export interface MarrowSpineOptions {
      *
      * Events, loops, time scales, reverse and the `start` and `end` options stay as without
      * baking. At a sample time the pose equals the played one, rounded to 32 bits. Between two
-     * samples the frame before is shown. While baked frames play, `bone(name)` reads the local
+     * samples the nearer frame is shown, so a display of 60 Hz shows each frame once whatever the
+     * jitter of its ticks. While baked frames play, `bone(name)` reads the local
      * values of the last update the engine posed. Its world values are those of the frame.
      */
     bake?: PerfSettings['bake'];

@@ -5,7 +5,7 @@
  * value of a slot that never changes.
  *
  * The numbers are 32-bit. Played back, a frame equals the pose the engine gives at its time,
- * rounded to 32 bits. Between two frames the frame before is shown.
+ * rounded to 32 bits. Between two frames the nearer one is shown.
  *
  * Frame `k` is at `k / fps` seconds into the animation, for every `k` below `duration * fps`.
  * The last frame is at `duration`.
@@ -70,9 +70,6 @@ export interface BakedClip {
     readonly drawOrderFrames: Uint16Array;
 }
 
-/** How far below a sample time a time may be and still show that sample, in frames. It absorbs the sum of many steps. */
-export const SAMPLE_SLACK = 1e-4;
-
 /**
  * How many frames a clip of this duration has at this rate: one per sample time below the
  * duration, and one at the duration.
@@ -85,20 +82,28 @@ export function frameCount(duration: number, fps: number): number {
 }
 
 /**
- * The frame a clip shows at a time of its animation: the last frame at or after the duration,
- * else the nearest sample at or before the time. A time a little below a sample counts as that
- * sample, see {@link SAMPLE_SLACK}, so that the sum of many steps of `1 / fps` finds its frame.
+ * The frame a clip shows at a time of its animation: the sample nearest to the time. The last
+ * frame is at the duration, which can be nearer to the frame before it than `1 / fps`. A time
+ * at or after the duration shows the last frame, and a time before 0 the first.
+ *
+ * The nearest sample, and not the one at or before the time, keeps the steps of a display in
+ * step with the frames. A tick of 60 Hz lands on a sample of 60 frames per second, give or take
+ * the jitter of the timestamps. The frame before would then show one frame twice and skip the next.
  *
  * @example
  * frameAt(clip, 0.5); // 30 for a clip of 60 frames per second
  */
 export function frameAt(clip: Pick<BakedClip, 'frames' | 'duration' | 'fps'>, time: number): number {
+    const { fps, duration } = clip;
     const last = clip.frames - 1;
 
-    if (time >= clip.duration) return last;
-    const frame = Math.floor(time * clip.fps + SAMPLE_SLACK);
+    if (time >= duration || last === 0) return last;
+    const frame = Math.round(time * fps);
 
-    return frame < 0 ? 0 : frame < last ? frame : last;
+    if (frame < last - 1) return frame > 0 ? frame : 0;
+
+    // the last frame is at the duration, which can be nearer to the frame before than 1 / fps
+    return time * 2 >= (last - 1) / fps + duration ? last : last - 1;
 }
 
 /**
