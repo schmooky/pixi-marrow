@@ -36,4 +36,4 @@ When no code can run in the page, ask for `JSON.stringify(__PIXI_MARROW__.tree()
 - Skeletons that draw next to each other share draw calls. Another display object between them ends the batch.
 - A container that moves or fades above batched skeletons must be a render group: `isRenderGroup: true`.
 - A skeleton at rest costs close to nothing. Check `inspect(hero).frame.uploadBytes`, which is 0 after a frame at rest.
-- The ids `MARROW001` to `MARROW026` are stable. `node_modules/pixi-marrow/perf-rules.json` holds them as data.
+- The ids `MARROW001` to `MARROW025` are stable. `node_modules/pixi-marrow/perf-rules.json` holds them as data.

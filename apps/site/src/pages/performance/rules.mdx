@@ -83,7 +83,6 @@ pixi-marrow rules --json
 | [MARROW023](#marrow023) | The runtime builds the vertex layout again and again | `warn` | two looks |
 | [MARROW024](#marrow024) | More mesh draws on WebGPU than the shared uniform buffer of Pixi holds | `info` | one look |
 | [MARROW025](#marrow025) | A Spine 4.3 track changes its animation faster than the mix | `warn` | two looks |
-| [MARROW026](#marrow026) | Uploads are larger on pixi.js before 8.23 with WebGL | `info` | one look |
 
 ## MARROW001
 
@@ -435,16 +434,10 @@ pixi-marrow rules --json
 | Check | The `start` events of the skeleton outnumber its `end` events from frame to frame. |
 | Fix | Let a mix end before the next change, or change with `mix: 0`. |
 
-## MARROW026
+## Retired rules
 
-**Uploads are larger on pixi.js before 8.23 with WebGL.** Its short name is `whole-buffer-upload-floor`, and its level is `info`.
+A retired rule can no longer hit. Its id stays reserved, and no later rule takes it.
 
-| What | Details |
-| --- | --- |
-| Cost | bytes sent to the GPU |
-| Found by | one look |
-| Pattern | The game runs pixi.js 8.21 or 8.22 on WebGL2, and 8 or more batched skeletons draw. |
-| Runtime | Before pixi.js 8.23 a WebGL buffer keeps one stretch until Pixi binds it. So each buffer uploads one stretch, from the first change to the last. A data texture of `skinning: 'gpu'` uploads whole. From 8.23 the runtime uploads each stretch that changed. |
-| Source | `src/render/batch-upload.ts` |
-| Check | The tree dump states the pixi.js version and the renderer. |
-| Fix | Use pixi.js 8.23 or later, or WebGPU. |
+### MARROW026
+
+**Uploads are larger on pixi.js before 8.23 with WebGL.** Retired. The floor is pixi.js 8.23, so no game can run the older versions.
