@@ -30,11 +30,12 @@ export interface PerfSettings {
      */
     instancing: 'auto' | 'off';
     /**
-     * `auto` plays an animation from frames baked at load time, where it can be: one track, no
-     * mix, no physics, no handle that writes a bone. The pose equals the played one at the
-     * baked frames. A list bakes the named animations only. A baked clip keeps 23 KB to 0.9 MB per
-     * animation and skin for the life of the asset, so it is set by name. `off` (the default)
-     * bakes nothing.
+     * `auto` plays an animation from baked frames where it can be: one track, no mix, no entry
+     * queued after it, no physics, no handle that writes a bone. The first time an animation can
+     * play baked, its clip is baked in idle time, and the skeleton plays live until the clip is
+     * there. The pose equals the played one at the baked frames. A list bakes the named
+     * animations only. A clip keeps 23 KB to 0.9 MB per animation and skin, more for a longer
+     * animation, for the life of the asset. So it is set by name. `off` (the default) bakes nothing.
      */
     bake: BakeMode;
     /**

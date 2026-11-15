@@ -3,13 +3,16 @@ import type { PhysicsMode, PoseEngine, PoseEngineFactory, PoseSource, TrackEntry
 import type { PoseState } from '../pose/state';
 import type { BakedClip } from './clip';
 import { showsClipAttachments, writeFrame } from './frame';
-import { bakeWith } from './record';
+import { bakeInIdleTime, type SteppedWork } from './later';
+import { recordClip } from './record';
 import { type Baker, bakesOf, type ModelBakes, type PreparedClip } from './store';
 
 /** What baked playback needs of an asset: its model and the factory of its engines. A `MarrowAsset` is one. */
 export interface BakeHost {
     readonly model: SkeletonModel;
     readonly createEngine: PoseEngineFactory;
+    /** Runs the steps of a bake outside the frame. Default: in idle time, see `bakeInIdleTime`. */
+    readonly bakeLater?: (work: SteppedWork) => void;
 }
 
 /** How a baked display object fared so far, for the perf report. */
@@ -139,17 +142,32 @@ class BakedPlayback implements PoseSource, BakeTally {
 
     constructor(host: BakeHost, engine: PoseEngine, allowed: readonly number[] | null) {
         const { model, createEngine } = host;
+        const later = host.bakeLater ?? bakeInIdleTime;
         const { state } = engine;
 
         this.engine = engine;
         this.bakes = bakesOf(model);
         this.allowed = allowed === null ? null : new Set(allowed);
         // a clip is baked where the first instance that plays it stands, and shared
-        this.baker = (animation, skins) =>
-            bakeWith(createEngine, model, animation, {
+        this.baker = (animation, skins, done) => {
+            const recorder = recordClip(createEngine, model, animation, {
                 skins,
                 placement: [state.x, state.y, state.scaleX, state.scaleY],
             });
+
+            later({
+                step() {
+                    try {
+                        if (!recorder.step()) return false;
+                        if (recorder.clip !== undefined) done(recorder.clip);
+                    } catch (error) {
+                        done(error instanceof Error ? error : new Error(String(error)));
+                    }
+
+                    return true;
+                },
+            });
+        };
     }
 
     get bytes(): number {

@@ -37,9 +37,19 @@ export function modelOf(id: string): Promise<SkeletonModel> {
     return model;
 }
 
-/** An asset as baked playback sees it: the model and a factory of engines. */
+/**
+ * An asset as baked playback sees it: the model and a factory of engines. Its bakes run at once,
+ * in the update that asks for them, so that a test sees the clip in the next update. The bakes
+ * of a display object run in idle time, which `idle.test.ts` looks at.
+ */
 export async function hostOf(model: SkeletonModel): Promise<BakeHost> {
-    return { model, createEngine: await loadPoseEngine(model) };
+    return {
+        model,
+        createEngine: await loadPoseEngine(model),
+        bakeLater: (work) => {
+            while (!work.step());
+        },
+    };
 }
 
 /** An engine placed as a `MarrowSpine` places it, in the setup pose as its constructor leaves it. */
