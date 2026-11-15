@@ -33,7 +33,8 @@ export interface ViewStats {
      * Draw calls the view takes per frame at the moment. In the mesh mode they are its own: one
      * per range and two per clip mask. In the batched mode they are the batches it draws in,
      * which it shares with the skeletons next to it in the render group. That is 1 unless a
-     * slot multiplies or screens. A skeleton that shows nothing is in no batch and has 0.
+     * slot multiplies or screens. A skeleton that shows nothing has 0. Once it was in a batch it
+     * stays there with triangles without area, so that Pixi builds no instructions again.
      * Polygons and skipped slots never change this number.
      */
     drawCalls: number;
