@@ -77,9 +77,12 @@ export abstract class SpineLinks<N extends MarrowNames = MarrowNames> extends Co
     }
 
     /**
-     * The name of the active skin, or null for none. It is null too while several skins are
-     * active: read `skins` then. Setting a skin also puts the slots into their setup pose, as
-     * code with the official runtime does after `setSkin`.
+     * The name of the active skin, or null for none.
+     *
+     * While several skins are active it reads null: read and set `skins` then. Setting another
+     * skin also puts the slots into their setup pose, as code with the official runtime does
+     * after `setSkin`. Setting what it reads changes nothing, so `hero.skin = hero.skin` keeps
+     * several skins, and the attachments and colors that slot handles set. `skins = []` clears them.
      */
     get skin(): N['skins'] | null {
         const { engine, model } = this.parts();
@@ -92,6 +95,8 @@ export abstract class SpineLinks<N extends MarrowNames = MarrowNames> extends Co
     }
 
     set skin(name: N['skins'] | null) {
+        // the value it reads is the one that is active, null for several skins too
+        if (name === this.skin) return;
         this.skins = name === null ? [] : [name];
     }
 
@@ -101,9 +106,10 @@ export abstract class SpineLinks<N extends MarrowNames = MarrowNames> extends Co
      * holds the attachments, bones and constraints of all of them. Where two skins store an attachment under
      * one slot and name, the later one wins. An empty list is no skin.
      *
-     * Setting the list also puts the slots into their setup pose, as the `skin` setter does. Every
-     * instance of an asset shares the combined skin of a list. Throws a `MarrowError` that lists
-     * the skin names for a name the skeleton does not have.
+     * Setting another list also puts the slots into their setup pose, as the `skin` setter does.
+     * The list that is active, in the same order, changes nothing. Every instance of an asset
+     * shares the combined skin of a list. Throws a `MarrowError` that lists the skin names for a
+     * name the skeleton does not have.
      *
      * @example
      * hero.skins = ['body/girl', 'hair/long', 'outfit/knight'];
@@ -123,7 +129,11 @@ export abstract class SpineLinks<N extends MarrowNames = MarrowNames> extends Co
                 fix: "Pass an array of names, such as ['body', 'hat'], or [] for no skin.",
             });
         }
-        engine.setSkins(names.map((name) => namedIndex('skin', model.skins, String(name))));
+        const skins = names.map((name) => namedIndex('skin', model.skins, String(name)));
+        const active = engine.skins;
+
+        if (skins.length === active.length && skins.every((skin, i) => skin === active[i])) return;
+        engine.setSkins(skins);
         engine.setupPoseSlots();
     }
 
