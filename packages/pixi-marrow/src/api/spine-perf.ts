@@ -24,6 +24,17 @@ export interface PerfMemory {
      */
     shared: number;
     /**
+     * The bytes of the baked clips of the asset, which count in `shared` too: those from
+     * `addBakedClips` and those baked while the game played. 0 for an instance without the
+     * `bake` setting, and until the code of baked playback has loaded.
+     */
+    baked: number;
+    /**
+     * The most bytes the clips hold that were baked while the game played. Over it the clip that
+     * played longest ago goes. `setBakeBudget` of `pixi-marrow/bake` sets it. 0 where `baked` is.
+     */
+    bakeBudget: number;
+    /**
      * What this instance holds in typed arrays. First `engine.bytes`: the pose and what
      * constraints add to it. Then the arrays of the view: the vertex and index data, the clip
      * masks, the list of visible slots and the test of covered slots.
@@ -75,6 +86,7 @@ export class MarrowPerf {
     private readonly links: () => readonly Link[];
 
     /**
+     * @internal
      * @param view The view that draws the display object.
      * @param links Hands out the containers that follow a bone or are attached to a slot at the moment.
      */

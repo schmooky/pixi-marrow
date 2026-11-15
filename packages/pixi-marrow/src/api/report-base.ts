@@ -86,6 +86,8 @@ export interface BakeReading {
     last: string;
     /** The bytes of the clips that every instance of the asset shares. */
     bytes: number;
+    /** The most bytes the clips hold that were baked while the game played. */
+    budget: number;
 }
 
 /** How many names a reason spells out before it counts the rest. */

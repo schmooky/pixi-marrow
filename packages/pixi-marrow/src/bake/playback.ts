@@ -25,6 +25,10 @@ export interface BakeTally {
     readonly last: string;
     /** The bytes of the clips of the model, which every instance shares. */
     readonly bytes: number;
+    /** The most bytes the clips of the model hold that were baked while the game played. */
+    readonly budget: number;
+    /** How many clips of the model went to keep within the budget. */
+    readonly evicted: number;
 }
 
 /** Why an update was posed by the engine, or that the next one plays baked. Index into {@link REASONS}. */
@@ -174,6 +178,14 @@ class BakedPlayback implements PoseSource, BakeTally {
         return this.bakes.bytes;
     }
 
+    get budget(): number {
+        return this.bakes.budget;
+    }
+
+    get evicted(): number {
+        return this.bakes.evicted;
+    }
+
     /** What the last update did, as text. */
     get last(): string {
         const { model } = this.engine.state;
@@ -200,6 +212,7 @@ class BakedPlayback implements PoseSource, BakeTally {
         if (!placed(state, prepared.clip)) return this.drop(ELSEWHERE);
         if (!engine.deform && pathFollows(prepared.clip, state)) return this.drop(PATH_DEFORM);
         engine.advance(dt, TIME);
+        this.bakes.touch(prepared);
         writeFrame(state, prepared, frameOf(prepared), engine.deform);
         this.seen = state.version;
         this.reason = BAKED;
