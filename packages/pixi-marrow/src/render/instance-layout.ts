@@ -114,7 +114,7 @@ function blockOf(template: Template, model: SkeletonModel, pages: number): Layou
 export class InstanceLayout {
     /** Why its views draw alone, or null when they can draw instanced. */
     readonly block: LayoutBlock | null;
-    /** `aSkin`, the skin data of the layout. */
+    /** `aSkin`, the buffer of the skin data of the layout, which the views drawing alone share too. */
     readonly skin: Buffer;
     /** `aUV` and `aFlags`. A region with a sequence takes its texture coordinates from its texel. */
     readonly statics: Buffer;
@@ -170,16 +170,19 @@ export class InstanceLayout {
 
         this.shape = { bones: model.bones.count, slots: model.slots.count, cpuTexels, cpuAt };
         this.influences = skin.influences;
-        this.skin = new Buffer({ data: skin.vertices, label: 'marrow-skin', usage });
+        this.skin = skin.buffer;
         this.statics = new Buffer({ data: statics, label: 'marrow-uvs', usage });
         this.entries = new Buffer({ data, label: 'marrow-entries', usage });
     }
 
-    /** The bytes the views of the layout share: the buffers, the index buffers and the room of the pools no view takes. */
+    /**
+     * The bytes the views of the layout share: the buffers, the index buffers and the room of the
+     * pools no view takes. The skin data is counted with the skin data of the layout.
+     */
     get bytes(): number {
         // the statics of the template are counted with the template, unless the layout holds a copy
         const own = this.statics.data === this.template?.statics ? 0 : (this.statics.data?.byteLength ?? 0);
-        let bytes = this.skin.data.byteLength + own + this.entries.data.byteLength;
+        let bytes = own + this.entries.data.byteLength;
 
         for (const union of this.unions) bytes += union.buffer.data.byteLength;
         for (const pool of this.pools) bytes += pool.bytes - pool.used * pool.slotBytes;
@@ -297,11 +300,10 @@ export class InstanceLayout {
         });
     }
 
-    /** Frees the buffers, the pools and the shaders, and lets go of the template. The skin data belongs to the layout. */
+    /** Frees the buffers, the pools and the shaders, and lets go of the template. The skin data and its buffer belong to the layout. */
     destroy(): void {
         this.destroyed = true;
         this.empty();
-        this.skin.destroy();
         this.statics.destroy();
         this.entries.destroy();
         for (const union of this.unions) union.buffer.destroy();

@@ -122,7 +122,11 @@ describe('what instanced draws hold on to', () => {
         // raptor-pro has no sequence: the layout draws with the statics of the template
         expect(layout.statics.data).toBe(template.statics);
         expect(layoutArrayBytes(template)).toBeGreaterThanOrEqual(template.statics.byteLength);
-        expect(layout.bytes).toBe(layout.skin.data.byteLength + layout.entries.data.byteLength + unionBytes + room);
+        // the buffer aSkin is the one of the skin data, which counts it once for the views drawn alone too
+        const skin: unknown = Reflect.get(rig.view.parts.paints.mesh ?? {}, 'skin');
+
+        expect(layout.skin).toBe(typeof skin === 'object' && skin !== null ? Reflect.get(skin, 'buffer') : null);
+        expect(layout.bytes).toBe(layout.entries.data.byteLength + unionBytes + room);
     });
 
     it('makes no instanced draw for a layout that always draws alone', async () => {

@@ -398,7 +398,10 @@ export function inspectView(view: SkeletonView): ViewReport {
             (paints.mesh?.instanced?.bytes ?? 0) +
             (paints.body?.element.arrayBytes ?? 0) +
             batchBytes,
-        layoutBytes: layoutArrayBytes(template) + (paints.mesh?.instanced?.layout?.bytes ?? 0),
+        layoutBytes:
+            layoutArrayBytes(template) +
+            (paints.mesh?.sharedSkinBytes ?? 0) +
+            (paints.mesh?.instanced?.layout?.bytes ?? 0),
         gpuBytes: meshBufferBytes(view.container) + batchBytes,
     };
 }

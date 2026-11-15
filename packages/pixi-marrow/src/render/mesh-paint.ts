@@ -20,6 +20,7 @@ import type { MeshCode } from './mesh-code';
 import { linkMeshPipe } from './mesh-pipe';
 import { vertexBuffer } from './pages';
 import { type PosePass, poseEntries } from './pose-pass';
+import type { VertexBuffers } from './range-mesh';
 import { DrawRanges, type DrawRangesOptions } from './ranges';
 import { MeshSkin } from './skin-paint';
 import type { ViewStats } from './stats';
@@ -75,6 +76,8 @@ export class MeshPaint {
     private readonly colors: Buffer | undefined;
     /** What the vertex shader places the vertices from, with `gpu`. */
     private readonly skin: MeshSkin | undefined;
+    /** The buffers the draw ranges read. The buffer of the skin data is that of the layout of the view. */
+    private readonly buffers: VertexBuffers;
     /** The child that calls the view before every draw. It exists once the view cuts. */
     private probe: RenderContainer | undefined;
     /** The renderer that drew the paint last. It has a pipe for meshes and says when its context is lost. */
@@ -114,10 +117,16 @@ export class MeshPaint {
         this.statics = vertexBuffer(template.statics, 'marrow-uvs');
         this.skin = gpu ? new MeshSkin(model, template, rest.pages, rest.dark) : undefined;
         this.colors = gpu ? undefined : vertexBuffer(template.colors, 'marrow-colors');
+        this.buffers = {
+            positions: this.positions,
+            statics: this.statics,
+            colors: this.colors,
+            skin: this.skin?.buffer,
+        };
         this.ranges = new DrawRanges({
             ...rest,
             blendModes: model.slots.blendModes,
-            buffers: { positions: this.positions, statics: this.statics, colors: this.colors, skin: this.skin?.buffer },
+            buffers: this.buffers,
             shade: this.skin?.shade,
         });
         this.resize(template);
@@ -126,6 +135,11 @@ export class MeshPaint {
     /** The bytes of the bone and palette textures, with `gpu`. */
     get skinBytes(): number {
         return this.skin?.bytes ?? 0;
+    }
+
+    /** The bytes of the skin data of the layout, with `gpu`, which the views of the layout share. */
+    get sharedSkinBytes(): number {
+        return this.skin?.sharedBytes ?? 0;
     }
 
     /** Whether the vertex shader places the vertices from the bones where it can: `skinning: 'gpu'`. */
@@ -151,6 +165,8 @@ export class MeshPaint {
         this.statics.data = template.statics;
         if (this.colors !== undefined) this.colors.data = template.colors;
         this.skin?.resize(template);
+        // the ranges take the buffer of the skin data of the new layout
+        this.buffers.skin = this.skin?.buffer;
         this.ranges.resize(template);
         this.counted = 0;
         this.recount();
