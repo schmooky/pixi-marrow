@@ -14,7 +14,7 @@ import {
 } from '../../src/core';
 import { setClock } from '../../src/pose/v43/curves';
 import { createPose } from '../../src/pose/v43/pose';
-import { prepareRig } from '../../src/pose/v43/rig';
+import { clipOf, prepareRig } from '../../src/pose/v43/rig';
 import { setupPoseSlots } from '../../src/pose/v43/skeleton';
 import { applyTimeline } from '../../src/pose/v43/timelines';
 import { CURRENT, SETUP } from '../../src/pose/v43/types';
@@ -409,13 +409,23 @@ describe('data the official 4.3 core fails on', () => {
 
         return errorOf(() => engine.update(0.2)).message;
     };
-    /** The error of creating an engine after `damage` changed the model, as text. */
-    const createError = async (damage: Damage): Promise<string> => {
+    /**
+     * The error of creating an engine after `damage` changed the model, as text. With `animation`
+     * it is the error of playing that animation: an animation is prepared when it is first played.
+     */
+    const createError = async (damage: Damage, animation?: number): Promise<string> => {
         const model = await importSkeleton(LAB);
 
         damage(model);
+        try {
+            const engine = await play(model);
 
-        return String(await play(model).catch((reason: unknown) => reason));
+            if (animation !== undefined) engine.setAnimation(0, animation, true);
+        } catch (reason) {
+            return String(reason);
+        }
+
+        return 'nothing was thrown';
     };
 
     it('names what is wrong when an update meets it', async () => {
@@ -456,10 +466,10 @@ describe('data the official 4.3 core fails on', () => {
         ]);
     });
 
-    it('refuses a model it cannot prepare', async () => {
+    it('refuses an animation it cannot prepare when it is first played, and a model it cannot prepare', async () => {
         const errors = await Promise.all([
-            createError((model) => Object.assign(timelineOf(model, MOVE, 'rotate'), { kind: 'warp' })),
-            createError((model) => Object.assign(timelineOf(model, BEND, 'deform'), { attachment: lost })),
+            createError((model) => Object.assign(timelineOf(model, MOVE, 'rotate'), { kind: 'warp' }), MOVE),
+            createError((model) => Object.assign(timelineOf(model, BEND, 'deform'), { attachment: lost }), BEND),
             createError((model) => Object.assign(attachmentOf(model, 'copy', 'echo'), { timelineAttachment: lost })),
         ]);
 
@@ -476,7 +486,9 @@ describe('the attachment timeline of the 4.3 pose engine', () => {
         const pose = createPose(prepareRig(await importSkeleton(LAB)));
         const { state } = pose;
         const shown = (animation: number, time: number, from: number, out: boolean): string | undefined => {
-            const timeline = pose.rig.clips[animation]?.timelines.find((candidate) => candidate.kind === 'attachment');
+            const timeline = clipOf(pose.rig, animation)?.timelines.find(
+                (candidate) => candidate.kind === 'attachment',
+            );
 
             if (timeline === undefined) throw new Error('The animation has no attachment timeline');
             setClock(-1, time, 1);

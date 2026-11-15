@@ -5,6 +5,7 @@ import type { AnimationData, SkeletonModel } from '../../model/model';
 import type { TimelineData, TimelineKind } from '../../model/timelines';
 import { onSkinFreed } from '../shared/combine-skins';
 import { type AttachmentLookup, createAttachmentLookup, meshSource } from '../shared/lookup';
+import { PropertyIds } from './property-ids';
 import { prepareSolver } from './solver';
 import {
     PATH_MIX,
@@ -203,26 +204,6 @@ const SPECS: Record<TimelineKind, KindSpec> = {
 const invalid = (message: string): MarrowError =>
     new MarrowError('invalid-data', message, { fix: 'Export the skeleton again from Spine.' });
 
-/** Gives every official property id string a number. Equal strings get the same number. */
-class PropertyIds {
-    private readonly numbers = new Map<string, number>();
-
-    get count(): number {
-        return this.numbers.size;
-    }
-
-    of(key: string): number {
-        let id = this.numbers.get(key);
-
-        if (id === undefined) {
-            id = this.numbers.size;
-            this.numbers.set(key, id);
-        }
-
-        return id;
-    }
-}
-
 /** What building the timelines of a model needs. */
 interface Build {
     model: SkeletonModel;
@@ -415,10 +396,43 @@ function buildClip(build: Build, animation: AnimationData, index: number): Clip4
 }
 
 const rigs = new WeakMap<SkeletonModel, Rig43>();
+/** What building a clip of a rig needs. A clip is built when it is first asked for. */
+const builds = new WeakMap<Rig43, Build>();
 
 /**
- * Prepares a model for the 4.3 pose engine: its animations as timelines that are ready to apply,
- * and what the engine needs to know about its attachments. Every engine of a model shares one rig.
+ * The animation at a model index, ready to play, or undefined for an index the model does not
+ * have. It is built on first use, so a model with many animations costs what it plays. Throws a
+ * {@link MarrowError} for an animation this engine cannot play.
+ */
+export function clipOf(rig: Rig43, index: number): Clip43 | undefined {
+    const built = rig.clips[index];
+    const animation = rig.model.animations[index];
+    const build = builds.get(rig);
+
+    if (built !== undefined || animation === undefined || build === undefined) return built;
+    const clip = buildClip(build, animation, index);
+    const { scratch } = rig;
+
+    rig.clips[index] = clip;
+    // the clip may have brought new property ids: the scratch has a place for each
+    if (scratch.owners.length < build.ids.count) {
+        const owners = new Int32Array(build.ids.count * 2);
+        const stamps = new Float64Array(build.ids.count * 2);
+
+        owners.set(scratch.owners);
+        stamps.set(scratch.stamps);
+        scratch.owners = owners;
+        scratch.stamps = stamps;
+    }
+
+    return clip;
+}
+
+/**
+ * Prepares a model for the 4.3 pose engine: what the engine needs to know about its attachments
+ * and its constraints. Every engine of a model shares one rig. An animation becomes timelines
+ * that are ready to apply when it is first played: see {@link clipOf}. The animation of a
+ * slider is built here, because an update applies it.
  */
 export function prepareRig(model: SkeletonModel): Rig43 {
     const cached = rigs.get(model);
@@ -429,7 +443,7 @@ export function prepareRig(model: SkeletonModel): Rig43 {
     const drawOrderId = ids.of(`${P_DRAW_ORDER}`);
     const solver = prepareSolver(model, lookup);
     const build: Build = { model, lookup, info: describeAttachments(model, lookup), ids, plans: solver.plans };
-    const clips = model.animations.map((animation, index) => buildClip(build, animation, index));
+    const clips: (Clip43 | undefined)[] = model.animations.map(() => undefined);
     const rig: Rig43 = {
         model,
         lookup,
@@ -453,10 +467,12 @@ export function prepareRig(model: SkeletonModel): Rig43 {
         },
     };
 
+    builds.set(rig, build);
+    for (const plan of solver.plans) if (plan.type === 'slider') clipOf(rig, plan.animation);
     // a combined skin that is freed takes its attachment rows along
     onSkinFreed(lookup, (index) => {
         for (const clip of clips) {
-            for (const timeline of clip.timelines) {
+            for (const timeline of clip?.timelines ?? []) {
                 if (timeline.shown.length > index + 1) timeline.shown[index + 1] = undefined;
             }
         }

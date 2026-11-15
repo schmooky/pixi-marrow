@@ -24,7 +24,7 @@ import { physicsRotate, physicsTranslate } from './physics';
 import { createPlayer, type Player43 } from './player';
 import { createPose, poseBytes } from './pose';
 import { distrust, solvePose } from './rest';
-import { prepareRig } from './rig';
+import { clipOf, prepareRig } from './rig';
 import {
     setSkin,
     setupPoseBones,
@@ -157,7 +157,7 @@ class Engine43 implements PoseEngine {
     }
 
     private clip(animation: number): Clip43 {
-        const clip = this.pose.rig.clips[animation];
+        const clip = Number.isInteger(animation) ? clipOf(this.pose.rig, animation) : undefined;
 
         if (clip === undefined) {
             const count = this.pose.rig.clips.length;

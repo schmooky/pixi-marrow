@@ -84,13 +84,23 @@ function timelineOf(model: SkeletonModel, kind: string): TimelineData {
 
 const play = (model: SkeletonModel): Promise<PoseEngine> => createPoseEngine(model);
 
-/** The error of creating an engine after `damage` changed the model, as text. */
-async function createError(damage: Damage): Promise<string> {
+/**
+ * The error of creating an engine after `damage` changed the model, as text. With `animation` it
+ * is the error of playing that animation: an animation is prepared when it is first played.
+ */
+async function createError(damage: Damage, animation?: number): Promise<string> {
     const model = await importSkeleton(RIG);
 
     damage(model);
+    try {
+        const engine = await play(model);
 
-    return String(await play(model).catch((reason: unknown) => reason));
+        if (animation !== undefined) engine.setAnimation(0, animation, true);
+    } catch (reason) {
+        return String(reason);
+    }
+
+    return 'nothing was thrown';
 }
 
 /** The error of the first update after `damage` changed the model and `pose` the engine. */
@@ -141,8 +151,8 @@ describe('constraint data the official 4.3 core fails on', () => {
     it('names the animation whose timeline is for a constraint of another kind, or for none', async () => {
         const errors = await Promise.all([
             // constraint 3 is the path constraint
-            createError((model) => Object.assign(timelineOf(model, 'ikConstraint'), { target: 3 })),
-            createError((model) => Object.assign(timelineOf(model, 'pathConstraintPosition'), { target: 44 })),
+            createError((model) => Object.assign(timelineOf(model, 'ikConstraint'), { target: 3 }), AIM),
+            createError((model) => Object.assign(timelineOf(model, 'pathConstraintPosition'), { target: 44 }), AIM),
         ]);
 
         expect(errors).toEqual([
