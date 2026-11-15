@@ -48,7 +48,8 @@ export interface PerfSettings {
     /**
      * `update` (the `exact` default) updates a skeleton off the screen as one on it. `throttle`
      * updates it 4 times a second, with the time that passed, so events fire late. `pause` does
-     * not update it, so its time stands still until it is on the screen again.
+     * not update it, so its time stands still until it is on the screen again. A skeleton that
+     * is hidden, or under a parent that is, counts as off the screen: `visible` or `renderable` false.
      */
     offscreen: OffscreenMode;
     /**
