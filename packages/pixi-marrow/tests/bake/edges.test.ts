@@ -136,6 +136,20 @@ describe('clips that do not fit together', () => {
         expect(() => addBakedClips({ model }, [clip])).toThrow(/does not hold each slot once/);
     });
 
+    it('takes the clips of a skeleton without slots, whose draw orders are empty', async () => {
+        const json = {
+            skeleton: { spine: '4.2.00' },
+            bones: [{ name: 'root' }, { name: 'arm', parent: 'root', length: 10 }],
+            animations: { swing: { bones: { arm: { rotate: [{ time: 0 }, { time: 1, value: 40 }] } } } },
+        };
+        const model = await importSkeleton(JSON.stringify(json));
+        const clip = await bakeAnimation(model, 'swing');
+
+        expect(model.slots.count).toBe(0);
+        // a draw order of 0 slots once looped for ever in the check of the hand-over
+        expect(() => addBakedClips({ model }, [clip])).not.toThrow();
+    });
+
     it('throws a MarrowError at the hand-over for a clip of an animation that lasts another time', async () => {
         const model = await modelOf('4.2/spineboy-pro.skel');
         const idle = await bakeAnimation(model, 'idle');

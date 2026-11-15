@@ -288,6 +288,8 @@ const within = (values: ArrayLike<number>, low: number, high: number): boolean =
 
 /** True when every draw order of `slots` slot indices holds each slot once. The indices are in range. */
 function eachSlotOnce(orders: Int16Array, slots: number): boolean {
+    // a skeleton without slots has empty draw orders, and a step of 0 would never end
+    if (slots === 0) return true;
     const seen = new Uint8Array(slots);
 
     for (let at = 0; at + slots <= orders.length; at += slots) {

@@ -1,6 +1,5 @@
 import type { Renderer } from 'pixi.js';
-import { beforeAll, describe, expect, it } from 'vitest';
-import { MarrowError } from '../../src/base/errors';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { linkRenderer } from '../../src/render/batch-pipe';
 import { linkInstancePipe } from '../../src/render/instance-pipe';
 import { loadMeshCode } from '../../src/render/mesh-code';
@@ -10,8 +9,8 @@ import { createStage } from './batch-stage';
 
 /*
  * Every program of pixi-marrow is GLSL 3.00, and Pixi falls back to WebGL1 where a browser has
- * no WebGL2. A renderer of WebGL1 throws a `MarrowError` when it first draws a skeleton, in
- * place of shaders that fail to compile.
+ * no WebGL2. A renderer of WebGL1 draws no skeleton and warns once, in place of shaders that fail
+ * to compile. It throws nothing: an error in a render would stop Pixi's ticker and the whole app.
  */
 
 beforeAll(async () => {
@@ -41,27 +40,38 @@ function thrown(call: () => void): unknown {
 }
 
 describe('a renderer of WebGL1', () => {
-    it('throws a MarrowError in every pipe that draws a skeleton, and WebGL2 and WebGPU pass', () => {
-        for (const link of [linkRenderer, linkInstancePipe]) {
-            const error = thrown(() => link(fakeRenderer(1)));
+    it('links every pipe, warns once, and counts as lost, where WebGL2 and WebGPU do not', () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
-            expect(error).toBeInstanceOf(MarrowError);
-            expect((error as MarrowError).code).toBe('unsupported-feature');
-            expect((error as MarrowError).message).toMatch(/WebGL1/);
-            expect(thrown(() => link(fakeRenderer(2)))).toBeUndefined();
-            expect(thrown(() => link(fakeRenderer('gpu')))).toBeUndefined();
+        try {
+            const old = fakeRenderer(1);
+
+            for (const link of [linkRenderer, linkInstancePipe]) {
+                expect(thrown(() => link(old))).toBeUndefined();
+                expect(thrown(() => link(fakeRenderer(2)))).toBeUndefined();
+                expect(thrown(() => link(fakeRenderer('gpu')))).toBeUndefined();
+            }
+            expect(thrown(() => linkMeshPipe(old))).toBeUndefined();
+            expect(warn.mock.calls.filter(([text]) => /WebGL1/.test(String(text)))).toHaveLength(1);
+        } finally {
+            warn.mockRestore();
         }
-        expect(thrown(() => linkMeshPipe(fakeRenderer(1)))).toBeInstanceOf(MarrowError);
     });
 
-    it('throws at the first render of a skeleton, in every render after it, and draws nothing', async () => {
-        const stage = createStage();
-        const speedy = await loadFamily('4.2/speedy-ess.skel');
+    it('draws nothing in any render, and throws nothing', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
-        Reflect.set(stage.renderer, 'context', { webGLVersion: 1 });
-        await populate(stage, speedy, 1);
-        expect(() => stage.render()).toThrow(MarrowError);
-        expect(() => stage.render()).toThrow(/WebGL1/);
-        expect(stage.counts.draws).toEqual([]);
+        try {
+            const stage = createStage();
+            const speedy = await loadFamily('4.2/speedy-ess.skel');
+
+            Reflect.set(stage.renderer, 'context', { webGLVersion: 1 });
+            await populate(stage, speedy, 1);
+            expect(() => stage.render()).not.toThrow();
+            expect(() => stage.render()).not.toThrow();
+            expect(stage.counts.draws).toEqual([]);
+        } finally {
+            warn.mockRestore();
+        }
     });
 });

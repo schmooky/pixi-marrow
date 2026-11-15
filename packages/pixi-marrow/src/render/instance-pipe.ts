@@ -324,7 +324,7 @@ export function linkInstancePipe(renderer: Renderer): InstancePipe {
     const found: unknown = Reflect.get(renderer.renderPipes, INSTANCE_PIPE);
 
     if (found instanceof InstancePipe) return found;
-    // first: a renderer of WebGL1 throws in every render, and gets no pipe
+    // first: a renderer of WebGL1 counts as lost, so its skeletons draw nothing
     watchContext(renderer);
     const pipe = new InstancePipe(renderer);
 
