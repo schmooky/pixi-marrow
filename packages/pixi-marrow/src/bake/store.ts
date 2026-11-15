@@ -14,6 +14,13 @@ import { animationIndex, bakeBlocker, skinIndices } from './eligible';
 export const BAKE_BUDGET: number = 4 * 1024 * 1024;
 
 /**
+ * How far the duration of a clip may be from the duration of its animation, in seconds. A JSON
+ * export rounds a time to four digits and a binary export holds it at 32 bits, so the two
+ * exports of one skeleton differ by up to half of this.
+ */
+const DURATION_SLACK = 1e-4;
+
+/**
  * A clip counts as in use while fewer updates than this used the clips of its model since it
  * played. At 60 updates a second that is 10 seconds for one instance, and 6 frames for 100.
  */
@@ -374,7 +381,7 @@ export class ModelBakes {
  * Throws a `MarrowError` when a clip was not baked from this skeleton, or its arrays do not fit
  * its counts. A JSON export can lack the editor hash, so the duration of the animation is
  * compared too: a clip of an animation that was edited since lasts another time, most often.
- * The two compare at 32 bits, as a binary export holds a time.
+ * The two may differ by {@link DURATION_SLACK}, so that a clip moves between the two exports.
  */
 function checkFits(model: SkeletonModel, clip: BakedClip): void {
     const duration = model.animations[animationIndex(model, clip.animation)]?.duration ?? 0;
@@ -393,7 +400,7 @@ function checkFits(model: SkeletonModel, clip: BakedClip): void {
     }
     if (clip.hash !== null && model.hash !== null && clip.hash !== model.hash)
         fail('is of another export of the skeleton');
-    if (Math.fround(clip.duration) !== Math.fround(duration)) {
+    if (Math.abs(clip.duration - duration) > DURATION_SLACK) {
         fail(`lasts ${clip.duration} seconds, and the animation of the skeleton ${duration}`);
     }
     if (clip.frames !== frameCount(clip.duration, clip.fps)) fail('has the wrong number of frames for its duration');
