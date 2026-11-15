@@ -1,3 +1,4 @@
+import { LONG_KEYS, searchLong } from '../shared/search';
 import { LOCAL_STRIDE } from '../state';
 import {
     ALPHA,
@@ -92,10 +93,13 @@ export function applyRelative(
 
         return;
     }
-    for (let k = 2; k < n; k += 2) {
-        if (Number(frames[k]) > time) {
-            key = k - 2;
-            break;
+    if (n > LONG_KEYS * 2) key = searchLong(frames, 2, SHARED, TIME);
+    else {
+        for (let k = 2; k < n; k += 2) {
+            if (Number(frames[k]) > time) {
+                key = k - 2;
+                break;
+            }
         }
     }
     const curveType = Number(curves[key >> 1]);
