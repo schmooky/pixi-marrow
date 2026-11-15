@@ -1,5 +1,6 @@
 ---
 import type { MarkdownHeading } from 'astro';
+import { apiEntries } from '../lib/api-reference';
 import { docPage, markdownPath } from '../lib/content';
 import { dayInWords, dayOf } from '../lib/git';
 import { PAGES, pagesOf, SECTIONS } from '../lib/site';
@@ -21,30 +22,69 @@ const page = index >= 0 ? PAGES[index] : undefined;
 /** When git last saw the source of this page change, and the page as Markdown. */
 const modified = modifiedOf(path);
 const twin = docPage(path) === undefined ? undefined : markdownPath(path);
+/** The API reference has a navigation of its own: its entry points, and the exports of the open one. */
+const api = path.startsWith('/api/') ? apiEntries() : undefined;
+const entry = api?.find((each) => each.href === path);
 ---
 
 <Base title={frontmatter.title} description={frontmatter.description} article>
     <div class="container-page docs">
         <aside class="docs-side">
-            <nav aria-label="Docs">
-                {SECTIONS.map((part) => (
+            {api === undefined ? (
+                <nav aria-label="Docs">
+                    {SECTIONS.map((part) => (
+                        <div class="docs-side-part">
+                            <div class="eyebrow">{part}</div>
+                            <div>
+                                {pagesOf(part).map((item) => (
+                                    <a href={item.href} aria-current={item.href === path ? 'page' : undefined}>{item.title}</a>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
+                </nav>
+            ) : (
+                <nav aria-label="API reference">
+                    <a class="docs-side-back" href="/start/">Back to the docs</a>
                     <div class="docs-side-part">
-                        <div class="eyebrow">{part}</div>
+                        <div class="eyebrow">API reference</div>
                         <div>
-                            {pagesOf(part).map((item) => (
-                                <a href={item.href} aria-current={item.href === path ? 'page' : undefined}>{item.title}</a>
+                            <a href="/api/" aria-current={path === '/api/' ? 'page' : undefined}>Entry points</a>
+                            {api.map((each) => (
+                                <a href={each.href} aria-current={each.href === path ? 'page' : undefined}><code>{each.name}</code></a>
                             ))}
                         </div>
                     </div>
-                ))}
-            </nav>
+                    {entry && (
+                        <div class="docs-side-part">
+                            <div class="eyebrow">Exports</div>
+                            <div>
+                                {entry.symbols.map((symbol) => (
+                                    <a href={`#${symbol.anchor}`}>{symbol.name}</a>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </nav>
+            )}
         </aside>
         <article class="docs-article prose-docs">
             <header class="docs-header">
                 <div class="eyebrow">{page === undefined ? 'Docs' : page.section === 'Reference' ? 'Reference' : `${page.section}, step ${pagesOf(page.section).indexOf(page) + 1}`}</div>
                 <h1 class="display-3">{frontmatter.title}</h1>
                 <p class="lead">{frontmatter.description}</p>
-                {page && (
+                {api && (
+                    <details class="docs-part">
+                        <summary>API reference: {api.length} entry points</summary>
+                        <ol>
+                            <li><a href="/api/" aria-current={path === '/api/' ? 'page' : undefined}>Entry points</a></li>
+                            {api.map((each) => (
+                                <li><a href={each.href} aria-current={each.href === path ? 'page' : undefined}>{each.name}</a></li>
+                            ))}
+                        </ol>
+                    </details>
+                )}
+                {page && api === undefined && (
                     <details class="docs-part">
                         <summary>{page.section}: {pagesOf(page.section).length} pages</summary>
                         <ol>
@@ -82,7 +122,7 @@ const twin = docPage(path) === undefined ? undefined : markdownPath(path);
             )}
         </article>
         <aside class="docs-toc">
-            {sections.length > 0 && (
+            {sections.length > 0 && entry === undefined && (
                 <nav aria-label="On this page">
                     <div class="card-label">On this page</div>
                     <ul>
@@ -95,6 +135,11 @@ const twin = docPage(path) === undefined ? undefined : markdownPath(path);
         </aside>
     </div>
 </Base>
+
+<script>
+    // a long navigation scrolls by itself, so show the open page in it
+    document.querySelector('.docs-side [aria-current="page"]')?.scrollIntoView({ block: 'nearest' });
+</script>
 
 <style>
     .docs-updated {
