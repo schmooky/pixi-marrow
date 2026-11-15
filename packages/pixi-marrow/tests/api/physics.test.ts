@@ -90,13 +90,13 @@ describe.each([
             const spine = create();
             const error = thrownBy(() => Reflect.set(spine, 'physics', 'updat'));
 
-            expect(error.code).toBe('invalid-data');
+            expect(error.code).toBe('invalid-option');
             expect(error.message).toContain('"updat" is not a physics mode.');
             expect(error.validNames).toEqual(['none', 'reset', 'update', 'pose']);
             expect(error.closest).toBe('update');
             expect(error.fix).toBe('Set one of: none, reset, update, pose.');
             expect(spine.physics).toBe('update');
-            expect(thrownBy(() => Reflect.set(spine, 'physics', undefined)).code).toBe('invalid-data');
+            expect(thrownBy(() => Reflect.set(spine, 'physics', undefined)).code).toBe('invalid-option');
         });
     });
 
@@ -236,13 +236,13 @@ describe.each([
                 thrownBy(() => spine.physicsRotate(0, Number.NaN, 1)),
             ];
 
-            expect(errors.map((error) => error.code)).toEqual(Array(5).fill('invalid-data'));
+            expect(errors.map((error) => error.code)).toEqual(Array(5).fill('invalid-option'));
             expect(errors.map((error) => error.message.split('] ')[1])).toEqual([
-                'physicsTranslate got NaN for x. Pass a finite number.',
-                'physicsTranslate got 4 for y. Pass a finite number.',
-                'physicsRotate got Infinity for degrees. Pass a finite number.',
-                'physicsRotate got undefined for x. Pass a finite number.',
-                'physicsRotate got NaN for y. Pass a finite number.',
+                'physicsTranslate x got NaN. Pass a finite number.',
+                'physicsTranslate y got "4". Pass a finite number.',
+                'physicsRotate degrees got Infinity. Pass a finite number.',
+                'physicsRotate x got undefined. Pass a finite number.',
+                'physicsRotate y got NaN. Pass a finite number.',
             ]);
             expect(translate).not.toHaveBeenCalled();
             expect(rotate).not.toHaveBeenCalled();

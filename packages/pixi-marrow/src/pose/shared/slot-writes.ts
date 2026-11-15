@@ -12,7 +12,7 @@ export function checkSlot(model: SkeletonModel, slot: number): void {
     const { count } = model.slots;
 
     if (!Number.isInteger(slot) || slot < 0 || slot >= count) {
-        throw new MarrowError('invalid-data', `The skeleton has no slot ${slot}. It has ${count} slots.`, {
+        throw new MarrowError('invalid-option', `The skeleton has no slot ${slot}. It has ${count} slots.`, {
             fix: 'Pass an index into the slot list of the model.',
         });
     }
@@ -36,7 +36,7 @@ export function checkDark(model: SkeletonModel, slot: number): void {
 /** A part of a color for a write: clamped to 0 and 1, as the official `Color.set` does. */
 function part(value: number): number {
     if (!Number.isFinite(value)) {
-        throw new MarrowError('invalid-data', `${value} is not a color value.`, {
+        throw new MarrowError('invalid-option', `${value} is not a color value.`, {
             fix: 'Pass a number from 0 to 1.',
         });
     }

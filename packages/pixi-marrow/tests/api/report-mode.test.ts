@@ -87,7 +87,7 @@ describe('the render mode of a display object', () => {
                 error = caught;
             }
             expect(error).toBeInstanceOf(MarrowError);
-            expect(error).toMatchObject({ code: 'invalid-data', validNames: ['auto', 'mesh', 'batched'] });
+            expect(error).toMatchObject({ code: 'invalid-option', validNames: ['auto', 'mesh', 'batched'] });
         }
         expect(spine.renderMode).toBe('auto');
     });
@@ -117,13 +117,13 @@ describe('the render mode of a display object', () => {
         const autoClipped = create(clipped);
 
         autoClipped.update(FRAME);
-        expect(await row(autoClipped, 'renderMode')).toEqual({
+        expect(await row(autoClipped, 'renderMode')).toMatchObject({
             feature: 'renderMode',
             value: 'batched',
             reason: `the option renderMode is "auto": the skeleton has 4 vertices in a batch, which is at most ${AUTO_BATCH_VERTICES}. ${shares}`,
         });
         expect(autoClipped.stats).toMatchObject({ clips: 1, maskDraws: 0, drawCalls: 1 });
-        expect(await row(autoClipped, 'clipping')).toEqual({
+        expect(await row(autoClipped, 'clipping')).toMatchObject({
             feature: 'clipping',
             value: '1 clip, cut on the CPU',
             reason: 'the clipping attachment of slot "cut" cuts visible slots: their triangles are cut as the official runtime cuts them and stay in the batch, which keeps room for 0 vertices and 0 indices of cut triangles',
@@ -134,7 +134,7 @@ describe('the render mode of a display object', () => {
             const rows = await spine.perf.report();
 
             expect(rows.slice(0, 3).map((entry) => entry.feature)).toEqual(['perf', 'pacing', 'renderMode']);
-            expect(rows[2]).toEqual({ feature: 'renderMode', value, reason });
+            expect(rows[2]).toMatchObject({ feature: 'renderMode', value, reason });
             expect(spine.stats.renderMode).toBe(value);
         }
         // auto says which side of its limit the skeleton is on
@@ -145,7 +145,7 @@ describe('the render mode of a display object', () => {
             const batched = vertices <= AUTO_BATCH_VERTICES;
             const side = batched ? 'at most' : 'more than';
 
-            expect(await row(spine, 'renderMode')).toEqual({
+            expect(await row(spine, 'renderMode')).toMatchObject({
                 feature: 'renderMode',
                 value: batched ? 'batched' : 'mesh',
                 reason: `the option renderMode is "auto": the skeleton has ${vertices} vertices in a batch, which is ${side} ${AUTO_BATCH_VERTICES}. ${batched ? shares : owns}`,
@@ -160,7 +160,7 @@ describe('the render mode of a display object', () => {
         const [spine] = spines;
 
         if (spine === undefined) throw new Error('no spine');
-        expect(await row(spine, 'drawCalls')).toEqual({
+        expect(await row(spine, 'drawCalls')).toMatchObject({
             feature: 'drawCalls',
             value: '1 shared',
             reason: 'Pixi has not built the instructions of the render group with the skeleton yet',
@@ -168,13 +168,13 @@ describe('the render mode of a display object', () => {
         for (const item of spines) stage.root.addChild(item);
         stage.render();
         expect(stage.counts.draws).toHaveLength(1);
-        expect(await row(spine, 'drawCalls')).toEqual({
+        expect(await row(spine, 'drawCalls')).toMatchObject({
             feature: 'drawCalls',
             value: '1 shared',
             reason: '1 batch of the render group, shared with 2 other skeletons: the visible slots share one blend state and one group of pages',
         });
         // 44 vertices with 28 bytes each, and 66 indices with one triangle without area
-        expect(await row(spine, 'vertices')).toEqual({
+        expect(await row(spine, 'vertices')).toMatchObject({
             feature: 'vertices',
             value: '108 vertices, 66 indices',
             reason: '44 of the vertices are visible. The batch holds the largest attachment of every slot, 1370 bytes for this skeleton',
@@ -209,7 +209,7 @@ describe('the render mode of a display object', () => {
             'normal',
         ]);
         expect(spine.stats.drawCalls).toBe(3);
-        expect(await row(spine, 'drawCalls')).toEqual({
+        expect(await row(spine, 'drawCalls')).toMatchObject({
             feature: 'drawCalls',
             value: '3 shared',
             reason: '3 batches of the render group: a batch ends where the blend state or the group of 16 pages changes. The first one is shared with 0 other skeletons',
@@ -226,14 +226,14 @@ describe('the render mode of a display object', () => {
         many.update(FRAME);
         expect(pages).toBeGreaterThan(8);
         expect(await row(many, 'renderMode')).toMatchObject({ value: 'batched' });
-        expect(await row(many, 'pages')).toEqual({
+        expect(await row(many, 'pages')).toMatchObject({
             feature: 'pages',
             value: 'no extra range',
             reason: `the atlas has ${pages} pages and a batch samples up to 16`,
         });
         stage.root.addChild(dragon);
         stage.render();
-        expect(await row(dragon, 'renderMode')).toEqual({
+        expect(await row(dragon, 'renderMode')).toMatchObject({
             feature: 'renderMode',
             value: 'mesh',
             reason: 'the option renderMode is "batched", and a batch of the renderer samples fewer textures than the skeleton has atlas pages. It has draw calls of its own, and the CPU places its vertices in the space of the skeleton',
@@ -271,7 +271,7 @@ describe('the render mode of a display object', () => {
         spine.play('run', { loop: true });
         for (let frame = 0; frame < 4; frame++) spine.update(FRAME);
         expect(spine.stats).toMatchObject({ renderMode: 'mesh', boneUploads: 5, positionUploads: 0 });
-        expect(await row(spine, 'uploads')).toEqual({
+        expect(await row(spine, 'uploads')).toMatchObject({
             feature: 'uploads',
             value: '1 bone, 0 position, 0.2 color, 0 uv per update',
             reason: '0 position, 1 color and 0 uv uploads in 5 updates that drew, 2 rewrites of the index buffers, 5 uploads of the bones',

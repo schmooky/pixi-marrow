@@ -1,0 +1,60 @@
+name: Pull request
+
+# The checks that read the pull request itself: its title, its labels and its changeset. They run
+# again when the title or a label changes. The jobs of ci.yml do not, so a label cannot replace a
+# failed run of them with a skipped one.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  changeset-gate:
+    # A pull request that changes the published package brings a changeset that names the package.
+    # scripts/changeset-gate.mjs holds the rule.
+    #
+    # Two ways around it are meant. The label `skip-changeset` is for a change that needs no
+    # release. The branch `changeset-release/main` is a release, and only in this repository: a
+    # fork that names its branch so does not skip the gate.
+    #
+    # A push to main does not pass this gate at all. The ruleset of main must require a pull request.
+    if: >-
+      !contains(github.event.pull_request.labels.*.name, 'skip-changeset')
+      && !(github.head_ref == 'changeset-release/main'
+      && github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Require a changeset for a change of the published package
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/changeset-gate.mjs "$BASE_SHA" "$HEAD_SHA"
+
+  pr-title:
+    # A squash merge makes the title the commit message on main, so the title follows the rules of
+    # commitlint.config.cjs too.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Lint the title
+        env:
+          # through the environment, so that a title cannot become a part of the script
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: printf '%s\n' "$PR_TITLE" | pnpm exec commitlint --verbose

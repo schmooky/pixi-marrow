@@ -5,7 +5,7 @@
   "description": "pixi-marrow monorepo: a Spine runtime for PixiJS v8 with its own pose core.",
   "type": "module",
   "engines": {
-    "node": ">=22.12"
+    "node": ">=24.0"
   },
   "packageManager": "pnpm@10.32.1",
   "scripts": {
@@ -21,8 +21,10 @@
     "fixtures:refresh": "node scripts/fixtures.mjs --refresh",
     "parity:ref": "pnpm --filter pixi-marrow parity:ref",
     "memory:update": "pnpm --filter pixi-marrow memory:update",
-    "facts": "node scripts/gen-facts.mjs",
+    "facts": "pnpm build && node scripts/gen-facts.mjs",
     "check:facts": "node scripts/gen-facts.mjs --check",
+    "rules": "node scripts/perf-rules.mjs",
+    "check:rules": "node scripts/perf-rules.mjs --check",
     "check:source": "node scripts/check-source.mjs",
     "check:api": "node scripts/check-api.mjs",
     "api:update": "node scripts/check-api.mjs --update",
@@ -32,15 +34,16 @@
     "bench:ab": "node scripts/fixtures.mjs && node scripts/bench/ab.mjs",
     "site:dev": "pnpm build && pnpm --filter @pixi-marrow/site dev",
     "site:build": "pnpm build && pnpm --filter @pixi-marrow/site build",
+    "site:typecheck": "pnpm --filter @pixi-marrow/site typecheck",
     "size": "node scripts/size-check.mjs",
     "size:check": "node scripts/size-check.mjs --check",
     "size:update": "node scripts/size-check.mjs --update",
-    "check": "pnpm lint && pnpm typecheck && pnpm check:source && pnpm check:facts && pnpm test:coverage && pnpm build && pnpm check:api && pnpm check:publish-contents && pnpm size:check && pnpm check:dead",
+    "check": "pnpm lint && pnpm typecheck && pnpm check:source && pnpm test:coverage && pnpm build && pnpm check:facts && pnpm check:rules && pnpm check:api && pnpm check:publish-contents && pnpm size:check && pnpm site:typecheck && pnpm check:dead",
     "changeset": "changeset",
     "changeset:status": "changeset status",
     "version-packages": "changeset version && pnpm install --lockfile-only",
     "commitlint": "commitlint --edit",
-    "prepare": "husky || true"
+    "prepare": "husky || test \"$CI\" = true"
   },
   "devDependencies": {
     "@assetpack/core": "^1.7.0",

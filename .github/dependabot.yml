@@ -1,0 +1,47 @@
+# Dependabot opens pull requests for new versions once a week.
+#
+# - npm: one pull request for all minor and patch versions, and one per major version.
+# - github-actions: one pull request. It moves the pinned commits of the workflows and the version
+#   in the comment beside each.
+#
+# The titles follow commitlint.config.cjs: `chore(deps): ...` and `ci(deps): ...`.
+#
+# A pull request for npm changes dev dependencies only: the library has no runtime dependencies.
+# So it takes the label `skip-changeset`, which the job changeset-gate reads. Dependabot sets a
+# label only when the repository has it.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+      include: scope
+    labels:
+      - dependencies
+      - skip-changeset
+    groups:
+      npm-minor-and-patch:
+        update-types:
+          - minor
+          - patch
+    ignore:
+      # The official Spine cores are the specification of the parity suite, one pinned version per
+      # Spine version. A person moves them, with `pnpm parity:ref`.
+      - dependency-name: '@esotericsoftware/*'
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci
+      include: scope
+    labels:
+      - dependencies
+    groups:
+      actions:
+        patterns:
+          - '*'

@@ -130,6 +130,13 @@ export function touchPose(state: PoseState): void {
 }
 
 /**
+ * The deform of a slot that has none: one empty array for every slot of every instance. An empty
+ * typed array of its own costs a slot about 200 bytes of objects, which no byte count shows. An
+ * engine replaces it with an array of the slot's own when a deform needs room.
+ */
+export const NO_DEFORM: Float64Array = new Float64Array(0);
+
+/**
  * Allocates the pose arrays for a model. The values are zero, not the setup pose. A pose engine
  * sets the setup pose when it is created.
  */
@@ -158,7 +165,7 @@ export function createPoseState(model: SkeletonModel): PoseState {
         darkColors: new Float64Array(slots * 3),
         attachments: new Array<AttachmentData | null>(slots).fill(null),
         sequenceIndices: new Int32Array(slots),
-        deform: Array.from({ length: slots }, () => new Float64Array(0)),
+        deform: new Array<Float64Array>(slots).fill(NO_DEFORM),
         deformLengths: new Int32Array(slots),
         drawOrder: new Int16Array(slots),
         version: 1,

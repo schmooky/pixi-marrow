@@ -1,0 +1,375 @@
+---
+layout: ../../layouts/Docs.astro
+title: Performance caveats
+description: What raises draw calls, CPU work, uploads, overdraw and memory in a PixiJS scene with Spine skeletons. How to see each cause, and how to fix it.
+---
+
+import Snippet from '../../components/Snippet.astro';
+import facts from '../../../../../scripts/facts.json';
+import source from '../../snippets/caveats.ts?raw';
+import perf from '../../snippets/performance.ts?raw';
+
+A scene with skeletons is slow for one of five reasons: draw calls, CPU work, uploads, overdraw or memory. This page has one section for each cause. Each section says what you see, why it costs, how to detect it and how to fix it. Each cause has a rule with a stable id on the page [Performance rules](/performance/rules/).
+
+## How to look
+
+Four tools show what a scene costs:
+
+- `hero.stats` holds counters of one skeleton. A read costs nothing. [Performance](/performance/#the-stats) lists every field.
+- `await hero.perf.report()` returns one row for each decision of the runtime, with the reason. [Performance](/performance/#the-perf-report) lists every row.
+- The entry `pixi-marrow/diagnose` reads a whole scene. `inspect(hero)` returns the state of one skeleton as plain data. `diagnose(root)` walks a Pixi tree and returns the rules that it breaks, each with its id.
+- The overdraw layer of the [debug overlays](/debug/) shows where the GPU paints a pixel more than once.
+
+## A parent that moves or fades
+
+This is the cause that a slot game meets first. Reels spin, and a win dims every other symbol.
+
+**What you see.** The skeletons rest, and the frame still costs CPU time and uploads. The cost grows with the number of skeletons below the parent that moves, and not with what plays.
+
+**Why.** In the batched mode, the vertices of a skeleton in the shared buffer are in the space of its render group. Pixi gives each skeleton one transform, one alpha and one tint that include every parent up to that group. So when a parent moves, the runtime places every vertex of each skeleton below it again and uploads the positions. When the alpha or the tint of a parent changes, the runtime writes the color of every vertex again. The same holds for a skeleton that moves or fades itself.
+
+Measured in Node for 200 resting spineboys: a container that moves each frame re-sends 740.6 KB of positions per frame. A container whose alpha changes re-sends 1,851.6 KB per frame.
+
+**Detect.** `stats.transformReplaces` grows by 1 per frame while a parent moves. `stats.tintRewrites` grows while the alpha or the tint above the skeleton changes. `stats.frameBytes` is not 0 for a skeleton that rests.
+
+<Snippet source={source} regions="import reel" />
+
+**Fix for a reel.** Make the container that moves a render group. Pixi then sends the transform of the group to the GPU as one matrix, and the batch shader applies it. No skeleton places a vertex again.
+
+<Snippet source={source} regions="dim" />
+
+**Fix for a dim layer.** Put the symbols that fade into a container that is a render group, and fade that container. The GPU applies the alpha and the tint of a render group. The sample dims with a tint. A tint dims with no transparency, so it also keeps the overdraw cuts on, which an alpha below 1 turns off.
+
+<Snippet source={source} regions="check" />
+
+A render group has a cost of its own. Pixi draws each render group with draw calls of its own, so five reels as five render groups take five draw calls or more. That is a good trade against vertices that the CPU writes in each frame. Do not make each symbol a render group.
+
+`renderMode: 'mesh'` is the other fix. A skeleton in the mesh mode keeps its vertices in its own space, and a parent moves it on the GPU. It then takes a draw call of its own.
+
+Rules: [MARROW001](/performance/rules/#marrow001) for a parent that moves, [MARROW002](/performance/rules/#marrow002) for a parent that fades.
+
+## A structure that changes
+
+**What you see.** Short stalls when symbols enter, leave or change their order.
+
+**Why.** Pixi keeps a list of instructions for each render group. It builds the list again when the structure of the group changes. Each skeleton in a batch then writes all its vertices again, and the batch uploads its buffers whole. These calls change the structure:
+
+- `addChild` and `removeChild`, also `addChild` of a child that is in the container, which moves it to the end
+- a change of `visible`, `renderable`, `blendMode` or `zIndex`
+- a mask or a filter that a container gets or loses.
+
+A skeleton changes the structure by itself in two cases. A slot that multiplies or screens appears or goes. A clip needs more room in the batch than before, which happens a few times in the first loop of an animation.
+
+A change of the draw order, of an attachment or of a color inside a skeleton does not build the instructions again.
+
+**Detect.** `stats.instructionBuilds` grows. Once per change is normal. A count that grows in every frame is the problem.
+
+**Fix.** Keep the same instances in the container where the game allows it, and change what they play. Where symbols must enter and leave, change them all in one frame: Pixi builds once per render, however many children changed. Put a layer whose children change often into a render group of its own, so that the build stays small.
+
+Rule: [MARROW014](/performance/rules/#marrow014).
+
+## Objects between skeletons
+
+**What you see.** More draw calls than expected for skeletons on one atlas.
+
+**Why.** Pixi draws in the order of the display list. A sprite, a text or a graphic between two skeletons uses another batcher, so it ends the batch of the first skeleton. The second skeleton starts a new one.
+
+**Detect.** `stats.drawCalls` reads 1 for each skeleton, and the renderer still makes many calls. `diagnose(root)` names the object that stands between.
+
+<Snippet source={source} regions="layers" />
+
+**Fix.** Put the skeletons of a scene into one container, and texts, frames and effects into a layer above or below it.
+
+`zIndex` and `sortableChildren` cause the same problem in another way. Pixi draws the children of a sorted container by `zIndex`, not in the order of `addChild`. So a text with a `zIndex` between those of two skeletons draws between them. Give the skeletons one range of `zIndex` values, and the other objects another.
+
+Rules: [MARROW004](/performance/rules/#marrow004) and [MARROW005](/performance/rules/#marrow005).
+
+## Blend modes
+
+**What you see.** One skeleton takes several draw calls, or each skeleton of a row takes its own.
+
+**Why.** A draw call has one blend state. Normal and additive slots share one, because the runtime draws with premultiplied alpha. A slot that multiplies or screens needs another state, so it ends the draw call before it and the one after it. A `blendMode` on the skeleton or on a parent does the same for the whole skeleton.
+
+**Detect.** The `blend` row of `perf.report()` counts the extra ranges and names the slots. `stats.drawCalls` is above 1 in the batched mode.
+
+**Fix.** Ask the animator for additive or normal slots where the look allows it. Put skeletons with the same blend mode next to each other.
+
+Rule: [MARROW006](/performance/rules/#marrow006).
+
+## Atlas pages over the limit
+
+**What you see.** A batch ends early, or a skeleton that should batch draws with meshes.
+
+**Why.** One draw call samples a fixed number of textures. A batch of the batched mode samples up to {facts.batch.pages} atlas pages. One draw of the mesh mode samples up to {facts.mesh.pages}. When the skeletons of a batch need more pages together, the batch ends and the next one starts.
+
+A device can sample fewer textures in one draw than {facts.batch.pages}. When one skeleton needs more pages than the device samples, the runtime cannot batch it. The skeleton then draws in the mesh mode, also with `renderMode: 'batched'`.
+
+**Detect.** The `pages` row of `perf.report()` counts the extra ranges. For the fallback, `stats.renderMode` reads `mesh`, and the `renderMode` row gives the device as the reason.
+
+**Fix.** Pack the skeletons of a scene into few atlas pages. One page for a set of symbols is best.
+
+Rules: [MARROW007](/performance/rules/#marrow007) and [MARROW008](/performance/rules/#marrow008).
+
+## Dark tint
+
+**What you see.** One more draw call where two kinds of skeletons meet.
+
+**Why.** A slot with a dark tint, which the Spine editor calls Tint black, needs one more color per vertex. Such a skeleton draws with a second batcher. A batch ends where a skeleton with a dark tint follows one without. A skeleton without a dark tint joins the open batch of one with it. Each vertex of a skeleton with a dark tint also carries 4 more bytes.
+
+**Detect.** The `darkTint` row of `perf.report()` reads `on`.
+
+**Fix.** Keep skeletons with a dark tint next to each other in the display list. Turn Tint black off in the editor for slots that no animation tints.
+
+Rule: [MARROW013](/performance/rules/#marrow013).
+
+## Clipping
+
+**What you see.** CPU time in the batched mode, or more draw calls in the mesh mode.
+
+**Why.** The two modes clip in different ways. In the batched mode the CPU cuts the triangles of each clipped slot against the clip polygon, in every frame in which they move. In the mesh mode the clip is a stencil mask, which costs 2 more draw calls per applied clip. A clip that cuts a visible slot also stops instancing for that instance.
+
+**Detect.** `stats.clips` counts the clips applied now, and `stats.maskDraws` the mask draws. The `clipping` row of `perf.report()` gives both with the reason.
+
+**Fix.** Ask the animator whether the clip is needed. A clip with few vertices over few slots costs least. For a large rig with one clip, the mesh mode can cost less than the cut on the CPU.
+
+Rules: [MARROW010](/performance/rules/#marrow010) and [MARROW011](/performance/rules/#marrow011).
+
+## Large rigs with many meshes
+
+**What you see.** CPU time that grows with the vertices of a rig, and one draw call or more per instance.
+
+**Why.** A vertex of a mesh costs work for each bone that it follows, in every frame in which its bones move. The CPU does that work in both render modes. `renderMode: 'auto'` batches a skeleton of up to {facts.batch.autoVertices} vertices. A larger one draws in the mesh mode, with draw calls of its own. So 50 instances of a large rig take 50 draw calls or more.
+
+**Detect.** The `vertices` row of `perf.report()` gives the count. `stats.renderMode` reads `mesh`, and the `renderMode` row says that the size is the reason.
+
+<Snippet source={source} regions="mesh" />
+
+**Fix.** For many instances of one large rig, set `skinning: 'gpu'` with `instancing: 'auto'`. The vertex shader then places the vertices, and instances that follow each other draw in one call. For a few instances, fewer mesh vertices in the rig help most. `renderMode: 'batched'` forces the batch for a rig over the limit, which trades draw calls for a larger copy.
+
+Rule: [MARROW009](/performance/rules/#marrow009).
+
+## Containers attached to slots
+
+**What you see.** One more draw call per attached container, plus the draw calls of the container.
+
+**Why.** `attach` puts a Pixi container into the draw order of a skeleton. The skeleton ends its draw call at that slot, Pixi draws the container, and the skeleton starts a new call. An attached container also stops instancing for its skeleton, and no slot counts as covered across it.
+
+**Detect.** The `links` row of `perf.report()` lists the containers.
+
+**Fix.** Use `follow` where the container may draw over the whole skeleton. `follow` costs no draw call.
+
+Rule: [MARROW012](/performance/rules/#marrow012).
+
+## Masks and filters
+
+**What you see.** More draw calls, more GPU time and more memory around a skeleton.
+
+**Why.** A filter makes Pixi draw the container into a texture of its own and then draw that texture with the filter. That is one more render target and at least one more draw call, in every frame. A mask and a filter both end the batch before and after their container. With `idleCache: 'auto'`, a skeleton below a filter or a mask draws live and gets no image.
+
+**Detect.** `diagnose(root)` names the container with the filter or the mask.
+
+**Fix.** Put a filter on the smallest container that needs it, not on the stage. For a glow or a blur that does not change, ask the animator for an image in the rig.
+
+Rule: [MARROW017](/performance/rules/#marrow017).
+
+## cacheAsTexture and the idle cache
+
+**What you see.** A cache that makes a frame slower.
+
+**Why.** `cacheAsTexture()` of Pixi draws a container into a texture once and then draws the texture. In pixi.js 8.23 the texture stays as it is until the game calls `updateCacheTexture()`. So a skeleton that plays below a cached container shows a still picture. The runtime still poses it and uploads its vertices, for nothing. A game that calls `updateCacheTexture()` in every frame pays the normal draw plus one render pass per frame.
+
+The idle cache of pixi-marrow, `idleCache: 'auto'`, does this for one skeleton that rests. It drops the image when the pose changes or when the skeleton moves by a part of a pixel. A skeleton that rests and moves in turns, as a symbol on a reel does, takes and drops images again and again. Each image costs a render pass and two builds of the instructions.
+
+**Detect.** For the idle cache, `stats.instructionBuilds` grows while the skeletons only rest and move. For `cacheAsTexture`, `diagnose(root)` names the cached container above a skeleton that plays.
+
+**Fix.** Cache only groups that rest for a long time, and stop the skeletons in them. Leave `idleCache` off for symbols on reels. It is off by default.
+
+Rules: [MARROW018](/performance/rules/#marrow018) and [MARROW019](/performance/rules/#marrow019).
+
+## Overdraw cuts that are off
+
+**What you see.** The overdraw layer of the debug overlays stays bright with outlines loaded.
+
+**Why.** The cuts are exact only where Pixi draws a skeleton as its pose says. The runtime turns them off where that does not hold:
+
+- **No outlines.** Without outlines, `tightMesh` and `occlusion` do nothing. An option set by name then warns once.
+- **`antialias: true` or a multisampled render target.** Edges of polygons would show in pixels where a quad would not. Both cuts are off for such a draw.
+- **`roundPixels`.** Rounding moves each vertex on its own, so both cuts are off.
+- **An alpha or a blend mode above the skeleton.** A slot of a skeleton at alpha 0.5 does not hide what is behind it. So `occlusion` skips no slot while an alpha above the skeleton is not 1.
+- **A page texture that is not plain.** Mipmaps, anisotropic filtering, a repeat mode, another pixel size than the atlas states, or a premultiplied image for a straight page. Such a page keeps its quads.
+
+**Detect.** The `tightMesh`, `occlusion` and `outlines` rows of `perf.report()` say what is on and what prevents it. `stats.tightRanges` and `stats.coveredSlots` count what the cuts do now.
+
+**Fix.** Write the outlines at build time, see [Less overdraw with outlines](/performance/#less-overdraw-with-outlines). Leave `antialias` and `roundPixels` off where overdraw is the limit. Load the page images as the atlas states them. Dim with a tint, not with alpha.
+
+Rules: [MARROW003](/performance/rules/#marrow003), [MARROW016](/performance/rules/#marrow016), [MARROW020](/performance/rules/#marrow020) and [MARROW021](/performance/rules/#marrow021).
+
+## Skins per instance
+
+**What you see.** A stall when a skin changes, and more memory with many skin lists.
+
+**Why.** All instances that show the same skins share one vertex layout. A new list of skins builds a combined skin and a new layout. The runtime keeps a combined skin that no instance shows, and frees it once {facts.skins.kept} newer ones are unused too. Instances with different skins also do not draw in one instanced call.
+
+**Detect.** `stats.templateBuilds` grows with each skin change. The `layout` row of `perf.report()` gives the count.
+
+**Fix.** Set the skins once, when the instance is made. Do not change skins in every frame.
+
+Rule: [MARROW023](/performance/rules/#marrow023).
+
+## Physics
+
+**What you see.** A skeleton that never rests.
+
+**Why.** A physics constraint simulates in every update, also when the animation ended. So a skeleton with physics poses its bones and places its vertices in every frame.
+
+**Detect.** The `physics` row of `perf.report()` lists the constraints and the mode. `stats.skips` does not grow.
+
+**Fix.** Set `hero.physics = 'none'` for a skeleton whose physics nobody sees. `lod: 'auto'` skips physics for a skeleton smaller than {facts.lod.below} pixels across.
+
+Rule: [MARROW022](/performance/rules/#marrow022).
+
+## Hidden skeletons
+
+**What you see.** CPU time for skeletons that nobody sees.
+
+**Why.** The ticker places no vertex for a skeleton that Pixi does not draw. That is one without a parent, or with `visible` false or an alpha of 0. Three cases still cost:
+
+- A skeleton that is visible and outside the screen updates in full with the default `offscreen: 'update'`.
+- An `update` that the game calls itself always does the whole work, also for a hidden skeleton.
+- A hidden skeleton with a mix or with several tracks still runs its timelines. Only one animation that plays alone on track 0 costs no pose work while hidden.
+
+<Snippet source={source} regions="hidden" />
+
+**Detect.** The `pacing` row of `perf.report()` says how often the skeleton updates and why. `pacingStatus().hidden` is true for a skeleton that counts as off the screen.
+
+**Fix.** Set `perf: 'balanced'` or `perf: 'fast'` for a scene with many skeletons outside the screen. Stop the animations of a skeleton in a pool. With `autoUpdate: false`, do not call `update` for a skeleton that is hidden.
+
+Rule: [MARROW015](/performance/rules/#marrow015).
+
+## The ticker
+
+**What you see.** `app.ticker.speed`, `maxFPS` or `stop()` do not reach the skeletons.
+
+**Why.** A skeleton updates from `Ticker.shared` by default, which is not the ticker of the application. A game that caps the frame rate of `app.ticker` then still poses its skeletons at the rate of the display.
+
+**Fix.** Pass `ticker: app.ticker` when you make the skeleton. [Play](/guide/play/#what-updates-the-skeleton) has the sample.
+
+## Resolution and devicePixelRatio
+
+**What you see.** A frame that is fast on a desktop and slow on a phone with a dense screen.
+
+**Why.** The `resolution` of the renderer multiplies the pixels that the GPU fills. At resolution 3, the GPU fills 9 times the pixels of resolution 1. Overdraw multiplies with it. Many phones report a `devicePixelRatio` of 3 or more and have a slow GPU.
+
+**Detect.** Lower the resolution and compare the frame time. When the frame gets faster, the GPU is the limit, not the CPU.
+
+**Fix.** Cap the resolution, for example at 2. Use atlas pages of a matching scale, as the `@0.5x` variants of AssetPack. Then cut the overdraw with outlines.
+
+## Atlas pages and GPU memory
+
+**What you see.** A tab that reloads on a phone, or textures that go black.
+
+**Why.** A page image takes its width times its height times 4 bytes on the GPU, whatever the size of its file. A page of 2048 by 2048 takes 16 MB, and one of 4096 by 4096 takes 64 MB. Mipmaps add a third. WebP and AVIF make the download smaller, not the texture.
+
+**Detect.** Add the pages of the atlases that the game holds at one time. `perf.memory()` does not count them: it counts the buffers and the small textures of one instance.
+
+<Snippet source={perf} regions="memory" />
+
+**Fix.** Unload the assets of a scene that ended, see [Destroy and unload](/guide/assets/#destroy-and-unload). Ship pages at half scale for small screens. Keep unused attachments out of the atlas.
+
+## Baked clips
+
+**What you see.** Memory that grows while the game plays, with `bake` on.
+
+**Why.** A baked clip stores the pose of each frame. It keeps 23 KB to 0.9 MB per animation and skin on the example rigs. Clips that the game bakes while it plays hold at most 4 MB per skeleton. Over that, the clip that played longest ago goes, and a clip in use never goes.
+
+**Detect.** `perf.memory()` returns `baked` and `bakeBudget`. The `bake` row of `perf.report()` says how many updates played baked.
+
+**Fix.** Bake only the animations that play often, with a list of names. `setBakeBudget` of `pixi-marrow/bake` sets another limit. [Performance](/performance/#bake) has the sample.
+
+## Idle images
+
+**What you see.** Memory that grows with the number of resting skeletons, with `idleCache: 'auto'`.
+
+**Why.** Each image is a texture of 4 bytes per pixel of the box of its skeleton on the screen. All images together hold at most 64 MB. A skeleton whose image would pass that draws live.
+
+**Fix.** Leave `idleCache` off unless a measurement on your device shows a gain.
+
+## Spine 4.3 and fast changes of animation
+
+**What you see.** On a skeleton of Spine 4.3, each update costs more the longer the game runs.
+
+**Why.** A track that mixes keeps the animation that it mixes from. When the game changes the animation faster than the mix time, again and again, the 4.3 engine keeps each of them in a chain. It applies the whole chain in every update. The official 4.3 runtime does the same, and pixi-marrow keeps its pose equal to it. A skeleton of 4.1 or 4.2 does not build such a chain.
+
+One measurement on an Apple M4 shows the size of it. Spineboy played with a mix of 0.25 seconds and a change every 10 updates. An update took about 10 microseconds at the start and about 700 after a minute.
+
+**Fix.** Let a mix end before the next change, or change with `mix: 0`. The chain ends when the track stays on one animation for longer than the mix.
+
+Rule: [MARROW025](/performance/rules/#marrow025).
+
+## pixi.js before 8.23
+
+**What you see.** More bytes per frame on pixi.js {facts.floor.pixiShort} and 8.22 than on 8.23.
+
+**Why.** From 8.23, a WebGL buffer of Pixi uploads the range that the runtime names. Before that, two things upload more:
+
+- The batched mode on WebGL2 uploads one stretch per buffer, from the first change to the last.
+- A data texture of `skinning: 'gpu'` uploads whole.
+
+WebGPU uploads each stretch on every version that the package allows.
+
+**Fix.** Use pixi.js 8.23 or later, or WebGPU.
+
+On WebGPU, one more limit holds in the mesh mode. Pixi keeps one uniform buffer for the draws of a frame, with room for about 2,000 draws. Past that room, each mesh of pixi-marrow binds a small uniform buffer of its own. Use the batched mode or instancing for a scene with that many mesh draws.
+
+Rules: [MARROW026](/performance/rules/#marrow026) and [MARROW024](/performance/rules/#marrow024).
+
+## WebGL1 and Canvas
+
+**What you see.** No skeleton draws, and the rest of the game goes on.
+
+**Why.** Every shader of pixi-marrow needs WebGL2 or WebGPU. Pixi uses WebGL1 where a browser has no WebGL2. The runtime then draws no skeleton and warns once: `pixi-marrow: this renderer draws no skeleton. Use WebGL2 or WebGPU.` The Canvas renderer of Pixi gives the same result.
+
+**Fix.** Check `app.renderer` after `app.init`, and show a message to a player whose browser has no WebGL2.
+
+## Context loss
+
+**What you see.** The skeletons go blank for a moment and come back.
+
+**Why.** A browser can take the WebGL context of a page away and give it back later. While the context is lost, pixi-marrow draws no skeleton. When it is back, Pixi makes every buffer and texture again, and each buffer uploads whole at its first draw. So a skeleton at rest comes back too. The game needs no code for this.
+
+An idle image is dropped and taken again. The runtime does not watch for a lost device of WebGPU.
+
+## Budgets by device class
+
+pixi-marrow has no measured budget for any class of phone. This page gives none, because a number without a measurement would be a guess.
+
+What is measured:
+
+- **One desktop.** `pnpm bench:ab` runs pixi-marrow against the official Pixi runtime in headless Chrome. The run in `scripts/bench/baseline-m5.json` of the repository is from 2026-11-12, on an Apple M4 with 10 cores and 16 GB, in Chrome 157. It plays 200 instances of each example rig, 5 runs each, on WebGL2 and WebGPU.
+- **The limit of `renderMode: 'auto'`.** The {facts.batch.autoVertices} vertices come from the same machine, with pixi.js 8.23.0, 200 instances and 5 runs.
+- **Bytes per frame under a moving parent.** These numbers come from Node with no GPU. They count what the runtime hands to Pixi, not frame times.
+- **One phone, one case.** The idle cache on a Galaxy A05, on the [Performance](/performance/#idlecache) page. The repository records no browser version and no date for it.
+
+What is not measured:
+
+- frame times on any phone, tablet or low-end laptop
+- Safari and Firefox
+- GPU skinning and instancing on a phone.
+
+So measure on your own devices. The [How many](/lab/how-many/) test of the lab adds symbols until the device drops frames. Run it on the weakest device that your game supports, and plan for fewer symbols than it reports. Your game also runs its own code in each frame.
+
+## Checklist before release
+
+1. Skeletons are in containers of their own, with no text or sprite between them.
+2. Each container that moves or fades with skeletons in it is a render group.
+3. `stats.frameBytes` is 0 for a skeleton that rests, in each state of the game.
+4. `stats.instructionBuilds` does not grow in every frame.
+5. The skeletons of a scene use few atlas pages.
+6. The outlines file is built and loaded, and the overdraw layer shows the cuts.
+7. The renderer has no `antialias` and no `roundPixels`, unless the look needs them.
+8. The resolution has a cap.
+9. Skeletons that leave the screen stop, or the preset is `balanced` or `fast`.
+10. A scene that ends destroys its instances and unloads its assets.
+11. pixi.js is 8.23 or later.
+12. `diagnose(app.stage)` returns no rule that you did not accept.
+13. The game was run on the weakest device that it supports.

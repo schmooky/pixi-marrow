@@ -14,15 +14,22 @@ concurrency:
   group: ci-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# Each action is pinned to a commit, with its version in a comment. A tag can move to other code,
+# and a commit cannot. Dependabot moves the pins, see .github/dependabot.yml.
+#
+# No job draws pixels. The runners have no GPU, so the pixel check runs on a machine of a person:
+# pnpm check:render.
+
 jobs:
   ci:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           cache: pnpm
@@ -38,7 +45,10 @@ jobs:
 
       - name: Commit message lint
         if: github.event_name == 'pull_request'
-        run: pnpm exec commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }} --verbose
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: pnpm exec commitlint --from "$BASE_SHA" --to "$HEAD_SHA" --verbose
 
       - name: Typecheck
         run: pnpm typecheck
@@ -47,11 +57,8 @@ jobs:
         # layer imports, file size, casts
         run: pnpm check:source
 
-      - name: Generated facts are current
-        run: pnpm check:facts
-
       - name: Fixture cache
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: fixtures/.cache
           key: fixtures-${{ hashFiles('fixtures/manifest.json') }}
@@ -62,6 +69,10 @@ jobs:
 
       - name: Build library
         run: pnpm build
+
+      - name: Generated facts are current
+        # reads the numbers of the docs from the source and the build, so it runs after the build
+        run: pnpm check:facts
 
       - name: Public API snapshot
         run: pnpm check:api
@@ -79,64 +90,66 @@ jobs:
     # The peer range starts at pixi.js 8.21.0 and pixi-silk 1.0.1, but the dev dependencies resolve
     # newer versions. This job installs the lowest ones into the package on the runner, where the
     # changed manifest and lockfile stay, and runs the typecheck and the unit tests on them.
+    #
+    # The tests run in Node, where a canvas has no context. So no test uploads a texture, which is
+    # what differs on 8.21. Only the pixel check does: pnpm check:render --pixi=8.21.0, on a
+    # machine with a GPU.
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
 
       - name: Install the lowest peers
-        # the floors are the starts of the peer ranges in packages/pixi-marrow/package.json
+        # The floors are the starts of the peer ranges in packages/pixi-marrow/package.json. The
+        # check fails when a peer is not at its floor, and when the install added a package that
+        # the committed lockfile does not pin. So the job runs on pinned packages only.
         run: |
           pnpm --filter pixi-marrow add --save-dev $(node scripts/peer-floor.mjs)
           node scripts/peer-floor.mjs --check
 
       - name: Fixture cache
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: fixtures/.cache
           key: fixtures-${{ hashFiles('fixtures/manifest.json') }}
 
       - name: Typecheck
+        # With skipLibCheck, as everywhere. Without it tsc reports the types of the peers
+        # themselves: pixi.js 8.21.0 and pixi-silk 1.0.1 each have one error under
+        # exactOptionalPropertyTypes, which is not for this repository to fix.
         run: pnpm typecheck
 
       - name: Unit tests
         # downloads missing fixtures first, then runs unit tests and the parity suite
         run: pnpm test
 
-  changeset-gate:
-    # Library source changed but no changeset added. Escape hatch: the `skip-changeset` label.
-    if: >-
-      github.event_name == 'pull_request'
-      && !contains(github.event.pull_request.labels.*.name, 'skip-changeset')
-      && github.head_ref != 'changeset-release/main'
+  site:
+    # The docs site is the one real bundle in the repo: it imports the built package as a game does.
+    # A change that breaks its types or its build fails here, before the deploy finds it.
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          fetch-depth: 0
-      - name: Require a changeset for library changes
-        run: |
-          base="${{ github.event.pull_request.base.sha }}"
-          head="${{ github.event.pull_request.head.sha }}"
-          if git diff --name-only "$base" "$head" -- 'packages/pixi-marrow/src/**' 'packages/pixi-marrow/package.json' | grep -q .; then
-            # In a git pathspec `*` matches `/` too, so `.changeset/*.md` would count a file added
-            # to .changeset/pre/. The glob form matches the top folder only.
-            added=$(git diff --name-only --no-renames --diff-filter=A "$base" "$head" -- ':(glob).changeset/*.md' | grep -vE '(^|/)README\.md$' || true)
-            # A release in pre mode moves the changesets from .changeset/ into .changeset/pre/. Only
-            # such a move counts, not a file that is added to .changeset/pre/ alone.
-            moved=""
-            for file in $(git diff --name-only --no-renames --diff-filter=D "$base" "$head" -- ':(glob).changeset/*.md'); do
-              if git diff --name-only --no-renames --diff-filter=A "$base" "$head" -- ".changeset/pre/${file#.changeset/}" | grep -q .; then
-                moved="$moved $file"
-              fi
-            done
-            if [ -z "$added" ] && [ -z "$moved" ]; then
-              echo "::error::This PR changes packages/pixi-marrow but adds no .changeset/*.md. Run 'pnpm changeset' or add the 'skip-changeset' label."
-              exit 1
-            fi
-          fi
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build library
+        # the site reads the types and the code of the built package
+        run: pnpm build
+
+      - name: Typecheck the site
+        run: pnpm typecheck
+        working-directory: apps/site
+
+      - name: Build the site
+        run: pnpm site:build

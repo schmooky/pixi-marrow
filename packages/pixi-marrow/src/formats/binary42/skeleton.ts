@@ -8,6 +8,8 @@ import {
 } from '../../model/model';
 import type { BinaryInput } from '../shared/binary-input';
 import { writeRgb888, writeRgba8888 } from '../shared/color';
+import { hashOfInts } from '../shared/hash';
+import { MAX_INDEX, requireAtMost } from '../shared/limits';
 import {
     type BinaryVersion,
     type ImportState,
@@ -32,9 +34,7 @@ export interface Header {
 
 /** Reads the header. 4.1 files have no reference scale. */
 export function readHeader(input: BinaryInput, version: BinaryVersion): Header {
-    const lowHash = input.readInt32();
-    const highHash = input.readInt32();
-    const hash = highHash === 0 && lowHash === 0 ? null : highHash.toString(16) + lowHash.toString(16);
+    const hash = hashOfInts(input.readInt32(), input.readInt32());
     const editorVersion = input.readString();
 
     if (editorVersion === null) throw invalid('The file has no version string.');
@@ -71,6 +71,8 @@ export function readStrings(state: ImportState): void {
 export function readBones(state: ImportState): BoneTable {
     const { input, version, nonessential } = state;
     const count = readCount(state, 'bones');
+
+    requireAtMost(count, MAX_INDEX, 'The number of bones');
     const names: string[] = [];
     const parents = new Int16Array(count);
     // 64-bit, like the numbers the official bone data holds
@@ -117,6 +119,8 @@ function skipBoneEditorData(input: BinaryInput, version: BinaryVersion): void {
 export function readSlots(state: ImportState): SlotTable {
     const { input, version, nonessential } = state;
     const count = readCount(state, 'slots');
+
+    requireAtMost(count, MAX_INDEX, 'The number of slots');
     const names: string[] = [];
     const bones = new Int16Array(count);
     const colors = new Float64Array(count * 4);

@@ -91,7 +91,7 @@ export function setSkin(rig: Rig, pose: PoseState, solver: Solver, skin: number)
     const count = rig.lookup.skinCount;
 
     if (!Number.isInteger(skin) || skin < -1 || skin >= count || (skin >= 0 && rig.lookup.skin(skin) === undefined)) {
-        throw new MarrowError('invalid-data', `The skeleton has no skin ${skin}. It has ${count} skins.`, {
+        throw new MarrowError('invalid-option', `The skeleton has no skin ${skin}. It has ${count} skins.`, {
             fix: 'Pass an index into the skin list of the model, one that combineSkins made, or -1 for no skin.',
         });
     }

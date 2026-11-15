@@ -1,7 +1,7 @@
 import { AnimationState, AnimationStateData, Physics, Skeleton } from 'spine-core-4.3';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createPoseEngine, importSkeleton, WORLD_STRIDE } from '../../src/core';
-import { COS_QUARTER, DEG_RAD, QUARTER, SIN_QUARTER } from '../../src/pose/v43/math';
+import { DEG_RAD, QUARTER, START, START_COS, START_SIN } from '../../src/pose/v43/math';
 import { readData43 } from '../parity/pose-official43';
 
 /*
@@ -89,7 +89,7 @@ describe('the trig shortcuts of the 4.3 pose engine', () => {
         expect([Math.cos(0), Math.cos(-0)]).toEqual([1, 1]);
         expect([Object.is(Math.sin(0), 0), Object.is(Math.sin(-0), -0)]).toEqual([true, true]);
         expect(QUARTER).toBe((0 + 90 + 0) * DEG_RAD);
-        expect([COS_QUARTER, SIN_QUARTER]).toEqual([Math.cos(QUARTER), Math.sin(QUARTER)]);
+        expect([START[START_COS], START[START_SIN]]).toEqual([Math.cos(QUARTER), Math.sin(QUARTER)]);
     });
 
     it('give the pose of the official core, which computes every cosine and sine', async () => {

@@ -112,8 +112,14 @@ export type PhysicsMode = 'none' | 'reset' | 'update' | 'pose';
 export interface PoseEngine {
     readonly state: PoseState;
     /**
-     * The bytes of typed arrays this instance holds: its pose state, the values of its constraints
-     * and the poses they work on. Track entries are objects and are not counted.
+     * The bytes of data in the typed arrays this instance holds: its pose state, the values of
+     * its constraints and the poses they work on. It grows with the bones, the slots, the
+     * constraints and the deforms of the skeleton.
+     *
+     * The objects of the instance are not counted: the engine, its track entries and the typed
+     * array objects themselves. They are about the same for every skeleton. Measured in Node 24,
+     * they are about 5 kB for a 4.1 or 4.2 skeleton and about 7 kB for a 4.3 skeleton. A slot
+     * without a deform has no array of its own, so that part does not grow with the skeleton.
      */
     readonly bytes: number;
     /** Multiplies the time every track advances by. */
@@ -130,7 +136,15 @@ export interface PoseEngine {
     setEmptyAnimation(track: number, mixDuration: number): TrackEntry;
     /** Queues mixing a track out to nothing. */
     addEmptyAnimation(track: number, mixDuration: number, delay: number): TrackEntry;
-    /** Sets fields of a track entry. A field this Spine version does not have throws a `MarrowError`. */
+    /**
+     * Sets fields of a track entry. Every field is checked before the first one is written, so a
+     * call that throws changes nothing. The rules are the same in every Spine version.
+     *
+     * - A field that only another Spine version has throws a `MarrowError` with the code `unsupported-feature`.
+     * - A name that no version has throws one with the code `unknown-name`.
+     * - A value of the wrong type throws one with the code `invalid-data`.
+     * - A field whose value is `undefined` stays as it is.
+     */
     configure(entry: TrackEntry, fields: TrackFields): void;
     /** Removes what a track holds, without mixing out. The pose keeps what the track did to it. */
     clearTrack(track: number): void;
@@ -243,7 +257,15 @@ export interface PoseEngine {
      * poses the skeleton as it would from the setup pose. Values it keys are not looked at.
      */
     holdsSetup(animation: number, bones?: Uint8Array): boolean;
-    /** What happened since the last call, in the order the official listener is called. */
+    /**
+     * What happened since the last call, in the order the official listener is called. The list
+     * is the caller's to keep.
+     *
+     * Call it after every update, also when you need no events. The engine keeps every event
+     * until this call takes it, so the list of an engine that is never asked grows without limit.
+     * An update that reports nothing returns one shared empty list and allocates nothing. An
+     * update that reports events allocates the list and one object for each event.
+     */
     takeEvents(): PoseEvent[];
 }
 
@@ -265,6 +287,9 @@ export type PoseEngineFactory = () => PoseEngine;
 /**
  * Loads the pose engine code for a model's Spine version and returns a factory that creates
  * engines for that model without waiting. Use it when instances are created synchronously.
+ *
+ * Call `takeEvents` of every engine after each of its updates: an engine keeps its events until
+ * that call takes them.
  *
  * @example
  * const createEngine = await loadPoseEngine(model);
@@ -288,10 +313,14 @@ export async function loadPoseEngine(model: SkeletonModel): Promise<PoseEngineFa
  *
  * Every constraint of the three versions is solved: IK, transform, path, physics and sliders.
  *
+ * Call `takeEvents` after every update. The engine keeps its events until that call takes them,
+ * so the list of an engine that is never asked grows without limit.
+ *
  * @example
  * const engine = await createPoseEngine(await importSkeleton(bytes));
  * engine.setAnimation(0, 0, true);
  * engine.update(1 / 60);
+ * for (const event of engine.takeEvents()) console.log(event.type, event.track);
  * console.log(engine.state.world.subarray(0, 6));
  */
 export async function createPoseEngine(model: SkeletonModel): Promise<PoseEngine> {

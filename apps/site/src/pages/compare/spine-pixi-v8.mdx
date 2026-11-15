@@ -1,0 +1,105 @@
+---
+layout: ../../layouts/Docs.astro
+title: pixi-marrow vs spine-pixi-v8 vs pixi-spine
+description: Which Spine runtime for PixiJS v8. A table of versions, renderers, draw calls, cost at rest, bundle size, features, API and maturity, checked on 15 November 2026.
+---
+
+For PixiJS v8 there are two Spine runtimes: the official `@esotericsoftware/spine-pixi-v8`, and pixi-marrow. Take the official runtime when you need a released runtime, the Canvas renderer or the full `spine-core` API. Take pixi-marrow when many skeletons, or skeletons at rest, cost your game too much frame time. pixi-spine is for PixiJS v7 and earlier.
+
+pixi-marrow is a pre-release. Its version is `0.1.0-next.1`, and its API can still change. Read [what pixi-marrow does not have](#not-in-pixi-marrow) before you choose it.
+
+## How this page was checked
+
+Each cell about pixi-marrow comes from its code, its tests or a measurement. Each cell about the official runtime comes from the source of `@esotericsoftware/spine-pixi-v8` 4.2.120 and 4.3.13. Those two versions are development dependencies of this repo. Each cell about pixi-spine comes from the README of its repository, read on 15 November 2026.
+
+A cell says `Not checked` where none of these sources gives the answer. The measured numbers are from the run of 15 November 2026 on [Benchmarks](/benchmarks/): one Apple M4, Chrome 157, PixiJS 8.23.0.
+
+## The table
+
+A skeleton is the bones, slots, skins and animations of one Spine export. A draw call is one command from the CPU to the GPU to draw triangles. An instance is one display object of a skeleton.
+
+| | pixi-marrow | spine-pixi-v8 | pixi-spine |
+|---|---|---|---|
+| Made by | schmooky, on GitHub | Esoteric Software, the maker of Spine | The `pixijs-userland` organization on GitHub |
+| State | Pre-release `0.1.0-next.1`, on the npm tag `next` | Released. Checked here: 4.2.120 and 4.3.13 | Not checked |
+| Spine versions | 4.1, 4.2 and 4.3 in one package, also mixed in one scene | One per package version: 4.2.x for Spine 4.2, 4.3.x for Spine 4.3 | 3.7, 3.8, 4.0 and 4.1 |
+| PixiJS versions | 8.21 or later | 8.16 or later | v5 to v7 |
+| WebGL2 | Yes | Yes | Not checked |
+| WebGPU | Yes | Yes | No. PixiJS v7 has no WebGPU renderer |
+| WebGL1 | No. It warns once and draws no skeleton | Not checked | Not checked |
+| Canvas | No. It warns once and draws no skeleton | Yes, through `spine-canvas` | Not checked |
+| Draw calls, 200 instances of a rig without a clip | 1 | 1 | Not measured |
+| Draw calls, 200 instances of coin-pro | 1 | 400 | Not measured |
+| Draw calls, 200 instances of tank-pro | 401 | 485 to 491 | Not measured |
+| How skeletons batch | Its own batchers feed the batch pipe of Pixi. Skeletons of up to 1024 vertices that follow each other share draw calls | Each slot goes to the batcher of Pixi as one element | Not checked |
+| Slots that add | They stay in the batch of the normal slots | A change of blend mode starts a new batch | Not checked |
+| CPU time at rest, 200 instances, WebGL2 | 0.03 to 0.09 ms a frame, and no upload | 0.61 to 19.3 ms a frame, and 206 to 3,385 KB of uploads | Not measured |
+| CPU time while playing, 200 instances, WebGL2 | 0.65 to 6.13 ms a frame | 1.24 to 19.4 ms a frame | Not measured |
+| Size of the code, gzipped | 31 kB at the import, about 72 to 74 kB before the first skeleton shows | 46.6 kB for 4.2.120, 55.1 kB for 4.3.13 | Not measured |
+| Vertices placed on the GPU | An option: `skinning: 'gpu'`, in the mesh mode | Not in its source | Not checked |
+| Instanced draws | An option: `instancing`, with `skinning: 'gpu'` | Not in its source | Not checked |
+| Baked playback | An option: `bake`, and the entry `pixi-marrow/bake` | Not in its source | Not checked |
+| Physics | Yes, for 4.2 and 4.3 files | Yes | No. Physics came with Spine 4.2 |
+| Clipping | Yes | Yes | Not checked |
+| API | Its own: `hero.play('run', { loop: true })`. It does not expose `spine-core` objects | The `spine-core` objects: `spine.state.setAnimation(0, 'run', true)` | Not checked |
+| Typed names | `pixi-marrow typegen` writes the names of a skeleton as a type | Names are of the type `string` | Not checked |
+| At import | It registers nothing with Pixi | It registers its loaders, its batcher and its pipe with Pixi | Not checked |
+| Module format | ES modules only, in many files that load on demand | ES modules, and single files as ES module and IIFE | Not checked |
+| Licence | The Spine Runtimes License | The Spine Runtimes License | Its README names a file `SPINE-LICENSE` |
+
+## Notes on the rows
+
+**Spine versions.** Esoteric Software states the rule for its runtimes in the [Spine versioning](https://esotericsoftware.com/spine-versioning) page. The major and minor version of the editor that exports a file must match the runtime. In pixi-marrow, the loader reads the version from each file and loads the reader and the pose engine for it. So a game can hold 4.1, 4.2 and 4.3 exports at once.
+
+**Draw calls.** The numbers are for 200 instances that play, on WebGL2 and on WebGPU. coin-pro has a slot that adds, and tank-pro has slots that multiply. In pixi-marrow a slot that multiplies or screens ends a batch too. [Draw order and batches](/how/batches/) shows what ends a batch.
+
+**Cost at rest.** A skeleton is at rest when its animation ended and nothing changes its pose. pixi-marrow then runs no timeline and places no vertex. The official runtime poses and packs its vertices in each frame. A moving parent changes this for pixi-marrow: see [the question on render groups](/faq/#how-do-i-move-or-fade-many-skeletons-without-a-cost).
+
+**CPU time while playing.** pixi-marrow took 0.23 to 0.77 times the CPU time of the official runtime, and one of those ratios is not decided. Its `update` call alone is slower on four of five rigs, because it places its vertices there. [Benchmarks](/benchmarks/) has every row.
+
+**Size of the code.** pixi-marrow loads more code than the official runtime of one Spine version. The import of `MarrowSpine` is 31 kB. The first skeleton then loads a reader of 8.6 to 9.1 kB and a pose engine of 32 or 34 kB. The mesh mode adds 18 kB and clipping adds 7.4 kB, each when a skeleton needs it. These sizes are in `scripts/facts.json`, and `pnpm size` measures them.
+
+The official numbers are from a bundle of `import { Spine } from '@esotericsoftware/spine-pixi-v8'`, made on 15 November 2026. The bundler was rolldown 1.3.2. The bundle is minified and leaves `pixi.js` out, as the size check of this repo does. That bundle holds `spine-core` and the Canvas renderer of `spine-canvas`.
+
+**API.** The official runtime gives a game the objects of `spine-core`. pixi-marrow has a smaller API of its own and does not ship `spine-core`. Its pose core is a port of the official Spine Runtimes. The parity suite compares its poses with `spine-core` 4.1.55, 4.2.120 and 4.3.13, and they must be equal to the bit. [Migrate](/migrate/) maps the calls.
+
+## Not in pixi-marrow
+
+The official runtime has these, and pixi-marrow does not:
+
+- A release. pixi-marrow is `0.1.0-next.1`, and a pre-release can break an API.
+- Support from the maker of Spine.
+- The Canvas renderer.
+- PixiJS 8.16 to 8.20.
+- The `spine-core` objects: `spine.skeleton`, `spine.state`, a `Skin` that the game builds, and constraints that the game changes.
+- A listener on one track entry, and `getCurrent(track)`.
+- Bounds providers, such as `SetupPoseBoundsProvider` and `SkinsAndAnimationBoundsProvider`.
+- `skeletonBounds`, for hit tests against bounding box attachments.
+- The load options `scale` and `allowMissingRegions`.
+- The hooks `beforeUpdateWorldTransforms` and `afterUpdateWorldTransforms`.
+- Single-file builds, as an ES module and as an IIFE.
+
+The numbers of pixi-marrow come from one desktop machine. It has no numbers for phones yet.
+
+## In pixi-marrow only
+
+The official runtime does not have these, as far as its source shows:
+
+- Spine 4.1, 4.2 and 4.3 exports in one package.
+- A skeleton at rest that runs no timeline and uploads nothing.
+- Slots that add in the same batch as normal slots.
+- Cuts of overdraw from the outlines of an atlas: `outlines`, `occlusion` and `tightMesh`.
+- The options `skinning: 'gpu'`, `instancing`, `bake`, `idleCache`, `lod`, `offscreen` and `updateRate`.
+- A report of what a skeleton costs: `hero.stats`, `perf.report()` and `perf.memory()`.
+- Names of animations, skins, bones, slots and events as types.
+- `Track.finished`, a promise that says why an animation ended.
+
+Each option has a cost. [Performance](/performance/) lists what each one trades.
+
+## Which one to take
+
+1. Your game runs on PixiJS v7 or earlier: take pixi-spine. pixi-marrow and the official runtime for v8 do not run there.
+2. Your game must run on the Canvas renderer: take the official runtime.
+3. Your code uses `spine.skeleton` and `spine.state` in many places: stay with the official runtime, or read [Migrate](/migrate/) first.
+4. Your game shows many skeletons at once, as the symbols of a slot game: measure pixi-marrow in your scene.
+5. Your game ships soon and cannot take a breaking change: take the official runtime, and look at pixi-marrow again at 1.0.

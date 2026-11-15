@@ -1,7 +1,7 @@
 import { INHERIT_MODES } from '../../model/model';
 import type { TimelineData, TimelineKind } from '../../model/timelines';
 import { TimelineWriter } from '../shared/timeline-writer';
-import { checkChoice, type ImportState, pick, readIndex } from './reader';
+import { checkChoice, type ImportState, pick, readCount, readIndex } from './reader';
 import {
     pushTimeline,
     readColorValue,
@@ -56,10 +56,10 @@ function readAttachmentNames(state: ImportState, slot: number, frameCount: numbe
 export function readSlotTimelines(state: ImportState, sink: TimelineSink): void {
     const input = state.input;
 
-    for (let i = 0, n = input.readInt(true); i < n; i++) {
+    for (let i = 0, n = readCount(input, 'entries'); i < n; i++) {
         const slot = readIndex(input, state.slotCount, 'slot');
 
-        for (let ii = 0, nn = input.readInt(true); ii < nn; ii++) {
+        for (let ii = 0, nn = readCount(input, 'entries'); ii < nn; ii++) {
             const type = input.readByte();
             const frameCount = readFrameCount(input);
 
@@ -93,10 +93,10 @@ function readInherit(state: ImportState, bone: number, frameCount: number): Time
 export function readBoneTimelines(state: ImportState, sink: TimelineSink): void {
     const input = state.input;
 
-    for (let i = 0, n = input.readInt(true); i < n; i++) {
+    for (let i = 0, n = readCount(input, 'entries'); i < n; i++) {
         const bone = readIndex(input, state.boneCount, 'bone');
 
-        for (let ii = 0, nn = input.readInt(true); ii < nn; ii++) {
+        for (let ii = 0, nn = readCount(input, 'entries'); ii < nn; ii++) {
             const type = input.readByte();
             const frameCount = readFrameCount(input);
 

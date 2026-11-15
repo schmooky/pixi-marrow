@@ -1,4 +1,7 @@
+// #region import
 import { MarrowSpine } from 'pixi-marrow';
+
+// #endregion
 
 const hero = await MarrowSpine.load({ skeleton: 'rigs/animation_bee.skel', atlas: 'rigs/symbols.atlas' });
 

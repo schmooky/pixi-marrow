@@ -1,10 +1,19 @@
 import type { AttachmentData, AttachmentRef } from '../../model/attachments';
 import type { SkinAttachment, SkinData } from '../../model/model';
 import { readAttachment } from './attachments';
-import { checkIndex, type ImportState, invalid, type LinkedMesh, readIndex, readName, type SkinBuild } from './reader';
+import {
+    checkIndex,
+    type ImportState,
+    invalid,
+    type LinkedMesh,
+    readCount,
+    readIndex,
+    readName,
+    type SkinBuild,
+} from './reader';
 
 function readIndexList(state: ImportState, count: number, what: string): Int16Array {
-    const indices = new Int16Array(state.input.readInt(true));
+    const indices = new Int16Array(readCount(state.input, 'indices'));
 
     for (let i = 0; i < indices.length; i++) indices[i] = readIndex(state.input, count, what);
 
@@ -20,7 +29,7 @@ function readSkinSlots(state: ImportState, skin: SkinBuild, slotCount: number): 
         const attachments: Map<string, AttachmentData> = skin.slots.get(slot) ?? new Map();
 
         skin.slots.set(slot, attachments);
-        for (let ii = 0, nn = input.readInt(true); ii < nn; ii++) {
+        for (let ii = 0, nn = readCount(input, 'entries'); ii < nn; ii++) {
             const placeholder = input.readStringRef();
 
             if (placeholder === null) throw invalid(`An attachment of skin "${skin.name}" has no name.`);
@@ -31,7 +40,7 @@ function readSkinSlots(state: ImportState, skin: SkinBuild, slotCount: number): 
 
 /** Reads the default skin. The file stores only its attachments. Null when it has none. */
 function readDefaultSkin(state: ImportState): SkinBuild | null {
-    const slotCount = state.input.readInt(true);
+    const slotCount = readCount(state.input, 'skin slots');
 
     if (slotCount === 0) return null;
     const skin: SkinBuild = {
@@ -55,7 +64,7 @@ function readSkin(state: ImportState): SkinBuild {
     const constraints = readIndexList(state, state.constraints.length, 'constraint');
     const skin: SkinBuild = { name, bones, constraints, slots: new Map() };
 
-    readSkinSlots(state, skin, state.input.readInt(true));
+    readSkinSlots(state, skin, readCount(state.input, 'skin slots'));
 
     return skin;
 }
@@ -88,7 +97,7 @@ export function readSkins(state: ImportState): void {
     const defaultSkin = readDefaultSkin(state);
 
     if (defaultSkin !== null) state.skins.push(defaultSkin);
-    for (let i = 0, n = state.input.readInt(true); i < n; i++) state.skins.push(readSkin(state));
+    for (let i = 0, n = readCount(state.input, 'entries'); i < n; i++) state.skins.push(readSkin(state));
     for (const linked of state.linked) linkMesh(state, linked);
 }
 

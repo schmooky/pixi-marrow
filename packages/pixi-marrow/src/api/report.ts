@@ -1,9 +1,10 @@
 import type { Container } from 'pixi.js';
 import type { ConstraintData } from '../model/constraints';
 import type { PhysicsMode } from '../pose/engine';
-import { type PerfEntry, plural, type ReportSource, slotNames } from './report-base';
+import { type PerfEntry, plural, type ReportSource, ruled, slotNames } from './report-base';
 import { cutRows } from './report-cuts';
 import { instancedDrawRow, instancedUploadsRow, instancingRow } from './report-instancing';
+import { motionRow } from './report-motion';
 import { pacingRow, perfRow } from './report-perf';
 
 /*
@@ -72,7 +73,8 @@ function waitingFor({ meshCode, drawn }: ReportSource['view']['mode']): string {
 }
 
 function renderModeRow({ view }: ReportSource): PerfEntry {
-    const { mode, wanted, drawn, gpu } = view.mode;
+    const { mode, wanted, drawn, gpu, reason, vertices, limit } = view.mode;
+    const data = { mode, wanted, reason, vertices, limit, gpu };
     const owns = gpu
         ? 'It has draw calls of its own, and its vertex shader places the vertices from the bones, except where they deform'
         : 'It has draw calls of its own, and the CPU places its vertices in the space of the skeleton';
@@ -86,30 +88,12 @@ function renderModeRow({ view }: ReportSource): PerfEntry {
             feature: 'renderMode',
             value: drawn ? mode : `${mode}, nothing drawn`,
             reason: `${modeWhy(view.mode)}. ${waitingFor(view.mode)}`,
+            data,
         };
     }
+    const row: PerfEntry = { feature: 'renderMode', value: mode, reason: `${modeWhy(view.mode)}. ${does}`, data };
 
-    return { feature: 'renderMode', value: mode, reason: `${modeWhy(view.mode)}. ${does}` };
-}
-
-/** The row that says how much of the skeleton moved, and whether the view had anything to do. */
-function motionRow({ model, stats, view }: ReportSource): PerfEntry {
-    const { skipped, bones, slots } = view.motion;
-    const rested = `${plural(stats.skips, 'update')} of the view found nothing to do so far`;
-
-    if (skipped) {
-        return {
-            feature: 'motion',
-            value: 'at rest',
-            reason: `the pose is the one the view drew last, so the last update placed no vertex and uploaded nothing. ${rested}`,
-        };
-    }
-
-    return {
-        feature: 'motion',
-        value: `${bones} of ${model.bones.count} bones, ${slots} of ${model.slots.count} slots`,
-        reason: `the pose engine marked them as changed for the last update. The view placed the vertices of ${stats.placedSlots} of ${plural(view.visible.length, 'visible slot')} and wrote the colors of ${stats.coloredSlots}. ${rested}`,
-    };
+    return ruled(row, reason === 'limit' && 'MARROW008');
 }
 
 /** How a container is named in a reason: by its label, else by its class. */
@@ -119,11 +103,16 @@ const labelOf = (container: Container): string => `"${container.label || contain
 function linksRow({ model, stats, view, links, attachCode }: ReportSource): PerfEntry {
     const attached = links.filter((link) => link.slot >= 0);
     const following = links.filter((link) => link.slot < 0);
-    const row = (reason: string): PerfEntry => ({
-        feature: 'links',
-        value: links.length === 0 ? 'none' : `${attached.length} attached, ${following.length} following`,
-        reason,
-    });
+    const row = (reason: string): PerfEntry =>
+        ruled(
+            {
+                feature: 'links',
+                value: links.length === 0 ? 'none' : `${attached.length} attached, ${following.length} following`,
+                reason,
+                data: { attached: attached.length, following: following.length },
+            },
+            attached.length > 0 && 'MARROW012',
+        );
 
     if (links.length === 0) return row('no container is attached to a slot or follows a bone');
     const on = attached.map((link) => `${labelOf(link.container)} on slot "${model.slots.names[link.slot]}"`);
@@ -162,7 +151,12 @@ function batchRow({ stats, view }: ReportSource): PerfEntry {
         reason = `${batches} batches of the render group: a batch ends where the blend state or the group of 16 pages changes. The first one is shared with ${plural(others, 'other skeleton')}`;
     }
 
-    return { feature: 'drawCalls', value: `${stats.drawCalls} shared`, reason };
+    return {
+        feature: 'drawCalls',
+        value: `${stats.drawCalls} shared`,
+        reason,
+        data: { drawCalls: stats.drawCalls, batches, sharedBy },
+    };
 }
 
 function drawCallRow(source: ReportSource): PerfEntry {
@@ -179,7 +173,12 @@ function drawCallRow(source: ReportSource): PerfEntry {
         reason = `${ranges} draw ranges${masks}: a range ends where the blend state, the group of 8 pages or the clip changes`;
     }
 
-    return { feature: 'drawCalls', value: String(stats.drawCalls), reason };
+    return {
+        feature: 'drawCalls',
+        value: String(stats.drawCalls),
+        reason,
+        data: { drawCalls: stats.drawCalls, ranges, maskDraws: stats.maskDraws },
+    };
 }
 
 function blendRow(source: ReportSource): PerfEntry {
@@ -200,7 +199,9 @@ function blendRow(source: ReportSource): PerfEntry {
         parts.push(`${slotNames(model, multiply)} ${multiply.length === 1 ? 'uses' : 'use'} multiply`);
     if (screen.length > 0) parts.push(`${slotNames(model, screen)} ${screen.length === 1 ? 'uses' : 'use'} screen`);
 
-    return { feature: 'blend', value, reason: parts.join(', ') };
+    const data = { extraRanges: extra, multiply: multiply.length, screen: screen.length };
+
+    return ruled({ feature: 'blend', value, reason: parts.join(', '), data }, 'MARROW006');
 }
 
 function pagesRow(source: ReportSource): PerfEntry {
@@ -211,11 +212,14 @@ function pagesRow(source: ReportSource): PerfEntry {
     const samples = batched ? 'a batch samples up to 16' : 'a draw range samples up to 8';
     const used = groups > 1 ? `, and the visible slots use ${groups} groups of ${batched ? 16 : 8}` : '';
 
-    return {
+    const row: PerfEntry = {
         feature: 'pages',
         value: extra > 0 ? plural(extra, 'extra range') : 'no extra range',
         reason: `the atlas has ${plural(count, 'page')} and ${samples}${used}`,
+        data: { pages: count, groups, extraRanges: extra },
     };
+
+    return ruled(row, extra > 0 && 'MARROW007');
 }
 
 function clippingRow(source: ReportSource): PerfEntry {
@@ -232,25 +236,31 @@ function clippingRow(source: ReportSource): PerfEntry {
     if (view.mode.mode === 'batched') {
         const { clipVertices, clipIndices } = view.mode;
 
-        return {
+        const row: PerfEntry = {
             feature: 'clipping',
             value: `${plural(stats.clips, 'clip')}, cut on the CPU`,
             reason:
                 cutting.length === 0
                     ? 'no visible slot is cut'
                     : `the clipping attachment of ${slotNames(model, cutting)} cuts visible slots: their triangles are cut as the official runtime cuts them and stay in the batch, which keeps room for ${clipVertices} vertices and ${clipIndices} indices of cut triangles`,
+            data: { clips: stats.clips, cutting: cutting.length, clipVertices, clipIndices },
         };
+
+        return ruled(row, 'MARROW010');
     }
     const reason =
         cutting.length === 0
             ? 'no visible slot is cut, so no mask is drawn'
             : `the clipping attachment of ${slotNames(model, cutting)} cuts visible slots: a mask is drawn twice and its slots get draw ranges of their own`;
 
-    return {
+    const row: PerfEntry = {
         feature: 'clipping',
         value: `${plural(stats.clips, 'clip')}, ${plural(stats.maskDraws, 'mask draw')}`,
         reason,
+        data: { clips: stats.clips, cutting: cutting.length, maskDraws: stats.maskDraws },
     };
+
+    return ruled(row, stats.maskDraws > 0 && 'MARROW011');
 }
 
 function darkTintRow({ model }: ReportSource): PerfEntry {
@@ -268,13 +278,16 @@ function physicsRow({ model, physics, resetPending }: ReportSource): PerfEntry {
 
     if (count === 0) return { feature: 'physics', value: 'off', reason: 'the skeleton has no physics constraint' };
 
-    return {
+    const row: PerfEntry = {
         feature: 'physics',
         value: `${plural(count, 'constraint')}, mode ${physics}`,
         reason: resetPending
             ? `the next update resets the physics, then mode ${physics} returns`
             : PHYSICS_REASONS[physics],
+        data: { constraints: count, mode: physics },
     };
+
+    return ruled(row, physics === 'update' && 'MARROW022');
 }
 
 function constraintsRow({ model }: ReportSource): PerfEntry {
@@ -328,6 +341,7 @@ function verticesRow({ stats, view }: ReportSource): PerfEntry {
         return {
             feature: 'vertices',
             value: `${stats.vertices} vertices, ${stats.indices} indices`,
+            data: { vertices: stats.vertices, indices: stats.indices, visible },
             reason: `${visible} of the vertices are visible. The batch holds the largest attachment of every slot, ${view.mode.batchBytes} bytes for this skeleton`,
         };
     }
@@ -335,6 +349,7 @@ function verticesRow({ stats, view }: ReportSource): PerfEntry {
     return {
         feature: 'vertices',
         value: `${stats.vertices} vertices, ${stats.indices} indices`,
+        data: { vertices: stats.vertices, indices: stats.indices, visible },
         reason: `${visible} of the vertices are visible. The buffers hold every attachment the slots can show with the skin, with ${bits}-bit indices`,
     };
 }
@@ -357,6 +372,15 @@ function uploadsRow(source: ReportSource): PerfEntry {
         feature: 'uploads',
         value: `${first}, ${rate(stats.colorUploads)} color, ${rate(stats.uvUploads)} uv per update`,
         reason: `${stats.positionUploads} position, ${stats.colorUploads} color and ${stats.uvUploads} uv uploads in ${plural(updates, 'update')} that drew, ${plural(stats.indexRebuilds, 'rewrite')} of the index buffers${masks}${bones}`,
+        data: {
+            positionUploads: stats.positionUploads,
+            colorUploads: stats.colorUploads,
+            uvUploads: stats.uvUploads,
+            boneUploads,
+            indexRebuilds: stats.indexRebuilds,
+            frameBytes: stats.frameBytes,
+            ...stats.uploadBytes,
+        },
     };
 }
 
@@ -365,6 +389,7 @@ function layoutRow({ stats }: ReportSource): PerfEntry {
         feature: 'layout',
         value: plural(stats.templateBuilds, 'layout'),
         reason: 'the vertex ranges are laid out once, and again when the skin, the outlines or a page texture changes',
+        data: { templateBuilds: stats.templateBuilds, instructionBuilds: stats.instructionBuilds },
     };
 }
 

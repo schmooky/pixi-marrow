@@ -7,11 +7,16 @@
  * - The headless core (base, model, formats, pose, geometry and src/core.ts) never imports pixi.js.
  *   Neither does src/bake: the baker runs in Node. It imports the headless core only.
  * - The display object in src/api loads src/bake on demand: a dynamic import() is the one way in.
+ *   The command line tool in src/optimize loads the static rules of src/diagnose the same way.
  * - No runtime dependencies. The source imports nothing from npm except pixi.js. The official
  *   Spine cores are for tests. Node built-ins are allowed in src/optimize only. pixi-silk, an
  *   optional peer, is allowed in src/debug only: the debug overlays draw with it.
  * - Size. No source or test file is longer than 500 lines.
- * - Casts. No `as any`, no double cast through unknown, no TypeScript suppression comments.
+ * - Casts. No `as any`, no `as never`, no double cast through unknown, also when the cast runs
+ *   over a line break. No TypeScript suppression comments, `@ts-expect-error` included.
+ * - Imports the rules can read. An `import()` names its module in a string literal, and the source
+ *   has no CommonJS `require()`: the layer rules cannot see a module that a variable names.
+ * - It finds source files. A run that finds none fails: it would pass an empty or a moved tree.
  *
  * usage: node scripts/check-source.mjs
  */
@@ -23,16 +28,27 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 const pkgDir = join(root, 'packages/pixi-marrow');
 const srcDir = join(pkgDir, 'src');
 const LAYERS = ['base', 'model', 'formats', 'pose', 'geometry', 'render', 'api'];
-const FEATURES = ['bake', 'debug', 'perf', 'optimize'];
+const FEATURES = ['bake', 'debug', 'perf', 'optimize', 'diagnose'];
 const HEADLESS = ['base', 'model', 'formats', 'pose', 'geometry'];
 /** Features that run without Pixi: they import the headless core and themselves only. */
 const HEADLESS_FEATURES = ['bake'];
 const MAX_LINES = 500;
+// \s matches a line break, so a cast that a formatter wrapped is found too
 const CASTS = [
-    [/\bas any\b/, '`as any`'],
-    [/\bas unknown as\b/, 'a double cast through unknown'],
-    [/@ts-(ignore|nocheck)/, 'a TypeScript suppression comment'],
+    [/\bas\s+any\b/, '`as any`'],
+    [/\bas\s+never\b/, '`as never`'],
+    [/\bas\s+unknown\s+as\b/, 'a double cast through unknown'],
+    [/@ts-(ignore|nocheck|expect-error)/, 'a TypeScript suppression comment'],
 ];
+/** An `import(` that is not followed by one string literal and the closing parenthesis. */
+const OPAQUE_IMPORT = /\bimport\s*\((?!\s*(?:'[^'\n]+'|"[^"\n]+")\s*\))/g;
+/** A call of `require`, not of a method of that name: `names.require(key)` is not CommonJS. */
+const REQUIRE = /(?<![.\w$])require\s*\(/g;
+/** A line that declares a method named `require`. */
+const REQUIRE_METHOD =
+    /^\s*(?:(?:public|private|protected|static|override|async)\s+)*require\s*\([^()]*\)\s*(?::[^{;]+)?\{\s*$/;
+const lineOf = (text, index) => text.slice(0, index).split('\n').length;
+const lineAt = (text, index) => text.slice(text.lastIndexOf('\n', index - 1) + 1).split('\n')[0];
 const IMPORT =
     /(?:\bimport|\bexport)\s[^'";]*?\bfrom\s*['"]([^'"]+)['"]|\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)|\bimport\s*['"]([^'"]+)['"]/g;
 
@@ -77,6 +93,8 @@ function checkImport(file, area, allowed, specifier, dynamic) {
 
         // the display object loads the baked playback when a skeleton asks for it
         if (dynamic && area === 'api' && target === 'bake') return;
+        // the command line tool runs the static rules of src/diagnose, which need no Pixi, on a tree dump
+        if (dynamic && area === 'optimize' && target === 'diagnose') return;
         if (target === '..') fail(file, `imports "${specifier}", which is outside src`);
         else if (!LAYERS.includes(target) && !FEATURES.includes(target))
             fail(file, `imports "${specifier}". Entry files are for consumers, not for the source`);
@@ -116,7 +134,16 @@ for (const file of walk(srcDir)) {
         checkImport(file, area, allowed, match[1] ?? match[2] ?? match[3], match[2] !== undefined);
     }
     for (const [pattern, what] of CASTS) {
-        if (pattern.test(text)) fail(file, `contains ${what}`);
+        const match = pattern.exec(text);
+
+        if (match) fail(file, `line ${lineOf(text, match.index)} contains ${what}`);
+    }
+    for (const match of text.matchAll(OPAQUE_IMPORT)) {
+        fail(file, `line ${lineOf(text, match.index)}: import() of a module that is not one string literal`);
+    }
+    for (const match of text.matchAll(REQUIRE)) {
+        if (REQUIRE_METHOD.test(lineAt(text, match.index))) continue;
+        fail(file, `line ${lineOf(text, match.index)}: require(). The source is ES modules: use import`);
     }
 }
 
@@ -126,6 +153,9 @@ for (const file of [...walk(srcDir), ...walk(join(pkgDir, 'tests'))]) {
     if (lines > MAX_LINES) fail(file, `${lines} lines. The limit is ${MAX_LINES}: split the file`);
 }
 
+const sourceFiles = walk(srcDir).length;
+
+if (sourceFiles === 0) errors.push(`no .ts file under ${relative(root, srcDir)}. The rules checked nothing`);
 for (const error of errors) console.error(`check-source: ${error}`);
-console.log(`check-source: ${walk(srcDir).length} source files, ${errors.length} problems`);
+console.log(`check-source: ${sourceFiles} source files, ${errors.length} problems`);
 process.exit(errors.length ? 1 : 0);

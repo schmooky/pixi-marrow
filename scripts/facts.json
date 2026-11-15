@@ -1,0 +1,95 @@
+{
+  "batch": {
+    "autoVertices": 1024,
+    "pages": 16
+  },
+  "mesh": {
+    "pages": 8
+  },
+  "lod": {
+    "below": 96,
+    "back": 120
+  },
+  "offscreen": {
+    "throttleSeconds": 0.25,
+    "throttleRate": 4
+  },
+  "idleCache": {
+    "waitUpdates": 30,
+    "maxSide": 2048
+  },
+  "skins": {
+    "kept": 8
+  },
+  "bake": {
+    "fps": 60
+  },
+  "floor": {
+    "pixi": "8.21.0",
+    "pixiShort": "8.21",
+    "pixiSilk": "1.0.1",
+    "node": "24.0"
+  },
+  "size": {
+    "root": 32,
+    "readers": {
+      "json42": 8.9,
+      "binary42": 9.1,
+      "json43": 8.6,
+      "binary43": 8.6
+    },
+    "engines": {
+      "legacy": 32,
+      "v43": 34
+    },
+    "meshMode": 18,
+    "clipping": 7.4,
+    "limit": {
+      "root": 32.5,
+      "readers": {
+        "json42": 9.5,
+        "binary42": 9.5,
+        "json43": 9,
+        "binary43": 9
+      },
+      "engines": {
+        "legacy": 32.5,
+        "v43": 34
+      },
+      "meshMode": 18,
+      "clipping": 8
+    }
+  },
+  "presets": {
+    "exact": {
+      "tightMesh": "auto",
+      "skinning": "auto",
+      "instancing": "off",
+      "bake": "off",
+      "idleCache": "off",
+      "offscreen": "update",
+      "updateRate": "display",
+      "lod": "off"
+    },
+    "balanced": {
+      "tightMesh": "auto",
+      "skinning": "auto",
+      "instancing": "off",
+      "bake": "off",
+      "idleCache": "off",
+      "offscreen": "throttle",
+      "updateRate": "display",
+      "lod": "off"
+    },
+    "fast": {
+      "tightMesh": "auto",
+      "skinning": "auto",
+      "instancing": "off",
+      "bake": "off",
+      "idleCache": "off",
+      "offscreen": "pause",
+      "updateRate": 30,
+      "lod": "off"
+    }
+  }
+}

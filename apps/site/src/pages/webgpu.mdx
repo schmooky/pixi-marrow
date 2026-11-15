@@ -1,0 +1,99 @@
+---
+layout: ../layouts/Docs.astro
+title: Spine on PixiJS WebGPU
+description: pixi-marrow draws Spine skeletons on the WebGPU renderer of PixiJS v8. This page says what works, what differs from WebGL2 and what was measured.
+---
+
+import Snippet from '../components/Snippet.astro';
+import source from '../snippets/webgpu.ts?raw';
+
+pixi-marrow draws Spine 4.1, 4.2 and 4.3 skeletons on the WebGPU renderer of PixiJS v8, from PixiJS 8.21. The game code is the same as on WebGL2. Both render modes, clipping, dark tint, the blend modes and the options work on both renderers.
+
+## Pick the renderer
+
+Pixi picks the renderer, and pixi-marrow follows it. Ask Pixi for WebGPU when the app starts:
+
+<Snippet source={source} regions="init" />
+
+With `preference: 'webgpu'`, Pixi uses WebGPU where the browser has it, and WebGL where not. So the same build runs in both kinds of browser.
+
+<Snippet source={source} regions="check" />
+
+`app.renderer.type` says which renderer Pixi made. The stats of a skeleton have the same fields on both.
+
+## What works
+
+| What | WebGL2 | WebGPU |
+|---|---|---|
+| The batched mode: skeletons share draw calls | Yes | Yes |
+| The mesh mode: meshes per skeleton | Yes | Yes |
+| Clipping | Yes | Yes |
+| Dark tint, and slots that add, multiply or screen | Yes | Yes |
+| The cuts of overdraw, with outlines | Yes | Yes |
+| `skinning: 'gpu'` and `instancing` | Yes | Yes |
+| The idle cache | Yes | Yes |
+| A lost context comes back | Yes, checked | A lost device is not handled |
+
+The pixel check of the repo draws rigs with pixi-marrow and with the official runtime, on WebGL2 and on WebGPU. It compares the pixels in both render modes. The maintainer runs it on a local machine with `pnpm check:render`, because the CI runners have no GPU.
+
+## What differs from WebGL2
+
+### Uploads
+
+A skeleton that moves sends new vertex positions to the GPU in each frame. How much it sends depends on the renderer and on the PixiJS version.
+
+| PixiJS | Batched mode on WebGPU | Batched mode on WebGL2 | Mesh mode, both renderers |
+|---|---|---|---|
+| 8.21 and 8.22 | Each changed stretch of a buffer | One stretch per buffer, from the first change to the last | One stretch per buffer, from the first change to the last |
+| 8.23 and later | Each changed stretch of a buffer | Each changed stretch of a buffer | One stretch per buffer, from the first change to the last |
+
+A stretch is a part of a buffer that holds the vertices of some skeletons. On WebGPU, a buffer writes a stretch at once in every PixiJS that the package allows. On WebGL2 before PixiJS 8.23, a buffer keeps only one stretch until Pixi binds it.
+
+So on PixiJS 8.21 and 8.22, a scene where a few of many skeletons move uploads less on WebGPU than on WebGL2. From PixiJS 8.23 the two are equal.
+
+<Snippet source={source} regions="bytes" />
+
+`stats.frameBytes` holds the bytes that one skeleton handed to the GPU since its last update began. On WebGPU an empty stage also uploads about 0.1 KB a frame, which is Pixi's own.
+
+### The limit of mesh draws
+
+On WebGPU, Pixi gives each mesh draw a slot in one uniform buffer per frame. The buffer has room for about 2000 draws, and Pixi throws when a frame needs more. In the mesh mode, 1200 instances of a rig with a clip are enough for that.
+
+pixi-marrow keeps this from the game. A mesh of the mesh mode takes a slot while the buffer has room, and leaves 256 slots for the rest of the scene. After that, the mesh binds a small uniform buffer of its own. That buffer uploads only when its transform, its tint or its rounding changes.
+
+This code reads private fields of Pixi. The project checked them against the source of PixiJS 8.21.0 and 8.23.0. When a field is missing, the runtime says so once in the console, with the PixiJS version. WebGL2 sets uniforms one by one and has no such limit.
+
+The batched mode draws no mesh per skeleton. So it stays far from this limit.
+
+### A lost context and a lost device
+
+A browser can take the WebGL context of a page away and give it back. While the context is lost, pixi-marrow draws nothing. It draws again when the context comes back. The pixel check loses and restores the context of a running game in both render modes.
+
+A lost WebGPU device is another event. pixi-marrow does not watch it, and no check covers it. Treat it as not handled.
+
+### The wait for the GPU
+
+The bench waits for the GPU in different ways. On WebGL2 it reads one pixel. On WebGPU it waits for the queue of the device, which also takes one turn of the event loop. So compare frame times inside one renderer, not across the two.
+
+## What was measured
+
+The run of 15 November 2026 measured both renderers on one Apple M4, in Chrome 157, on PixiJS 8.23.0. These are 200 instances that play:
+
+| Rig | Draw calls on both renderers | Frame ms on WebGL2 | Frame ms on WebGPU |
+|---|---|---|---|
+| tank-pro | 401 | 7.295 | 16.192 |
+| coin-pro | 1 | 1.987 | 1.975 |
+| speedy-ess | 1 | 1.718 | 1.395 |
+| raptor-pro | 1 | 8.720 | 4.640 |
+| sack-pro | 1 | 2.778 | 2.475 |
+
+The draw calls are the same on both renderers. The rig tank-pro was slower on WebGPU in this run, and its frame time has a spread of 3.7 ms to each side. Other programs used the machine during the run. [Benchmarks](/benchmarks/) has every row, the spread and the numbers of the official runtime.
+
+The choice of the render mode also rests on a measurement. The machine was an Apple M4 with PixiJS 8.23.0, and the scene had 200 instances. On WebGPU, a batched frame took 0.64 to 0.76 times the frame of the mesh mode. That was for skeletons of 44 to 819 vertices. The source file `src/render/mode.ts` records it.
+
+## What was not measured
+
+- Phones and tablets on WebGPU.
+- Browsers other than Google Chrome.
+- A lost WebGPU device.
+- PixiJS 8.21 and 8.22 on WebGPU in the bench. The pixel check can run on 8.21 with `pnpm check:render --pixi=8.21.0`.

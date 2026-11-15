@@ -1,4 +1,4 @@
-import { Mesh, Texture, TextureSource } from 'pixi.js';
+import { Mesh, type Renderer, Texture, TextureSource } from 'pixi.js';
 import { expect } from 'vitest';
 import { importAtlas } from '../../src/formats/atlas';
 import { importSkeleton } from '../../src/formats/import';
@@ -154,6 +154,28 @@ export function drawPose(view: SkeletonView, state: PoseState): void {
 export function redraw(rig: Rig): void {
     rig.engine.update(0);
     drawPose(rig.view, rig.engine.state);
+}
+
+/** A renderer as far as the uploads of the mesh mode ask one: it has no GPU, so it is no WebGPU. */
+const NO_GPU = {} as unknown as Renderer;
+
+/** The paints of the views that {@link flushUploads} was called for. */
+const PAINTS = new WeakMap<SkeletonView, SkeletonView['parts']['paints']>();
+
+/**
+ * What Pixi makes a view in the mesh mode do before a render: it uploads the stretches of the
+ * vertex buffers that the updates since the last render wrote, and with `skinning: 'gpu'` the
+ * textures of bones and colors.
+ */
+export function flushUploads(view: SkeletonView): void {
+    // `parts` makes an object, which a test of the heap would count: the paints are asked once
+    let paints = PAINTS.get(view);
+
+    if (paints === undefined) {
+        paints = view.parts.paints;
+        PAINTS.set(view, paints);
+    }
+    paints.mesh?.flush(NO_GPU);
 }
 
 /** Advances the pose and brings the view in line with it. */

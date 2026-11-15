@@ -1,8 +1,10 @@
 import { Assets, Texture } from 'pixi.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { assetName } from '../../src/api/asset-fetch';
 import { describeSkeleton, importAtlas } from '../../src/core';
 import { MarrowAsset, MarrowError, MarrowSpine } from '../../src/index';
 import { blankTexture, fixtureFiles, importRig } from './helpers';
+import { useLocalUrls } from './urls';
 
 const BOY = fixtureFiles('4.2/spineboy-pro.skel');
 const BOY_JSON = fixtureFiles('4.2/spineboy-pro.json');
@@ -69,7 +71,7 @@ describe('MarrowAsset.from', () => {
         const { model, atlas } = await importRig('4.3/dragon-ess.skel');
         const error = await rejection(MarrowAsset.from({ model, atlas, textures: [Texture.WHITE] }));
 
-        expect(error.code).toBe('invalid-data');
+        expect(error.code).toBe('invalid-option');
         expect(error.message).toContain(`The atlas has ${atlas.pages.length} pages, but 1 textures were passed.`);
         expect(error.fix).toContain('dragon.png, dragon_2.png');
     });
@@ -192,18 +194,21 @@ describe('MarrowAsset.load', () => {
 
         return response;
     });
-    /** Pixi `Assets`, typed as loosely as the stubs below answer. */
-    const pixiAssets: { load(asset: unknown): Promise<unknown>; unload(url: unknown): Promise<void> } = Assets;
+    /** The loader of Pixi `Assets`, typed as loosely as the stubs below answer. */
+    const pixiAssets: { load(asset: unknown): Promise<unknown>; unload(url: unknown): Promise<void> } = Assets.loader;
     const loadImage = vi.spyOn(pixiAssets, 'load');
     const unloadImage = vi.spyOn(pixiAssets, 'unload');
 
+    /** Loads an asset that the test file lets go after the test: once per load, as each load is an owner. */
     async function load(options: Parameters<typeof MarrowAsset.load>[0]): Promise<MarrowAsset> {
         const asset = await MarrowAsset.load(options);
 
-        if (!assets.includes(asset)) assets.push(asset);
+        assets.push(asset);
 
         return asset;
     }
+
+    useLocalUrls();
 
     /** What Pixi `Assets` was asked to load. */
     const requests = (): unknown[] => loadImage.mock.calls.map(([asset]) => asset);
@@ -233,12 +238,43 @@ describe('MarrowAsset.load', () => {
         expect(asset.textures[0]?.source.style.minFilter).toBe('linear');
     });
 
-    it('fetches a .json URL as text, and keeps the query of the atlas URL for the image', async () => {
+    it('fetches a .json URL as bytes too, and keeps the query of the atlas URL for the image', async () => {
         const asset = await load({ skeleton: 'art/boy.json?v=2', atlas: 'art/boy.atlas?v=2' });
 
-        expect(reads.sort()).toEqual(['art/boy.atlas?v=2 text', 'art/boy.json?v=2 text']);
+        // the content says that it is JSON, not the name
+        expect(reads.sort()).toEqual(['art/boy.atlas?v=2 text', 'art/boy.json?v=2 bytes']);
         expect(asset.info.animations.map((animation) => animation.name)).toContain('walk');
         expect(requests()).toMatchObject([{ src: 'art/spineboy.png?v=2' }]);
+    });
+
+    it('is named after the file of the skeleton URL, or by the name option', async () => {
+        const plain = await load({ skeleton: 'art/boy.skel', atlas: 'art/boy.atlas' });
+        const query = await load({ skeleton: 'art/boy.json?v=2', atlas: 'art/boy.atlas?v=2' });
+        const named = await load({ skeleton: 'dragon.skel', atlas: 'dragon.atlas', name: 'smaug' });
+        const bytes = await load({
+            skeleton: BOY.skeleton instanceof Uint8Array ? BOY.skeleton : new Uint8Array(),
+            atlas: 'art/boy.atlas',
+        });
+        const hero = await MarrowSpine.load({
+            skeleton: 'sack.skel',
+            atlas: 'sack.atlas',
+            name: 'bag',
+            autoUpdate: false,
+        });
+
+        assets.push(hero.asset);
+        expect([plain.name, query.name, named.name, bytes.name]).toEqual(['boy', 'boy', 'smaug', '']);
+        expect([hero.asset.name, hero.label]).toEqual(['bag', 'MarrowSpine:bag']);
+        hero.destroy();
+        const wrong = await rejection(
+            MarrowAsset.load({ skeleton: 'art/boy.skel', atlas: 'art/boy.atlas', name: 7 } as never),
+        );
+
+        expect(assetName(undefined, 'https://cdn.example/rigs/hero.v2.skel?v=3#top')).toBe('hero.v2');
+        expect([assetName(undefined, 'hero'), assetName(undefined, 'blob:abc/def')]).toEqual(['hero', '']);
+        expect(wrong.code).toBe('invalid-option');
+        // the name is checked before a request
+        expect(fetched.mock.calls.filter(([url]) => url === 'art/boy.skel')).toHaveLength(1);
     });
 
     it('takes bytes, an ArrayBuffer or parsed JSON and fetches the atlas alone', async () => {
@@ -361,7 +397,7 @@ describe('MarrowAsset.load', () => {
             MarrowAsset.load({ ...options, skeleton: 'art/boy.json', atlas: 'art/boy.atlas' }),
         );
 
-        expect(missing.code).toBe('invalid-data');
+        expect(missing.code).toBe('not-found');
         expect(missing.message).toContain('The atlas at art/missing.atlas did not load: status 404.');
         expect(failed.message).toContain('The skeleton at art/boy.json did not load: network down');
         expect(loadImage).not.toHaveBeenCalled();
@@ -379,8 +415,8 @@ describe('MarrowAsset.load', () => {
         });
         const error = await rejection(MarrowAsset.load({ skeleton: 'dragon.skel', atlas: 'dragon.atlas' }));
 
-        expect(error.code).toBe('invalid-data');
-        expect(error.message).toContain('The page image "dragon_3.png" did not load: decode failed');
+        expect(error.code).toBe('not-found');
+        expect(error.message).toContain('The page image "dragon_3.png" at dragon_3.png did not load: decode failed');
         expect(unloadImage.mock.calls.map(([url]) => url).sort()).toEqual([
             'dragon.png',
             'dragon_2.png',
@@ -400,9 +436,12 @@ describe('MarrowAsset.load', () => {
     });
 
     it('says that the parsers for Pixi Assets are not registered, before registerMarrowAssets ran', () => {
-        expect(() => MarrowAsset.get({ skeleton: 'hero.skel', atlas: 'hero.atlas' })).toThrow(
-            /Call registerMarrowAssets\(\) before the first load/,
-        );
+        for (const read of [MarrowAsset.fromCache, MarrowAsset.get]) {
+            const call = (): MarrowAsset => read({ skeleton: 'hero.skel', atlas: 'hero.atlas' });
+
+            expect(call).toThrow(/Call registerMarrowAssets\(\) before the first load/);
+            expect(call).toThrow(expect.objectContaining({ code: 'not-registered' }));
+        }
     });
 
     it('loads a skeleton with physics constraints like any other', async () => {

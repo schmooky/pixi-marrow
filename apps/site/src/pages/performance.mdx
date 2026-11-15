@@ -1,31 +1,33 @@
 ---
 layout: ../layouts/Docs.astro
 title: Performance
-description: The presets, the settings that trade exactness for speed, and how to see which are in effect.
+description: The presets, every performance setting with its values and its cost, outlines, and the rows of perf.report() and the fields of stats.
 ---
 
 import Diagram from '../components/Diagram.astro';
 import Snippet from '../components/Snippet.astro';
+import facts from '../../../../scripts/facts.json';
 import source from '../snippets/performance.ts?raw';
+import outlines from '../snippets/outlines.ts?raw';
 
-Most of the speed of pixi-marrow needs no option. See [what is automatic](/good-to-know/#what-is-automatic). The settings on this page change the timing, the memory or the picture, so each one stays off until you ask for it.
+Most of the speed of pixi-marrow needs no option. See [what is automatic](/good-to-know/#what-is-automatic). The settings on this page change the timing, the memory or the picture, so each one stays off until you ask for it. [Performance caveats](/performance/caveats/) lists what makes a scene slow, cause by cause.
 
 ## Presets
 
-<Snippet source={source} regions="preset" />
+<Snippet source={source} regions="import preset" />
 
 `perf` takes `exact`, `balanced` or `fast`. `exact` is the default and changes nothing. A skeleton then looks and moves as in the official runtime.
 
 | Setting | `exact` | `balanced` | `fast` |
 |---|---|---|---|
-| `tightMesh` | `auto` | `auto` | `auto` |
-| `bake` | `off` | `off` | `off` |
-| `idleCache` | `off` | `off` | `off` |
-| `offscreen` | `update` | `throttle` | `pause` |
-| `updateRate` | `display` | `display` | 30 for batched skeletons |
-| `lod` | `off` | `off` | `off` |
-| `skinning` | `auto` | `auto` | `auto` |
-| `instancing` | `off` | `off` | `off` |
+| `tightMesh` | {facts.presets.exact.tightMesh} | {facts.presets.balanced.tightMesh} | {facts.presets.fast.tightMesh} |
+| `bake` | {facts.presets.exact.bake} | {facts.presets.balanced.bake} | {facts.presets.fast.bake} |
+| `idleCache` | {facts.presets.exact.idleCache} | {facts.presets.balanced.idleCache} | {facts.presets.fast.idleCache} |
+| `offscreen` | {facts.presets.exact.offscreen} | {facts.presets.balanced.offscreen} | {facts.presets.fast.offscreen} |
+| `updateRate` | {facts.presets.exact.updateRate} | {facts.presets.balanced.updateRate} | {facts.presets.fast.updateRate} for batched skeletons |
+| `lod` | {facts.presets.exact.lod} | {facts.presets.balanced.lod} | {facts.presets.fast.lod} |
+| `skinning` | {facts.presets.exact.skinning} | {facts.presets.balanced.skinning} | {facts.presets.fast.skinning} |
+| `instancing` | {facts.presets.exact.instancing} | {facts.presets.balanced.instancing} | {facts.presets.fast.instancing} |
 
 The presets set when a skeleton updates, and nothing else. `tightMesh: 'on'`, `bake`, `idleCache`, `lod` and `instancing` cost memory, vertices or draw calls. That cost depends on the device and the scene, so set each by name where it pays.
 
@@ -33,7 +35,7 @@ The presets set when a skeleton updates, and nothing else. `tightMesh: 'on'`, `b
 
 <Snippet source={source} regions="settings" />
 
-A `perf` object starts from its `preset` and changes the settings it names. An option that you give by name wins over both. For a value that does not exist, the runtime throws a `MarrowError` with the closest valid name.
+A `perf` object starts from its `preset` and changes the settings it names. An option that you give by name wins over both. For a value that does not exist, the runtime throws a `MarrowError` with the closest valid name. It does the same for a key that is no option.
 
 ## How pacing works
 
@@ -41,34 +43,262 @@ The presets change how often the runtime poses a skeleton, and nothing else. A s
 
 <Diagram name="perf-pacing" height={230} rows={0} caption="One second at 60 frames, played slower. A tick marks each frame in which the runtime poses the skeleton. The square moves with the time of that pose." />
 
-On the screen, the runtime poses the skeleton in every frame. Off the screen, `throttle` poses it 4 times a second with all the time that passed. So its square steps, and the event key at 0.4 seconds fires at 0.5. `pause` stops its time until it is on the screen again. `updateRate: 30` poses it every other frame. That halves the work and steps the motion at 30 frames a second.
+On the screen, the runtime poses the skeleton in every frame. Off the screen, `throttle` poses it {facts.offscreen.throttleRate} times a second with all the time that passed. So its square steps, and the event key at 0.4 seconds fires at 0.5. `pause` poses nothing, so its square stands still. Its time still passes: its events fire and `finished` resolves.
+
+`updateRate: 30` poses the skeleton 30 times a second. On a display of 60 Hz that is every other frame, which halves the pose work.
 
 ## The settings
 
-- **`offscreen`.** A skeleton is off the screen when its bounds lie outside the screen, or when no render reached it for a tenth of a second. `throttle` updates it 4 times a second with the time that passed, so events fire late. `pause` stops its time until it is on the screen again.
-- **`updateRate`.** With a number, the runtime poses the skeleton at most that many times a second, with the time of the frames in between. Motion steps at low rates. The rate of `fast` applies to batched skeletons only, unless you set it by name.
-- **`lod`.** `auto` skips physics and deform while the skeleton draws smaller than 96 pixels across. Meshes then show their setup shape. Both return at 120 pixels, physics with a reset, so nothing jumps.
-- **`idleCache`.** `auto` draws a skeleton that rested for 30 updates as one image, until its pose or its place changes. The image takes 4 bytes per pixel of its box on the screen. A slot that multiplies or screens keeps the skeleton live. Every image is a texture of its own, so many images split a batch into more draw calls. On a Galaxy A05, a low-end phone, 120 small resting symbols took 13.5 ms a frame with the cache and 11.9 ms without.
-- **`tightMesh`.** `on` draws every region as the polygon around its visible pixels. Some pixels move by 1 of 255 levels. It needs the outlines of the atlas. On the rigs of the bench, it adds 13 to 94 percent more vertices.
-- **`bake`.** `auto` bakes an animation in idle time the first time it plays alone on track 0, and plays it live until the clip is ready. From then on it plays from the frames while it plays alone. A clip keeps 23 KB to 0.9 MB per animation and skin. The engine still runs the tracks and fires the events. Between two frames, 60 a second, the skeleton shows the nearest frame.
-  - `auto` does not bake an animation with another one queued after it.
-  - `auto` never bakes a skin with physics or a slider.
-- **`skinning`.** `gpu` places the vertices of the mesh mode in the vertex shader, from the bones. So a moving skeleton uploads its bones and not its vertices. With `instancing: 'auto'`, copies of one rig that follow each other in the display list then draw in one instanced call. That pays for many copies of one rig. A grid of different symbols draws in fewer calls in the batched mode, so `auto` stays `cpu`.
+Each setting is an option of `MarrowSpine.load`, of `MarrowSpine.from` and of `new MarrowSpine`. `perfSettings` of an instance reads the values in effect.
+
+### offscreen
+
+- Values: `update`, `throttle`, `pause`. Default `update`.
+- `update` updates a skeleton off the screen as one on it.
+- `throttle` poses it {facts.offscreen.throttleRate} times a second with the time that passed, so its events fire late.
+- `pause` places no vertex for it and draws nothing. Its tracks, its events and `finished` go on.
+
+A skeleton is off the screen when its bounds lie outside the screen. It also counts when no render reached it for a tenth of a second, or when Pixi does not draw it. Pixi does not draw a skeleton with `visible` or `renderable` false or an alpha of 0, on itself or on a parent.
+
+Cost: `throttle` and `pause` read the bounds of the skeleton in each render. They pay in a scene that keeps many playing skeletons outside the screen, such as a long map.
+
+### updateRate
+
+- Values: `display` or a number of poses a second. Default `display`.
+- With a number, the runtime poses the skeleton that many times a second, in an even rhythm, with the time that passed.
+
+The rhythm is even on displays of 60, 90, 120 and 144 Hz, and a pose never comes more often than a frame. Motion steps at low rates. The rate of the `fast` preset applies to batched skeletons only. A rate that you set by name applies in both modes.
+
+Cost: none in memory. It pays for small skeletons in the background, where nobody sees the steps.
+
+### lod
+
+- Values: `off`, `auto`. Default `off`.
+- `auto` skips physics and deform while the skeleton draws smaller than {facts.lod.below} pixels across. Meshes then show their setup shape.
+
+Both return at {facts.lod.back} pixels, physics with a reset, so nothing jumps at the limit. The size is the larger side of the bounds on the stage.
+
+Cost: the picture differs for a small skeleton, and the runtime reads the bounds in each render. It pays for many small skeletons with physics or deform keys.
+
+### idleCache
+
+- Values: `off`, `auto`. Default `off`.
+- `auto` draws a skeleton that rested for {facts.idleCache.waitUpdates} updates as one image, until its pose or its place changes.
+
+The image takes 4 bytes per pixel of its box on the screen. All images together hold at most 64 MB, and a skeleton larger than {facts.idleCache.maxSide} pixels on one side draws live. The runtime draws at most 4 images per frame, so 200 symbols that come to rest together take 50 frames.
+
+The skeleton draws live, with no image, in these cases:
+
+- a slot multiplies or screens
+- a filter or a mask is on the skeleton or on a parent
+- the alpha above it is not 1, or a blend mode is set above it
+- the render target is multisampled, as with `antialias: true`
+- it moves by a part of a pixel, as on a reel that spins.
+
+Cost: memory, one render pass per image, and two builds of the instructions of its render group. A small skeleton at rest costs little to draw live, so the cache can make a frame slower. On a Galaxy A05, a low-end phone, 120 small resting symbols took 13.5 ms a frame with the cache and 11.9 ms without. It can pay for large skeletons at rest with much overdraw. Measure it on your device.
+
+### tightMesh
+
+- Values: `auto`, `on`, `off`. Default `auto`.
+- `auto` keeps the quad of each region, and does not draw a region without a visible pixel.
+- `on` draws every region as the polygon around its visible pixels.
+- `off` keeps every quad.
+
+It needs the outlines of the atlas, see [Less overdraw with outlines](#less-overdraw-with-outlines). With `on`, some pixels move by 1 of 255 levels, so the picture is the same to the eye and not to the bit.
+
+Cost: `on` adds vertices, 13 to 94 percent on the rigs of the bench. A phone whose CPU is the limit pays for them. It pays where the GPU is the limit and regions have large transparent corners.
+
+### occlusion
+
+- Values: `auto`, `off`. Default `auto`.
+- `auto` skips a slot that lies behind the opaque part of a later slot, once the asset has outlines.
+
+The picture stays the same. The runtime finds a slot that goes behind within about a second, and draws it until then. It draws a slot that comes out again in the same frame.
+
+Cost: a search for covered slots, one time in 4 to 64 updates. It is not a setting of `perf`, so pass it as an option of its own.
+
+### bake
+
+- Values: `off`, `auto`, or a list of animation names. Default `off`.
+- `auto` bakes an animation in idle time the first time it plays alone on track 0. It plays live until the clip is ready.
+
+From then on the animation plays from the frames while it plays alone, with no mix and nothing queued after it. The engine still runs the tracks and fires the events. Between two frames, {facts.bake.fps} a second, the skeleton shows the nearest frame.
+
+- `auto` does not bake an animation with another one queued after it.
+- `auto` never bakes a skin with physics or a slider.
+
+Cost: memory. A clip keeps 23 KB to 0.9 MB per animation and skin on the example rigs. Clips that the game bakes while it plays hold at most 4 MB per skeleton. The clip that played longest ago goes first, and a clip in use never goes. `setBakeBudget` sets another limit.
+
+<Snippet source={source} regions="bake-import budget" />
+
+It pays for long loops with many bones and constraints that play alone, on many instances.
+
+### skinning
+
+- Values: `auto`, `cpu`, `gpu`. Default `auto`, which is `cpu`.
+- `gpu` places the vertices of the mesh mode in the vertex shader, from the bones.
+
+By default the CPU places every vertex, in both render modes. With `gpu`, a moving skeleton uploads its bones and not its vertices. The CPU still places a mesh while a deform is on it, and a region with a sequence. The batched mode always places on the CPU, so `gpu` does nothing there, and the instance warns once.
+
+Cost: two small textures per skeleton, and a draw call of its own per instance without `instancing`. GPU skinning has no numbers for phones yet, so `auto` stays on the CPU.
+
+### instancing
+
+- Values: `off`, `auto`, `on`. Default `off`.
+- `auto` draws instances of one rig that follow each other in the display list as one instanced draw.
+
+It acts on the mesh mode with `skinning: 'gpu'`. On any other skeleton it does nothing, and the instance warns once. A run ends where Pixi draws anything else. It also ends where the next instance has another skin, other cuts, another draw order, other pages or another blend mode.
+
+An instanced draw runs every attachment of every slot. So `auto` leaves a rig alone whose attachments have more than twice the vertices a pose shows. `on` draws such a rig instanced too.
+
+Cost: the GPU runs the vertices of every attachment. It pays for many instances of one large rig. A grid of different symbols draws in fewer calls in the batched mode.
+
+### renderMode
+
+- Values: `auto`, `batched`, `mesh`. Default `auto`.
+- `auto` batches a skeleton of up to {facts.batch.autoVertices} vertices, and gives a larger one meshes of its own.
+
+`stats.renderMode` names the mode in use. `batched` falls back to meshes on a device that cannot sample the atlas pages of the skeleton in one draw. The code of the mesh mode loads on demand, and a skeleton draws in a batch until it is there.
+
+Cost: the mesh mode takes one draw call or more per instance. The batched mode copies the vertices into a shared buffer, and writes them again when a parent moves. See [Performance caveats](/performance/caveats/#a-parent-that-moves-or-fades).
+
+### ticker
+
+- Values: a Pixi `Ticker`. Default `Ticker.shared`.
+- Pass `app.ticker` so that its `speed`, `maxFPS` and `stop()` reach the skeleton.
+
+`autoUpdate: false` takes the skeleton off every ticker, and the game calls `update` itself. [Play](/guide/play/#what-updates-the-skeleton) shows both.
+
+### physics
+
+- Values of the `physics` property: `update`, `pose`, `reset`, `none`. Default `update`.
+
+A skeleton with physics constraints simulates in every update, also while its animation rests. `none` leaves the physics out. Physics does not follow the Pixi position by itself. Tell it with `physicsTranslate` and `physicsRotate`.
+
+## Less overdraw with outlines
+
+The GPU paints every pixel of every triangle, also where the image is transparent. Outlines tell the runtime where the visible pixels of each atlas region are. With them, the runtime does not draw a region without a visible pixel, and skips a slot behind the opaque part of a later slot. Outlines are off by default.
+
+```bash
+npx pixi-marrow outlines hero.atlas
+npx pixi-marrow outlines hero.atlas --out build/hero.outlines.json --pages art/pages
+```
+
+The command writes `hero.outlines.json` next to the atlas, at build time. It reads PNG pages. For an atlas with WebP or AVIF pages, `--pages` names the folder with the PNG sources of the pages. The command needs Node 24 or later.
+
+<Snippet source={outlines} regions="import load" />
+
+Pass the URL of the file as `outlines` of the load. The runtime then reads no page image at load time.
+
+<Snippet source={outlines} regions="assets" />
+
+With Pixi `Assets`, load the file as any JSON file. Then pass its alias or its URL as `outlines` to `MarrowSpine.from` or `MarrowAsset.get`.
+
+<Snippet source={outlines} regions="auto" />
+
+`outlines: 'auto'` needs no file. The runtime reads the page images in idle time after the load, and outlines their regions in slices of 4 ms. Assets that draw from one page share one scan of it. The scans read one page after the other, and a premultiplied page goes through one WebGL context that all scans share.
+
+The cost is at run time. The scan draws a page into a canvas and reads its pixels back, at 4 bytes a pixel each. So a page of 2048 by 2048 takes about 32 MB for that moment, which a phone with little memory can fail on. A page that fails warns once in the console, and its regions keep their quads. Use the file where the build can make it.
+
+<Snippet source={outlines} regions="tight" />
+
+`tightMesh: 'on'` also draws each region as a polygon. `stats.tightRanges` and `stats.coveredSlots` count what the cuts do. Some settings of the renderer turn the cuts off. [Performance caveats](/performance/caveats/#overdraw-cuts-that-are-off) lists them.
 
 ## Bake at build time
 
-<Snippet source={source} regions="bake" />
+<Snippet source={source} regions="bake-import bake" />
 
-`bakeAnimations` of `pixi-marrow/bake` runs in Node too. So you can bake the clips at build time and ship them as a file. `addBakedClips` gives them to an asset, and its instances play them instead of baking. A clip costs 23 KB to 0.9 MB on the example rigs.
+`bakeAnimations` of `pixi-marrow/bake` runs in Node too. So you can bake the clips at build time and ship them as a file. `addBakedClips` gives them to an asset, and its instances play them instead of baking. Clips from a file do not count against the 4 MB budget. A clip costs 23 KB to 0.9 MB on the example rigs.
 
-## See which are in effect
+## The perf report
 
 <Snippet source={source} regions="report" />
 
-The first two rows of the report are `perf` and `pacing`. `perf` names the preset, the settings, and the ones you gave by name. `pacing` says how often the skeleton updates right now, and why. `pacingStatus()` returns the same as an object.
+`perf.report()` returns one row for each decision of the runtime about one instance. A row has a `feature`, a `value` in a few words and a `reason`. The call is asynchronous, because its code loads on first use. The example values are those of the bee of Bzzz while its `win` plays.
+
+| `feature` | Example `value` | What it tells | What to change |
+|---|---|---|---|
+| `perf` | `exact` | The preset, each setting, and the ones given by name. | The `perf` option. |
+| `pacing` | `every frame` | How often the skeleton updates now, and why. | `offscreen`, `updateRate`, `lod`. |
+| `renderMode` | `batched` | The mode in use, and why: the option, the size, or the device. | `renderMode`, or fewer vertices or pages. |
+| `instancing` | `off` | Whether the instance draws instanced, and what prevents it. | `skinning: 'gpu'` with `instancing`. |
+| `motion` | `27 of 27 bones, 2 of 27 slots` | What the last update changed, and how many updates found nothing to do. | Stop animations that nobody sees. |
+| `links` | `none` | The containers that follow a bone or are attached to a slot. | `follow` in place of `attach`, where the draw order allows. |
+| `drawCalls` | `1 shared` | The draw calls of the instance. `shared` means that it draws in a batch. | See `blend`, `pages`, `clipping` and `links`. |
+| `blend` | `no extra range` | The draw ranges that slots with multiply or screen add. | Additive or normal slots. |
+| `pages` | `no extra range` | The draw ranges that atlas pages over the limit add. | Pack the atlas into fewer pages. |
+| `clipping` | `off` | The clips applied now, and their mask draws in the mesh mode. | Remove the clip, or change the mode. |
+| `tightMesh` | `off` | Whether regions draw as polygons, and what prevents it. | Outlines, `tightMesh: 'on'`. |
+| `occlusion` | `off` | How many slots the runtime skips as covered, and what prevents it. | Outlines, and no alpha above the skeleton. |
+| `outlines` | `off` | Where the outlines stand: given, scanned, scanning, unread or off. | The `outlines` option of the load. |
+| `darkTint` | `off` | Whether a slot has a dark tint. Each vertex then carries 4 more bytes. | Turn Tint black off in the editor where no animation needs it. |
+| `physics` | `off` | The physics constraints and the mode. | The `physics` property, or `lod`. |
+| `bake` | `off` | Whether updates play baked frames, and why not. | The `bake` option. |
+| `constraints` | `none` | The constraints by kind. | Fewer constraints in the rig. |
+| `bones` | `27 of 27 posed` | The bones that an update poses. | Fewer bones in the rig. |
+| `slots` | `21 of 27 visible` | The slots that draw. | None. |
+| `vertices` | `161 vertices, 336 indices` | The vertices and indices of the instance. | Fewer mesh vertices in the rig. |
+| `uploads` | `1 position, 0.45 color, 0 uv per update` | How often an update handed data on. | Fewer moving skeletons. |
+| `layout` | `1 layout` | How often the runtime laid the vertex ranges out. It grows with each skin change. | Set skins once. |
+
+The report reads the instance when you ask for it. It does not show what a parent costs. For that, read the three fields `transformReplaces`, `tintRewrites` and `frameBytes` of `stats`.
+
+`pacingStatus()` returns the `pacing` row as an object: the rate, the `offscreen` mode, and whether the skeleton counts as hidden.
+
+## The stats
+
+<Snippet source={source} regions="stats" />
+
+`stats` is a plain object that the runtime keeps up to date. A read costs nothing and allocates nothing. Where the table does not say "now", a field only grows.
+
+| Field | What it counts |
+|---|---|
+| `renderMode` | The mode in use now: `batched` or `mesh`. |
+| `drawCalls` | Draw calls per frame now. In the batched mode they are the batches it draws in, which it shares. |
+| `vertices` | Vertices in the buffers now. |
+| `indices` | Indices that the instance draws now. |
+| `bufferBytes` | Bytes of vertex and index data that the instance holds now. |
+| `templateBuilds` | How often the runtime built the vertex ranges: once, and again when the skin changes. |
+| `indexRebuilds` | How often it wrote the indices again: on attachment, draw order and visibility changes. |
+| `positionUploads` | How often it handed vertex positions on. |
+| `colorUploads` | How often it handed vertex colors on. |
+| `uvUploads` | How often it handed texture coordinates on, for a sequence. |
+| `boneUploads` | Updates that wrote bone matrices, with `skinning: 'gpu'`. |
+| `clips` | Clipping attachments applied now. |
+| `maskDraws` | Draw calls for clip masks now. 2 per applied clip in the mesh mode, 0 in the batched mode. |
+| `maskUploads` | How often it uploaded the polygon of a clip mask. |
+| `maskRebuilds` | How often it wrote the triangles of a clip mask again. |
+| `tightRanges` | Visible regions that are not a quad now, because of the outlines. |
+| `coveredSlots` | Slots that it skips now because a later opaque slot covers them. |
+| `skips` | Updates that returned at once, because nothing changed. |
+| `placedSlots` | Slots whose vertices the last working update placed. |
+| `coloredSlots` | Slots whose colors that update wrote. |
+| `transformReplaces` | Frames of the batched mode that placed every vertex again because a display object above the skeleton moved. |
+| `tintRewrites` | Frames of the batched mode that wrote every vertex again because the tint or the alpha above the skeleton changed. |
+| `instructionBuilds` | How often Pixi built the instructions of the render group with the skeleton in a batch. |
+| `uploadBytes` | The bytes handed to the GPU so far, as `positions`, `statics`, `indices`, `bones` and `masks`. |
+| `frameBytes` | The bytes of all kinds since the last update began. 0 after a frame in which nothing moved. |
+
+An instance that draws instanced counts no uploads of its own. The pool of its rig uploads for all its instances, and the `uploads` row of the report gives that count.
+
+## Memory
+
+<Snippet source={source} regions="memory" />
+
+`perf.memory()` counts the bytes of one instance and of its asset.
+
+| Field | What it counts |
+|---|---|
+| `shared` | What the asset holds once for all instances: the skeleton data, the atlas, the vertex layout and the baked clips. |
+| `baked` | The bytes of the baked clips, which count in `shared` too. |
+| `bakeBudget` | The most bytes that clips baked in the game may hold. |
+| `instance` | What this instance holds in typed arrays: its pose and the arrays of its view. |
+| `gpu` | The bytes of this instance on the GPU: `gpuBuffers` plus `gpuTextures`. |
+
+The page textures of the atlas are not in these numbers. A page takes its width times its height times 4 bytes on the GPU. [Performance caveats](/performance/caveats/#atlas-pages-and-gpu-memory) says more.
 
 ## Not measured yet
 
 The numbers for the presets come from one desktop machine. The only phone measured so far is the Galaxy A05, for the idle cache above. GPU skinning has no numbers for phones. So `skinning: 'auto'` stays on the CPU, and no preset changes it.
 
-The [lab](/lab/) shows how pixi-marrow plays on the device that opens it, with the settings a game gets when it sets none. Each test plays a scene at the rate of the screen and shows the frame rate and the time per frame. The How many test finds the number of symbols that the device plays at its full rate.
+The [lab](/lab/) shows how pixi-marrow plays on the device that opens it, with the settings a game gets when it sets none. Each test plays a scene at the rate of the screen and shows the frame rate and the time per frame. The [How many](/lab/how-many/) test finds the number of symbols that the device plays at its full rate.

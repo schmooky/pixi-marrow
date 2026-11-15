@@ -130,9 +130,12 @@ function bonesAndSlots(w: SkelWriter, version: Version): SkelWriter {
 const weights = (w: SkelWriter): SkelWriter =>
     w.int(1, 0).f(0, 0, 1).int(2, 0).f(4, 0, 0.5).int(1).f(3, 0, 0.5).int(1, 1).f(0, 4, 1);
 
-/** The slot timelines, which both versions store the same way: attachment, rgb, rgb2 and alpha. */
+/**
+ * The slot timelines, which both versions store the same way: attachment, rgb, rgb2 and alpha.
+ * They animate the slot `back`: only a slot with a dark color can have an rgb2 timeline.
+ */
 function slotTimelines(w: SkelWriter): SkelWriter {
-    w.int(1, 0, 4);
+    w.int(1, 1, 4);
     w.u8(0).int(2).f(0).int(REF.quad).f(0.5).int(0);
     w.u8(2).int(2, 0).f(0).u8(255, 128, 0).f(1).u8(0, 64, 255).u8(1);
     w.u8(4).int(2, 6).f(0).u8(1, 2, 3, 4, 5, 6).f(1).u8(250, 200, 150, 100, 50, 0).u8(2).handles(6);
@@ -287,7 +290,7 @@ describe.each(['4.1', '4.2'] as const)('importBinary42 with a %s file', (version
         const model = await importSkeleton(skeleton);
 
         expect(differences(model, officialModel(version, { skeleton, atlas: ATLAS }))).toEqual([]);
-        expect(model.hash).toBe(version === '4.2' ? null : '12341234');
+        expect(model.hash).toBe(version === '4.2' ? null : '0000123400001234');
         expect(model.skins.map((skin) => skin.name)).toEqual(['default', 'alt']);
         expect(model.animations[0]?.timelines.map((timeline) => timeline.kind)).toContain('deform');
     });

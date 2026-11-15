@@ -1,4 +1,4 @@
-import { Container, type DestroyOptions, Ticker } from 'pixi.js';
+import { Container, type DestroyOptions, type Renderer } from 'pixi.js';
 import { MarrowError } from '../base/errors';
 import type { SkeletonInfo } from '../model/info';
 import type { AtlasOutlines } from '../model/outlines';
@@ -6,19 +6,21 @@ import type { PoseEngine } from '../pose/engine';
 import { SkeletonView } from '../render/skeleton-view';
 import type { ViewStats } from '../render/stats';
 import { MarrowAsset, type MarrowLoadOptions } from './asset';
+import { dropAsset, handOver, holdAsset } from './asset-holds';
 import type { MarrowAssetsOptions } from './assets';
 import { bakingEngine } from './baking';
-import { namedIndex, renderMode, warnWithoutOutlines } from './checks';
+import { checkSpineOptions, namedIndex, renderMode, warnNoEffect } from './checks';
 import { EventPump } from './events';
 import { createIdleCache, type IdleCache } from './idle-cache';
 import type { MarrowNames, MarrowSpineOptions, PlayOptions, QueueOptions, StopOptions, UpdateProbe } from './options';
-import { Pacer, type PacingStatus } from './pacing';
+import { Pacer, type PacingStatus, unseen } from './pacing';
 import { animationDuration, applyPlan, planPlay } from './play-fields';
 import { type ResolvedPerf, resolvePerf } from './presets';
 import { MarrowPerf } from './spine-perf';
 import { SpinePhysics } from './spine-physics';
-import { EMPTY_ANIMATION, type Track, TrackHandle } from './track';
+import { EMPTY_ANIMATION, type Track, type TrackEnd, TrackHandle } from './track';
 import { TrackBook } from './track-book';
+import { finite } from './values';
 import { registerView } from './view-of';
 
 /**
@@ -26,6 +28,10 @@ import { registerView } from './view-of';
  * and draws the result.
  *
  * Pass the names type that `pixi-marrow typegen` writes to make a misspelled name a compile error.
+ *
+ * After `destroy()` the object is of no more use. `play`, `queue`, `stop`, `setMix`, `bone`,
+ * `slot`, the skins, `setupPose`, `follow`, `attach` and `autoUpdate = true` throw a
+ * `MarrowError` with the code `destroyed`. `update`, `destroy`, `unfollow` and `detach` do nothing.
  *
  * @example
  * const hero = await MarrowSpine.load({ skeleton: 'hero.skel', atlas: 'hero.atlas' });
@@ -37,6 +43,8 @@ import { registerView } from './view-of';
  * hero.on('event', (event: MarrowEvent, track: Track) => console.warn(event.name, track.animation));
  */
 export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysics<N> {
+    /** True on every `MarrowSpine`, for code that walks a scene tree and has no class to compare with. */
+    readonly isMarrowSpine: true = true;
     /** What this object shares with the other instances of its skeleton. */
     readonly asset: MarrowAsset;
     /**
@@ -50,7 +58,6 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
     private readonly book = new TrackBook();
     /** The engine events between the update that caused them and the listeners. */
     private readonly pump = new EventPump();
-    private ticking = false;
     private tools: MarrowPerf | undefined;
     /**
      * The `perf` settings in effect: the preset, every setting, and which were given by name.
@@ -60,24 +67,33 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
     /** When an update poses the skeleton, and with how much time. */
     private readonly pacer: Pacer;
     private readonly idle: IdleCache | undefined;
-    /** What {@link updateProbe} holds. An update without a probe pays one check of this field. */
-    private probe: UpdateProbe | null = null;
+    /** The child that hears the renders, once the pacing or an update without a pose needs one. */
+    private watch: Container | undefined;
+    /** True when time passed that the drawn skeleton does not show. */
+    private stale = false;
 
     /**
      * Creates one more instance of a loaded skeleton. It shows the setup pose until an animation
      * plays. The pose is flipped to Pixi's y axis, which points down.
+     *
+     * Throws a `MarrowError` before anything is made: `destroyed` for a destroyed asset, and
+     * `invalid-option` for a key that is no option and for a value an option does not take.
      *
      * @param asset The loaded skeleton, from `MarrowAsset.load` or `MarrowAsset.from`.
      */
     constructor(asset: MarrowAsset, options: MarrowSpineOptions = {}) {
         super();
         if (asset.destroyed) {
-            throw new MarrowError('invalid-data', 'The asset was destroyed.', { fix: 'Load the asset again.' });
+            throw new MarrowError('destroyed', 'The asset was destroyed.', { fix: 'Load the asset again.' });
         }
-        this.asset = asset;
+        checkSpineOptions(options);
         // the options name each setting as the settings do
         const settings = resolvePerf(options.perf, options);
+        const mode = renderMode(options.renderMode ?? 'auto');
 
+        this.asset = asset;
+        this.label = options.label ?? (asset.name === '' ? 'MarrowSpine' : `MarrowSpine:${asset.name}`);
+        if (options.ticker !== undefined) this.clock = options.ticker;
         this.perfSettings = settings;
         this.engine = bakingEngine(asset, asset.createEngine(), settings.bake);
         // Spine's y axis points up and Pixi's points down. The official Pixi runtime flips the pose too:
@@ -89,11 +105,11 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
             outlines: this.outlines,
             tightMesh: settings.tightMesh,
             occlusion: options.occlusion,
-            renderMode: renderMode(options.renderMode ?? 'auto'),
+            renderMode: mode,
             skinning: settings.skinning,
             instancing: settings.instancing,
         });
-        warnWithoutOutlines(asset, settings, options.occlusion);
+        warnNoEffect(asset, settings, options.occlusion, mode);
         this.addChild(this.skeletonView.container);
         this.linkTo({ engine: this.engine, state: this.engine.state, model: asset.model, view: this.skeletonView });
         registerView(this, this.skeletonView);
@@ -104,21 +120,17 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
         this.engine.physics = 'update';
         this.draw();
         this.pacer = new Pacer(settings);
-        // a render tells the pacing where the skeleton is, for `offscreen` and `lod`. An empty
-        // child hears it, so that `onRender` of this object stays the game's
-        if (this.pacer.watching) {
-            const watch = new Container({ label: 'marrow-pacing' });
-
-            watch.onRender = (renderer) => this.pacer.seen(this, renderer);
-            this.addChild(watch);
-        }
+        // a render tells the pacing where the skeleton is, for `offscreen` and `lod`
+        if (this.pacer.watching) this.listen();
         this.idle = createIdleCache(this, this.skeletonView, this.engine.state, settings.idleCache, asset.textures);
         this.autoUpdate = options.autoUpdate ?? true;
+        // the asset keeps its textures while this object is alive
+        holdAsset(asset);
     }
 
     /**
      * Loads a skeleton and creates a display object for it: `MarrowAsset.load`, then `new MarrowSpine`.
-     * Loads of the same files share one asset.
+     * Loads of the same files share one asset. A key that is no option throws before anything loads.
      *
      * @example
      * const hero = await MarrowSpine.load<HeroNames>({ skeleton: 'hero.skel', atlas: 'hero.atlas' });
@@ -127,7 +139,10 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
     static async load<N extends MarrowNames = MarrowNames>(
         options: MarrowLoadOptions & MarrowSpineOptions,
     ): Promise<MarrowSpine<N>> {
-        return new MarrowSpine<N>(await MarrowAsset.load(options), options);
+        checkSpineOptions(options);
+
+        // the display object takes the place of the load as the holder of the asset
+        return handOver(await MarrowAsset.load(options), (asset) => new MarrowSpine<N>(asset, options));
     }
 
     /**
@@ -171,29 +186,6 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
     }
 
     /**
-     * What measures the updates of this object, or null. Default null. `createProbe` of
-     * `pixi-marrow/perf` sets it, and `stop` of that probe takes it back. With a probe every
-     * update reads the clock five times and calls `record`. Without one it pays one check.
-     *
-     * Throws a `MarrowError` for a value that is not null and has no `record` method.
-     *
-     * @example
-     * hero.updateProbe = { record: (pose, geometry, events) => console.warn(pose + geometry + events) };
-     */
-    get updateProbe(): UpdateProbe | null {
-        return this.probe;
-    }
-
-    set updateProbe(probe: UpdateProbe | null) {
-        if (probe !== null && typeof probe?.record !== 'function') {
-            throw new MarrowError('invalid-data', `updateProbe was set to ${String(probe)}, which cannot record.`, {
-                fix: 'Set an object with a record(pose, geometry, events) method, or null.',
-            });
-        }
-        this.probe = probe;
-    }
-
-    /**
      * The `renderMode` option: `auto`, `mesh` or `batched`. Setting it takes effect with the next
      * update. `stats.renderMode` names the mode in use. Any other value throws a `MarrowError`.
      */
@@ -205,42 +197,9 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
         this.skeletonView.renderMode = renderMode(mode);
     }
 
-    /** Multiplies the time every track advances by. 1 is normal speed. */
-    get timeScale(): number {
-        return this.engine.timeScale;
-    }
-
-    set timeScale(value: number) {
-        this.engine.timeScale = value;
-    }
-
-    /** Seconds to mix between two animations that have no mix set with {@link setMix}. */
-    get defaultMix(): number {
-        return this.engine.defaultMix;
-    }
-
-    set defaultMix(seconds: number) {
-        this.engine.defaultMix = seconds;
-    }
-
-    /**
-     * True when the object updates itself from Pixi's shared ticker, with the seconds the ticker
-     * measured. Set it to false to call {@link update} yourself.
-     */
-    get autoUpdate(): boolean {
-        return this.ticking;
-    }
-
-    set autoUpdate(value: boolean) {
-        if (value === this.ticking) return;
-        this.ticking = value;
-        if (value) Ticker.shared.add(this.onTick, this);
-        else Ticker.shared.remove(this.onTick, this);
-    }
-
     /** Sets the seconds to mix when animation `from` changes to animation `to`. */
     setMix(from: N['animations'], to: N['animations'], seconds: number): void {
-        this.engine.setMix(this.animationIndex(from), this.animationIndex(to), seconds);
+        this.engine.setMix(this.animationIndex(from), this.animationIndex(to), finite('setMix seconds', seconds));
     }
 
     /**
@@ -248,8 +207,8 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
      * queued there.
      *
      * Throws a `MarrowError` before anything plays. The code is `unknown-name` for a name the
-     * skeleton lacks and for a key that is no option. It is `invalid-data` for an option value of
-     * the wrong type.
+     * skeleton lacks. It is `invalid-option` for a key that is no option, for an option value of
+     * the wrong type and for a name that is no string.
      *
      * @example
      * hero.play('idle', { loop: true });
@@ -259,12 +218,13 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
      */
     play(name: N['animations'], options: PlayOptions = {}): Track<N> {
         const index = this.animationIndex(name);
-        const plan = planPlay(options, 'play', this.asset.model.version);
+        const { model } = this.asset;
+        const plan = planPlay(options, 'play', model.version);
 
         this.catchUp();
         this.absorb();
         const entry = this.engine.setAnimation(plan.track, index, plan.loop);
-        const handle = this.adopt(new TrackHandle<N>(this, entry, name, animationDuration(this.asset.model, index)));
+        const handle = this.adopt(new TrackHandle<N>(this, entry, name, animationDuration(model, index)));
 
         applyPlan(handle, plan);
 
@@ -305,8 +265,10 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
     }
 
     /**
-     * Stops one track, or every track. With `mix` the track mixes out to the setup pose through
-     * an empty animation. Without it the track is cleared at once and the pose stays as it is.
+     * Stops one track, or every track. With `mix` the track mixes out through an empty animation,
+     * as in the official runtime. What it keyed goes back to what lower tracks give, or to the
+     * setup pose where they key nothing. Without it the track is cleared at once and the pose
+     * stays as it is.
      *
      * @example
      * hero.stop({ track: 1, mix: 0.2 });
@@ -316,6 +278,7 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
         const mix = options.mix ?? 0;
         const { track } = options;
 
+        this.parts();
         this.catchUp();
         if (mix > 0) {
             this.absorb();
@@ -328,7 +291,7 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
         } else {
             if (track === undefined) this.engine.clearTracks();
             else this.engine.clearTrack(track);
-            this.absorb();
+            this.absorb('stopped');
         }
     }
 
@@ -338,7 +301,12 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
      * asset was destroyed it does nothing, and {@link autoUpdate} turns off.
      *
      * The `updateRate` and `offscreen` settings apply here: an update that is not due gathers its
-     * seconds for the next one, or loses them in the `pause` mode.
+     * seconds for the next one. In the `pause` mode off the screen the time passes and the events
+     * fire, and nothing is posed or drawn.
+     *
+     * `seconds` that are no finite number throw a `MarrowError`. More than 10 seconds in one
+     * update advance the animations by all of them and start the physics again, as
+     * `resetPhysics` does.
      *
      * @example
      * hero.autoUpdate = false;
@@ -352,13 +320,22 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
 
             return;
         }
+        this.checkStep(seconds);
         const due = this.pacer.take(seconds, this.skeletonView.stats.renderMode === 'batched');
 
         if (due < 0) return;
+        if (this.dozes || this.pacer.paused) {
+            this.rest(due);
+
+            return;
+        }
+        // the physics did not run while nothing was drawn
+        if (this.stale) this.calm();
+        this.stale = false;
         if (this.probe !== null) this.measure(due, this.probe);
         else {
             this.pose(due);
-            this.absorb();
+            this.absorb(undefined, true);
             this.links?.move(this.engine.state);
             this.draw();
             this.idle?.update();
@@ -368,7 +345,10 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
 
     /**
      * Stops updating and frees what this instance holds. Every {@link Track} of it resolves its
-     * `finished`. The asset is shared and stays loaded.
+     * `finished`, with `destroyed` when nothing ended it before. The asset is shared: it stays
+     * loaded while an owner or another instance holds it, and ends when this one was its last
+     * holder. That is the case after `MarrowSpine.load`, which gives its hold to the instance.
+     * See the class for what the object does after this.
      */
     override destroy(options?: DestroyOptions): void {
         if (this.destroyed) return;
@@ -376,12 +356,15 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
         this.engine.clearTracks();
         // a combined skin stays while an engine shows it
         if (this.engine.skins.length > 1) this.engine.setSkin(-1);
-        this.absorb();
+        this.absorb('destroyed');
         this.pump.pending.clear();
         this.links?.clear();
+        this.linkTo(undefined);
         this.idle?.destroy();
         this.skeletonView.destroy();
         super.destroy(options);
+        // the last holder ends the asset, which unloads its page images
+        dropAsset(this.asset);
     }
 
     /**
@@ -394,7 +377,7 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
         this.pose(seconds);
         const posed = performance.now();
 
-        this.absorb();
+        this.absorb(undefined, true);
         const absorbed = performance.now();
 
         this.links?.move(this.engine.state);
@@ -428,23 +411,59 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
         this.skeletonView.update(this.engine.state);
     }
 
-    private onTick(ticker: Ticker): void {
-        this.update(ticker.deltaMS / 1000);
+    /**
+     * An update of an object that nothing draws. The time passes, the events fire and `finished`
+     * resolves. Nothing is drawn, and an animation that plays alone is not posed either.
+     */
+    private rest(seconds: number): void {
+        // without an entry no time passes that the picture would show
+        if (this.book.live > 0) {
+            if (this.engine.solo() === null) this.pose(seconds);
+            else this.engine.advance(seconds);
+            this.stale = true;
+            this.listen();
+            this.absorb(undefined, true);
+        }
+        this.pump.flush(this, this.asset.model.events);
     }
 
-    private animationIndex(name: string): number {
-        return namedIndex('animation', this.asset.model.animations, String(name));
+    /** Hears the renders from now on, through an empty child: `onRender` of this object stays the game's. */
+    private listen(): void {
+        if (this.watch !== undefined) return;
+        this.watch = new Container({ label: 'marrow-pacing' });
+        this.watch.onRender = (renderer) => this.seen(renderer);
+        this.addChild(this.watch);
+    }
+
+    /**
+     * What a render tells: where the skeleton is, for the pacing. A render that draws the object
+     * after updates without a pose poses and draws it first, at the time its tracks are at.
+     */
+    private seen(renderer: Renderer): void {
+        this.pacer.seen(this, renderer);
+        if (!this.stale || this.pacer.paused || unseen(this, true)) return;
+        this.stale = false;
+        this.calm();
+        this.pose(0);
+        this.absorb();
+        this.links?.move(this.engine.state);
+        this.draw();
+    }
+
+    /** The index of an animation. Throws for a destroyed object, and for a name the skeleton lacks. */
+    private animationIndex(name: unknown): number {
+        return namedIndex('animation', this.parts().model.animations, name);
     }
 
     /** Mixes a track out through the empty animation. Its entry gets a handle that emits nothing. */
     private mixOut(track: number, mix: number): void {
-        this.adopt(new TrackHandle(this, this.engine.setEmptyAnimation(track, mix), EMPTY_ANIMATION, 0));
+        this.adopt(new TrackHandle(this, this.engine.setEmptyAnimation(track, mix), EMPTY_ANIMATION, 0), 'stopped');
     }
 
     /** Takes in the handle of an entry the engine made a moment ago, with the events of that command. */
-    private adopt<H extends TrackHandle>(handle: H): H {
+    private adopt<H extends TrackHandle>(handle: H, cause?: TrackEnd): H {
         this.book.add(handle);
-        this.absorb();
+        this.absorb(cause);
 
         return handle;
     }
@@ -455,9 +474,12 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
      * It runs after every engine command and every engine update, and before a command that
      * makes an entry. A 4.3 engine hands an entry object out again after its `dispose`. The
      * events of the earlier use must be matched before the object gets a new handle.
+     *
+     * @param cause Why the entries end that the command before this call ended.
+     * @param emits True in an update, which emits at once: an event nobody listens for is left out.
      */
-    private absorb(): void {
-        this.book.absorb(this.engine.takeEvents(), this.pump.pending);
+    private absorb(cause?: TrackEnd, emits = false): void {
+        this.book.absorb(this.engine.takeEvents(), this.pump.pending, cause, emits ? this : undefined);
     }
 
     /**

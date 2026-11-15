@@ -82,6 +82,8 @@ function updateTrack(player: Player43, index: number, current: Entry): void {
         if (current.delay > 0) return;
         currentDelta = -current.delay;
         current.delay = 0;
+        // from this update on the entry is applied
+        player.stirred = true;
     }
     const next = current.next;
 

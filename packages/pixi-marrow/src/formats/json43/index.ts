@@ -1,4 +1,6 @@
 import type { SkeletonModel } from '../../model/model';
+import { checkModel } from '../shared/checks';
+import { hashOfText } from '../shared/hash';
 import { readAnimations } from './animations';
 import { linkSliderAnimations, readConstraints } from './constraints';
 import { ImportContext, invalid } from './context';
@@ -23,10 +25,10 @@ function readModel(root: JsonRoot): SkeletonModel {
 
     linkSliderAnimations(constraintMaps, ctx);
 
-    return {
+    return checkModel({
         version: '4.3',
         editorVersion: header.spine,
-        hash: header.hash ?? null,
+        hash: hashOfText(header.hash),
         x: header.x ?? 0,
         y: header.y ?? 0,
         width: header.width ?? 0,
@@ -38,7 +40,7 @@ function readModel(root: JsonRoot): SkeletonModel {
         constraints: ctx.constraints,
         skins,
         animations,
-    };
+    });
 }
 
 /**

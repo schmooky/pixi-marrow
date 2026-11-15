@@ -19,9 +19,9 @@ const app = new Application();
 
 await app.init({ resizeTo: window });
 
-// #region copies
-/** Makes a copy of a skeleton that plays on its own. */
-function makeCopy(id: SkeletonId): MarrowSpine {
+// #region instances
+/** Makes an instance of a skeleton that plays on its own. */
+function makeInstance(id: SkeletonId): MarrowSpine {
     const asset = assets.get(id);
 
     if (asset === undefined) throw new Error(`no skeleton ${id}`);
@@ -31,8 +31,8 @@ function makeCopy(id: SkeletonId): MarrowSpine {
 
 const scene = app.stage.addChild(new Container());
 
-// two copies of A share everything but their pose
-scene.addChild(makeCopy('a'), makeCopy('a'), makeCopy('coin'));
+// two instances of A share everything but their pose
+scene.addChild(makeInstance('a'), makeInstance('a'), makeInstance('coin'));
 
 // #endregion
 
@@ -47,20 +47,20 @@ const fromBundle = new MarrowSpine(MarrowAsset.get({ skeleton: 'rigs/animation_a
 // #endregion
 
 // #region pool
-/** Copies of each skeleton that wait off the screen, so showing one makes none. */
+/** Instances of each skeleton that wait off the screen, so showing one makes none. */
 const pools = new Map<SkeletonId, MarrowSpine[]>(NAMES.map((id) => [id, []]));
 
-/** Takes a copy from its pool, or makes one. */
+/** Takes an instance from its pool, or makes one. */
 function take(id: SkeletonId): MarrowSpine {
-    return pools.get(id)?.pop() ?? makeCopy(id);
+    return pools.get(id)?.pop() ?? makeInstance(id);
 }
 
-/** Gives a copy back when it leaves the screen, in its setup pose for the next use. */
-function give(id: SkeletonId, copy: MarrowSpine): void {
-    copy.removeFromParent();
-    copy.stop();
-    copy.setupPose();
-    pools.get(id)?.push(copy);
+/** Gives an instance back when it leaves the screen, in its setup pose for the next use. */
+function give(id: SkeletonId, instance: MarrowSpine): void {
+    instance.removeFromParent();
+    instance.stop();
+    instance.setupPose();
+    pools.get(id)?.push(instance);
 }
 // #endregion
 

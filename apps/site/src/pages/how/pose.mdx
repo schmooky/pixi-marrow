@@ -45,7 +45,7 @@ Keys are not the only thing that moves a bone. A constraint changes bones during
 - **Physics**, from Spine 4.2, lets bones swing and settle like springs: hair, antennae, a dangling coin.
 - **Slider**, from Spine 4.3, plays an animation by a value instead of by time.
 
-The animator sets the order in which bones and constraints update. From that order, the runtime makes one list for each skin, the update cache of the official runtime. In pixi-marrow, each skin gets that list once, and every copy that wears the skin shares it.
+The animator sets the order in which bones and constraints update. From that order, the runtime makes one list for each skin, the update cache of the official runtime. In pixi-marrow, each skin gets that list once, and every instance that wears the skin shares it.
 
 The Bzzz symbols have no constraints. Characters and props with hair, chains or cloth often do. A physics constraint keeps moving while the skeleton rests. Also, it does not see a change of the Pixi position by itself. [Good to know](/good-to-know/) shows how to tell it.
 

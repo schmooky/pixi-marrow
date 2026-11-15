@@ -1,0 +1,27 @@
+---
+import { apiEntries, apiLink } from '../lib/api-reference';
+import { renderMarkdown } from '../lib/markdown';
+
+/*
+ * The entry points of the package as a table, for the first page of the API reference. The list
+ * comes from the `exports` of the package, so a new entry point shows with no change here.
+ */
+
+const entries = apiEntries();
+const html = (text: string): string => renderMarkdown(text, { link: apiLink }).html.replace(/^<p>|<\/p>$/g, '');
+---
+
+<table>
+    <thead>
+        <tr><th>Import</th><th>Exports</th><th>What it holds</th></tr>
+    </thead>
+    <tbody>
+        {entries.map((entry) => (
+            <tr>
+                <td><a href={entry.href}><code>{entry.name}</code></a></td>
+                <td>{entry.symbols.length}</td>
+                <td set:html={html(entry.doc.text.replace(/^`[^`]+`:\s*/, ''))} />
+            </tr>
+        ))}
+    </tbody>
+</table>

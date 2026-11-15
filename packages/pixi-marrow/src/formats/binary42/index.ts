@@ -1,5 +1,6 @@
 import type { SkeletonModel } from '../../model/model';
 import { BinaryInput } from '../shared/binary-input';
+import { checkModel } from '../shared/checks';
 import { readAnimations } from './animation';
 import { readConstraints } from './constraints';
 import { readBones, readEvents, readHeader, readSlots, readStrings } from './skeleton';
@@ -44,5 +45,14 @@ export function importBinary42(bytes: Uint8Array, version: BinaryVersion): Skele
     const events = readEvents(state);
     const animations = readAnimations(state);
 
-    return { version, ...header, bones, slots, events, constraints, skins: state.skins.map(skinData), animations };
+    return checkModel({
+        version,
+        ...header,
+        bones,
+        slots,
+        events,
+        constraints,
+        skins: state.skins.map(skinData),
+        animations,
+    });
 }

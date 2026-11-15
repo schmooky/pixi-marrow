@@ -1,5 +1,5 @@
 import type { AnimationData } from '../../model/model';
-import { type ImportState, readName } from './reader';
+import { type ImportState, readCount, readName } from './reader';
 import { readAttachmentTimelines } from './timelines-attachment';
 import {
     readIkAndTransformTimelines,
@@ -36,7 +36,7 @@ function readAnimation(state: ImportState, name: string): AnimationData {
 export function readAnimations(state: ImportState): AnimationData[] {
     const animations: AnimationData[] = [];
 
-    for (let i = 0, n = state.input.readInt(true); i < n; i++) {
+    for (let i = 0, n = readCount(state.input, 'entries'); i < n; i++) {
         animations.push(readAnimation(state, readName(state.input, 'An animation')));
     }
 

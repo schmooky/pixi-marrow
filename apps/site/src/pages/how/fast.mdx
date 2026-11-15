@@ -6,6 +6,7 @@ description: The pages before explained one frame, stage by stage. This page col
 
 import Diagram from '../../components/Diagram.astro';
 import Preview from '../../components/Preview.astro';
+import facts from '../../../../../scripts/facts.json';
 
 <Preview name="fast" height={470} rows={4} caption="Sixty symbols of the slot game Bzzz. The preview updates them itself and times that update. It also counts the skeletons that wrote new vertices in the last frame, and the draw calls." />
 
@@ -15,11 +16,15 @@ import Preview from '../../components/Preview.astro';
 
 A skeleton that moves costs the whole pipeline of [One frame](/how/frame/). A skeleton at rest costs one question, whether anything changed. Then the runtime skips it. So the work of a frame follows how many skeletons move.
 
+One case is an exception. In the batched mode, a skeleton at rest under a parent that moves or fades is not at rest for the GPU. The runtime places or colors each of its vertices again and uploads them. A parent that is a render group removes that work. [Performance caveats](/performance/caveats/#a-parent-that-moves-or-fades) shows how.
+
 In the preview at the top, pick **all play**, then **few play**, then **all rest**, and watch the numbers. The times depend on the device, so compare them with each other.
 
 - When all 60 skeletons move, every one of them poses its bones and writes its vertices in every frame.
 - When a few move, only those few do. The others run no timeline, pose no bone, write no vertex and upload nothing.
 - When all rest, no skeleton writes anything. The update shrinks to one small question per skeleton, whether anything changed.
+
+The symbols of the preview stand still on the stage, so the exception above does not apply to them. `stats.frameBytes` of a skeleton is 0 after a frame in which it uploaded nothing.
 
 Most scenes are mostly at rest: a menu, a map with idle characters, the symbols of a slot between two spins. So the cost of a frame follows what moves in it, not how many skeletons it holds. [The pose](/how/pose/) and [an animation](/how/animation/) show where the runtime decides that.
 
@@ -29,7 +34,9 @@ The draw calls stay at one in all three scenes. The 60 skeletons follow each oth
 
 ## No garbage
 
-After the first frames, an update that fires no event allocates nothing. A test proves it. The official cores allocate 17 bytes to 8 kB per update on the same rigs. A browser stops the page now and then to collect garbage. On a phone, such a stop can cost a frame. A runtime that allocates nothing gives it nothing to collect.
+After the first frames, an update that reports no event allocates nothing. The test `tests/pose/heap.test.ts` of the package measures the heap of live pose engines while their timelines play. An update that reports events allocates a list and one small object per event. An event is an event key, or a report of a track such as `complete`.
+
+A browser stops the page now and then to collect garbage. On a phone, such a stop can cost a frame. A runtime that allocates little gives it little to collect.
 
 ## Plain arrays
 
@@ -37,7 +44,21 @@ The pose of every skeleton lives in typed arrays: the local and world values of 
 
 ## Code on demand
 
-A game that imports `MarrowSpine` loads about 32 kB of code, gzipped. The mesh mode, clipping and the cuts of overdraw load the first time a skeleton needs them. A game that never clips never loads the clipper.
+The import of `MarrowSpine` is not all the code that a game downloads. The first skeleton also needs a reader for its file format and the pose engine of its Spine version. The runtime loads both on demand, before the skeleton shows. The sizes are gzipped, in kB:
+
+| Part | When it loads | Size |
+|---|---|---|
+| The root import with `MarrowSpine` | With the game | {facts.size.root} |
+| Reader of a 4.1 or 4.2 `.skel` | First skeleton of that kind | {facts.size.readers.binary42} |
+| Reader of a 4.1 or 4.2 `.json` | First skeleton of that kind | {facts.size.readers.json42} |
+| Reader of a 4.3 `.skel` | First skeleton of that kind | {facts.size.readers.binary43} |
+| Reader of a 4.3 `.json` | First skeleton of that kind | {facts.size.readers.json43} |
+| Pose engine for 4.1 and 4.2 | First skeleton of 4.1 or 4.2 | {facts.size.engines.legacy} |
+| Pose engine for 4.3 | First skeleton of 4.3 | {facts.size.engines.v43} |
+| Mesh mode | First skeleton that draws with meshes | {facts.size.meshMode} |
+| Clipping | First skeleton with a clipping attachment | {facts.size.clipping} |
+
+So the first skeleton costs the root, one reader and one engine. A game with skeletons of 4.2 and of 4.3 loads both engines. A game that never clips never loads the clipper. The cuts of overdraw, the idle cache, baked playback and the perf report load on demand too, and this table does not count them.
 
 ## Less overdraw
 
@@ -47,7 +68,7 @@ Outlines are off by default. A game passes them with the `outlines` option of th
 
 ## What it does not trade
 
-The poses equal the official runtime to the bit, and the picture matches it. The runtime skips only work that cannot change the picture.
+The poses equal the official runtime to the bit. The parity suite checks that on every fixture. The picture matches the official Pixi runtime within the tolerance of the pixel check, which runs on a developer machine and not in CI. The runtime skips only work that cannot change the picture.
 
 Some optimizations do trade something: memory, vertices or draw calls, in a way that depends on the device and the scene. The idle cache, baked animations, instancing, GPU skinning, tight meshes and level of detail are all off until a game names them. [Performance](/performance/) says what each costs and when it pays.
 
@@ -57,8 +78,9 @@ The previews of this part show where the time goes, so they also show what costs
 
 - **Many moving skeletons.** The update grows with every skeleton that moves. A skeleton with physics keeps moving at rest.
 - **Big weighted meshes.** A vertex costs work for every bone it follows, in every frame its bones move.
-- **Breaks in the batch.** A Pixi object between skeletons, a slot that multiplies or screens, or more than 16 atlas pages each cost a draw call.
+- **Breaks in the batch.** A Pixi object between skeletons, a slot that multiplies or screens, or more than {facts.batch.pages} atlas pages each cost a draw call.
+- **A parent that moves or fades.** In the batched mode it makes the runtime write every vertex below it again, in every frame.
 - **Clipping.** In the batched mode a clipping attachment cuts the triangles after it on the CPU, in every frame they move. In the mesh mode it draws a stencil mask, which costs two more draw calls.
 - **Overdraw.** Large transparent areas and layers that cover each other cost GPU time, which a phone has little of.
 
-`perf.report()` of a skeleton lists what it costs and why, in plain words.
+`perf.report()` of a skeleton lists what it costs and why, in plain words. [Performance caveats](/performance/caveats/) has one section for each cause, with the way to see it and the fix.

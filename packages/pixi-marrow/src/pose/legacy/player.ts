@@ -1,11 +1,15 @@
 import { MarrowError } from '../../base/errors';
 import type { EventKey } from '../../model/timelines';
 import type { PoseEvent, PoseEventType } from '../engine';
+import { createFired, type Fired } from '../shared/fired';
 import type { PoseState } from '../state';
 import { LegacyEntry } from './entry';
 import { clipOf, type Rig } from './rig';
 import type { Solver } from './solver';
 import type { Clip } from './timelines';
+
+/** Scratch of one timeline apply: no call keeps it across a return, so every player of every engine shares it. */
+const KEY_VALUES = new Float64Array(8);
 
 /**
  * The playback state of one skeleton instance: the official `AnimationState` and
@@ -44,13 +48,13 @@ export class LegacyPlayer {
     /** The official `Slot.attachmentState` of each slot. */
     readonly attachmentState: Float64Array;
     /** The events the timelines of one entry fired. Emptied after each entry. */
-    readonly fired: EventKey[] = [];
+    readonly fired: Fired = createFired();
     /** The listener calls since the last `takeEvents`. */
     events: PoseEvent[] = [];
     /** Scratch: the property ids seen while hold modes are computed. */
     readonly seenIds: Set<number> = new Set();
-    /** Scratch: the values of one key of a timeline with several values. */
-    readonly values: Float64Array = new Float64Array(8);
+    /** Scratch: the values of one key of a timeline with several values. Every player has the same array. */
+    readonly values: Float64Array = KEY_VALUES;
 
     constructor(rig: Rig, pose: PoseState, solver: Solver) {
         this.rig = rig;
@@ -107,7 +111,7 @@ export function clearNext(player: LegacyPlayer, entry: LegacyEntry): void {
 /** The official `expandToIndex`: the current entry of a track. Tracks up to `index` are created. */
 function expandToIndex(player: LegacyPlayer, index: number): LegacyEntry | null {
     if (!Number.isInteger(index) || index < 0) {
-        throw new MarrowError('invalid-data', `${index} is not a track index.`, {
+        throw new MarrowError('invalid-option', `${index} is not a track index.`, {
             fix: 'Pass a whole number from 0 up.',
         });
     }

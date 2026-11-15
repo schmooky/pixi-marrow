@@ -112,6 +112,7 @@ describe('a debug overlay', () => {
 
         expect(make).toThrow(MarrowError);
         expect(make).toThrow(/no layer "bonez"/);
+        expect(make).toThrow(expect.objectContaining({ code: 'invalid-option' }));
         spine.destroy();
     });
 

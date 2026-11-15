@@ -1,6 +1,6 @@
 import {
     type Bounds,
-    Buffer,
+    type Buffer,
     type Container,
     RenderContainer,
     type Renderer,
@@ -11,8 +11,9 @@ import { MarrowError } from '../base/errors';
 import { i16, i32 } from '../geometry/read';
 import type { SkeletonModel } from '../model/model';
 import { isNewer, type PoseState } from '../pose/state';
-import { uploadStretch, uploadsStretch } from './batch-upload';
+import { uploadsStretch } from './batch-upload';
 import { clipCode, clipCodeMissing } from './clip-code';
+import { drawsNothing } from './context-watch';
 import { bendsEdges, type DrawGate } from './gate';
 import { instanceBlock, instanceLayout, setupVertices, unionSpread } from './instance-layout';
 import { InstancePaint, type InstanceWhy } from './instance-paint';
@@ -20,10 +21,11 @@ import type { MeshCode } from './mesh-code';
 import { linkMeshPipe } from './mesh-pipe';
 import { vertexBuffer } from './pages';
 import { type PosePass, poseEntries } from './pose-pass';
-import type { VertexBuffers } from './range-mesh';
+import { RangeMesh, type VertexBuffers } from './range-mesh';
 import { DrawRanges, type DrawRangesOptions } from './ranges';
+import { sent, uploadWaiting } from './sent';
 import { MeshSkin } from './skin-paint';
-import type { ViewStats } from './stats';
+import type { UploadBytes, ViewStats } from './stats';
 import { type Template, templateBytes } from './template';
 import { restoreColors } from './vertex-colors';
 import type { VisibleList } from './visible';
@@ -35,7 +37,14 @@ const NO_DEFORM = new Float64Array(0);
 const NO_SKIPS = new Uint8Array(0);
 
 /** Whether this Pixi uploads a stretch of a buffer on its own. */
-const RANGED = uploadsStretch(Buffer.prototype.update, VERSION);
+const RANGED = uploadsStretch(VERSION);
+
+/** Whether a display object and all its parents are visible: Pixi draws it unless it culls it. */
+function shown(node: Container | null): boolean {
+    for (; node !== null; node = node.parent) if (!node.visible) return false;
+
+    return true;
+}
 
 /** What a {@link MeshPaint} is created with: what its draw ranges need, and the first vertex ranges. */
 export interface MeshPaintOptions extends Omit<DrawRangesOptions, 'buffers' | 'blendModes' | 'shade'> {
@@ -48,6 +57,8 @@ export interface MeshPaintOptions extends Omit<DrawRangesOptions, 'buffers' | 'b
     readonly instancing: 'auto' | 'on' | 'off';
     /** The view, which the pipe of instanced draws asks before every draw. */
     readonly gate: DrawGate;
+    /** The counters of the view. The paint counts the bytes it uploads. */
+    readonly stats: ViewStats;
 }
 
 /**
@@ -82,6 +93,8 @@ export class MeshPaint {
     private probe: RenderContainer | undefined;
     /** The renderer that drew the paint last. It has a pipe for meshes and says when its context is lost. */
     private linked: Renderer | null = null;
+    private blind = false;
+    private readonly stats: ViewStats;
     /** The instanced draw of the view, once it drew instanced. */
     private instance: InstancePaint | undefined;
     /** Why the view drew alone in its last update. */
@@ -93,9 +106,13 @@ export class MeshPaint {
     private readonly dark: boolean;
     /** The bytes of the bone and palette textures that {@link ranges} counts. */
     private counted = 0;
+    /** What waits for {@link flush}: the first vertex whose position changed and the one behind the last, then of the colors. */
+    private readonly waiting = new Int32Array(4);
+    /** The bytes of the colors of one vertex. */
+    private colorBytes = 4;
 
     constructor(options: MeshPaintOptions) {
-        const { template, model, gpu, instancing, gate, ...rest } = options;
+        const { template, model, gpu, instancing, gate, stats, ...rest } = options;
 
         this.container = options.container;
         this.model = model;
@@ -108,10 +125,13 @@ export class MeshPaint {
         // a template that a batch drew has no color per vertex, and only the CPU way needs one
         if (!gpu) restoreColors(template);
         // a renderer that was created before this code loaded may have no pipe for meshes
+        this.stats = stats;
         this.container.onRender = (renderer): void => {
+            this.flush(renderer);
             if (renderer === this.linked) return;
             linkMeshPipe(renderer);
             this.linked = renderer;
+            this.blind = drawsNothing(renderer);
         };
         this.positions = vertexBuffer(template.positions, 'marrow-positions');
         this.statics = vertexBuffer(template.statics, 'marrow-uvs');
@@ -169,6 +189,9 @@ export class MeshPaint {
         this.positions.data = template.positions;
         this.statics.data = template.statics;
         if (this.colors !== undefined) this.colors.data = template.colors;
+        // a buffer with other data uploads whole
+        this.waiting.fill(0);
+        this.colorBytes = template.hasDark ? 8 : 4;
         this.skin?.resize(template);
         // the ranges take the buffer of the skin data of the new layout
         this.buffers.skin = this.skin?.buffer;
@@ -184,11 +207,10 @@ export class MeshPaint {
     }
 
     /**
-     * Brings the vertex data of the visible entries in line with a pose and uploads what changed.
-     * That is the positions and the colors of the vertices it wrote, and the texture coordinates
-     * when a sequence showed another region. A stretch uploads on its own where Pixi can do that,
-     * see `uploadsStretch`. With `gpu` the bones and the palette go to the GPU, and the positions
-     * only of what the CPU places.
+     * Brings the vertex data of the visible entries in line with a pose and notes what changed
+     * for {@link flush}. That is the positions and the colors of the vertices it wrote. The
+     * texture coordinates upload whole when a sequence showed another region. With `gpu` the bones
+     * and the palette go to the GPU, and the positions only of what the CPU places.
      */
     pose(pass: PosePass, template: Template, state: PoseState, seen: VisibleList): void {
         const { bones, hasDark } = this.model.slots;
@@ -207,12 +229,55 @@ export class MeshPaint {
             }
         } else {
             poseEntries(pass, template, state, bones, hasDark, seen, undefined);
-            if (pass.colored > 0 && this.colors !== undefined) {
-                uploadStretch(this.colors, RANGED, pass.colorFrom, pass.colorTo, template.hasDark ? 8 : 4);
-            }
+            if (pass.colored > 0) this.wait(pass, 2);
         }
-        if (pass.placed > 0) uploadStretch(this.positions, RANGED, pass.from, pass.to, 8);
-        if (pass.framed > 0) this.statics.update();
+        if (pass.placed > 0) {
+            this.wait(pass, 0);
+            // Pixi keeps the bounds of a container until a child says that it changed
+            RangeMesh.touchAll(this.container);
+        }
+        if (pass.framed > 0) {
+            this.statics.update();
+            this.note('statics', template.statics.byteLength);
+        }
+    }
+
+    /**
+     * Uploads what the passes wrote since the last render: the stretches of the positions and of
+     * the colors, and with `gpu` the textures of bones and colors. Pixi calls it before every
+     * render, so each uploads once per frame, and not while the view is hidden.
+     *
+     * A buffer gets one stretch, from the first vertex that changed to the last. The renderer
+     * says how it takes it. WebGPU writes it at once, and so does WebGL from pixi.js 8.23 on. An
+     * older WebGL buffer keeps one stretch until its geometry is bound, so it uploads here.
+     * Else a render that draws no mesh of the view would let the next stretch replace this one.
+     */
+    flush(renderer: Renderer): void {
+        const { positions, colors, waiting } = this;
+
+        if (!shown(this.container)) return;
+        if (this.skin !== undefined) this.note('bones', this.skin.flush());
+        // WebGPU writes a stretch at once, and WebGL from pixi.js 8.23 on
+        const push = RANGED || 'gpu' in renderer ? null : renderer;
+
+        this.note('positions', uploadWaiting(positions, waiting, 0, 8, push));
+        if (colors !== undefined) this.note('statics', uploadWaiting(colors, waiting, 2, this.colorBytes, push));
+    }
+
+    /** Notes the vertices a pass wrote in {@link waiting}: positions at 0, colors at 2. No number crosses a call. */
+    private wait(pass: PosePass, at: number): void {
+        const { waiting } = this;
+        const from = at === 0 ? pass.from : pass.colorFrom;
+        const to = at === 0 ? pass.to : pass.colorTo;
+
+        if (i32(waiting, at + 1) === 0 || from < i32(waiting, at)) waiting[at] = from;
+        if (to > i32(waiting, at + 1)) waiting[at + 1] = to;
+    }
+
+    /** Counts bytes that went to the GPU in the stats of the view. */
+    private note(kind: keyof UploadBytes, bytes: number): void {
+        this.stats.uploadBytes[kind] += bytes;
+        this.stats.frameBytes += bytes;
     }
 
     /**
@@ -258,10 +323,14 @@ export class MeshPaint {
 
             return;
         }
+        const before = sent.indices;
+
         ranges.build(template, seen.list, seen.clips, skipped, seen.count, seen);
-        stats.maskDraws = ranges.masks * 2;
-        stats.drawCalls = ranges.active + stats.maskDraws;
-        stats.indices = ranges.indices;
+        this.note('indices', sent.indices - before);
+        // a renderer that can draw no skeleton drew the view last: nothing draws
+        stats.maskDraws = this.blind ? 0 : ranges.masks * 2;
+        stats.drawCalls = this.blind ? 0 : ranges.active + stats.maskDraws;
+        stats.indices = this.blind ? 0 : ranges.indices;
         stats.bufferBytes = templateBytes(template) + ranges.bytes;
     }
 
@@ -289,6 +358,7 @@ export class MeshPaint {
     clip(model: SkeletonModel, state: PoseState, seen: VisibleList, stats: ViewStats): void {
         const { ranges } = this;
         const clipShape = clipCode()?.shape;
+        const before = sent.masks;
 
         // the code that shapes a polygon loads with an asset whose skeleton has a clipping attachment
         if (clipShape === undefined) throw clipCodeMissing();
@@ -316,6 +386,7 @@ export class MeshPaint {
             if (ranges.placeMask(index, clipShape)) stats.maskRebuilds++;
             stats.maskUploads++;
         }
+        this.note('masks', sent.masks - before);
     }
 
     /**

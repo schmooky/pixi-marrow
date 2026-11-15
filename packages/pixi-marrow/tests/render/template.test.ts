@@ -3,7 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { MarrowError } from '../../src/base/errors';
 import { SPINE_VERSIONS } from '../../src/base/version';
 import type { MeshAttachmentData } from '../../src/model/attachments';
+import { createAttachmentLookup } from '../../src/pose/shared/lookup';
+import { draftEntries } from '../../src/render/drafts';
+import { draftLayout, releaseTemplate } from '../../src/render/layouts';
 import { SkeletonView } from '../../src/render/skeleton-view';
+import { buildTemplate } from '../../src/render/template';
 import { syntheticRig } from '../geometry/synthetic';
 import {
     createRig,
@@ -240,5 +244,53 @@ describe('what the view refuses', () => {
         step(rig, 0);
         rig.engine.state.sequenceIndices[flame] = -7;
         expect(() => drawPose(rig.view, rig.engine.state)).toThrow(/has 3 sequence regions and no region -7/);
+    });
+});
+
+describe('the drafts of the layout a view starts with', () => {
+    it('are made once per model, atlas, skin and cuts, and again for anything else', async () => {
+        const rig = await loadRig('4.2/mix-and-match-pro.skel');
+        const { model } = rig;
+        // an atlas of its own: the view of the rig asked for the drafts of the atlas of the rig
+        const atlas = { ...rig.atlas };
+        const lookup = createAttachmentLookup(model);
+        let made = 0;
+        const ask = (skin: number, keep = true, cutting = false, of = atlas) =>
+            draftLayout(model, of, skin, false, undefined, cutting, keep, () => {
+                made++;
+
+                return draftEntries(model, of, lookup, skin, null, undefined);
+            });
+        const first = ask(-1);
+
+        expect(ask(-1)).toBe(first);
+        expect(made).toBe(1);
+        // another skin, another atlas and the code of the cuts each decide other drafts
+        expect(ask(1).key).not.toBe(first.key);
+        expect(ask(-1, true, true)).not.toBe(first);
+        expect(ask(-1, true, false, { ...atlas })).not.toBe(first);
+        expect(made).toBe(4);
+        // a layout that the slots of one instance decide is not kept, and has the same key
+        expect(ask(-1, false)).not.toBe(first);
+        expect(ask(-1, false).key).toBe(first.key);
+        expect(made).toBe(6);
+        expect(ask(-1)).toBe(first);
+        // past the limit the kept drafts go, and the next view makes its own again
+        for (let i = 0; i < 8; i++) ask(-1, true, false, { ...atlas });
+        expect(ask(-1)).not.toBe(first);
+        expect(ask(-1).key).toBe(first.key);
+    });
+
+    it('give a second view the layout of the first, and a view with another skin its own', async () => {
+        const rig = await loadRig('4.2/mix-and-match-pro.skel');
+        const lookup = createAttachmentLookup(rig.model);
+        const build = (skin: number) => buildTemplate(rig.model, rig.atlas, lookup, skin, null, false);
+        const [first, second, other] = [build(-1), build(-1), build(1)];
+
+        expect(second.slots).toBe(first.slots);
+        expect(second.positions).not.toBe(first.positions);
+        expect(other.slots).not.toBe(first.slots);
+        expect(other.attachments.length).toBeGreaterThan(first.attachments.length);
+        for (const template of [first, second, other]) releaseTemplate(template);
     });
 });

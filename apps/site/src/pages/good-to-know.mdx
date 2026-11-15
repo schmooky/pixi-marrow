@@ -1,50 +1,100 @@
 ---
 layout: ../layouts/Docs.astro
 title: Good to know
-description: What the runtime does on its own, the few options, the supported versions and the limits.
+description: What the runtime does on its own, what it was tested with, its limits, and what the official runtime has that pixi-marrow does not.
 ---
 
 import Snippet from '../components/Snippet.astro';
+import facts from '../../../../scripts/facts.json';
 import source from '../snippets/good-to-know.ts?raw';
 
 ## What is automatic
 
-- **Skeletons share draw calls.** The runtime batches skeletons of up to 1024 vertices: 200 instances of a small rig draw in one call. A Pixi object between two skeletons in the draw order ends a batch. So keep skeletons next to each other in the display list.
-- **A skeleton at rest costs close to nothing.** When its animation ended, or it never played one, no timeline runs and the runtime uploads nothing. It wakes with the next `play`.
-- **Less overdraw, once you pass outlines.** Outlines are off by default. Write the outlines of an atlas at build time with `pixi-marrow outlines`. Then pass the file as `outlines`. The runtime then skips a region without a visible pixel, and a slot behind the opaque part of a later slot. The picture stays the same.
+- **Skeletons share draw calls.** The runtime batches skeletons of up to {facts.batch.autoVertices} vertices: 200 instances of a small rig draw in one call. A Pixi object between two skeletons in the draw order ends a batch. So keep skeletons next to each other in the display list.
+- **A skeleton at rest costs close to nothing.** When its animation ended, or it never played one, no timeline runs and the runtime uploads nothing. It wakes with the next `play`. This holds for skeletons of Spine 4.1, 4.2 and 4.3, on one track or on several.
+- **Less overdraw, once you pass outlines.** Outlines are off by default. Write the outlines of an atlas at build time with `pixi-marrow outlines`, and pass the file as `outlines`. The runtime then skips a region without a visible pixel, and a slot behind the opaque part of a later slot. The picture stays the same. [Performance](/performance/#less-overdraw-with-outlines) shows the steps.
+
+Two things end the rest of a skeleton. A skeleton with physics constraints simulates until a step changes nothing in its physics. In the batched mode, a parent that moves or fades makes the runtime write the vertices of a resting skeleton again. [Performance caveats](/performance/caveats/#a-parent-that-moves-or-fades) shows the fix.
 
 ## Render mode
 
-<Snippet source={source} regions="render-mode" />
+<Snippet source={source} regions="import render-mode" />
 
-`renderMode` is `auto` by default. The runtime then batches a skeleton of up to 1024 vertices, and gives a larger one meshes of its own. `mesh` and `batched` force one mode. `stats.renderMode` names the mode in use.
+`renderMode` is `auto` by default. The runtime then batches a skeleton of up to {facts.batch.autoVertices} vertices, and gives a larger one meshes of its own. `mesh` and `batched` force one mode. `stats.renderMode` names the mode in use.
+
+In both modes the CPU places the vertices. Only `skinning: 'gpu'` moves that work to the vertex shader, and only in the mesh mode. `batched` falls back to meshes on a device that cannot sample the atlas pages of the skeleton in one draw.
 
 ## Physics
 
 <Snippet source={source} regions="physics" />
 
-`physics` is the official mode: `update`, `pose`, `reset` or `none`. Physics does not follow the Pixi position by itself. Tell it with `physicsTranslate` and `physicsRotate`. A skeleton with physics constraints keeps simulating at rest.
+`physics` is the official mode: `update`, `pose`, `reset` or `none`. Physics does not follow the Pixi position by itself. Tell it with `physicsTranslate` and `physicsRotate`. A skeleton with physics constraints simulates until a step changes nothing in its physics. An update of more than 10 seconds starts the physics again, as `resetPhysics` does.
 
 ## Why is it slow
 
 <Snippet source={source} regions="report" />
 
-The report lists what the runtime decided for this instance and why: draw calls, blend ranges, clipping, physics and more.
+The report lists what the runtime decided for this instance and why: draw calls, blend ranges, clipping, physics and more. [Performance](/performance/#the-perf-report) explains every row, and [Performance caveats](/performance/caveats/) every cause.
 
-## Versions
+## Compatibility
 
-| What | Supported |
-|---|---|
-| Spine | Exports of 4.1, 4.2 and 4.3, as `.json` or `.skel` |
-| PixiJS | Version 8, from 8.21 |
-| Renderer | WebGL2 and WebGPU |
+"Tested" means that a check of the repository runs on it. "Expected" means that nothing known prevents it, and no check runs on it.
+
+| What | Tested | Expected | Not supported |
+|---|---|---|---|
+| Spine export | 4.1.17 and 4.1.20, 4.2.22 and 4.2.43, 4.3.75-beta, each as `.json` and `.skel` | Other exports of 4.1, 4.2 and 4.3 | 3.8, 4.0 and older |
+| pixi.js | {facts.floor.pixi} and 8.23.0 | Other versions of 8 from {facts.floor.pixiShort} | Below {facts.floor.pixiShort}, and version 7 |
+| Renderer | WebGL2 and WebGPU | | WebGL1 and Canvas |
+| Browser | Chrome, on a desktop | Safari, Firefox and browsers on phones, with WebGL2 or WebGPU | Browsers without WebGL2 |
+| Node, for `pixi-marrow/core`, `bake`, `optimize` and the command line tool | {facts.floor.node} and 24 | Versions between and later | Below {facts.floor.node} |
+
+The parity suite compares the poses with the official `spine-core` of each version, on every fixture. The fixtures of 4.3 all come from one beta export, 4.3.75-beta. The pixel check compares the picture with the official Pixi runtime in headless Chrome, on WebGL2 and WebGPU. It runs on a developer machine and not in CI.
 
 The runtime solves every constraint: IK, transform, path, physics and sliders. Clipping works.
 
+On WebGL1 and Canvas no skeleton draws. The rest of the game goes on, and the console warns once: `pixi-marrow: this renderer draws no skeleton. Use WebGL2 or WebGPU.` Pixi uses WebGL1 where a browser has no WebGL2.
+
 ## Limits
 
-- No Canvas 2D and no WebGL1.
-- No Spine 3.8 and no Spine 4.0.
+- A batch samples up to {facts.batch.pages} atlas pages, and one draw of the mesh mode up to {facts.mesh.pages}. More pages cost more draw calls.
+- A skeleton has at most 32,767 bones and 32,767 slots.
+- An `update` takes a finite number of seconds. `update(Infinity)` throws.
+- On a skeleton of Spine 4.1 or 4.2, track 0 never adds. Put an additive animation on track 1 or higher.
+- On a skeleton of Spine 4.3, a track that changes its animation faster than its mix time costs more with each change. [Mix and queue](/guide/mix/#what-a-mix-costs) says why.
 - The runtime plays skeletons. To edit them, use the Spine editor.
-- The numbers for speed come from one desktop machine. The only phone measured so far is a Galaxy A05, for the idle cache. See [Performance](/performance/).
+- The numbers for speed come from one desktop machine. The only phone measured so far is a Galaxy A05, for the idle cache. See [Performance caveats](/performance/caveats/#budgets-by-device-class).
 - The licence is the Spine Runtimes License, as for the official runtimes. Each user of a product built on it needs a Spine Editor licence of their own.
+
+## Not in pixi-marrow
+
+The official Pixi runtime has these, and pixi-marrow does not. Each line says what to use.
+
+| Missing | Use this |
+|---|---|
+| A scale at load time, the `scale` option | Scale the container. [Size and units](/guide/size/) shows how. |
+| A bounds provider, the `boundsProvider` option | `getBounds()` measures what the skeleton draws. Measure the setup pose once, as [Size and units](/guide/size/) shows. |
+| Hit tests against bounding box attachments | Set a `hitArea` on the container. `pixi-marrow/core` gives the data of the attachments. |
+| Listeners on one track entry | Listen on the display object. Each listener gets the `Track` of the event. |
+| `Track.duration` | `hero.info.animations` lists the length of each animation. |
+| A read of the track that plays now | Keep the `Track` that `play` returned. |
+| An API for constraints, such as the mix of an IK constraint | None. `hero.engine` is not stable. |
+| Skins and attachments built in code from textures | `skins` combines the skins of the export. `attach` puts a Pixi object into a slot. |
+| The `darkTint` option | Leave it out. A slot with a dark tint draws with it. |
+
+The names differ too. `play` is the official `setAnimation`, `queue` is `addAnimation`, `attach` is `addSlotObject`, and `skin` is `setSkinByName`.
+
+## ESM and bundlers
+
+The package is ESM only. It has no CommonJS build and no single-file build for a script tag. So a game needs a bundler such as Vite, Rollup, webpack or esbuild, or a page that loads modules.
+
+The package loads much of its code on demand, with `import()`. That code is the reader of a file format, the pose engine of a Spine version, the mesh mode, clipping and more. A bundler turns each into a chunk of its own. Three things follow:
+
+- The bundle must keep code splitting on. A build that forces one file puts every chunk into it.
+- The chunks load from where the bundle is served. A wrong public path of the bundler breaks the first load of a skeleton.
+- The first skeleton of each kind waits for its chunks. Load the skeletons of a scene before the scene shows.
+
+The package has no side effects and registers nothing with Pixi when a game imports it. `registerMarrowAssets()` is the one call that changes Pixi `Assets`. The package ships no source maps.
+
+## Context loss
+
+A browser can take the WebGL context of a page away and give it back later. pixi-marrow draws no skeleton while the context is lost. When the context is back, the skeletons draw as before, also the ones at rest. The game needs no code for this. The runtime does not watch for a lost device of WebGPU.

@@ -12,21 +12,29 @@
  * It reads declarations as text, with no type checker. It expects one statement per declaration
  * and no braces or semicolons inside string literal types.
  *
+ * It fails closed: an `export` in an entry file that it cannot read as one of the forms below is
+ * an error, not a symbol that the snapshot silently lacks. The forms are a list of names with or
+ * without `from`, a declaration (class, function, const, let, var, interface, type, enum,
+ * namespace) and `export default`.
+ *
  *   --update  rewrite the snapshot
  *
  * usage: pnpm build && node scripts/check-api.mjs [--update]
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const pkgDir = join(root, 'packages/pixi-marrow');
 const snapshotPath = join(pkgDir, 'api.md');
 const pkg = JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf8'));
-const KINDS = 'class|function|const|interface|type|enum';
+const KINDS = 'class|function|const|let|var|interface|type|enum|namespace|module';
 /** declarations that end at their closing brace, not at a semicolon */
-const BLOCKS = new Set(['class', 'interface', 'enum']);
+const BLOCKS = new Set(['class', 'interface', 'enum', 'namespace', 'module']);
+const MODIFIERS = '(?:declare\\s+)?(?:abstract\\s+)?';
+/** what `export default` is followed by when it declares something itself */
+const DEFAULT_KIND = new RegExp(`^export\\s+default\\s+${MODIFIERS}(class|function|interface)\\b`);
 const errors = [];
 
 const stripComments = (text) => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
@@ -43,6 +51,11 @@ function exportsOf(file) {
     const imported = new Map();
     const found = [];
     const moduleFile = (specifier) => join(dirname(file), specifier.replace(/\.js$/, '.d.ts'));
+    // what is left of the code after every export that was read. No `export` may remain in it
+    let rest = code;
+    const consume = (text) => {
+        rest = rest.replace(text, () => '');
+    };
 
     if (/export\s*\*/.test(code)) errors.push(`${file}: "export *" hides the public surface. Export by name`);
     for (const match of code.matchAll(/import\s*(?:type\s*)?\{([^}]*)\}\s*from\s*["']([^"']+)["']/g)) {
@@ -54,11 +67,22 @@ function exportsOf(file) {
 
             found.push({ exported, ...(origin ?? { name: local, file }) });
         }
+        consume(match[0]);
     }
-    for (const match of code.matchAll(
-        new RegExp(`^export\\s+(?:declare\\s+)?(?:abstract\\s+)?(?:${KINDS})\\s+(\\w+)`, 'gm'),
-    )) {
-        found.push({ exported: match[1], name: match[1], file });
+    for (const match of code.matchAll(new RegExp(`^export\\s+${MODIFIERS}(${KINDS})\\s+(\\w+)`, 'gm'))) {
+        found.push({ exported: match[2], name: match[2], file });
+        consume(code.slice(match.index, statementEnd(code, match.index, match[1])));
+    }
+    for (const match of code.matchAll(/^export\s+default\b/gm)) {
+        const kind = DEFAULT_KIND.exec(code.slice(match.index))?.[1];
+
+        found.push({ exported: 'default', name: 'default', file });
+        consume(code.slice(match.index, statementEnd(code, match.index, kind)));
+    }
+    for (const match of rest.matchAll(/\bexport\b[^\n]*/g)) {
+        errors.push(
+            `${relative(root, file)}: cannot read the export "${match[0].trim()}". Teach scripts/check-api.mjs its form`,
+        );
     }
 
     return found;
@@ -88,23 +112,41 @@ function statementEnd(text, start, kind) {
 /** Every declaration of `name` in `file`, without comments. Checks the TSDoc on the way. */
 function declarationsOf({ name, file }) {
     const text = readFileSync(file, 'utf8');
-    const pattern = new RegExp(`^export\\s+(?:declare\\s+)?(?:abstract\\s+)?(${KINDS})\\s+${name}\\b`, 'gm');
+    const isDefault = name === 'default';
+    const pattern = isDefault
+        ? /^export\s+default\b/gm
+        : new RegExp(`^export\\s+${MODIFIERS}(${KINDS})\\s+${name}\\b`, 'gm');
     const found = [];
 
     for (const match of text.matchAll(pattern)) {
+        const kind = isDefault ? DEFAULT_KIND.exec(text.slice(match.index))?.[1] : match[1];
         const before = text.slice(0, match.index).trimEnd();
         const doc = before.endsWith('*/') ? before.slice(before.lastIndexOf('/**')) : '';
+        const statement = stripComments(text.slice(match.index, statementEnd(text, match.index, kind)));
+        // `export default name;` says nothing about the shape: the declaration of the name does
+        const local = isDefault && !kind ? /^export\s+default\s+(\w+)\s*;?\s*$/.exec(statement)?.[1] : undefined;
 
-        if (!doc) errors.push(`${name}: no TSDoc comment`);
-        else if ((match[1] === 'class' || match[1] === 'function') && !doc.includes('@example')) {
+        if (!doc && !local) errors.push(`${name}: no TSDoc comment`);
+        else if ((kind === 'class' || kind === 'function') && !doc.includes('@example')) {
             errors.push(`${name}: the TSDoc has no @example`);
         }
         found.push(
-            stripComments(text.slice(match.index, statementEnd(text, match.index, match[1])))
+            statement
                 .split('\n')
                 .filter((line) => line.trim())
                 .join('\n'),
         );
+        if (!local) continue;
+        const declared = new RegExp(`^(?:export\\s+)?${MODIFIERS}(${KINDS})\\s+${local}\\b`, 'gm');
+        const shapes = [...text.matchAll(declared)].map((m) =>
+            stripComments(text.slice(m.index, statementEnd(text, m.index, m[1])))
+                .split('\n')
+                .filter((line) => line.trim())
+                .join('\n'),
+        );
+
+        if (!shapes.length) errors.push(`default: no declaration of ${local} found in ${file}`);
+        found.push(...shapes);
     }
     if (!found.length) errors.push(`${name}: no declaration found in ${file}`);
 

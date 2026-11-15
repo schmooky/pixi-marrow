@@ -3,6 +3,7 @@ import type { AttachmentData, MeshAttachmentData, VertexData } from '../../model
 import type { ConstraintData } from '../../model/constraints';
 import type { EventData } from '../../model/model';
 import type { BinaryInput } from '../shared/binary-input';
+import { MAX_INDEX, requireAtMost } from '../shared/limits';
 
 const FIX = 'Export the skeleton again from Spine 4.3.';
 
@@ -18,6 +19,29 @@ export function checkIndex(index: number, count: number, what: string): number {
     }
 
     return index;
+}
+
+/**
+ * Reads the length of a list. Every entry of a list takes at least one byte, so a length above
+ * the file size means the file is damaged. It throws before a reader makes room for the list.
+ */
+export function readCount(input: BinaryInput, what: string): number {
+    const count = input.readInt(true);
+
+    if (count < 0 || count > input.byteLength) {
+        throw invalid(`The file claims to hold ${count} ${what}, which does not fit its size.`);
+    }
+
+    return count;
+}
+
+/** Reads the number of bones or of slots. The model keeps their indices in 16 bits. */
+export function readTableCount(input: BinaryInput, what: 'bones' | 'slots'): number {
+    const count = readCount(input, what);
+
+    requireAtMost(count, MAX_INDEX, `The number of ${what}`);
+
+    return count;
 }
 
 /** Reads an index and checks that it points into a list of `count` items. */

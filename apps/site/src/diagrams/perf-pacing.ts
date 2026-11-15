@@ -6,7 +6,7 @@ import { COLORS } from './shapes';
  * A tick marks each frame in which the skeleton is posed, and a square moves with the time it
  * was posed at. On the screen it is posed every frame. Off the screen with `throttle` it is
  * posed 4 times a second with the time that passed, so the square steps, and an event key at
- * 0.4 s fires at 0.5 s. With `pause` its time stands still. With `updateRate: 30` it is posed
+ * 0.4 s fires at 0.5 s. With `pause` it is not posed, and its time goes on. With `updateRate: 30` it is posed
  * every other frame.
  */
 

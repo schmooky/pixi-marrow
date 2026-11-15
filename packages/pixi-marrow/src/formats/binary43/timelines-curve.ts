@@ -1,7 +1,7 @@
 import type { TimelineData, TimelineKind } from '../../model/timelines';
 import type { BinaryInput } from '../shared/binary-input';
 import { BEZIER_SIZE, TimelineWriter } from '../shared/timeline-writer';
-import { invalid } from './reader';
+import { invalid, readCount } from './reader';
 
 /** The byte after a key that says how the key blends into the next one. */
 const CURVE_LINEAR = 0;
@@ -29,7 +29,7 @@ export function pushTimeline(sink: TimelineSink, timeline: TimelineData, entries
  * reader runs past the data on it, or ends with a duration that is not a number.
  */
 export function readFrameCount(input: BinaryInput): number {
-    const frameCount = input.readInt(true);
+    const frameCount = readCount(input, 'timeline keys');
 
     if (frameCount < 1) throw invalid('A timeline has no keys.');
 
@@ -133,7 +133,7 @@ export function readCurveTimeline(
     valueCount: number,
     readValue: ValueReader,
 ): TimelineData {
-    const writer = new TimelineWriter(frameCount, valueCount + 1, input.readInt(true));
+    const writer = new TimelineWriter(frameCount, valueCount + 1, readCount(input, 'Bezier curves'));
 
     readCurveKeys(input, writer, valueCount, readValue);
 

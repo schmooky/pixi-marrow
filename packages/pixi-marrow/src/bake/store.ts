@@ -6,9 +6,35 @@ import { createAttachmentLookup } from '../pose/shared/lookup';
 import { type BakedClip, bakedBytes, frameCount } from './clip';
 import { animationIndex, bakeBlocker, skinIndices } from './eligible';
 
+/**
+ * The most bytes the clips hold that a game baked while it played, per model: 4 MB. That is 220
+ * clips of the mean size of a set of slot symbols, 18 KB, and 29 clips of its largest rig.
+ * `setBakeBudget` sets another limit.
+ */
+export const BAKE_BUDGET: number = 4 * 1024 * 1024;
+
+/**
+ * How far the duration of a clip may be from the duration of its animation, in seconds. A JSON
+ * export rounds a time to four digits and a binary export holds it at 32 bits, so the two
+ * exports of one skeleton differ by up to half of this.
+ */
+const DURATION_SLACK = 1e-4;
+
+/**
+ * A clip counts as in use while fewer updates than this used the clips of its model since it
+ * played. At 60 updates a second that is 10 seconds for one instance, and 6 frames for 100.
+ */
+const RECENT = 600;
+
 /** A clip made ready for one skin of its model: its attachments found, and what playback checks. */
 export interface PreparedClip {
     readonly clip: BakedClip;
+    /** The bytes of the clip. */
+    readonly bytes: number;
+    /** True for a clip that a game handed over. The budget does not count it, and it never goes. */
+    readonly given: boolean;
+    /** The count of {@link ModelBakes.uses} when the clip was looked for or played last. */
+    used: number;
     /** The duration, the rate and the last frame of the clip, kept here, where every prepared clip has one shape. */
     readonly duration: number;
     readonly fps: number;
@@ -30,6 +56,9 @@ export interface PreparedClip {
  * once, with the clip or with the error that ended the bake. A baker of tests can call it at once.
  */
 export type Baker = (animation: number, skins: readonly string[], done: (clip: BakedClip | Error) => void) => void;
+
+/** One number for a skin index, which is -1 for no skin, and an animation. */
+const keyOf = (skin: number, animation: number): number => (skin + 1) * 65536 + animation;
 
 /** True when two lists of names are the same. */
 const sameNames = (a: readonly string[], b: readonly string[]): boolean =>
@@ -88,6 +117,17 @@ export class ModelBakes {
     private readonly reasons = new Map<number, string[]>();
     /** Per skin index, per animation: the bake that runs, as a token that its answer must match. */
     private readonly running = new Map<number, Map<number, object>>();
+    /**
+     * The clips that did not fit the budget, by {@link keyOf}: their bytes, and the count of
+     * {@link uses} when the room for them was looked at last.
+     */
+    private readonly full = new Map<number, { bytes: number; at: number }>();
+    /** How many updates looked for a clip of the model or played one. The order of use of the clips. */
+    private uses = 0;
+    /** The most bytes of the clips that were baked while the game played. */
+    private limit = BAKE_BUDGET;
+    /** How many clips the budget let go of so far. */
+    evicted = 0;
 
     constructor(model: SkeletonModel) {
         this.model = model;
@@ -96,7 +136,22 @@ export class ModelBakes {
             this.bySkin.delete(index);
             this.reasons.delete(index);
             this.running.delete(index);
+            this.full.clear();
         });
+    }
+
+    /**
+     * The most bytes the clips hold that were baked while the game played. A lower budget lets
+     * go of clips at once: the one that played longest ago first, and none that is in use.
+     */
+    get budget(): number {
+        return this.limit;
+    }
+
+    set budget(bytes: number) {
+        this.limit = bytes;
+        this.full.clear();
+        this.makeRoom(0);
     }
 
     /** True while a bake of an animation of the model runs outside the frame. */
@@ -116,6 +171,7 @@ export class ModelBakes {
     /** Why an animation of a skin does not play baked, or undefined when it does or was not looked at. */
     reason(skin: number, animation: number): string | undefined {
         if (this.running.get(skin)?.has(animation) === true) return 'its clip is being baked in idle time';
+        if (this.full.has(keyOf(skin, animation))) return 'its clip does not fit the byte budget of the baked clips';
 
         return this.reasons.get(skin)?.[animation];
     }
@@ -135,6 +191,12 @@ export class ModelBakes {
         this.bySkin.clear();
         this.reasons.clear();
         this.running.clear();
+        this.full.clear();
+    }
+
+    /** Notes that an update played a clip, for the order in which the budget lets clips go. */
+    touch(prepared: PreparedClip): void {
+        prepared.used = ++this.uses;
     }
 
     /**
@@ -146,8 +208,13 @@ export class ModelBakes {
     find(skin: number, animation: number, bake: Baker | null): PreparedClip | null {
         const known = this.rowOf(skin)[animation];
 
-        if (known !== undefined) return known;
-        if (this.running.get(skin)?.has(animation) === true) return null;
+        this.uses++;
+        if (known !== undefined) {
+            if (known !== null) known.used = this.uses;
+
+            return known;
+        }
+        if (this.running.get(skin)?.has(animation) === true || this.waits(skin, animation)) return null;
         const prepared = this.prepare(skin, animation, bake);
 
         if (prepared !== undefined) this.rowOf(skin)[animation] = prepared;
@@ -213,12 +280,83 @@ export class ModelBakes {
             now.delete(animation);
             if (now.size === 0) this.running.delete(skin);
             this.rowOf(skin)[animation] =
-                clip instanceof Error ? this.cannot(skin, animation, clip.message) : this.ready(clip, skin, animation);
+                clip instanceof Error ? this.cannot(skin, animation, clip.message) : this.keep(clip, skin, animation);
         });
     }
 
+    /**
+     * Takes in a clip that was baked for a skin, within the budget. Clips that are not in use go
+     * to make room, the one that played longest ago first. A clip that still does not fit is
+     * dropped, and its animation plays live until there is room: the answer is undefined.
+     */
+    private keep(clip: BakedClip, skin: number, animation: number): PreparedClip | null | undefined {
+        const prepared = this.ready(clip, skin, animation, false);
+
+        if (prepared === null || this.makeRoom(prepared.bytes)) return prepared;
+        this.full.set(keyOf(skin, animation), { bytes: prepared.bytes, at: this.uses });
+
+        return undefined;
+    }
+
+    /**
+     * True while the clip of an animation is known not to fit the budget. The room is looked at
+     * again once the clips were used often enough for another one to be out of use.
+     */
+    private waits(skin: number, animation: number): boolean {
+        const key = keyOf(skin, animation);
+        const mark = this.full.get(key);
+
+        if (mark === undefined) return false;
+        if (this.uses - mark.at < RECENT) return true;
+        mark.at = this.uses;
+        let held = 0;
+
+        this.each((prepared) => {
+            if (this.uses - prepared.used < RECENT) held += prepared.bytes;
+        });
+        if (this.limit - held < mark.bytes) return true;
+        this.full.delete(key);
+
+        return false;
+    }
+
+    /** Calls `visit` for every clip that was baked while the game played, with its place. */
+    private each(visit: (prepared: PreparedClip, row: (PreparedClip | null | undefined)[], at: number) => void): void {
+        for (const row of this.bySkin.values()) {
+            row.forEach((prepared, at) => {
+                if (prepared && !prepared.given) visit(prepared, row, at);
+            });
+        }
+    }
+
+    /**
+     * Lets clips go until `bytes` more fit the budget: the one that played longest ago first,
+     * and none that is in use. Returns false when the bytes still do not fit.
+     */
+    private makeRoom(bytes: number): boolean {
+        const idle: { prepared: PreparedClip; row: (PreparedClip | null | undefined)[]; at: number }[] = [];
+        let total = bytes;
+
+        this.each((prepared, row, at) => {
+            total += prepared.bytes;
+            if (this.uses - prepared.used >= RECENT) idle.push({ prepared, row, at });
+        });
+        idle.sort((a, b) => b.prepared.used - a.prepared.used);
+        while (total > this.limit) {
+            const oldest = idle.pop();
+
+            if (oldest === undefined) return false;
+            // the next look bakes the animation again
+            oldest.row[oldest.at] = undefined;
+            total -= oldest.prepared.bytes;
+            this.evicted++;
+        }
+
+        return true;
+    }
+
     /** A clip made ready for a skin, or null when a name that a frame shows finds no attachment. */
-    private ready(clip: BakedClip, skin: number, animation: number): PreparedClip | null {
+    private ready(clip: BakedClip, skin: number, animation: number, given = true): PreparedClip | null {
         const attachments = attachmentsOf(this.model, clip, skin);
 
         if (attachments === undefined)
@@ -226,6 +364,9 @@ export class ModelBakes {
 
         return {
             clip,
+            bytes: bakedBytes(clip),
+            given,
+            used: this.uses,
             duration: clip.duration,
             fps: clip.fps,
             last: clip.frames - 1,
@@ -240,7 +381,7 @@ export class ModelBakes {
  * Throws a `MarrowError` when a clip was not baked from this skeleton, or its arrays do not fit
  * its counts. A JSON export can lack the editor hash, so the duration of the animation is
  * compared too: a clip of an animation that was edited since lasts another time, most often.
- * The two compare at 32 bits, as a binary export holds a time.
+ * The two may differ by {@link DURATION_SLACK}, so that a clip moves between the two exports.
  */
 function checkFits(model: SkeletonModel, clip: BakedClip): void {
     const duration = model.animations[animationIndex(model, clip.animation)]?.duration ?? 0;
@@ -259,7 +400,7 @@ function checkFits(model: SkeletonModel, clip: BakedClip): void {
     }
     if (clip.hash !== null && model.hash !== null && clip.hash !== model.hash)
         fail('is of another export of the skeleton');
-    if (Math.fround(clip.duration) !== Math.fround(duration)) {
+    if (Math.abs(clip.duration - duration) > DURATION_SLACK) {
         fail(`lasts ${clip.duration} seconds, and the animation of the skeleton ${duration}`);
     }
     if (clip.frames !== frameCount(clip.duration, clip.fps)) fail('has the wrong number of frames for its duration');

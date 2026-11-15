@@ -1,7 +1,7 @@
 import { LOCAL_STRIDE, WORLD_STRIDE } from '../state';
 import { modifyLocal } from './bone-pose';
 import { ikParent, scaleBone, solveOneBone } from './ik-one';
-import { EPSILON, NORMAL, PI, RAD_DEG } from './math';
+import { EPSILON, NORMAL, RAD_DEG, START, START_PI } from './math';
 import { IK_BEND_DIRECTION, IK_MIX, IK_SOFTNESS, type IkPlan } from './solver-types';
 import type { Pose43 } from './types';
 
@@ -45,7 +45,7 @@ function solveExtreme(bendDir: number): void {
     const a = Number(T[PSX]) * l2;
     const b = Number(T[PSY]) * l2;
     const ta = Math.atan2(Number(T[TY]), Number(T[TX]));
-    let minAngle = PI;
+    let minAngle = Number(START[START_PI]);
     let minX = l1 - a;
     let minDist = minX * minX;
     let minY = 0;

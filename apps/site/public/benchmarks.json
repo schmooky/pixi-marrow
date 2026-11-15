@@ -1,0 +1,1688 @@
+{
+  "what": "One run of pnpm bench:ab of pixi-marrow: pixi-marrow against the official runtime @esotericsoftware/spine-pixi-v8 in headless Chrome. Times are ms as [median, fastest run, slowest run].",
+  "date": "2026-11-15T18:04:42.048Z",
+  "command": "pnpm bench:ab --scene=play,rest",
+  "build": "the working tree",
+  "machine": {
+    "cpu": "Apple M4",
+    "cores": 10,
+    "memoryGB": 16,
+    "os": "darwin 25.5.0 arm64",
+    "power": "AC Power",
+    "node": "v24.14.0",
+    "chrome": "157.0.8103.78"
+  },
+  "versions": {
+    "pixi-marrow": "0.1.0-next.1, git f139975",
+    "spine-pixi-v8 for 4.2": "4.2.120",
+    "spine-pixi-v8 for 4.3": "4.3.13"
+  },
+  "settings": {
+    "scenes": ["play", "rest"],
+    "runs": 3,
+    "frames": 200,
+    "warmupFrames": 40,
+    "instances": [1, 50, 200],
+    "canvas": [1280, 720],
+    "timeStep": "1/60 s",
+    "renderModeOfPixiMarrow": "auto"
+  },
+  "renderers": [
+    {
+      "renderer": "webgl",
+      "gpu": "WebGL 2.0 (OpenGL ES 3.0 Chromium), ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)",
+      "pixi": "8.23.0",
+      "emptyFrameMs": 0.415,
+      "rigs": [
+        {
+          "rig": "4.2/tank-pro",
+          "scene": "play",
+          "animation": "shoot",
+          "bones": 115,
+          "slots": 200,
+          "meshVertices": 71,
+          "features": [
+            "meshes",
+            "weights",
+            "clipping",
+            "paths",
+            "darkTint",
+            "additiveBlend",
+            "multiplyBlend",
+            "ik",
+            "transform",
+            "path"
+          ],
+          "gpuBusyBefore": 0.18,
+          "blocks": [
+            {
+              "instances": 1,
+              "sides": [
+                {
+                  "side": "pixi-marrow",
+                  "renderMode": "batched",
+                  "updateMs": [0.019, 0.019, 0.03],
+                  "cpuMs": [0.029, 0.029, 0.043],
+                  "renderMs": [0.516, 0.461, 0.517],
+                  "frameMs": [0.534, 0.502, 0.536],
+                  "framePerc95Ms": 1.521,
+                  "drawCalls": [3, 3],
+                  "uploadsPerFrame": 2.3,
+                  "uploadKBPerFrame": 16.9,
+                  "heapKBPerInstance": null
+                },
+                {
+                  "side": "spine-pixi-v8",
+                  "updateMs": [0.025, 0.022, 0.026],
+                  "cpuMs": [0.145, 0.09, 0.145],
+                  "renderMs": [0.696, 0.481, 0.702],
+                  "frameMs": [0.722, 0.504, 0.729],
+                  "framePerc95Ms": 1.634,
+                  "drawCalls": [3, 4],
+                  "uploadsPerFrame": 2.5,
+                  "uploadKBPerFrame": 2139.3,
+                  "heapKBPerInstance": null
+                },
+                {
+                  "side": "pixi-marrow, mesh mode",
+                  "renderMode": "mesh",
+                  "updateMs": [0.024, 0.022, 0.031],
+                  "cpuMs": [0.031, 0.03, 0.042],
+                  "renderMs": [0.453, 0.437, 0.463],
+                  "frameMs": [0.477, 0.472, 0.491],
+                  "framePerc95Ms": 1.1,
+                  "drawCalls": [3, 6],
+                  "uploadsPerFrame": 3.5,
+                  "uploadKBPerFrame": 441.3,
+                  "heapKBPerInstance": null
+                }
+              ]
+            },
+            {
+              "instances": 50,
+              "sides": [
+                {
+                  "side": "pixi-marrow",
+                  "renderMode": "batched",
+                  "updateMs": [0.905, 0.86, 0.915],
+                  "cpuMs": [1.133, 1.07, 1.145],
+                  "renderMs": [1.752, 1.692, 1.79],
+                  "frameMs": [2.632, 2.627, 2.73],
+                  "framePerc95Ms": 6.272,
+                  "drawCalls": [101, 101],
+                  "uploadsPerFrame": 57.7,
+                  "uploadKBPerFrame": 1156.5,
+                  "heapKBPerInstance": null
+                },
+                {
+                  "side": "spine-pixi-v8",
+                  "updateMs": [1.035, 1, 1.05],
+                  "cpuMs": [4.748, 4.335, 4.81],
+                  "renderMs": [5.603, 4.988, 5.883],
+                  "frameMs": [6.678, 6.023, 6.973],
+                  "framePerc95Ms": 10.75,
+                  "drawCalls": [120, 125],
+                  "uploadsPerFrame": 4,
+                  "uploadKBPerFrame": 5587.3,
+                  "heapKBPerInstance": null
+                },
+                {
+                  "side": "pixi-marrow, mesh mode",
+                  "renderMode": "mesh",
+                  "updateMs": [0.975, 0.97, 1.01],
+                  "cpuMs": [1.495, 1.255, 1.495],
+                  "renderMs": [2.333, 1.877, 2.365],
+                  "frameMs": [3.335, 2.92, 3.358],
+                  "framePerc95Ms": 6.441,
+                  "drawCalls": [174, 183],
+                  "uploadsPerFrame": 173,
+                  "uploadKBPerFrame": 14294.3,
+                  "heapKBPerInstance": null
+                }
+              ]
+            },
+            {
+              "instances": 200,
+              "sides": [
+                {
+                  "side": "pixi-marrow",
+                  "renderMode": "batched",
+                  "updateMs": [3.447, 3.425, 3.465],
+                  "cpuMs": [4.387, 4.335, 4.4],
+                  "renderMs": [3.737, 3.73, 3.835],
+                  "frameMs": [7.295, 7.29, 7.32],
+                  "framePerc95Ms": 10.41,
+                  "drawCalls": [401, 401],
+                  "uploadsPerFrame": 212.1,
+                  "uploadKBPerFrame": 3997.1,
+                  "heapKBPerInstance": 138.7
+                },
+                {
+                  "side": "spine-pixi-v8",
+                  "updateMs": [4.15, 4.088, 4.175],
+                  "cpuMs": [19.375, 18.745, 19.46],
+                  "renderMs": [18.485, 17.938, 18.598],
+                  "frameMs": [22.745, 22.06, 22.775],
+                  "framePerc95Ms": 26.681,
+                  "drawCalls": [485, 491],
+                  "uploadsPerFrame": 4,
+                  "uploadKBPerFrame": 9322.7,
+                  "heapKBPerInstance": 282.9
+                },
+                {
+                  "side": "pixi-marrow, mesh mode",
+                  "renderMode": "mesh",
+                  "updateMs": [4.303, 4.268, 4.555],
+                  "cpuMs": [5.473, 5.425, 5.83],
+                  "renderMs": [4.232, 4.223, 4.537],
+                  "frameMs": [8.563, 8.515, 9.18],
+                  "framePerc95Ms": 12.216,
+                  "drawCalls": [708, 717],
+                  "uploadsPerFrame": 680,
+                  "uploadKBPerFrame": 15722.1,
+                  "heapKBPerInstance": 112.6
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "rig": "4.2/coin-pro",
+          "scene": "play",
+          "animation": "animation",
+          "bones": 7,
+          "slots": 6,
+          "meshVertices": 0,
+          "features": ["clipping", "darkTint", "additiveBlend"],
+          "gpuBusyBefore": 0.08,
+          "blocks": [
+            {
+              "instances": 1,
+              "sides": [
+                {
+                  "side": "pixi-marrow",
+                  "renderMode": "batched",
+                  "updateMs": [0.011, 0.007, 0.014],
+                  "cpuMs": [0.022, 0.016, 0.026],
+                  "renderMs": [0.514, 0.483, 0.528],
+                  "frameMs": [0.524, 0.496, 0.542],
+                  "framePerc95Ms": 1.419,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 3,
+                  "uploadKBPerFrame": 2.9,
+                  "heapKBPerInstance": null
+                },
+                {
+                  "side": "spine-pixi-v8",
+                  "updateMs": [0.005, 0.004, 0.005],
+                  "cpuMs": [0.037, 0.025, 0.043],
+                  "renderMs": [0.539, 0.507, 0.554],
+                  "frameMs": [0.544, 0.511, 0.557],
+                  "framePerc95Ms": 1.485,
+                  "drawCalls": [2, 2],
+                  "uploadsPerFrame": 4,
+                  "uploadKBPerFrame": 190.6,
+                  "heapKBPerInstance": null
+                }
+              ]
+            },
+            {
+              "instances": 50,
+              "sides": [
+                {
+                  "side": "pixi-marrow",
+                  "renderMode": "batched",
+                  "updateMs": [0.155, 0.15, 0.155],
+                  "cpuMs": [0.19, 0.182, 0.19],
+                  "renderMs": [0.772, 0.74, 0.775],
+                  "frameMs": [0.92, 0.915, 0.94],
+                  "framePerc95Ms": 3.704,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 3,
+                  "uploadKBPerFrame": 146.2,
+                  "heapKBPerInstance": null
+                },
+                {
+                  "side": "spine-pixi-v8",
+                  "updateMs": [0.055, 0.05, 0.075],
+                  "cpuMs": [0.66, 0.645, 0.745],
+                  "renderMs": [1.51, 1.32, 1.56],
+                  "frameMs": [1.57, 1.368, 1.65],
+                  "framePerc95Ms": 3.512,
+                  "drawCalls": [100, 100],
+                  "uploadsPerFrame": 4,
+                  "uploadKBPerFrame": 232.4,
+                  "heapKBPerInstance": null
+                }
+              ]
+            },
+            {
+              "instances": 200,
+              "sides": [
+                {
+                  "side": "pixi-marrow",
+                  "renderMode": "batched",
+                  "updateMs": [0.542, 0.54, 0.545],
+                  "cpuMs": [0.647, 0.63, 0.653],
+                  "renderMs": [1.415, 1.38, 1.42],
+                  "frameMs": [1.987, 1.953, 1.987],
+                  "framePerc95Ms": 4.95,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 3,
+                  "uploadKBPerFrame": 584.8,
+                  "heapKBPerInstance": 19.3
+                },
+                {
+                  "side": "spine-pixi-v8",
+                  "updateMs": [0.205, 0.203, 0.245],
+                  "cpuMs": [2.655, 2.635, 2.9],
+                  "renderMs": [4.593, 4.45, 4.825],
+                  "frameMs": [4.808, 4.678, 5.08],
+                  "framePerc95Ms": 8.15,
+                  "drawCalls": [400, 400],
+                  "uploadsPerFrame": 4,
+                  "uploadKBPerFrame": 356.4,
+                  "heapKBPerInstance": 15.4
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "rig": "4.2/speedy-ess",
+          "scene": "play",
+          "animation": "run",
+          "bones": 15,
+          "slots": 11,
+          "meshVertices": 0,
+          "features": [],
+          "gpuBusyBefore": 0.07,
+          "blocks": [
+            {
+              "instances": 1,
+              "sides": [
+                {
+                  "side": "pixi-marrow",
+                  "renderMode": "batched",
+                  "updateMs": [0.013, 0.011, 0.022],
+                  "cpuMs": [0.03, 0.03, 0.041],
+                  "renderMs": [0.502, 0.497, 0.531],
+                  "frameMs": [0.52, 0.516, 0.543],
+                  "framePerc95Ms": 1.45,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 1.8,
+                  "uploadKBPerFrame": 0.8,
+                  "heapKBPerInstance": null
+                },
+                {
+                  "side": "spine-pixi-v8",
+                  "updateMs": [0.01, 0.009, 0.011],
+                  "cpuMs": [0.038, 0.031, 0.044],
+                  "renderMs": [0.554, 0.503, 0.564],
+                  "frameMs": [0.564, 0.512, 0.574],
+                  "framePerc95Ms": 1.563,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 2.3,
+                  "uploadKBPerFrame": 41.6,
+                  "heapKBPerInstance": null
+                }
+              ]
+            },
+            {
+              "instances": 50,
+              "sides": [
+                {
+                  "side": "pixi-marrow",
+                  "renderMode": "batched",
+                  "updateMs": [0.18, 0.17, 0.21],
+                  "cpuMs": [0.23, 0.22, 0.275],
+                  "renderMs": [0.625, 0.618, 0.79],
+                  "frameMs": [0.81, 0.792, 0.997],
+                  "framePerc95Ms": 3.633,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 3,
+                  "uploadKBPerFrame": 66.9,
+                  "heapKBPerInstance": null
+                },
+                {
+                  "side": "spine-pixi-v8",
+                  "updateMs": [0.13, 0.125, 0.155],
+                  "cpuMs": [0.305, 0.295, 0.36],
+                  "renderMs": [0.782, 0.76, 0.855],
+                  "frameMs": [0.925, 0.885, 1.012],
+                  "framePerc95Ms": 3.255,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 4,
+                  "uploadKBPerFrame": 153.7,
+                  "heapKBPerInstance": null
+                }
+              ]
+            },
+            {
+              "instances": 200,
+              "sides": [
+                {
+                  "side": "pixi-marrow",
+                  "renderMode": "batched",
+                  "updateMs": [0.64, 0.63, 0.67],
+                  "cpuMs": [0.79, 0.78, 0.835],
+                  "renderMs": [1.075, 1.055, 1.117],
+                  "frameMs": [1.718, 1.712, 1.82],
+                  "framePerc95Ms": 3.013,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 3,
+                  "uploadKBPerFrame": 267.6,
+                  "heapKBPerInstance": 19.3
+                },
+                {
+                  "side": "spine-pixi-v8",
+                  "updateMs": [0.48, 0.46, 0.617],
+                  "cpuMs": [1.238, 1.183, 1.487],
+                  "renderMs": [1.835, 1.772, 2.058],
+                  "frameMs": [2.3, 2.26, 2.68],
+                  "framePerc95Ms": 4.622,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 4,
+                  "uploadKBPerFrame": 327.7,
+                  "heapKBPerInstance": 26.3
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "rig": "4.3/raptor-pro",
+          "scene": "play",
+          "animation": "roar",
+          "bones": 76,
+          "slots": 36,
+          "meshVertices": 583,
+          "features": ["meshes", "weights", "ik"],
+          "gpuBusyBefore": 0.14,
+          "blocks": [
+            {
+              "instances": 1,
+              "sides": [
+                {
+                  "side": "pixi-marrow",
+                  "renderMode": "batched",
+                  "updateMs": [0.037, 0.034, 0.05],
+                  "cpuMs": [0.063, 0.052, 0.073],
+                  "renderMs": [0.549, 0.532, 0.579],
+                  "frameMs": [0.597, 0.568, 0.616],
+                  "framePerc95Ms": 1.548,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 1,
+                  "uploadKBPerFrame": 5.3,
+                  "heapKBPerInstance": null
+                },
+                {
+                  "side": "spine-pixi-v8",
+                  "updateMs": [0.03, 0.029, 0.031],
+                  "cpuMs": [0.076, 0.073, 0.077],
+                  "renderMs": [0.598, 0.572, 0.599],
+                  "frameMs": [0.632, 0.605, 0.632],
+                  "framePerc95Ms": 1.66,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 1,
+                  "uploadKBPerFrame": 58.1,
+                  "heapKBPerInstance": null
+                },
+                {
+                  "side": "pixi-marrow, mesh mode",
+                  "renderMode": "mesh",
+                  "updateMs": [0.04, 0.039, 0.05],
+                  "cpuMs": [0.055, 0.054, 0.07],
+                  "renderMs": [0.538, 0.53, 0.546],
+                  "frameMs": [0.586, 0.573, 0.588],
+                  "framePerc95Ms": 1.572,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 1,
+                  "uploadKBPerFrame": 5.1,
+                  "heapKBPerInstance": null
+                }
+              ]
+            },
+            {
+              "instances": 50,
+              "sides": [
+                {
+                  "side": "pixi-marrow",
+                  "renderMode": "batched",
+                  "updateMs": [1.355, 1.3, 1.43],
+                  "cpuMs": [1.522, 1.475, 1.625],
+                  "renderMs": [1.665, 1.532, 1.76],
+                  "frameMs": [2.975, 2.823, 3.19],
+                  "framePerc95Ms": 4.827,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 2.6,
+                  "uploadKBPerFrame": 267.7,
+                  "heapKBPerInstance": null
+                },
+                {
+                  "side": "spine-pixi-v8",
+                  "updateMs": [1.21, 1.03, 1.265],
+                  "cpuMs": [2.69, 2.382, 2.802],
+                  "renderMs": [3.453, 3.007, 3.6],
+                  "frameMs": [4.63, 4.045, 4.822],
+                  "framePerc95Ms": 8.362,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 2.4,
+                  "uploadKBPerFrame": 2305.5,
+                  "heapKBPerInstance": null
+                },
+                {
+                  "side": "pixi-marrow, mesh mode",
+                  "renderMode": "mesh",
+                  "updateMs": [1.475, 1.425, 1.532],
+                  "cpuMs": [1.585, 1.547, 1.645],
+                  "renderMs": [1.545, 1.498, 1.555],
+                  "frameMs": [3.038, 2.933, 3.085],
+                  "framePerc95Ms": 6.144,
+                  "drawCalls": [50, 50],
+                  "uploadsPerFrame": 50.8,
+                  "uploadKBPerFrame": 255.8,
+                  "heapKBPerInstance": null
+                }
+              ]
+            },
+            {
+              "instances": 200,
+              "sides": [
+                {
+                  "side": "pixi-marrow",
+                  "renderMode": "batched",
+                  "updateMs": [5.495, 4.902, 5.495],
+                  "cpuMs": [6.13, 5.455, 6.135],
+                  "renderMs": [3.215, 3.065, 3.27],
+                  "frameMs": [8.72, 7.997, 8.828],
+                  "framePerc95Ms": 12.017,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 7.3,
+                  "uploadKBPerFrame": 1070.9,
+                  "heapKBPerInstance": 70.7
+                },
+                {
+                  "side": "spine-pixi-v8",
+                  "updateMs": [3.925, 3.78, 4.03],
+                  "cpuMs": [10.13, 9.565, 10.725],
+                  "renderMs": [10.13, 9.422, 11.275],
+                  "frameMs": [14.157, 13.355, 15.835],
+                  "framePerc95Ms": 18.265,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 4,
+                  "uploadKBPerFrame": 7637.5,
+                  "heapKBPerInstance": 105.3
+                },
+                {
+                  "side": "pixi-marrow, mesh mode",
+                  "renderMode": "mesh",
+                  "updateMs": [5.83, 5.305, 5.998],
+                  "cpuMs": [6.173, 5.633, 6.387],
+                  "renderMs": [2.723, 2.658, 2.84],
+                  "frameMs": [8.56, 7.963, 8.97],
+                  "framePerc95Ms": 12.382,
+                  "drawCalls": [200, 200],
+                  "uploadsPerFrame": 203.3,
+                  "uploadKBPerFrame": 1023.2,
+                  "heapKBPerInstance": 56.1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "rig": "4.3/sack-pro",
+          "scene": "play",
+          "animation": "fall-in",
+          "bones": 31,
+          "slots": 3,
+          "meshVertices": 193,
+          "features": ["meshes", "weights", "transform", "physics"],
+          "gpuBusyBefore": 0.22,
+          "blocks": [
+            {
+              "instances": 1,
+              "sides": [
+                {
+                  "side": "pixi-marrow",
+                  "renderMode": "batched",
+                  "updateMs": [0.011, 0.01, 0.034],
+                  "cpuMs": [0.018, 0.015, 0.049],
+                  "renderMs": [0.45, 0.449, 0.522],
+                  "frameMs": [0.461, 0.46, 0.559],
+                  "framePerc95Ms": 1.449,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 1,
+                  "uploadKBPerFrame": 1.5,
+                  "heapKBPerInstance": null
+                },
+                {
+                  "side": "spine-pixi-v8",
+                  "updateMs": [0.01, 0.009, 0.018],
+                  "cpuMs": [0.022, 0.019, 0.037],
+                  "renderMs": [0.471, 0.44, 0.517],
+                  "frameMs": [0.482, 0.448, 0.535],
+                  "framePerc95Ms": 1.414,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 1,
+                  "uploadKBPerFrame": 4.5,
+                  "heapKBPerInstance": null
+                }
+              ]
+            },
+            {
+              "instances": 50,
+              "sides": [
+                {
+                  "side": "pixi-marrow",
+                  "renderMode": "batched",
+                  "updateMs": [0.35, 0.35, 0.655],
+                  "cpuMs": [0.375, 0.375, 0.718],
+                  "renderMs": [0.645, 0.64, 0.782],
+                  "frameMs": [0.995, 0.99, 1.453],
+                  "framePerc95Ms": 4.255,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 1,
+                  "uploadKBPerFrame": 75.4,
+                  "heapKBPerInstance": null
+                },
+                {
+                  "side": "spine-pixi-v8",
+                  "updateMs": [0.27, 0.27, 0.44],
+                  "cpuMs": [0.455, 0.455, 0.725],
+                  "renderMs": [0.815, 0.81, 0.985],
+                  "frameMs": [1.085, 1.083, 1.45],
+                  "framePerc95Ms": 3.634,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 1,
+                  "uploadKBPerFrame": 226.2,
+                  "heapKBPerInstance": null
+                }
+              ]
+            },
+            {
+              "instances": 200,
+              "sides": [
+                {
+                  "side": "pixi-marrow",
+                  "renderMode": "batched",
+                  "updateMs": [1.48, 1.415, 2.35],
+                  "cpuMs": [1.573, 1.515, 2.533],
+                  "renderMs": [1.285, 1.278, 1.505],
+                  "frameMs": [2.778, 2.728, 3.95],
+                  "framePerc95Ms": 6.166,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 1,
+                  "uploadKBPerFrame": 301.6,
+                  "heapKBPerInstance": 39
+                },
+                {
+                  "side": "spine-pixi-v8",
+                  "updateMs": [1.23, 1.075, 1.643],
+                  "cpuMs": [2.045, 1.78, 2.71],
+                  "renderMs": [2.045, 1.905, 2.368],
+                  "frameMs": [3.365, 2.988, 4.037],
+                  "framePerc95Ms": 5.66,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 1,
+                  "uploadKBPerFrame": 904.7,
+                  "heapKBPerInstance": 46.6
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "rig": "4.2/tank-pro",
+          "scene": "rest",
+          "animation": "shoot",
+          "bones": 115,
+          "slots": 200,
+          "meshVertices": 71,
+          "features": [
+            "meshes",
+            "weights",
+            "clipping",
+            "paths",
+            "darkTint",
+            "additiveBlend",
+            "multiplyBlend",
+            "ik",
+            "transform",
+            "path"
+          ],
+          "gpuBusyBefore": 0.18,
+          "blocks": [
+            {
+              "instances": 200,
+              "sides": [
+                {
+                  "side": "pixi-marrow",
+                  "renderMode": "batched",
+                  "updateMs": [0.025, 0.025, 0.03],
+                  "cpuMs": [0.085, 0.08, 0.095],
+                  "renderMs": [1.79, 1.775, 1.82],
+                  "frameMs": [1.82, 1.805, 1.855],
+                  "framePerc95Ms": 4.057,
+                  "drawCalls": [401, 401],
+                  "uploadsPerFrame": 0,
+                  "uploadKBPerFrame": 0,
+                  "heapKBPerInstance": null
+                },
+                {
+                  "side": "spine-pixi-v8",
+                  "updateMs": [4.697, 4.505, 4.765],
+                  "cpuMs": [19.275, 17.585, 19.663],
+                  "renderMs": [16.82, 15.375, 17.443],
+                  "frameMs": [21.653, 19.953, 22.182],
+                  "framePerc95Ms": 25.067,
+                  "drawCalls": [401, 401],
+                  "uploadsPerFrame": 1,
+                  "uploadKBPerFrame": 3385.2,
+                  "heapKBPerInstance": null
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "rig": "4.2/coin-pro",
+          "scene": "rest",
+          "animation": "animation",
+          "bones": 7,
+          "slots": 6,
+          "meshVertices": 0,
+          "features": ["clipping", "darkTint", "additiveBlend"],
+          "gpuBusyBefore": 0.13,
+          "blocks": [
+            {
+              "instances": 200,
+              "sides": [
+                {
+                  "side": "pixi-marrow",
+                  "renderMode": "batched",
+                  "updateMs": [0.025, 0.025, 0.025],
+                  "cpuMs": [0.04, 0.035, 0.04],
+                  "renderMs": [1.63, 1.627, 1.63],
+                  "frameMs": [1.66, 1.657, 1.66],
+                  "framePerc95Ms": 4.629,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 0,
+                  "uploadKBPerFrame": 0,
+                  "heapKBPerInstance": null
+                },
+                {
+                  "side": "spine-pixi-v8",
+                  "updateMs": [0.145, 0.145, 0.16],
+                  "cpuMs": [2.345, 2.27, 2.49],
+                  "renderMs": [4.545, 4.508, 4.74],
+                  "frameMs": [4.7, 4.672, 4.922],
+                  "framePerc95Ms": 7.76,
+                  "drawCalls": [400, 400],
+                  "uploadsPerFrame": 4,
+                  "uploadKBPerFrame": 287.9,
+                  "heapKBPerInstance": null
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "rig": "4.2/speedy-ess",
+          "scene": "rest",
+          "animation": "run",
+          "bones": 15,
+          "slots": 11,
+          "meshVertices": 0,
+          "features": [],
+          "gpuBusyBefore": 0.27,
+          "blocks": [
+            {
+              "instances": 200,
+              "sides": [
+                {
+                  "side": "pixi-marrow",
+                  "renderMode": "batched",
+                  "updateMs": [0.025, 0.02, 0.025],
+                  "cpuMs": [0.03, 0.03, 0.035],
+                  "renderMs": [0.7, 0.7, 0.71],
+                  "frameMs": [0.725, 0.725, 0.735],
+                  "framePerc95Ms": 2.314,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 0,
+                  "uploadKBPerFrame": 0,
+                  "heapKBPerInstance": null
+                },
+                {
+                  "side": "spine-pixi-v8",
+                  "updateMs": [0.255, 0.245, 0.258],
+                  "cpuMs": [0.61, 0.595, 0.615],
+                  "renderMs": [1.07, 1.06, 1.075],
+                  "frameMs": [1.33, 1.3, 1.335],
+                  "framePerc95Ms": 3.842,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 1,
+                  "uploadKBPerFrame": 206.3,
+                  "heapKBPerInstance": null
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "rig": "4.3/raptor-pro",
+          "scene": "rest",
+          "animation": "roar",
+          "bones": 76,
+          "slots": 36,
+          "meshVertices": 583,
+          "features": ["meshes", "weights", "ik"],
+          "gpuBusyBefore": 0.08,
+          "blocks": [
+            {
+              "instances": 200,
+              "sides": [
+                {
+                  "side": "pixi-marrow",
+                  "renderMode": "batched",
+                  "updateMs": [0.025, 0.025, 0.04],
+                  "cpuMs": [0.03, 0.03, 0.055],
+                  "renderMs": [0.59, 0.575, 1.47],
+                  "frameMs": [0.62, 0.6, 1.513],
+                  "framePerc95Ms": 0.883,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 0,
+                  "uploadKBPerFrame": 0,
+                  "heapKBPerInstance": null
+                },
+                {
+                  "side": "spine-pixi-v8",
+                  "updateMs": [1.563, 1.45, 1.565],
+                  "cpuMs": [3.74, 3.475, 3.768],
+                  "renderMs": [3.803, 3.755, 3.81],
+                  "frameMs": [5.373, 5.225, 5.393],
+                  "framePerc95Ms": 9.019,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 1,
+                  "uploadKBPerFrame": 3009.4,
+                  "heapKBPerInstance": null
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "rig": "4.3/sack-pro",
+          "scene": "rest",
+          "animation": "fall-in",
+          "bones": 31,
+          "slots": 3,
+          "meshVertices": 193,
+          "features": ["meshes", "weights", "transform", "physics"],
+          "gpuBusyBefore": 0.35,
+          "blocks": [
+            {
+              "instances": 200,
+              "sides": [
+                {
+                  "side": "pixi-marrow",
+                  "renderMode": "batched",
+                  "updateMs": [0.06, 0.05, 0.085],
+                  "cpuMs": [0.07, 0.06, 0.1],
+                  "renderMs": [0.818, 0.585, 1.21],
+                  "frameMs": [0.868, 0.635, 1.308],
+                  "framePerc95Ms": 3.446,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 0,
+                  "uploadKBPerFrame": 0,
+                  "heapKBPerInstance": null
+                },
+                {
+                  "side": "spine-pixi-v8",
+                  "updateMs": [0.865, 0.853, 0.89],
+                  "cpuMs": [1.48, 1.47, 1.515],
+                  "renderMs": [1.635, 1.635, 1.64],
+                  "frameMs": [2.5, 2.495, 2.533],
+                  "framePerc95Ms": 4.181,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 1,
+                  "uploadKBPerFrame": 904.7,
+                  "heapKBPerInstance": null
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "renderer": "webgpu",
+      "gpu": "WebGPU, apple metal-3",
+      "pixi": "8.23.0",
+      "emptyFrameMs": 0.39,
+      "rigs": [
+        {
+          "rig": "4.2/tank-pro",
+          "scene": "play",
+          "animation": "shoot",
+          "bones": 115,
+          "slots": 200,
+          "meshVertices": 71,
+          "features": [
+            "meshes",
+            "weights",
+            "clipping",
+            "paths",
+            "darkTint",
+            "additiveBlend",
+            "multiplyBlend",
+            "ik",
+            "transform",
+            "path"
+          ],
+          "gpuBusyBefore": 0.13,
+          "blocks": [
+            {
+              "instances": 1,
+              "sides": [
+                {
+                  "side": "pixi-marrow",
+                  "renderMode": "batched",
+                  "updateMs": [0.035, 0.025, 0.05],
+                  "cpuMs": [0.065, 0.045, 0.115],
+                  "renderMs": [0.59, 0.538, 0.685],
+                  "frameMs": [0.637, 0.56, 0.742],
+                  "framePerc95Ms": 0.992,
+                  "drawCalls": [3, 3],
+                  "uploadsPerFrame": 3.4,
+                  "uploadKBPerFrame": 16.9,
+                  "heapKBPerInstance": null
+                },
+                {
+                  "side": "spine-pixi-v8",
+                  "updateMs": [0.03, 0.025, 0.085],
+                  "cpuMs": [0.155, 0.135, 0.502],
+                  "renderMs": [2.157, 0.67, 3.868],
+                  "frameMs": [2.185, 0.7, 3.935],
+                  "framePerc95Ms": 4.235,
+                  "drawCalls": [3, 4],
+                  "uploadsPerFrame": 3.5,
+                  "uploadKBPerFrame": 2128.6,
+                  "heapKBPerInstance": null
+                },
+                {
+                  "side": "pixi-marrow, mesh mode",
+                  "renderMode": "mesh",
+                  "updateMs": [0.04, 0.03, 0.065],
+                  "cpuMs": [0.06, 0.045, 0.12],
+                  "renderMs": [0.59, 0.58, 0.66],
+                  "frameMs": [0.64, 0.61, 0.73],
+                  "framePerc95Ms": 2.979,
+                  "drawCalls": [3, 6],
+                  "uploadsPerFrame": 5.5,
+                  "uploadKBPerFrame": 425.1,
+                  "heapKBPerInstance": null
+                }
+              ]
+            },
+            {
+              "instances": 50,
+              "sides": [
+                {
+                  "side": "pixi-marrow",
+                  "renderMode": "batched",
+                  "updateMs": [1.167, 1.13, 1.917],
+                  "cpuMs": [1.71, 1.68, 2.867],
+                  "renderMs": [2.438, 2.42, 2.88],
+                  "frameMs": [3.625, 3.623, 4.84],
+                  "framePerc95Ms": 7.503,
+                  "drawCalls": [101, 101],
+                  "uploadsPerFrame": 58.7,
+                  "uploadKBPerFrame": 1156.7,
+                  "heapKBPerInstance": null
+                },
+                {
+                  "side": "spine-pixi-v8",
+                  "updateMs": [0.975, 0.883, 1.815],
+                  "cpuMs": [5.855, 4.438, 11.412],
+                  "renderMs": [7.745, 5.657, 14.147],
+                  "frameMs": [8.72, 6.537, 16.093],
+                  "framePerc95Ms": 11.37,
+                  "drawCalls": [120, 125],
+                  "uploadsPerFrame": 5,
+                  "uploadKBPerFrame": 5587.4,
+                  "heapKBPerInstance": null
+                },
+                {
+                  "side": "pixi-marrow, mesh mode",
+                  "renderMode": "mesh",
+                  "updateMs": [1.203, 1.12, 2.43],
+                  "cpuMs": [3.03, 2.295, 6.143],
+                  "renderMs": [6.078, 3.167, 8.935],
+                  "frameMs": [7.313, 4.447, 11.497],
+                  "framePerc95Ms": 9.78,
+                  "drawCalls": [174, 183],
+                  "uploadsPerFrame": 174.9,
+                  "uploadKBPerFrame": 14338.9,
+                  "heapKBPerInstance": null
+                }
+              ]
+            },
+            {
+              "instances": 200,
+              "sides": [
+                {
+                  "side": "pixi-marrow",
+                  "renderMode": "batched",
+                  "updateMs": [6.9, 3.708, 7.15],
+                  "cpuMs": [10.457, 5.54, 10.813],
+                  "renderMs": [9.033, 5.37, 9.127],
+                  "frameMs": [16.192, 9.143, 16.535],
+                  "framePerc95Ms": 18.603,
+                  "drawCalls": [401, 401],
+                  "uploadsPerFrame": 213.1,
+                  "uploadKBPerFrame": 3997.2,
+                  "heapKBPerInstance": 138.7
+                },
+                {
+                  "side": "spine-pixi-v8",
+                  "updateMs": [3.975, 3.865, 7.422],
+                  "cpuMs": [20.5, 20.178, 39.313],
+                  "renderMs": [21.17, 20.89, 37.813],
+                  "frameMs": [25.157, 24.81, 45.69],
+                  "framePerc95Ms": 29.485,
+                  "drawCalls": [485, 491],
+                  "uploadsPerFrame": 5,
+                  "uploadKBPerFrame": 9322.8,
+                  "heapKBPerInstance": 282.2
+                },
+                {
+                  "side": "pixi-marrow, mesh mode",
+                  "renderMode": "mesh",
+                  "updateMs": [8.957, 4.495, 9.662],
+                  "cpuMs": [13.723, 6.815, 14.68],
+                  "renderMs": [12.552, 9.422, 12.91],
+                  "frameMs": [21.642, 13.968, 22.578],
+                  "framePerc95Ms": 26.132,
+                  "drawCalls": [708, 717],
+                  "uploadsPerFrame": 681.6,
+                  "uploadKBPerFrame": 15900.2,
+                  "heapKBPerInstance": 113.8
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "rig": "4.2/coin-pro",
+          "scene": "play",
+          "animation": "animation",
+          "bones": 7,
+          "slots": 6,
+          "meshVertices": 0,
+          "features": ["clipping", "darkTint", "additiveBlend"],
+          "gpuBusyBefore": 0.18,
+          "blocks": [
+            {
+              "instances": 1,
+              "sides": [
+                {
+                  "side": "pixi-marrow",
+                  "renderMode": "batched",
+                  "updateMs": [0.005, 0.005, 0.015],
+                  "cpuMs": [0.025, 0.025, 0.035],
+                  "renderMs": [0.61, 0.605, 0.623],
+                  "frameMs": [0.625, 0.61, 0.625],
+                  "framePerc95Ms": 0.7,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 4,
+                  "uploadKBPerFrame": 3.1,
+                  "heapKBPerInstance": null
+                },
+                {
+                  "side": "spine-pixi-v8",
+                  "updateMs": [0.005, 0.005, 0.005],
+                  "cpuMs": [0.1, 0.04, 0.11],
+                  "renderMs": [0.69, 0.625, 0.7],
+                  "frameMs": [0.7, 0.63, 0.705],
+                  "framePerc95Ms": 0.886,
+                  "drawCalls": [2, 2],
+                  "uploadsPerFrame": 5,
+                  "uploadKBPerFrame": 190.1,
+                  "heapKBPerInstance": null
+                }
+              ]
+            },
+            {
+              "instances": 50,
+              "sides": [
+                {
+                  "side": "pixi-marrow",
+                  "renderMode": "batched",
+                  "updateMs": [0.16, 0.15, 0.17],
+                  "cpuMs": [0.24, 0.23, 0.265],
+                  "renderMs": [0.765, 0.76, 0.78],
+                  "frameMs": [0.922, 0.915, 0.955],
+                  "framePerc95Ms": 1.992,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 4,
+                  "uploadKBPerFrame": 146.3,
+                  "heapKBPerInstance": null
+                },
+                {
+                  "side": "spine-pixi-v8",
+                  "updateMs": [0.06, 0.055, 0.075],
+                  "cpuMs": [0.813, 0.788, 1.008],
+                  "renderMs": [1.5, 1.485, 1.74],
+                  "frameMs": [1.56, 1.54, 1.815],
+                  "framePerc95Ms": 2.79,
+                  "drawCalls": [100, 100],
+                  "uploadsPerFrame": 5,
+                  "uploadKBPerFrame": 232.5,
+                  "heapKBPerInstance": null
+                }
+              ]
+            },
+            {
+              "instances": 200,
+              "sides": [
+                {
+                  "side": "pixi-marrow",
+                  "renderMode": "batched",
+                  "updateMs": [0.61, 0.607, 0.645],
+                  "cpuMs": [0.903, 0.9, 0.95],
+                  "renderMs": [1.35, 1.335, 1.365],
+                  "frameMs": [1.975, 1.958, 2.025],
+                  "framePerc95Ms": 5.15,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 4,
+                  "uploadKBPerFrame": 584.9,
+                  "heapKBPerInstance": 19.3
+                },
+                {
+                  "side": "spine-pixi-v8",
+                  "updateMs": [0.19, 0.185, 0.21],
+                  "cpuMs": [2.908, 2.88, 3.118],
+                  "renderMs": [4.35, 4.32, 4.575],
+                  "frameMs": [4.572, 4.555, 4.82],
+                  "framePerc95Ms": 8.198,
+                  "drawCalls": [400, 400],
+                  "uploadsPerFrame": 5,
+                  "uploadKBPerFrame": 356.5,
+                  "heapKBPerInstance": 15.4
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "rig": "4.2/speedy-ess",
+          "scene": "play",
+          "animation": "run",
+          "bones": 15,
+          "slots": 11,
+          "meshVertices": 0,
+          "features": [],
+          "gpuBusyBefore": 0.19,
+          "blocks": [
+            {
+              "instances": 1,
+              "sides": [
+                {
+                  "side": "pixi-marrow",
+                  "renderMode": "batched",
+                  "updateMs": [0.005, 0.005, 0.015],
+                  "cpuMs": [0.025, 0.025, 0.035],
+                  "renderMs": [0.535, 0.532, 0.538],
+                  "frameMs": [0.545, 0.54, 0.548],
+                  "framePerc95Ms": 0.99,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 2.9,
+                  "uploadKBPerFrame": 0.9,
+                  "heapKBPerInstance": null
+                },
+                {
+                  "side": "spine-pixi-v8",
+                  "updateMs": [0.005, 0.005, 0.005],
+                  "cpuMs": [0.03, 0.03, 0.042],
+                  "renderMs": [0.55, 0.535, 0.56],
+                  "frameMs": [0.56, 0.545, 0.565],
+                  "framePerc95Ms": 0.778,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 3.3,
+                  "uploadKBPerFrame": 41.9,
+                  "heapKBPerInstance": null
+                }
+              ]
+            },
+            {
+              "instances": 50,
+              "sides": [
+                {
+                  "side": "pixi-marrow",
+                  "renderMode": "batched",
+                  "updateMs": [0.135, 0.13, 0.14],
+                  "cpuMs": [0.2, 0.188, 0.21],
+                  "renderMs": [0.645, 0.625, 0.647],
+                  "frameMs": [0.785, 0.76, 0.785],
+                  "framePerc95Ms": 3.346,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 4,
+                  "uploadKBPerFrame": 67,
+                  "heapKBPerInstance": null
+                },
+                {
+                  "side": "spine-pixi-v8",
+                  "updateMs": [0.095, 0.095, 0.11],
+                  "cpuMs": [0.29, 0.27, 0.325],
+                  "renderMs": [0.775, 0.755, 0.8],
+                  "frameMs": [0.87, 0.85, 0.92],
+                  "framePerc95Ms": 3.584,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 5,
+                  "uploadKBPerFrame": 153.8,
+                  "heapKBPerInstance": null
+                }
+              ]
+            },
+            {
+              "instances": 200,
+              "sides": [
+                {
+                  "side": "pixi-marrow",
+                  "renderMode": "batched",
+                  "updateMs": [0.485, 0.475, 0.495],
+                  "cpuMs": [0.675, 0.67, 0.692],
+                  "renderMs": [0.9, 0.895, 0.9],
+                  "frameMs": [1.395, 1.385, 1.42],
+                  "framePerc95Ms": 3.33,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 4,
+                  "uploadKBPerFrame": 267.7,
+                  "heapKBPerInstance": 19.4
+                },
+                {
+                  "side": "spine-pixi-v8",
+                  "updateMs": [0.345, 0.335, 0.355],
+                  "cpuMs": [1.02, 0.99, 1.03],
+                  "renderMs": [1.39, 1.38, 1.407],
+                  "frameMs": [1.752, 1.718, 1.77],
+                  "framePerc95Ms": 4.664,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 5,
+                  "uploadKBPerFrame": 327.9,
+                  "heapKBPerInstance": 26.8
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "rig": "4.3/raptor-pro",
+          "scene": "play",
+          "animation": "roar",
+          "bones": 76,
+          "slots": 36,
+          "meshVertices": 583,
+          "features": ["meshes", "weights", "ik"],
+          "gpuBusyBefore": 0.21,
+          "blocks": [
+            {
+              "instances": 1,
+              "sides": [
+                {
+                  "side": "pixi-marrow",
+                  "renderMode": "batched",
+                  "updateMs": [0.02, 0.02, 0.03],
+                  "cpuMs": [0.035, 0.035, 0.05],
+                  "renderMs": [0.415, 0.4, 0.42],
+                  "frameMs": [0.44, 0.42, 0.45],
+                  "framePerc95Ms": 0.505,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 2,
+                  "uploadKBPerFrame": 5.5,
+                  "heapKBPerInstance": null
+                },
+                {
+                  "side": "spine-pixi-v8",
+                  "updateMs": [0.015, 0.015, 0.015],
+                  "cpuMs": [0.045, 0.045, 0.045],
+                  "renderMs": [0.425, 0.415, 0.45],
+                  "frameMs": [0.44, 0.435, 0.465],
+                  "framePerc95Ms": 0.592,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 2,
+                  "uploadKBPerFrame": 58.3,
+                  "heapKBPerInstance": null
+                },
+                {
+                  "side": "pixi-marrow, mesh mode",
+                  "renderMode": "mesh",
+                  "updateMs": [0.025, 0.02, 0.025],
+                  "cpuMs": [0.035, 0.035, 0.045],
+                  "renderMs": [0.427, 0.405, 0.44],
+                  "frameMs": [0.45, 0.435, 0.465],
+                  "framePerc95Ms": 0.536,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 3,
+                  "uploadKBPerFrame": 5.5,
+                  "heapKBPerInstance": null
+                }
+              ]
+            },
+            {
+              "instances": 50,
+              "sides": [
+                {
+                  "side": "pixi-marrow",
+                  "renderMode": "batched",
+                  "updateMs": [0.7, 0.675, 0.715],
+                  "cpuMs": [0.845, 0.82, 0.86],
+                  "renderMs": [0.705, 0.695, 0.718],
+                  "frameMs": [1.425, 1.375, 1.435],
+                  "framePerc95Ms": 2.086,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 3.6,
+                  "uploadKBPerFrame": 267.8,
+                  "heapKBPerInstance": null
+                },
+                {
+                  "side": "spine-pixi-v8",
+                  "updateMs": [0.485, 0.405, 0.505],
+                  "cpuMs": [1.502, 1.2, 1.593],
+                  "renderMs": [3.26, 1.88, 3.47],
+                  "frameMs": [3.767, 2.29, 3.95],
+                  "framePerc95Ms": 7.439,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 3.4,
+                  "uploadKBPerFrame": 2305.6,
+                  "heapKBPerInstance": null
+                },
+                {
+                  "side": "pixi-marrow, mesh mode",
+                  "renderMode": "mesh",
+                  "updateMs": [0.81, 0.78, 0.875],
+                  "cpuMs": [0.85, 0.825, 0.93],
+                  "renderMs": [0.71, 0.665, 1.16],
+                  "frameMs": [1.533, 1.445, 2.09],
+                  "framePerc95Ms": 3.435,
+                  "drawCalls": [50, 50],
+                  "uploadsPerFrame": 52.8,
+                  "uploadKBPerFrame": 268.4,
+                  "heapKBPerInstance": null
+                }
+              ]
+            },
+            {
+              "instances": 200,
+              "sides": [
+                {
+                  "side": "pixi-marrow",
+                  "renderMode": "batched",
+                  "updateMs": [2.723, 2.675, 2.953],
+                  "cpuMs": [3.26, 3.205, 3.52],
+                  "renderMs": [1.865, 1.857, 2.685],
+                  "frameMs": [4.64, 4.607, 5.723],
+                  "framePerc95Ms": 9.157,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 8.3,
+                  "uploadKBPerFrame": 1071,
+                  "heapKBPerInstance": 70.7
+                },
+                {
+                  "side": "spine-pixi-v8",
+                  "updateMs": [2.118, 2.055, 2.195],
+                  "cpuMs": [7.228, 7.225, 7.412],
+                  "renderMs": [8.25, 8.235, 8.463],
+                  "frameMs": [10.393, 10.313, 10.675],
+                  "framePerc95Ms": 13.136,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 5,
+                  "uploadKBPerFrame": 7637.6,
+                  "heapKBPerInstance": 105.8
+                },
+                {
+                  "side": "pixi-marrow, mesh mode",
+                  "renderMode": "mesh",
+                  "updateMs": [3.107, 3.08, 3.212],
+                  "cpuMs": [3.245, 3.208, 3.393],
+                  "renderMs": [2.393, 2.315, 2.678],
+                  "frameMs": [5.567, 5.385, 5.973],
+                  "framePerc95Ms": 8.671,
+                  "drawCalls": [200, 200],
+                  "uploadsPerFrame": 205.3,
+                  "uploadKBPerFrame": 1073.3,
+                  "heapKBPerInstance": 56.8
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "rig": "4.3/sack-pro",
+          "scene": "play",
+          "animation": "fall-in",
+          "bones": 31,
+          "slots": 3,
+          "meshVertices": 193,
+          "features": ["meshes", "weights", "transform", "physics"],
+          "gpuBusyBefore": 0.1,
+          "blocks": [
+            {
+              "instances": 1,
+              "sides": [
+                {
+                  "side": "pixi-marrow",
+                  "renderMode": "batched",
+                  "updateMs": [0.01, 0.01, 0.02],
+                  "cpuMs": [0.025, 0.025, 0.035],
+                  "renderMs": [0.405, 0.4, 0.42],
+                  "frameMs": [0.415, 0.415, 0.44],
+                  "framePerc95Ms": 0.55,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 2,
+                  "uploadKBPerFrame": 1.6,
+                  "heapKBPerInstance": null
+                },
+                {
+                  "side": "spine-pixi-v8",
+                  "updateMs": [0.01, 0.01, 0.01],
+                  "cpuMs": [0.03, 0.025, 0.03],
+                  "renderMs": [0.41, 0.39, 0.43],
+                  "frameMs": [0.415, 0.395, 0.44],
+                  "framePerc95Ms": 0.525,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 2,
+                  "uploadKBPerFrame": 4.6,
+                  "heapKBPerInstance": null
+                }
+              ]
+            },
+            {
+              "instances": 50,
+              "sides": [
+                {
+                  "side": "pixi-marrow",
+                  "renderMode": "batched",
+                  "updateMs": [0.34, 0.34, 0.39],
+                  "cpuMs": [0.395, 0.39, 0.455],
+                  "renderMs": [0.495, 0.453, 0.573],
+                  "frameMs": [0.84, 0.807, 0.958],
+                  "framePerc95Ms": 3.326,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 2,
+                  "uploadKBPerFrame": 75.5,
+                  "heapKBPerInstance": null
+                },
+                {
+                  "side": "spine-pixi-v8",
+                  "updateMs": [0.25, 0.25, 0.275],
+                  "cpuMs": [0.49, 0.48, 0.53],
+                  "renderMs": [0.685, 0.685, 0.93],
+                  "frameMs": [0.94, 0.935, 1.21],
+                  "framePerc95Ms": 4,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 2,
+                  "uploadKBPerFrame": 226.3,
+                  "heapKBPerInstance": null
+                }
+              ]
+            },
+            {
+              "instances": 200,
+              "sides": [
+                {
+                  "side": "pixi-marrow",
+                  "renderMode": "batched",
+                  "updateMs": [1.325, 1.315, 1.495],
+                  "cpuMs": [1.49, 1.48, 1.712],
+                  "renderMs": [1.16, 1.145, 1.493],
+                  "frameMs": [2.475, 2.455, 3.002],
+                  "framePerc95Ms": 4.893,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 2,
+                  "uploadKBPerFrame": 301.7,
+                  "heapKBPerInstance": 39.1
+                },
+                {
+                  "side": "spine-pixi-v8",
+                  "updateMs": [1.025, 1.02, 1.172],
+                  "cpuMs": [1.948, 1.948, 2.22],
+                  "renderMs": [2.103, 1.877, 2.373],
+                  "frameMs": [3.137, 2.895, 3.587],
+                  "framePerc95Ms": 5.8,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 2,
+                  "uploadKBPerFrame": 904.8,
+                  "heapKBPerInstance": 46.6
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "rig": "4.2/tank-pro",
+          "scene": "rest",
+          "animation": "shoot",
+          "bones": 115,
+          "slots": 200,
+          "meshVertices": 71,
+          "features": [
+            "meshes",
+            "weights",
+            "clipping",
+            "paths",
+            "darkTint",
+            "additiveBlend",
+            "multiplyBlend",
+            "ik",
+            "transform",
+            "path"
+          ],
+          "gpuBusyBefore": 0.2,
+          "blocks": [
+            {
+              "instances": 200,
+              "sides": [
+                {
+                  "side": "pixi-marrow",
+                  "renderMode": "batched",
+                  "updateMs": [0.08, 0.055, 0.105],
+                  "cpuMs": [0.27, 0.165, 0.33],
+                  "renderMs": [3.165, 2.43, 3.433],
+                  "frameMs": [3.265, 2.49, 3.595],
+                  "framePerc95Ms": 8.376,
+                  "drawCalls": [401, 401],
+                  "uploadsPerFrame": 1,
+                  "uploadKBPerFrame": 0.1,
+                  "heapKBPerInstance": null
+                },
+                {
+                  "side": "spine-pixi-v8",
+                  "updateMs": [4.088, 3.685, 6.64],
+                  "cpuMs": [17.587, 15.465, 31.515],
+                  "renderMs": [16.797, 14.822, 28.377],
+                  "frameMs": [20.832, 18.525, 35.117],
+                  "framePerc95Ms": 37.25,
+                  "drawCalls": [401, 401],
+                  "uploadsPerFrame": 2,
+                  "uploadKBPerFrame": 3385.3,
+                  "heapKBPerInstance": null
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "rig": "4.2/coin-pro",
+          "scene": "rest",
+          "animation": "animation",
+          "bones": 7,
+          "slots": 6,
+          "meshVertices": 0,
+          "features": ["clipping", "darkTint", "additiveBlend"],
+          "gpuBusyBefore": 0.16,
+          "blocks": [
+            {
+              "instances": 200,
+              "sides": [
+                {
+                  "side": "pixi-marrow",
+                  "renderMode": "batched",
+                  "updateMs": [0.042, 0.03, 0.06],
+                  "cpuMs": [0.075, 0.055, 0.103],
+                  "renderMs": [1.59, 1.505, 1.7],
+                  "frameMs": [1.633, 1.53, 1.78],
+                  "framePerc95Ms": 4.945,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 1,
+                  "uploadKBPerFrame": 0.1,
+                  "heapKBPerInstance": null
+                },
+                {
+                  "side": "spine-pixi-v8",
+                  "updateMs": [0.12, 0.115, 0.155],
+                  "cpuMs": [2.04, 1.995, 2.345],
+                  "renderMs": [3.487, 3.135, 4.185],
+                  "frameMs": [3.633, 3.243, 4.355],
+                  "framePerc95Ms": 5.116,
+                  "drawCalls": [400, 400],
+                  "uploadsPerFrame": 5,
+                  "uploadKBPerFrame": 288,
+                  "heapKBPerInstance": null
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "rig": "4.2/speedy-ess",
+          "scene": "rest",
+          "animation": "run",
+          "bones": 15,
+          "slots": 11,
+          "meshVertices": 0,
+          "features": [],
+          "gpuBusyBefore": 0.18,
+          "blocks": [
+            {
+              "instances": 200,
+              "sides": [
+                {
+                  "side": "pixi-marrow",
+                  "renderMode": "batched",
+                  "updateMs": [0.025, 0.025, 0.03],
+                  "cpuMs": [0.045, 0.04, 0.05],
+                  "renderMs": [0.685, 0.42, 0.685],
+                  "frameMs": [0.71, 0.45, 0.715],
+                  "framePerc95Ms": 0.95,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 1,
+                  "uploadKBPerFrame": 0.1,
+                  "heapKBPerInstance": null
+                },
+                {
+                  "side": "spine-pixi-v8",
+                  "updateMs": [0.23, 0.225, 0.285],
+                  "cpuMs": [0.615, 0.605, 0.768],
+                  "renderMs": [1.095, 1.06, 1.19],
+                  "frameMs": [1.325, 1.282, 1.49],
+                  "framePerc95Ms": 4.115,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 2,
+                  "uploadKBPerFrame": 206.4,
+                  "heapKBPerInstance": null
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "rig": "4.3/raptor-pro",
+          "scene": "rest",
+          "animation": "roar",
+          "bones": 76,
+          "slots": 36,
+          "meshVertices": 583,
+          "features": ["meshes", "weights", "ik"],
+          "gpuBusyBefore": 0.21,
+          "blocks": [
+            {
+              "instances": 200,
+              "sides": [
+                {
+                  "side": "pixi-marrow",
+                  "renderMode": "batched",
+                  "updateMs": [0.025, 0.025, 0.07],
+                  "cpuMs": [0.04, 0.04, 0.13],
+                  "renderMs": [0.77, 0.72, 1.688],
+                  "frameMs": [0.795, 0.748, 1.768],
+                  "framePerc95Ms": 2.455,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 1,
+                  "uploadKBPerFrame": 0.1,
+                  "heapKBPerInstance": null
+                },
+                {
+                  "side": "spine-pixi-v8",
+                  "updateMs": [1.637, 1.578, 2.08],
+                  "cpuMs": [4.585, 4.533, 5.715],
+                  "renderMs": [5.275, 5.208, 6.158],
+                  "frameMs": [7.002, 6.83, 8.37],
+                  "framePerc95Ms": 9.716,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 2,
+                  "uploadKBPerFrame": 3009.5,
+                  "heapKBPerInstance": null
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "rig": "4.3/sack-pro",
+          "scene": "rest",
+          "animation": "fall-in",
+          "bones": 31,
+          "slots": 3,
+          "meshVertices": 193,
+          "features": ["meshes", "weights", "transform", "physics"],
+          "gpuBusyBefore": 0.08,
+          "blocks": [
+            {
+              "instances": 200,
+              "sides": [
+                {
+                  "side": "pixi-marrow",
+                  "renderMode": "batched",
+                  "updateMs": [0.045, 0.045, 0.08],
+                  "cpuMs": [0.06, 0.06, 0.115],
+                  "renderMs": [0.563, 0.52, 1.055],
+                  "frameMs": [0.613, 0.57, 1.135],
+                  "framePerc95Ms": 0.696,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 1,
+                  "uploadKBPerFrame": 0.1,
+                  "heapKBPerInstance": null
+                },
+                {
+                  "side": "spine-pixi-v8",
+                  "updateMs": [0.933, 0.865, 0.955],
+                  "cpuMs": [1.853, 1.745, 1.893],
+                  "renderMs": [2.08, 1.88, 2.333],
+                  "frameMs": [3.063, 2.745, 3.313],
+                  "framePerc95Ms": 6.143,
+                  "drawCalls": [1, 1],
+                  "uploadsPerFrame": 2,
+                  "uploadKBPerFrame": 904.8,
+                  "heapKBPerInstance": null
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

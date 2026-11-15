@@ -1,6 +1,6 @@
 import { MarrowError } from '../base/errors';
 import type { SkeletonModel } from '../model/model';
-import { type SkeletonSource, sniffSkeleton } from './sniff';
+import { type SkeletonSource, sniffSkeleton, textOfBytes } from './sniff';
 
 const EXPORT_FIX = 'Export the skeleton again from Spine 4.1, 4.2 or 4.3.';
 
@@ -13,7 +13,12 @@ function parseJson(text: string): object {
 }
 
 async function importJson(source: SkeletonSource, version: SkeletonModel['version']): Promise<SkeletonModel> {
-    const root: object = typeof source === 'string' ? parseJson(source) : source;
+    let root: object;
+
+    // bytes that hold JSON text, for example a file that was fetched without a look at its name
+    if (source instanceof ArrayBuffer) root = parseJson(textOfBytes(new Uint8Array(source)));
+    else if (source instanceof Uint8Array) root = parseJson(textOfBytes(source));
+    else root = typeof source === 'string' ? parseJson(source.replace(/^\uFEFF/, '')) : source;
 
     if (version === '4.3') return (await import('./json43/index')).importJson43(root);
 
@@ -45,8 +50,8 @@ async function importBinary(source: SkeletonSource, version: SkeletonModel['vers
 
 /**
  * Imports a skeleton file into a {@link SkeletonModel}. Accepts JSON text, parsed JSON, or the
- * bytes of a `.skel` file, from Spine 4.1, 4.2 or 4.3. The reader for the file's format and
- * version is loaded on demand.
+ * bytes of a `.skel` file or of a JSON file, from Spine 4.1, 4.2 or 4.3. The content of the bytes
+ * decides the format. The reader for the format and version of the file is loaded on demand.
  *
  * Throws a {@link MarrowError} when the data is not a skeleton, is damaged, or is from another version.
  *

@@ -144,6 +144,9 @@ describe('perf.memory', () => {
             gpu: VERTEX_DATA + INDEX_DATA + 512 * 512 * 4,
             gpuBuffers: VERTEX_DATA + INDEX_DATA,
             gpuTextures: 512 * 512 * 4,
+            // nothing bakes
+            baked: 0,
+            bakeBudget: 0,
         });
         expect(memory.shared).toBe(610 + 262 + 200);
         expect(memory.gpuBuffers).toBe(spine.stats.bufferBytes);
@@ -174,6 +177,9 @@ describe('perf.memory', () => {
             gpu: share + 512 * 512 * 4,
             gpuBuffers: share,
             gpuTextures: 512 * 512 * 4,
+            // nothing bakes
+            baked: 0,
+            bakeBudget: 0,
         });
         expect(spine.stats).toMatchObject({ renderMode: 'batched', bufferBytes: vertexData + share });
         // no mesh, no geometry and no buffer below the display object

@@ -112,7 +112,7 @@ export default defineDiagram({
         };
 
         for (let row = -1; row < 3; row++) enter(30 + CELL / 2 + row * CELL);
-        toggle('Pool', 'reuse copies', true, (on) => {
+        toggle('Pool', 'reuse instances', true, (on) => {
             pooled = on;
             pool.length = 0;
             made = 0;
@@ -135,8 +135,8 @@ export default defineDiagram({
             drawPool();
             show(
                 pooled
-                    ? `Made ${made} copies, and reused ${reused} from the pool.`
-                    : `Made ${made} copies. Without a pool, every symbol that enters is a new copy.`,
+                    ? `Made ${made} instances, and reused ${reused} from the pool.`
+                    : `Made ${made} instances. Without a pool, every symbol that enters is a new instance.`,
             );
         });
     },

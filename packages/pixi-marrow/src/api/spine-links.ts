@@ -1,8 +1,8 @@
 import { Container } from 'pixi.js';
 import { MarrowError } from '../base/errors';
-import { unknownName } from '../base/names';
 import { Bone } from './bone';
-import { namedIndex } from './checks';
+import { namedIndex, noName, warnLater } from './checks';
+import type { SpineEventName, SpineListener } from './events';
 import { type LinkParts, Links } from './links';
 import type { AttachOptions, MarrowNames } from './options';
 import { Slot } from './slot';
@@ -14,6 +14,9 @@ export type SetupPosePart = 'all' | 'bones' | 'slots';
  * The part of a display object that reaches into the skeleton by name. It holds the handles of
  * bones and slots, the active skins and the setup pose. It also holds the Pixi objects that
  * follow a bone or are attached to a slot. `MarrowSpine` is the one class that extends it.
+ *
+ * Once the display object was destroyed, every member here that reaches into the skeleton throws
+ * a `MarrowError` with the code `destroyed`. `unfollow` and `detach` do nothing then.
  *
  * @example
  * hero.skins = ['body', 'hat'];
@@ -29,6 +32,36 @@ export abstract class SpineLinks<N extends MarrowNames = MarrowNames> extends Co
     private readonly slotHandles = new Map<string, Slot<N>>();
 
     /**
+     * Listens for an event of the skeleton or of the Pixi container: the `on` of Pixi, with
+     * types. The names and the arguments of the listener come from `MarrowSpineEvents` and from
+     * the events of a container. A name that is no event does not compile. For an event of your
+     * own, call `on` of the object as a Pixi `Container`.
+     *
+     * @example
+     * hero.on('event', (event, track) => console.warn(event.name, track.animation));
+     */
+    declare on: <K extends string | symbol>(
+        event: SpineEventName<N, K>,
+        listener: SpineListener<N, K>,
+        context?: unknown,
+    ) => this;
+
+    /** Listens for the next time an event is emitted. Typed as {@link on}. */
+    declare once: <K extends string | symbol>(
+        event: SpineEventName<N, K>,
+        listener: SpineListener<N, K>,
+        context?: unknown,
+    ) => this;
+
+    /** Removes a listener, or every listener of the event when none is given. Typed as {@link on}. */
+    declare off: <K extends string | symbol>(
+        event: SpineEventName<N, K>,
+        listener?: SpineListener<N, K>,
+        context?: unknown,
+        once?: boolean,
+    ) => this;
+
+    /**
      * The handle of a bone: its pose next to its parent, to read and to write, and where it is in
      * this object after the last update. One object per bone, the same at every call.
      *
@@ -40,11 +73,10 @@ export abstract class SpineLinks<N extends MarrowNames = MarrowNames> extends Co
      * console.log(head.worldX, head.worldY);
      */
     bone(name: N['bones']): Bone<N> {
+        const { state, model } = this.parts();
         let handle = this.handles.get(name);
 
         if (handle === undefined) {
-            const { state, model } = this.parts();
-
             handle = new Bone<N>(state, indexOf('bone', model.bones.names, name), name);
             this.handles.set(name, handle);
         }
@@ -64,11 +96,10 @@ export abstract class SpineLinks<N extends MarrowNames = MarrowNames> extends Co
      * weapon.tint = 0xff8080;
      */
     slot(name: N['slots']): Slot<N> {
+        const { engine, model } = this.parts();
         let handle = this.slotHandles.get(name);
 
         if (handle === undefined) {
-            const { engine, model } = this.parts();
-
             handle = new Slot<N>(engine, indexOf('slot', model.slots.names, name), name);
             this.slotHandles.set(name, handle);
         }
@@ -125,11 +156,11 @@ export abstract class SpineLinks<N extends MarrowNames = MarrowNames> extends Co
         const { engine, model } = this.parts();
 
         if (!Array.isArray(names)) {
-            throw new MarrowError('invalid-data', `skins takes a list of skin names, not ${String(names)}.`, {
+            throw new MarrowError('invalid-option', `skins takes a list of skin names, not ${String(names)}.`, {
                 fix: "Pass an array of names, such as ['body', 'hat'], or [] for no skin.",
             });
         }
-        const skins = names.map((name) => namedIndex('skin', model.skins, String(name)));
+        const skins = names.map((name) => namedIndex('skin', model.skins, name));
 
         // the same indices in the same order
         if (String(skins) === String(engine.skins)) return;
@@ -154,7 +185,7 @@ export abstract class SpineLinks<N extends MarrowNames = MarrowNames> extends Co
         else if (part === 'bones') engine.setupPoseBones();
         else if (part === 'slots') engine.setupPoseSlots();
         else {
-            throw new MarrowError('invalid-data', `setupPose has no part "${String(part)}".`, {
+            throw new MarrowError('invalid-option', `setupPose has no part "${String(part)}".`, {
                 fix: "Pass 'all', 'bones' or 'slots', or nothing for all.",
             });
         }
@@ -167,7 +198,8 @@ export abstract class SpineLinks<N extends MarrowNames = MarrowNames> extends Co
      * is in the display list, and it costs no draw call.
      *
      * Throws a `MarrowError` for an unknown bone, and for a container that follows a bone or is
-     * attached to a slot already.
+     * attached to a slot already. A container that is no child of this object a moment after the
+     * call gets a warning, once: it stands elsewhere than the bone.
      *
      * @example
      * hero.addChild(sparkle);
@@ -177,6 +209,7 @@ export abstract class SpineLinks<N extends MarrowNames = MarrowNames> extends Co
         const { model } = this.parts();
 
         this.linked().follow(indexOf('bone', model.bones.names, bone), container);
+        if (container.parent !== this) warnLater(({ warnStray }) => warnStray(this, container, bone));
     }
 
     /** Lets a container go that follows a bone. It stays where it is. Does nothing for another container. */
@@ -214,13 +247,19 @@ export abstract class SpineLinks<N extends MarrowNames = MarrowNames> extends Co
         this.links?.release(container, true);
     }
 
-    /** Says what the handles and the links work on. The constructor of a display object calls it once. */
-    protected linkTo(parts: LinkParts): void {
+    /**
+     * Says what the handles and the links work on. The constructor of a display object calls it
+     * once, and its `destroy` takes the parts away with undefined.
+     */
+    protected linkTo(parts: LinkParts | undefined): void {
         this.linkParts = parts;
     }
 
-    private parts(): LinkParts {
-        if (this.linkParts === undefined) throw new Error('The display object is not set up.');
+    /** What the handles and the links work on. Throws the `MarrowError` of a destroyed display object. */
+    protected parts(): LinkParts {
+        if (this.linkParts === undefined) {
+            throw new MarrowError('destroyed', 'The display object was destroyed.', { fix: 'Make a new one.' });
+        }
 
         return this.linkParts;
     }
@@ -234,9 +273,9 @@ export abstract class SpineLinks<N extends MarrowNames = MarrowNames> extends Co
 
 /** The index of a name, or the `MarrowError` that lists the valid names. */
 function indexOf(kind: string, names: readonly string[], name: string): number {
-    const index = names.indexOf(String(name));
+    const index = names.indexOf(name);
 
-    if (index < 0) throw unknownName(kind, String(name), names);
+    if (index < 0) throw noName(kind, name, names);
 
     return index;
 }

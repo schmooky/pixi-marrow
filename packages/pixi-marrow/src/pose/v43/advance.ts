@@ -81,7 +81,7 @@ export function advanceTracks(player: Player43, dt: number): Clip43 {
     }
     finish(player, current);
     player.unkeyedState += 2;
-    player.rested = null;
+    player.stirred = true;
     distrust(player.pose);
     drain(player);
     // the event timelines move the time while they fire across a loop

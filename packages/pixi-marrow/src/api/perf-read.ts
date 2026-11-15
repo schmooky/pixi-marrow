@@ -22,14 +22,26 @@ const NO_PACING = {
     size: Number.POSITIVE_INFINITY,
     reduced: false,
 } as const;
-/** What the source of baked playback says of itself, read by shape: its code is a chunk of its own. */
-function readBake(source: PoseSource | null): BakeReading | null {
+/**
+ * What the source of baked playback says of itself, read by shape: its code is a chunk of its own.
+ *
+ * @example
+ * const bake = readBake(hero.engine.source);
+ * console.log(bake?.baked, bake?.unbaked);
+ */
+export function readBake(source: PoseSource | null): BakeReading | null {
     if (source === null || !('baked' in source && 'unbaked' in source && 'last' in source && 'bytes' in source)) {
         return null;
     }
     const { baked, unbaked, last, bytes } = source;
 
-    return { baked: Number(baked), unbaked: Number(unbaked), last: String(last), bytes: Number(bytes) };
+    return {
+        baked: Number(baked),
+        unbaked: Number(unbaked),
+        last: String(last),
+        bytes: Number(bytes),
+        budget: 'budget' in source ? Number(source.budget) : 0,
+    };
 }
 
 /**
@@ -73,11 +85,14 @@ export function readMemory(owner: PerfOwner, view: SkeletonView): PerfMemory {
     const { asset, engine } = owner;
     const { arrayBytes, layoutBytes, gpuBytes } = inspectView(view);
     const gpuTextures = textureBytes(asset.textures);
+    const bake = readBake(engine.source);
+    const baked = bake?.bytes ?? 0;
 
     return {
         // the baked clips of the asset, which its instances share
-        shared:
-            sharedBytes(asset.model, asset.atlas, asset.outlines) + layoutBytes + (readBake(engine.source)?.bytes ?? 0),
+        shared: sharedBytes(asset.model, asset.atlas, asset.outlines) + layoutBytes + baked,
+        baked,
+        bakeBudget: bake?.budget ?? 0,
         instance: engine.bytes + arrayBytes,
         gpu: gpuBytes + gpuTextures,
         gpuBuffers: gpuBytes,

@@ -1,5 +1,5 @@
 import type { AttachmentData } from '../../model/attachments';
-import { createPoseState, LOCAL_STRIDE, type PoseState, WORLD_STRIDE } from '../state';
+import { createPoseState, LOCAL_STRIDE, NO_DEFORM, type PoseState, WORLD_STRIDE } from '../state';
 import { createPhysicsState } from './physics';
 import type { SliderRig43, SlotStore, Split43 } from './slider-types';
 import { PHYSICS_UPDATE, PLACED_SIZE, type Solve43 } from './solver-types';
@@ -47,7 +47,7 @@ function animatedSlots(state: PoseState, sliders: SliderRig43): SlotStore {
         darkColors: new Float64Array(slots * 3),
         attachments: new Array<AttachmentData | null>(slots).fill(null),
         sequenceIndices: new Int32Array(slots),
-        deform: state.deform.map((deform, slot) => ((sliders.ordinals[slot] ?? -1) < 0 ? deform : new Float64Array(0))),
+        deform: state.deform.map((deform, slot) => ((sliders.ordinals[slot] ?? -1) < 0 ? deform : NO_DEFORM)),
         deformLengths: new Int32Array(slots),
     };
 }

@@ -5,7 +5,7 @@ import { bakesOf } from '../../src/bake/store';
 import { importSkeleton, MarrowError, type PoseEngine } from '../../src/core';
 import { createAttachmentLookup } from '../../src/pose/shared/lookup';
 import { listFixtures, readFixture } from '../parity/fixtures';
-import { DT, displayEngine, hostOf, modelOf } from './kit';
+import { bakeable, DT, displayEngine, hostOf, modelOf } from './kit';
 
 /*
  * Edges of baked playback that a review found: a baked attachment change, combined skins that
@@ -160,6 +160,57 @@ describe('clips that do not fit together', () => {
         expect(walk?.duration).not.toBe(idle.duration);
         expect(() => addBakedClips({ model }, [{ ...idle, hash: null }])).not.toThrow();
         expect(() => addBakedClips({ model }, [stale])).toThrow(/lasts .* seconds, and the animation/);
+    });
+
+    it('takes the clips of the JSON export for the binary export of one skeleton, and the other way', async () => {
+        const pairs = listFixtures().filter((fixture) => fixture.format === 'binary' && fixture.rig !== undefined);
+        let rounded = 0;
+        let moved = 0;
+
+        for (const binary of pairs) {
+            const json = listFixtures().find(
+                (other) => other.version === binary.version && other.rig === binary.rig && other.format === 'json',
+            );
+
+            if (json === undefined) continue;
+            const [fromSkel, fromJson] = await Promise.all([modelOf(binary.id), modelOf(json.id)]);
+
+            for (const animation of fromJson.animations) {
+                const other = fromSkel.animations.find(({ name }) => name === animation.name);
+
+                // JSON rounds a time to four digits, so the two exports give other durations at 32 bits
+                if (other === undefined || Math.fround(other.duration) === Math.fround(animation.duration)) continue;
+                rounded++;
+                expect(Math.abs(other.duration - animation.duration)).toBeLessThan(1e-4);
+                if (!bakeable(fromJson) || moved >= 6) continue;
+                moved++;
+                const [ofJson, ofSkel] = await Promise.all([
+                    bakeAnimation(fromJson, animation.name),
+                    bakeAnimation(fromSkel, animation.name),
+                ]);
+
+                expect(
+                    () => addBakedClips({ model: fromSkel }, [ofJson]),
+                    `${json.id} ${animation.name}`,
+                ).not.toThrow();
+                expect(
+                    () => addBakedClips({ model: fromJson }, [ofSkel]),
+                    `${binary.id} ${animation.name}`,
+                ).not.toThrow();
+            }
+        }
+        expect(rounded).toBeGreaterThan(0);
+        expect(moved).toBeGreaterThan(0);
+    });
+
+    it('still refuses a clip whose duration is off by more than the rounding of a JSON export', async () => {
+        const model = await modelOf('4.2/spineboy-pro.skel');
+        const idle = await bakeAnimation(model, 'idle');
+
+        expect(() => addBakedClips({ model }, [{ ...idle, hash: null, duration: idle.duration + 5e-5 }])).not.toThrow();
+        expect(() => addBakedClips({ model }, [{ ...idle, hash: null, duration: idle.duration + 2e-4 }])).toThrow(
+            /lasts .* seconds, and the animation/,
+        );
     });
 
     for (const [what, needs, damage] of damaged) {

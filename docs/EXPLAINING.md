@@ -6,9 +6,9 @@ The docs of pixi-marrow teach people who have never used Spine, a Spine runtime 
 
 Assume a developer who knows TypeScript and a little Pixi, and nothing else. They do not know what a bone, a slot, a mix, a draw call or a vertex is. Explain every such word in plain words where it first appears, before the page uses it.
 
-## Three kinds of page
+## Four kinds of page
 
-The site follows Diátaxis. Each page has one job, and a page that mixes jobs serves none of them.
+The site follows Diátaxis. It has four kinds of page: Basics, Guide, How it works and Reference. Each page has one job, and a page that mixes jobs serves none of them.
 
 - **Basics** pages explain the computer graphics a runtime stands on: pixels and frames, transforms, triangles and textures, the GPU and draw calls, blending. They come first, so that no later page has to assume them.
 - **Guide** pages lead to a result: load, play, mix, listen. They show the calls and say what each does. They link to How it works for the why, and do not explain the machinery themselves.
@@ -61,6 +61,8 @@ The structural rules hold in full:
 - Plain ASCII, and no hype or filler words.
 
 A rewrite keeps every fact, number, unit, API name, code span, link and hedge, and adds no fact. A hedge is part of the claim, so `may fail` stays `may fail`. A sentence that already follows the rules stays as it is. The pages teach newcomers, so they stay friendly and clear: short sentences, not robotic ones.
+
+Two names are settled. One `MarrowSpine` of an asset is an instance on every page. The second color of a slot is the dark tint, as in `Slot.darkTint`. Say once, where a page first uses it, that the Spine editor calls it Tint black and the official runtime calls it the dark color.
 
 The lexical rules are a direction, not a lock. Use the plainest common word, and the same word for the same thing. Prose needs some range, so only the words of the list below have one fixed meaning.
 
@@ -116,7 +118,8 @@ STE allows a project word list. In the docs, each of these words has one meaning
 | page | one image of an atlas. This file and AGENTS.md also use it for a page of the site |
 | region | a rectangle on an atlas page, or the attachment that shows it |
 | mesh | an attachment made of many triangles |
-| instance | one `MarrowSpine` of an asset, with its own pose and tracks. The guide calls it a copy |
+| instance | one `MarrowSpine` of an asset, with its own pose and tracks. Write `instance` on every page, not `copy` |
+| dark tint | the second color of a slot, which colors the dark parts of its image. The API name is `Slot.darkTint` |
 
 ## How the diagrams are built
 

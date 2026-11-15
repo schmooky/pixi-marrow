@@ -15,7 +15,10 @@ const SCREEN = { screen: { x: 0, y: 0, width: 800, height: 600 } } as unknown as
 const at = (x: number, y: number, width: number, height = width) => ({
     visible: true,
     renderable: true,
+    alpha: 1,
     parent: null,
+    // what Pixi gives the top of a tree it renders
+    renderGroup: {},
     getBounds: () => ({ x, y, width, height }),
 });
 
@@ -93,22 +96,29 @@ describe('the pacing of updates', () => {
         expect(meshes.take(1 / 60, false)).toBe(1 / 60);
     });
 
-    it('pauses a skeleton off the screen and loses the time, and resumes it on the screen', () => {
-        const pacer = new Pacer(resolvePerf(undefined, { offscreen: 'pause' }));
+    it('pauses a skeleton off the screen: its time passes in every update, and it says that it is paused', () => {
+        const pacer = new Pacer(resolvePerf(undefined, { offscreen: 'pause', updateRate: 20 }));
 
         pacer.take(1 / 60, false);
+        expect(pacer.paused).toBe(false);
         pacer.seen(at(900, 0, 50), SCREEN);
-        expect(pacer.take(1 / 60, false)).toBe(-1);
-        expect(pacer.take(1 / 60, false)).toBe(-1);
-        pacer.seen(at(100, 100, 50), SCREEN);
+        // the rate does not hold the time of a paused skeleton back: its events stay on time
+        expect(pacer.take(1 / 60, false)).toBeCloseTo(2 / 60, 12);
+        expect(pacer.paused).toBe(true);
         expect(pacer.take(1 / 60, false)).toBe(1 / 60);
+        pacer.seen(at(100, 100, 50), SCREEN);
+        expect(pacer.paused).toBe(false);
     });
 
     it('counts a skeleton that no render reaches for a while as off the screen', () => {
         const pacer = new Pacer(resolvePerf(undefined, { offscreen: 'pause' }));
-        const steps = Array.from({ length: 5 }, () => pacer.take(1 / 20, false));
+        const paused = Array.from({ length: 5 }, () => {
+            pacer.take(1 / 20, false);
 
-        expect(steps.map((seconds) => seconds > 0)).toEqual([true, true, false, false, false]);
+            return pacer.paused;
+        });
+
+        expect(paused).toEqual([false, false, true, true, true]);
     });
 
     it('keeps a skeleton on the screen that updates several times a render', () => {
@@ -193,6 +203,49 @@ describe('a display object with pacing', () => {
         expect(spine.physics).toBe('update');
         expect(spine.pacingStatus().reduced).toBe(false);
         spine.destroy();
+    });
+
+    it('sees a first frame, a new scale and a new skin at once, and reads an older box of a pose', async () => {
+        const asset = await fixtureAsset('4.2/spineboy-pro.skel');
+        const spine = new MarrowSpine(asset, { autoUpdate: false, offscreen: 'pause' });
+        const exact = new MarrowSpine(asset, { autoUpdate: false });
+        const size = (): number => spine.pacingStatus().size;
+        const across = (of: MarrowSpine): number => Math.max(of.getBounds().width, of.getBounds().height);
+        const both = (run: (of: MarrowSpine) => void): void => [spine, exact].forEach(run);
+
+        expect(size()).toBe(Number.POSITIVE_INFINITY);
+        // a first frame: the setup pose is measured
+        rendered(spine);
+        expect(size()).toBe(across(exact));
+        // a resize moves the box by the transform of the render, with no update between
+        both((of) => of.scale.set(0.25));
+        rendered(spine);
+        expect(size()).toBeCloseTo(across(exact), 9);
+        both((of) => of.scale.set(1));
+        // a pose alone: the pacing reads the box it has, for at most 8 renders
+        both((of) => of.play('walk', { loop: true }));
+        const sizes: boolean[] = [];
+
+        for (let frame = 0; frame < 9; frame++) {
+            both((of) => of.update(1 / 30));
+            rendered(spine);
+            sizes.push(size() === across(exact));
+        }
+        expect(across(exact)).not.toBe(across(new MarrowSpine(asset, { autoUpdate: false })));
+        expect(sizes).toEqual([false, false, false, false, false, false, false, true, false]);
+        // the bounds the game asks for are exact all the while
+        expect(across(spine)).toBe(across(exact));
+        both((of) => of.update(1 / 30));
+        expect(spine.getBounds().height).toBe(exact.getBounds().height);
+        // what the slots show changed: measured at once
+        both((of) => {
+            of.slot('gun').attachment = null;
+            of.slot('head').attachment = null;
+            of.update(0);
+        });
+        rendered(spine);
+        expect(size()).toBe(across(exact));
+        both((of) => of.destroy());
     });
 
     it('leaves a deform switch the game turned off as it is, with lod', async () => {
@@ -303,7 +356,8 @@ describe('pacing and hidden skeletons', () => {
     /** A skeleton on the screen of a stage, inside a popup, that updates by hand. */
     async function inPopup(offscreen: 'pause' | 'throttle'): Promise<{ spine: MarrowSpine; popup: Container }> {
         const spine = new MarrowSpine(await fixtureAsset('4.2/spineboy-pro.skel'), { autoUpdate: false, offscreen });
-        const stage = new Container();
+        // the stage of an app is a render group from its first render on
+        const stage = new Container({ isRenderGroup: true });
         const popup = new Container();
 
         stage.addChild(popup);

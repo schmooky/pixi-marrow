@@ -1,16 +1,8 @@
-import {
-    type Batch,
-    type BatchableElement,
-    Buffer,
-    extensions,
-    type InstructionSet,
-    type Renderer,
-    VERSION,
-} from 'pixi.js';
+import { type Batch, type BatchableElement, extensions, type InstructionSet, type Renderer } from 'pixi.js';
 import type { BatchBody } from './batch-body';
 import { BatchElement, PIPE_ID } from './batch-element';
 import type { ImageBody } from './batch-image';
-import { uploadsStretch } from './batch-upload';
+import { AT_ONCE } from './batch-upload';
 import { MarrowBatcher } from './batcher';
 import { contextLost, watchContext } from './context-watch';
 import { MarrowDarkBatcher } from './dark-batcher';
@@ -35,9 +27,6 @@ export interface BatchTail {
 
 /** Whether a body is the one of an image, see `batch-image.ts`. Its class loads with the idle cache. */
 const isImageBody = (body: BatchBody | ImageBody): body is ImageBody => 'quad' in body.element;
-
-/** Whether the buffers of this Pixi upload at once when a batcher tells them what changed. */
-const AT_ONCE = uploadsStretch(Buffer.prototype.update, VERSION);
 
 /** True once the batchers are among the extensions of Pixi. */
 let registered = false;
@@ -137,7 +126,8 @@ export class MarrowPipe {
                 // only what the look at the draw changed: Pixi has asked for the rest before
                 if (element.dirty) element.sync();
             }
-            batcher.flush();
+            // WebGPU writes every stretch at once. A WebGL buffer before pixi.js 8.23 keeps one until it is bound
+            batcher.flush(AT_ONCE || 'gpu' in renderer);
             // a later batch of a batcher finds its geometry bound, and an older Pixi uploaded when it bound it
             if (!AT_ONCE && batch.action === 'renderBatch') batcher.push(renderer);
         }

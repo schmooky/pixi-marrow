@@ -7,6 +7,7 @@ import { settle, WINDOW } from './heap';
 import {
     createRig,
     drawPose,
+    flushUploads,
     loadRig,
     meshes,
     play,
@@ -112,6 +113,7 @@ describe('destroy', () => {
         // a second call does nothing, an update says what is wrong
         expect(() => rig.view.destroy()).not.toThrow();
         expect(() => drawPose(rig.view, rig.engine.state)).toThrow(MarrowError);
+        expect(() => drawPose(rig.view, rig.engine.state)).toThrow(expect.objectContaining({ code: 'destroyed' }));
     });
 
     it('destroys a view that never drew', async () => {
@@ -177,6 +179,8 @@ describe('memory', () => {
                 state.drawOrder[to] = a;
                 if (other !== undefined) state.attachments[c] = i % 5 === 0 ? other.attachment : shown;
                 drawPose(rig.view, state);
+                // a frame: what the update wrote uploads before the render
+                flushUploads(rig.view);
             };
             const arrays = (): unknown[] => [
                 vertexData(rig.view).positions,

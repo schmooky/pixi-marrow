@@ -1,6 +1,6 @@
 import { LOCAL_STRIDE, WORLD_STRIDE } from '../state';
 import { updateLocalTransform } from './bone-pose';
-import { COS_QUARTER, DEG_RAD, NORMAL, QUARTER, SIN_QUARTER } from './math';
+import { DEG_RAD, NORMAL, QUARTER, START, START_COS, START_SIN } from './math';
 import { nextStamp, solveConstraint } from './solve-step';
 import { poseChanged } from './solve-tight';
 import type { Solve43 } from './solver-types';
@@ -110,8 +110,8 @@ function poseAll(pose: Pose43, stamp: number): void {
         // a bone that is not turned needs no cosine and no sine: see world.ts
         let cosX = 1;
         let sinX = rx;
-        let cosY = COS_QUARTER;
-        let sinY = SIN_QUARTER;
+        let cosY = Number(START[START_COS]);
+        let sinY = Number(START[START_SIN]);
 
         if (rx !== 0) {
             cosX = Math.cos(rx);

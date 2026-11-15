@@ -1,4 +1,4 @@
-import { Bounds, Container, Texture } from 'pixi.js';
+import { type Bounds, Container, Texture } from 'pixi.js';
 import { i32 } from '../geometry/read';
 import type { AtlasModel } from '../model/atlas';
 import type { AttachmentData } from '../model/attachments';
@@ -8,7 +8,7 @@ import { type AttachmentLookup, createAttachmentLookup } from '../pose/shared/lo
 import type { PoseState } from '../pose/state';
 import type { ViewInserts } from './attach-work';
 import { layoutSlots, type SlotLayout } from './batch-layout';
-import { measureEntries } from './bounds';
+import { measureEntries, ViewBox } from './bounds';
 import { clipCode, clipCodeMissing } from './clip-code';
 import { CoverTest } from './cover';
 import { type CutChoice, CutState } from './cut-state';
@@ -94,7 +94,8 @@ export class SkeletonView implements DrawGate {
     private readonly atlas: AtlasModel;
     private readonly lookup: AttachmentLookup;
     private readonly dark: boolean;
-    private readonly bounds: Bounds = new Bounds();
+    /** The box of the visible slots. The pacing sets `coarse` around its read: an older box will do. */
+    readonly box: ViewBox = new ViewBox();
     /** The outlines, the options and what Pixi did to the last draw. */
     private readonly cutState: CutState;
     /** Finds the slots a later slot covers. Its marks are all 0 while nothing is covered. */
@@ -110,7 +111,6 @@ export class SkeletonView implements DrawGate {
     /** The pose of the last update. */
     private last: PoseState | undefined;
     private template: Template;
-    private boundsDirty = true;
     /** What the last pass over the visible entries did, and the version of the pose it drew. */
     private readonly pass: PosePass = createPosePass();
     /** True when the mode must be picked again: the option, the layout or what a renderer can batch changed. */
@@ -194,20 +194,20 @@ export class SkeletonView implements DrawGate {
      * version the view drew last asks for none, and the update returns at once. It does not when
      * the outlines or the mode of the view changed, or a search for covered slots is owed.
      *
-     * Throws a `MarrowError` for a pose of another model, after {@link destroy}, and for a
-     * clipping attachment with fewer than three vertices, which it names.
+     * Every update starts the count of `stats.frameBytes` again. Throws a `MarrowError` for a pose of
+     * another model, after {@link destroy}, and for a clipping attachment with fewer than three vertices.
      */
     update(state: PoseState): void {
         checkPose(this.destroyed, state.model === this.model);
-        const { pass, paints, seen } = this;
+        const { pass, paints, seen, stats } = this;
         const stale = this.outdated() || state.skin !== this.template.skin;
         const same = state === this.last && state.version === pass.seen && !pass.all;
         const arrived = paints.waits && meshCode() !== undefined;
 
+        stats.frameBytes = 0;
         if (same && !stale && !this.restyle && !this.cover.owes && !arrived) {
-            this.stats.skips++;
+            stats.skips++;
             pass.skipped = true;
-
             return;
         }
         if (state !== this.last) pass.all = true;
@@ -302,7 +302,6 @@ export class SkeletonView implements DrawGate {
         this.seen.reset();
         this.last = undefined;
         const none = { drawCalls: 0, maskDraws: 0, clips: 0, indices: 0, vertices: 0, bufferBytes: 0 };
-
         Object.assign(this.stats, none, { tightRanges: 0, coveredSlots: 0 });
     }
 
@@ -362,7 +361,7 @@ export class SkeletonView implements DrawGate {
         this.pass.all = true;
         this.restyle = true;
         this.seen.dirty = true;
-        this.boundsDirty = true;
+        this.box.moved(true);
         this.stats.templateBuilds++;
         this.stats.vertices = template.vertexCount;
         this.watch();
@@ -397,18 +396,22 @@ export class SkeletonView implements DrawGate {
         this.choose();
         const { mesh, element } = this.paints;
 
+        pass.listed = listed || pass.all;
+        pass.tracked = cover.covered > 0;
         if (element === undefined && mesh !== undefined) mesh.pose(pass, template, state, seen);
         else poseEntries(pass, template, state, bones, hasDark, seen, element);
         notePass(stats, pass, element === undefined && mesh?.instanced !== undefined);
         const moved = pass.placed > 0 || pass.skinned > 0 || pass.reshaped || listed;
 
-        if (moved) this.boundsDirty = true;
+        if (moved) this.box.moved(listed);
         // a sequence on a page of another group of 8 moves its entry to another draw range
         if (pass.regrouped) seen.dirty = true;
         // the slots that can hide others are chosen again when the list or their alpha changed
         const relisted = seen.dirty || pass.recolored || pass.all;
 
-        if (cover.follow(template, seen, state.world, bones, this.container, moved, relisted)) seen.dirty = true;
+        const settles = element ? undefined : mesh;
+
+        if (cover.follow(template, seen, state, bones, this.container, moved, relisted, settles)) seen.dirty = true;
         stats.coveredSlots = cover.covered;
         const indexed = seen.dirty;
 
@@ -455,11 +458,13 @@ export class SkeletonView implements DrawGate {
         }
         if (element !== undefined) {
             const runs = element.plan();
-            // A skeleton that shows nothing leaves the batch, so that it breaks no batch of others.
             // One that no renderer can batch draws nothing while it waits for the code of the mesh mode
+            const { body } = this.paints;
             const shows = count > 0 && !(this.refused && this.paints.waits);
 
-            if (this.paints.body !== undefined) this.paints.body.visible = shows;
+            // A skeleton that shows nothing joins no batch. One that is in a batch stays there with
+            // triangles without area: to leave would make Pixi build the instructions again
+            if (body !== undefined) body.visible = shows || (count === 0 && body.visible && element.placed);
             stats.drawCalls = shows ? runs : 0;
             stats.maskDraws = 0;
             stats.indices = indices;
@@ -477,10 +482,10 @@ export class SkeletonView implements DrawGate {
      * are measured once after an update, and only when somebody asks.
      */
     private measure(): Bounds {
-        const { bounds, last } = this;
+        const { last } = this;
+        const { bounds } = this.box;
 
-        if (!this.boundsDirty) return bounds;
-        this.boundsDirty = false;
+        if (!this.box.due()) return bounds;
         if (last === undefined) bounds.clear();
         else {
             const { list, count } = this.seen;

@@ -1,0 +1,206 @@
+---
+import {
+    BENCH,
+    type BenchSide,
+    benchDay,
+    benchRows,
+    MESH,
+    OFFICIAL,
+    OURS,
+    showDraws,
+    showRatio,
+    showTime,
+} from '../lib/bench';
+
+/*
+ * A table of the page `/benchmarks/`, as HTML, from the numbers of `public/benchmarks.json`.
+ * `view` picks the table: the times of a renderer and a scene, the heap of one instance, the two
+ * render modes of pixi-marrow, or what the run says about itself.
+ */
+
+interface Props {
+    view: 'times' | 'memory' | 'modes' | 'run';
+    /** For `times`: `webgl` or `webgpu`. */
+    renderer?: string;
+    /** For `times`: `play` or `rest`. */
+    scene?: string;
+}
+const { view, renderer = 'webgl', scene = 'play' } = Astro.props;
+const RENDERERS = [
+    { id: 'webgl', name: 'WebGL2' },
+    { id: 'webgpu', name: 'WebGPU' },
+];
+const nameOf = (id: string): string => RENDERERS.find((it) => it.id === id)?.name ?? id;
+const rows = benchRows(renderer, scene).flatMap((row) => {
+    const ours = row.sides.get(OURS);
+    const official = row.sides.get(OFFICIAL);
+
+    return ours === undefined || official === undefined ? [] : [{ ...row, ours, official }];
+});
+const all = RENDERERS.flatMap((it) => benchRows(it.id, 'play').map((row) => ({ ...row, renderer: it.name })));
+const memory = all.flatMap((row) => {
+    const ours = row.sides.get(OURS);
+    const official = row.sides.get(OFFICIAL);
+
+    return ours?.heapKBPerInstance == null || official?.heapKBPerInstance == null ? [] : [{ ...row, ours, official }];
+});
+const modes = all.flatMap((row) => {
+    const batched = row.sides.get(OURS);
+    const mesh = row.sides.get(MESH);
+
+    return batched === undefined || mesh === undefined || row.instances < 200 ? [] : [{ ...row, batched, mesh }];
+});
+const pair = (ours: BenchSide, official: BenchSide, key: 'updateMs' | 'cpuMs' | 'frameMs') => ({
+    ours: showTime(ours[key]),
+    official: showTime(official[key]),
+    ratio: showRatio(ours[key], official[key]),
+});
+const { machine, versions, settings } = BENCH;
+const gpus = BENCH.renderers.map((it) => `${nameOf(it.renderer)}: ${it.gpu}`);
+---
+
+{view === 'times' && (
+    <table>
+        <caption>
+            {nameOf(renderer)}, scene <code>{scene}</code>, {benchDay()}. Times are ms per frame for all instances: the median of {settings.runs} runs,
+            and half the distance between the fastest and the slowest run. A ratio is pixi-marrow divided by spine-pixi-v8.
+        </caption>
+        <thead>
+            <tr>
+                <th>Rig</th>
+                <th>Instances</th>
+                <th>Draw calls, pixi-marrow</th>
+                <th>Draw calls, spine-pixi-v8</th>
+                <th>CPU ms, pixi-marrow</th>
+                <th>CPU ms, spine-pixi-v8</th>
+                <th>CPU ratio</th>
+                <th>Frame ms, pixi-marrow</th>
+                <th>Frame ms, spine-pixi-v8</th>
+                <th>Frame ratio</th>
+                <th>Update ms, pixi-marrow</th>
+                <th>Update ms, spine-pixi-v8</th>
+                <th>Update ratio</th>
+                <th>Upload KB, pixi-marrow</th>
+                <th>Upload KB, spine-pixi-v8</th>
+            </tr>
+        </thead>
+        <tbody>
+            {rows.map((row) => {
+                const cpu = pair(row.ours, row.official, 'cpuMs');
+                const frame = pair(row.ours, row.official, 'frameMs');
+                const update = pair(row.ours, row.official, 'updateMs');
+
+                return (
+                    <tr>
+                        <td>{row.rig}</td>
+                        <td>{row.instances}</td>
+                        <td>{showDraws(row.ours.drawCalls)}</td>
+                        <td>{showDraws(row.official.drawCalls)}</td>
+                        <td>{cpu.ours}</td>
+                        <td>{cpu.official}</td>
+                        <td>{cpu.ratio}</td>
+                        <td>{frame.ours}</td>
+                        <td>{frame.official}</td>
+                        <td>{frame.ratio}</td>
+                        <td>{update.ours}</td>
+                        <td>{update.official}</td>
+                        <td>{update.ratio}</td>
+                        <td>{row.ours.uploadKBPerFrame.toFixed(1)}</td>
+                        <td>{row.official.uploadKBPerFrame.toFixed(1)}</td>
+                    </tr>
+                );
+            })}
+        </tbody>
+    </table>
+)}
+
+{view === 'memory' && (
+    <table>
+        <caption>The JavaScript heap of one instance among 200 that play, in KB, {benchDay()}. It does not count what the GPU process holds.</caption>
+        <thead>
+            <tr><th>Renderer</th><th>Rig</th><th>pixi-marrow</th><th>spine-pixi-v8</th><th>Ratio</th></tr>
+        </thead>
+        <tbody>
+            {memory.map((row) => (
+                <tr>
+                    <td>{row.renderer}</td>
+                    <td>{row.rig}</td>
+                    <td>{row.ours.heapKBPerInstance?.toFixed(1)}</td>
+                    <td>{row.official.heapKBPerInstance?.toFixed(1)}</td>
+                    <td>{((row.ours.heapKBPerInstance ?? 0) / (row.official.heapKBPerInstance ?? 1)).toFixed(2)}</td>
+                </tr>
+            ))}
+        </tbody>
+    </table>
+)}
+
+{view === 'modes' && (
+    <table>
+        <caption>The two render modes of pixi-marrow at 200 instances that play, {benchDay()}. A ratio is the batched mode divided by the mesh mode.</caption>
+        <thead>
+            <tr>
+                <th>Renderer</th>
+                <th>Rig</th>
+                <th>Draw calls, batched</th>
+                <th>Draw calls, mesh</th>
+                <th>Frame ms, batched</th>
+                <th>Frame ms, mesh</th>
+                <th>Frame ratio</th>
+            </tr>
+        </thead>
+        <tbody>
+            {modes.map((row) => (
+                <tr>
+                    <td>{row.renderer}</td>
+                    <td>{row.rig}</td>
+                    <td>{showDraws(row.batched.drawCalls)}</td>
+                    <td>{showDraws(row.mesh.drawCalls)}</td>
+                    <td>{showTime(row.batched.frameMs)}</td>
+                    <td>{showTime(row.mesh.frameMs)}</td>
+                    <td>{showRatio(row.batched.frameMs, row.mesh.frameMs)}</td>
+                </tr>
+            ))}
+        </tbody>
+    </table>
+)}
+
+{view === 'run' && (
+    <table>
+        <caption>What the run says about itself.</caption>
+        <tbody>
+            <tr><th scope="row">Date</th><td><time datetime={BENCH.date}>{benchDay()}</time> ({BENCH.date})</td></tr>
+            <tr><th scope="row">Command</th><td><code>{BENCH.command}</code></td></tr>
+            <tr><th scope="row">Build</th><td>pixi-marrow {versions['pixi-marrow']}, {BENCH.build}</td></tr>
+            <tr><th scope="row">Official runtime</th><td><code>@esotericsoftware/spine-pixi-v8</code> {versions['spine-pixi-v8 for 4.2']} for the 4.2 rigs, {versions['spine-pixi-v8 for 4.3']} for the 4.3 rigs</td></tr>
+            <tr><th scope="row">pixi.js</th><td>{BENCH.renderers[0]?.pixi}, the same build on both sides</td></tr>
+            <tr><th scope="row">Machine</th><td>{machine.cpu}, {machine.cores} cores, {machine.memoryGB} GB, {machine.os}, on {machine.power}</td></tr>
+            <tr><th scope="row">Browser</th><td>Google Chrome {machine.chrome}, headless, on the GPU of the machine</td></tr>
+            {gpus.map((gpu) => <tr><th scope="row">GPU string</th><td>{gpu}</td></tr>)}
+            <tr><th scope="row">Canvas</th><td>{settings.canvas[0]} by {settings.canvas[1]} pixels</td></tr>
+            <tr><th scope="row">Instances</th><td>{settings.instances.join(', ')} in the scene <code>play</code>, 200 in the scene <code>rest</code></td></tr>
+            <tr><th scope="row">Runs</th><td>{settings.runs} runs of {settings.frames} frames, after {settings.warmupFrames} frames of warm-up</td></tr>
+            <tr><th scope="row">Time step</th><td>{settings.timeStep}, fixed</td></tr>
+            <tr><th scope="row">Node</th><td>{machine.node}</td></tr>
+        </tbody>
+    </table>
+)}
+
+<style>
+    caption {
+        caption-side: top;
+        padding-bottom: 0.6rem;
+        text-align: left;
+        font-size: 0.8125rem;
+        color: hsl(var(--muted-foreground));
+    }
+    th[scope='row'] {
+        border-bottom: 1px solid hsl(var(--border) / 0.7);
+        vertical-align: top;
+    }
+    td {
+        white-space: nowrap;
+    }
+    table:has(th[scope='row']) td {
+        white-space: normal;
+    }
+</style>

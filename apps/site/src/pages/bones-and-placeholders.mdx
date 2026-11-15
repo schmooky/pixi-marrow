@@ -24,6 +24,8 @@ With **follow**, the star moves with a bone but stays where it was in Pixi's dis
 
 ## Attach to a slot
 
+<Snippet source={more} regions="import" />
+
 <Snippet source={source} regions="ring attach" />
 
 `attach` makes the container a part of the skeleton. It draws at the place of the slot in the draw order, after the attachment of that slot. It moves with the bone of the slot, and its alpha is that of the slot.
@@ -34,7 +36,7 @@ A slot holds one container, and it shows on an empty slot too. That is what a pl
 
 `followAttachment` hides the container while the slot shows no attachment. `followColor` tints it with the color of the slot.
 
-Each attached slot costs one more draw call, plus the draw calls of the container. A clipping attachment does not clip the container.
+Each attached slot costs one more draw call, plus the draw calls of the container. The skeleton ends its draw call at the slot, Pixi draws the container, and the skeleton starts a new one. A clipping attachment does not clip the container. An attached container also stops instancing for its skeleton, and no slot counts as covered across it. See the rule [MARROW012](/performance/rules/#marrow012).
 
 ## Follow a bone
 
@@ -42,7 +44,7 @@ Each attached slot costs one more draw call, plus the draw calls of the containe
 
 `follow` gives a container the position, rotation, scale and skew of a bone after every update. The transform is in the space of the skeleton. So add the container to the skeleton first.
 
-The container stays where it is in the display list, and `follow` costs no draw call. `unfollow` ends it.
+The container stays where it is in the display list, and `follow` costs no draw call. `unfollow` ends it. For a container that is not a child of the skeleton, `follow` warns once in the console.
 
 ## Read and write a bone
 

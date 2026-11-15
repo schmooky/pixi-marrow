@@ -1,5 +1,8 @@
 import type { Rectangle } from 'pixi.js';
+// #region import
 import { MarrowAsset, MarrowSpine } from 'pixi-marrow';
+
+// #endregion
 
 const asset = await MarrowAsset.load({ skeleton: 'rigs/animation_a.skel', atlas: 'rigs/symbols.atlas' });
 

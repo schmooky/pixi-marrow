@@ -1,3 +1,5 @@
+import { LONG_KEYS, searchLong } from '../shared/search';
+
 /** The curve type of a key that interpolates in a straight line. */
 export const CURVE_LINEAR = 0;
 /** The curve type of a key that holds its value. */
@@ -58,6 +60,7 @@ export function search(frames: Float32Array, step: number): number {
     const time = Number(SHARED[TIME]);
     const n = frames.length;
 
+    if (n > LONG_KEYS * step) return searchLong(frames, step, SHARED, TIME);
     for (let i = step; i < n; i += step) {
         if (Number(frames[i]) > time) return i - step;
     }
@@ -117,10 +120,13 @@ export function curveValues(frames: Float32Array, curves: Float32Array, entries:
     // the official search, written out: this is the busiest loop of the timelines
     let i = n - entries;
 
-    for (let ii = entries; ii < n; ii += entries) {
-        if (Number(frames[ii]) > time) {
-            i = ii - entries;
-            break;
+    if (n > LONG_KEYS * entries) i = searchLong(frames, entries, SHARED, TIME);
+    else {
+        for (let ii = entries; ii < n; ii += entries) {
+            if (Number(frames[ii]) > time) {
+                i = ii - entries;
+                break;
+            }
         }
     }
     const curveType = Number(curves[i / entries]);
@@ -152,10 +158,13 @@ export function curveValue(frames: Float32Array, curves: Float32Array, out: Floa
     const n = frames.length;
     let i = n - 2;
 
-    for (let ii = 2; ii < n; ii += 2) {
-        if (Number(frames[ii]) > time) {
-            i = ii - 2;
-            break;
+    if (n > LONG_KEYS * 2) i = searchLong(frames, 2, SHARED, TIME);
+    else {
+        for (let ii = 2; ii < n; ii += 2) {
+            if (Number(frames[ii]) > time) {
+                i = ii - 2;
+                break;
+            }
         }
     }
     const curveType = Number(curves[i >> 1]);

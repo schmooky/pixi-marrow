@@ -110,8 +110,10 @@ describe.each(VERSIONS)('MarrowSpine of a Spine %s skeleton', (version) => {
             const names: unknown[] = [undefined, 7];
             const errors = names.map((name) => thrownBy(() => Reflect.apply(spine.play, spine, [name])));
 
-            expect(errors.map((error) => error.code)).toEqual(['unknown-name', 'unknown-name']);
-            expect(errors[0]?.message).toContain('The skeleton has no animation "undefined".');
+            expect(errors.map((error) => error.code)).toEqual(['invalid-option', 'invalid-option']);
+            expect(errors[0]?.message).toContain('The animation name is undefined.');
+            expect(errors[0]?.fix).toBe('Pass the name as a string.');
+            expect(errors[0]?.validNames).toContain('walk');
         });
 
         it('throws for an option of the wrong type before anything plays', () => {
@@ -124,8 +126,8 @@ describe.each(VERSIONS)('MarrowSpine of a Spine %s skeleton', (version) => {
             const error = thrownBy(() => Reflect.apply(spine.play, spine, ['walk', { speed }]));
             spine.update(FRAME);
 
-            expect(error.code).toBe('invalid-data');
-            expect(error.message).toContain('The option "speed" was set to "fast".');
+            expect(error.code).toBe('invalid-option');
+            expect(error.message).toContain('speed got "fast".');
             expect(error.fix).toBe('Pass a finite number.');
             expect(setAnimation).not.toHaveBeenCalled();
             expect(started).not.toHaveBeenCalled();
@@ -139,7 +141,7 @@ describe.each(VERSIONS)('MarrowSpine of a Spine %s skeleton', (version) => {
             const error = thrownBy(() => spine.play('walk', { speed: 2, entry: { trackEnd: 'never' } }));
             spine.update(FRAME);
 
-            expect(error.code).toBe('invalid-data');
+            expect(error.code).toBe('invalid-option');
             expect(started).toHaveBeenCalledOnce();
             expect(started.mock.calls[0]?.[0]).toMatchObject({ animation: 'walk', speed: 2 });
         });

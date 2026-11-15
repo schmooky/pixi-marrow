@@ -1,0 +1,68 @@
+---
+import { docPage, markdownPath } from '../lib/content';
+import { isNoindex, SHARE_IMAGE, seoDescription, seoTitle } from '../lib/seo';
+import { SITE } from '../lib/site';
+import { modifiedOf, structuredData } from '../lib/structured';
+
+/*
+ * What stands in the head of every page: the title, the description, the canonical address, the
+ * tags of a shared link, the icons and the structured data. `src/lib/seo.ts` can give a route a
+ * title and a description for search results that differ from those of its page file.
+ */
+
+interface Props {
+    /** The title of the page as its heading shows it. The home page has none. */
+    title?: string | undefined;
+    description?: string | undefined;
+    /** True for a page of the docs: it is an article with a date. */
+    article?: boolean | undefined;
+    /** True for a page that search engines must not index. `seo.ts` also lists such routes. */
+    noindex?: boolean | undefined;
+    /** The content of the viewport tag, where a page needs more than the default. */
+    viewport?: string | undefined;
+}
+const { title, description = SITE.description, article = false, noindex = false, viewport = 'width=device-width, initial-scale=1' } = Astro.props;
+const route = Astro.url.pathname;
+const hidden = noindex || isNoindex(route);
+const fullTitle = seoTitle(route, title);
+const fullDescription = seoDescription(route, description);
+const canonical = new URL(route, Astro.site).href;
+const image = new URL(SHARE_IMAGE.path, Astro.site).href;
+const twin = docPage(route) === undefined ? undefined : new URL(markdownPath(route), Astro.site).href;
+const modified = article ? modifiedOf(route) : undefined;
+const data = hidden
+    ? []
+    : structuredData({ route, title: title ?? SITE.name, headline: fullTitle, description: fullDescription, article });
+/** JSON for a script element: a `<` in it must not end the element. */
+const json = (value: unknown): string => JSON.stringify(value).replace(/</g, '\\u003c');
+---
+
+<meta charset="utf-8" />
+<meta name="viewport" content={viewport} />
+<title>{fullTitle}</title>
+<meta name="description" content={fullDescription} />
+{hidden ? <meta name="robots" content="noindex" /> : <link rel="canonical" href={canonical} />}
+{twin && <link rel="alternate" type="text/markdown" href={twin} title="This page as Markdown" />}
+<meta name="theme-color" content="#09090b" />
+<link rel="icon" href="/favicon.ico" sizes="32x32" />
+<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+<link rel="manifest" href="/site.webmanifest" />
+<meta property="og:site_name" content={SITE.name} />
+<meta property="og:type" content={article ? 'article' : 'website'} />
+<meta property="og:title" content={fullTitle} />
+<meta property="og:description" content={fullDescription} />
+<meta property="og:url" content={canonical} />
+<meta property="og:locale" content="en_US" />
+<meta property="og:image" content={image} />
+<meta property="og:image:type" content="image/png" />
+<meta property="og:image:width" content={String(SHARE_IMAGE.width)} />
+<meta property="og:image:height" content={String(SHARE_IMAGE.height)} />
+<meta property="og:image:alt" content={SHARE_IMAGE.alt} />
+{modified && <meta property="article:modified_time" content={modified} />}
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content={fullTitle} />
+<meta name="twitter:description" content={fullDescription} />
+<meta name="twitter:image" content={image} />
+<meta name="twitter:image:alt" content={SHARE_IMAGE.alt} />
+{data.map((item) => <script type="application/ld+json" is:inline set:html={json(item)} />)}

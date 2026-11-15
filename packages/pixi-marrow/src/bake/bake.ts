@@ -1,3 +1,4 @@
+import { MarrowError } from '../base/errors';
 import type { SkeletonModel } from '../model/model';
 import { loadPoseEngine } from '../pose/engine';
 import type { BakedClip } from './clip';
@@ -61,4 +62,27 @@ export async function bakeAnimations(model: SkeletonModel, options: BakeOptions 
  */
 export function addBakedClips(asset: { readonly model: SkeletonModel }, clips: readonly BakedClip[]): void {
     bakesOf(asset.model).add(clips);
+}
+
+/**
+ * Sets the most bytes the clips of an asset hold that were baked while the game played. The
+ * default is 4 MB per skeleton. Over the limit the clip that played longest ago goes, and its
+ * animation is baked again when it next plays alone. A clip in use never goes: a new clip that
+ * finds no room is dropped, and its animation plays live. Clips from `addBakedClips` do not
+ * count and never go. `perf.memory()` reports the bytes and the limit.
+ *
+ * Throws a `MarrowError` for bytes that are no number from 0.
+ *
+ * @param asset A `MarrowAsset`, or anything with the model of the skeleton.
+ *
+ * @example
+ * setBakeBudget(asset, 16 * 1024 * 1024);
+ */
+export function setBakeBudget(asset: { readonly model: SkeletonModel }, bytes: number): void {
+    if (typeof bytes !== 'number' || !(bytes >= 0)) {
+        throw new MarrowError('invalid-option', `setBakeBudget got ${String(bytes)} for the bytes.`, {
+            fix: 'Pass a number of bytes from 0, such as 8 * 1024 * 1024.',
+        });
+    }
+    bakesOf(asset.model).budget = bytes;
 }

@@ -8,7 +8,8 @@ import {
 } from '../../model/model';
 import type { BinaryInput } from '../shared/binary-input';
 import { writeRgb888, writeRgba8888 } from '../shared/color';
-import { checkChoice, invalid, readIndex, readName } from './reader';
+import { hashOfInts } from '../shared/hash';
+import { checkChoice, invalid, readCount, readIndex, readName, readTableCount } from './reader';
 
 /** The first values of a binary skeleton. */
 export interface Header {
@@ -24,9 +25,7 @@ export interface Header {
 
 /** Reads the hash, the version, the setup bounds and the flag for editor data. */
 export function readHeader(input: BinaryInput): Header {
-    const lowHash = input.readInt32();
-    const highHash = input.readInt32();
-    const hash = highHash === 0 && lowHash === 0 ? null : highHash.toString(16) + lowHash.toString(16);
+    const hash = hashOfInts(input.readInt32(), input.readInt32());
     const editorVersion = input.readString();
 
     if (editorVersion === null) throw invalid('The skeleton has no version string.');
@@ -49,12 +48,13 @@ export function readHeader(input: BinaryInput): Header {
 
 /** Reads the string table into `input.strings`. */
 export function readStrings(input: BinaryInput): void {
-    for (let i = 0, n = input.readInt(true); i < n; i++) input.strings.push(readName(input, 'A string table entry'));
+    for (let i = 0, n = readCount(input, 'entries'); i < n; i++)
+        input.strings.push(readName(input, 'A string table entry'));
 }
 
 /** Reads every bone. The file stores rotation before x and y. */
 export function readBones(input: BinaryInput, nonessential: boolean): BoneTable {
-    const count = input.readInt(true);
+    const count = readTableCount(input, 'bones');
     const names: string[] = [];
     const parents = new Int16Array(count);
     const setup = new Float64Array(count * BONE_SETUP_STRIDE);
@@ -93,7 +93,7 @@ export function readBones(input: BinaryInput, nonessential: boolean): BoneTable 
 
 /** Reads every slot. A dark color of -1 means the slot has none. */
 export function readSlots(input: BinaryInput, boneCount: number, nonessential: boolean): SlotTable {
-    const count = input.readInt(true);
+    const count = readTableCount(input, 'slots');
     const names: string[] = [];
     const bones = new Int16Array(count);
     const colors = new Float64Array(count * 4);
@@ -125,7 +125,7 @@ export function readSlots(input: BinaryInput, boneCount: number, nonessential: b
 export function readEvents(input: BinaryInput): EventData[] {
     const events: EventData[] = [];
 
-    for (let i = 0, n = input.readInt(true); i < n; i++) {
+    for (let i = 0, n = readCount(input, 'entries'); i < n; i++) {
         const name = readName(input, 'An event');
         const int = input.readInt(false);
         const float = input.readFloat();

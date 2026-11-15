@@ -1,0 +1,130 @@
+---
+layout: ../layouts/Docs.astro
+title: Benchmarks
+description: Frame time, CPU time and draw calls of pixi-marrow against spine-pixi-v8. One desktop machine measured them on 15 November 2026. The page has the method and all rows.
+---
+
+import BenchTable from '../components/BenchTable.astro';
+
+On an Apple M4 in Chrome 157, 200 instances of five official Spine example rigs took 0.23 to 0.77 times the CPU time of `@esotericsoftware/spine-pixi-v8`. The run is from 15 November 2026, on PixiJS 8.23.0, on WebGL2 and WebGPU. This page holds every row of that run, also the rows where pixi-marrow is slower.
+
+The numbers hold for this one machine. No phone ran this bench. Read [what the run does not measure](#what-the-run-does-not-measure) before you quote a number.
+
+## The run
+
+<BenchTable view="run" />
+
+The same numbers are in [benchmarks.json](/benchmarks.json), for tools.
+
+Other programs used the machine during the run. Before each rig, the bench times an empty stage. Other programs kept the GPU busy for 7 to 35 percent of that time. So trust the CPU time more than the frame time.
+
+## What each column means
+
+A draw call is one command from the CPU to the GPU to draw triangles. The bench counts draw calls on the GPU interface, the same way for both runtimes.
+
+- **Update ms** is the time of `update(1 / 60)` for all instances. Each runtime has its own ticker off.
+- **CPU ms** is the update plus the CPU part of `renderer.render(stage)`, until the frame goes to the GPU process.
+- **Frame ms** is the update plus the render and the wait for the GPU to finish the frame.
+- **Upload KB** is the buffer data that the frame sent to the GPU.
+
+The two runtimes do their work in different places. pixi-marrow computes its vertices in the update. The official runtime computes them when Pixi draws it. So the update time alone is not a fair comparison, and the CPU time is.
+
+A ratio is the time of pixi-marrow divided by the time of spine-pixi-v8. Below 1, pixi-marrow took less time. `not decided` means that the runs of the two runtimes overlap. Such a difference is not a result.
+
+## The rigs
+
+The rigs are the official Spine example exports. `pnpm fixtures` downloads them, and the repo does not hold them. An instance is one display object of a rig. All instances of a rig play the same animation and start at different places of its loop.
+
+| Rig | Spine | Bones | Slots | Plays | Why it is in the run |
+|---|---|---|---|---|---|
+| tank-pro | 4.2 | 115 | 200 | `shoot` | Many slots, a clipping attachment, slots that add and multiply |
+| coin-pro | 4.2 | 7 | 6 | `animation` | A small rig with a clipping attachment and a slot that adds |
+| speedy-ess | 4.2 | 15 | 11 | `run` | A rigid rig with few bones |
+| raptor-pro | 4.3 | 76 | 36 | `roar` | Weighted meshes, 583 mesh vertices |
+| sack-pro | 4.3 | 31 | 3 | `fall-in` | Physics constraints, 193 mesh vertices |
+
+Spine 4.1 is not in the run, because the official runtime for PixiJS v8 does not play 4.1 files.
+
+## Skeletons that play, WebGL2
+
+<BenchTable view="times" renderer="webgl" scene="play" />
+
+At 200 instances, pixi-marrow took 0.23 to 0.77 times the CPU time of the official runtime. The frame took 0.32 to 0.83 times as long. For sack-pro both ratios are not decided.
+
+The update of pixi-marrow is slower on four of the five rigs: 1.20 to 2.64 times the official update. The ratio of sack-pro is not decided. The reason is above: pixi-marrow places its vertices in the update. For coin-pro, pixi-marrow also uploads more: 584.8 KB a frame against 356.4 KB.
+
+With one instance, most differences are not decided. One small skeleton costs too little to measure against the cost of the frame itself.
+
+## Skeletons that play, WebGPU
+
+<BenchTable view="times" renderer="webgpu" scene="play" />
+
+At 200 instances, pixi-marrow took 0.31 to 0.76 times the CPU time of the official runtime. The frame took 0.43 to 0.80 times as long. The frame ratio of sack-pro is not decided. The update of pixi-marrow is slower on all five rigs here: 1.29 to 3.21 times the official update. The ratio of tank-pro is not decided.
+
+## Skeletons at rest
+
+A skeleton is at rest when its animation ended and nothing changes its pose. In the scene `rest`, 200 instances stand past the end of an animation that does not loop.
+
+<BenchTable view="times" renderer="webgl" scene="rest" />
+
+<BenchTable view="times" renderer="webgpu" scene="rest" />
+
+At rest, pixi-marrow uploaded no buffer data on WebGL2. The official runtime uploaded 206 to 3,385 KB in each frame. On both renderers, the CPU time of pixi-marrow was 0.00 to 0.07 times the official time. On WebGPU, the 0.1 KB a frame is what an empty stage uploads.
+
+Physics is the exception that sack-pro shows. A skeleton with physics constraints goes on with its simulation at rest, in both runtimes.
+
+## Draw calls
+
+| Rig, 200 instances that play | pixi-marrow | spine-pixi-v8 |
+|---|---|---|
+| speedy-ess | 1 | 1 |
+| raptor-pro | 1 | 1 |
+| sack-pro | 1 | 1 |
+| coin-pro | 1 | 400 |
+| tank-pro | 401 | 485 to 491 |
+
+Both runtimes draw 200 instances of a rig without a clip in one draw call. The numbers are the same on WebGL2 and WebGPU.
+
+coin-pro has a slot that adds its color to what is below it. The official runtime gives such a slot the Pixi blend mode `add`, and Pixi starts a new batch when the blend mode changes. The run counted 2 draw calls per instance there. In pixi-marrow, a slot that adds stays in the batch of the normal slots, so all instances drew in 1.
+
+tank-pro has slots that multiply. They end a batch in pixi-marrow too, so each instance of it took about 2 draw calls.
+
+## The two render modes of pixi-marrow
+
+pixi-marrow has a batched mode and a mesh mode. The default, `auto`, drew every rig of this run in the batched mode. For two rigs the bench also ran the mesh mode by name.
+
+<BenchTable view="modes" />
+
+## Memory
+
+<BenchTable view="memory" />
+
+One instance of pixi-marrow took 0.49 to 0.84 times the heap of the official runtime for four rigs. For coin-pro it took more: 19.3 KB against 15.4 KB. The bench reads each number on a page of its own, after a garbage collection.
+
+## Reproduce it
+
+The bench needs Node 24 or later, pnpm 10 and an installed Google Chrome.
+
+```bash
+git clone https://github.com/schmooky/pixi-marrow
+cd pixi-marrow
+pnpm install
+pnpm bench:ab --scene=play,rest
+```
+
+The run takes about 10 minutes. It prints the tables and writes the raw numbers of every frame into `.bench/`. `node apps/site/scripts/bench-data.mjs <file>` makes the file that this page reads from that.
+
+Close other programs first. Each row has a spread, and a difference inside the spread is not a result. `--rigs`, `--instances`, `--renderer`, `--runs` and `--pixi` change the run, and `scripts/bench/ab.mjs` documents them.
+
+## What the run does not measure
+
+- **Phones.** No phone ran this bench. The repo holds one phone number, and it is not a comparison with the official runtime. On a Galaxy A05, 120 resting symbols took 11.9 ms a frame live and 13.5 ms with the idle cache. `docs/DESIGN.md` records it without a date.
+- **Other browsers.** The bench runs Google Chrome only. Safari and Firefox have no numbers.
+- **Other machines.** One Apple M4 ran it. A machine with a slower GPU can give other ratios.
+- **GPU time alone.** The frame time is the CPU work plus the wait for the GPU.
+- **GPU memory.** The heap numbers do not count buffers and textures.
+- **Load time and bundle size.** [Compare runtimes](/compare/spine-pixi-v8/) has the bundle sizes.
+- **pixi-spine.** It is for PixiJS v7 and earlier, so it cannot run in this bench.
+- **Your game.** The scenes hold instances of one rig. A game mixes rigs, texts and effects. The [Lab](/lab/) runs scenes on the device that opens it.
+
+An older run is in the repo as `scripts/bench/baseline-m5.json`. It is from 12 November 2026 and measured an earlier build. The bench holds later runs against it.

@@ -9,6 +9,7 @@ import { inspectView } from '../../src/render/inspect';
 import { loadMeshCode } from '../../src/render/mesh-code';
 import { expectBatch, loadFamily, populate } from './batch-check';
 import { createStage, type Stage, watchUploads } from './batch-stage';
+import { RANGED_UPLOADS } from './pixi-version';
 
 /*
  * An image in a batch of the batched mode: the idle cache shows a skeleton at rest as one. It
@@ -204,8 +205,10 @@ describe('an image in a batch of skeletons', () => {
 
         image.visible = true;
         stage.render();
-        expect(uploads.positionBytes - hidden.positionBytes).toBe(batcher.attributeSize * 4);
-        expect(uploads.indices).toBe(0);
+        // Before pixi.js 8.23 a WebGL buffer uploads when it is bound. The batcher tells it once more
+        // then that all of it changed, so that no stretch of a later skeleton takes the place of that
+        expect(uploads.positionBytes - hidden.positionBytes).toBe(batcher.attributeSize * 4 * (RANGED_UPLOADS ? 1 : 2));
+        expect(uploads.indices).toBe(RANGED_UPLOADS ? 0 : 2);
         const shown = { ...uploads };
 
         image.x += 2;

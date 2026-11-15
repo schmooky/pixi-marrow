@@ -1,0 +1,48 @@
+---
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { SITE_ROOT, sourceOf } from '../lib/routes';
+
+/*
+ * The structured data of a page of questions, as a schema.org `FAQPage` in a JSON-LD block. It
+ * reads the source of the page that uses it. Each heading of the second level that ends with a
+ * question mark is a question, and the first paragraph after it is the answer. So the block
+ * always says what the page says, and nobody keeps a second copy of the answers.
+ */
+
+/** A paragraph of Markdown as plain text: no links, no code marks, no bold marks. */
+function plain(text: string): string {
+    return text
+        .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+        .replace(/[`*]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+const file = sourceOf(Astro.url.pathname);
+const body = file === undefined ? '' : readFileSync(join(SITE_ROOT, file), 'utf8');
+const questions = body
+    .split(/^## /m)
+    .slice(1)
+    .flatMap((part) => {
+        const [heading = '', ...rest] = part.split('\n');
+        const answer = rest.join('\n').trim().split(/\n\s*\n/)[0] ?? '';
+
+        return heading.trim().endsWith('?') && answer !== '' && !answer.startsWith('<')
+            ? [{ question: heading.trim(), answer: plain(answer) }]
+            : [];
+    });
+const data = {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: questions.map((item) => ({
+        '@type': 'Question',
+        name: item.question,
+        acceptedAnswer: { '@type': 'Answer', text: item.answer },
+    })),
+};
+/** JSON for a script element: a `<` in it must not end the element. */
+const json = JSON.stringify(data).replace(/</g, '\\u003c');
+---
+
+{questions.length > 0 && <script type="application/ld+json" is:inline set:html={json} />}

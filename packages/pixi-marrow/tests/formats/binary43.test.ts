@@ -167,7 +167,8 @@ function parts(editor: boolean): Record<string, Write> {
         strings: (w) => NAMES.reduce((out, name) => out.string(name), w.int(NAMES.length)),
         bones: (w) => ['root', 'arm', 'hand'].forEach((name, i) => bone(i === 0 ? w.int(3) : w, name, i - 1, i * 2)),
         slots(w) {
-            slot(w.int(3), 'front', 0, -1, ref('img'), 0);
+            // a dark color, because the animation has a two-color timeline for this slot
+            slot(w.int(3), 'front', 0, 0x00405060, ref('img'), 0);
             slot(w, 'mid', 1, 0x00102030, 0, 1);
             slot(w, 'back', 2, -1, 0, 3);
         },
@@ -355,7 +356,7 @@ describe('importBinary43', () => {
         const model = importBinary43(bytes);
 
         expect(differences(model, officialModel('4.3', { skeleton: bytes, atlas: ATLAS }))).toEqual([]);
-        expect(model.hash).toBe('abcdef012345678');
+        expect(model.hash).toBe('123456780abcdef0');
         expect(model.skins.map((skin) => skin.name)).toEqual(['default', 'skin1']);
         expect(model.constraints[5]).toMatchObject({ animation: 0, bone: 1, property: 'y', time: editor ? 0 : 1.5 });
         expect(model.constraints[5]).toMatchObject({ max: editor ? 1.5 : 0 });

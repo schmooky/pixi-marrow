@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
  * The `pixi-marrow` command line tool: `pixi-marrow info <skeleton>`,
- * `pixi-marrow typegen <skeleton>` and `pixi-marrow outlines <atlas>`. The work is done by
- * runCli from pixi-marrow/optimize.
+ * `pixi-marrow typegen <skeleton>`, `pixi-marrow outlines <atlas>`, `pixi-marrow rules` and
+ * `pixi-marrow diagnose <tree.json>`. The work is done by runCli from pixi-marrow/optimize.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { runCli } from '../dist/optimize.js';

@@ -5,7 +5,7 @@ import { drawsPlain } from '../../src/render/gate';
 import { type CoverSlot, coverFiles, coverRig, framesUntilCovered, moveSlot, opaqueSquares } from './cover-rig';
 import { cutView, drawnIndices, pageTextures } from './cuts';
 import { settle, WINDOW } from './heap';
-import { createRig, meshes, redraw, step } from './rig';
+import { createRig, flushUploads, meshes, redraw, step } from './rig';
 
 /** A small slot behind a big one: the small one is covered. */
 const BEHIND: readonly CoverSlot[] = [
@@ -178,6 +178,8 @@ describe('the cost of the test', () => {
             moveSlot(rig, 'a', i % 4 === 0 ? 200 : 0, 0);
             moveSlot(rig, 'mid', i % 6 < 3 ? 0 : 150, 0);
             redraw(rig);
+            // a frame: the stretches upload before the render, then Pixi asks before the draw
+            flushUploads(rig.view);
             rig.view.beforeDraw(false);
         };
 

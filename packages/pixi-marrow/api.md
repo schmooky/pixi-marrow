@@ -10,6 +10,12 @@ export interface AtlasAssetData {
   images?: Texture | TextureSource | string | Readonly<Record<string, Texture | TextureSource | string>>;
   imageMetadata?: Readonly<Record<string, unknown>>;
 }
+export interface AtlasModel {
+  pages: AtlasPage[];
+  regionNames: string[];
+  regions: Int32Array;
+  custom: AtlasCustomField[];
+}
 export interface AtlasOutlines {
   version: 1;
   margin: number;
@@ -27,7 +33,6 @@ export declare class Bone<N extends MarrowNames = MarrowNames> {
   private readonly local;
   private readonly world;
   private readonly index;
-  constructor(state: PoseState, index: number, name: N["bones"]);
   get x(): number;
   set x(value: number);
   get y(): number;
@@ -48,6 +53,7 @@ export declare class Bone<N extends MarrowNames = MarrowNames> {
   private read;
   private write;
 }
+export type DrawMode = "mesh" | "batched";
 export interface LoadedAtlas {
   readonly atlas: AtlasModel;
   readonly textures: readonly Texture[];
@@ -56,15 +62,18 @@ export declare class MarrowAsset {
   readonly model: SkeletonModel;
   readonly atlas: AtlasModel;
   readonly textures: readonly Texture[];
+  readonly name: string;
   readonly createEngine: PoseEngineFactory;
-  private readonly loaded;
+  private readonly release;
   private readonly key;
+  private readonly held;
   private description;
   private gone;
   private found;
   private scan;
   private work;
   private readonly scans;
+  private readonly given;
   private constructor();
   get info(): SkeletonInfo;
   get destroyed(): boolean;
@@ -72,10 +81,12 @@ export declare class MarrowAsset {
   get outlinesState(): OutlinesState;
   get optimized(): Promise<void>;
   static load(options: MarrowLoadOptions): Promise<MarrowAsset>;
+  static fromData(data: MarrowAssetData): Promise<MarrowAsset>;
   static from(data: MarrowAssetData): Promise<MarrowAsset>;
+  static fromCache(options: MarrowAssetsOptions): MarrowAsset;
   static get(options: MarrowAssetsOptions): MarrowAsset;
-  private static fetch;
   destroy(): void;
+  private free;
   private startScan;
   private onPageUpdate;
 }
@@ -85,12 +96,14 @@ export interface MarrowAssetData {
   textures: readonly Texture[];
   outlines?: "auto" | "off" | AtlasOutlines;
   renderMode?: "auto" | "mesh" | "batched";
+  name?: string;
 }
 export interface MarrowAssetsOptions {
   skeleton: string;
   atlas: string;
-  outlines?: "auto" | "off";
+  outlines?: "auto" | "off" | string | AtlasOutlines;
   renderMode?: "auto" | "mesh" | "batched";
+  name?: string;
 }
 export declare class MarrowError extends Error {
   override readonly name: string;
@@ -98,13 +111,15 @@ export declare class MarrowError extends Error {
   readonly fix: string;
   readonly validNames: readonly string[];
   readonly closest: string | undefined;
+  readonly docs: string | undefined;
   constructor(code: MarrowErrorCode, message: string, details: MarrowErrorDetails);
 }
-export type MarrowErrorCode = "invalid-data" | "unsupported-version" | "unsupported-feature" | "unknown-name";
+export type MarrowErrorCode = "invalid-data" | "unsupported-version" | "unsupported-feature" | "unknown-name" | "invalid-option" | "not-found" | "not-registered" | "not-loaded" | "destroyed";
 export interface MarrowErrorDetails {
   fix: string;
   validNames?: readonly string[];
-  closest?: string;
+  closest?: string | undefined;
+  docs?: string;
 }
 export interface MarrowEvent<N extends MarrowNames = MarrowNames> {
   name: N["events"];
@@ -121,6 +136,7 @@ export interface MarrowLoadOptions {
   textures?: Readonly<Record<string, Texture | string>>;
   outlines?: "auto" | "off" | string | AtlasOutlines;
   renderMode?: "auto" | "mesh" | "batched";
+  name?: string;
 }
 export interface MarrowNames {
   animations: string;
@@ -133,39 +149,31 @@ export declare class MarrowPerf {
   private readonly owner;
   private readonly view;
   private readonly links;
-  constructor(owner: PerfOwner, view: SkeletonView, links?: () => readonly Link[]);
   report(): Promise<PerfEntry[]>;
   memory(): Promise<PerfMemory>;
 }
 export declare class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysics<N> {
+  readonly isMarrowSpine: true;
   readonly asset: MarrowAsset;
   readonly engine: PoseEngine;
   private readonly skeletonView;
   private outlines;
   private readonly book;
   private readonly pump;
-  private ticking;
   private tools;
   readonly perfSettings: ResolvedPerf;
   private readonly pacer;
   private readonly idle;
-  private probe;
+  private watch;
+  private stale;
   constructor(asset: MarrowAsset, options?: MarrowSpineOptions);
   static load<N extends MarrowNames = MarrowNames>(options: MarrowLoadOptions & MarrowSpineOptions): Promise<MarrowSpine<N>>;
   static from<N extends MarrowNames = MarrowNames>(options: MarrowAssetsOptions & MarrowSpineOptions): MarrowSpine<N>;
   get info(): SkeletonInfo;
   get stats(): ViewStats;
   get perf(): MarrowPerf;
-  get updateProbe(): UpdateProbe | null;
-  set updateProbe(probe: UpdateProbe | null);
   get renderMode(): NonNullable<MarrowSpineOptions["renderMode"]>;
   set renderMode(mode: NonNullable<MarrowSpineOptions["renderMode"]>);
-  get timeScale(): number;
-  set timeScale(value: number);
-  get defaultMix(): number;
-  set defaultMix(seconds: number);
-  get autoUpdate(): boolean;
-  set autoUpdate(value: boolean);
   setMix(from: N["animations"], to: N["animations"], seconds: number): void;
   play(name: N["animations"], options?: PlayOptions): Track<N>;
   queue(name: N["animations"], options?: QueueOptions): Track<N>;
@@ -176,7 +184,9 @@ export declare class MarrowSpine<N extends MarrowNames = MarrowNames> extends Sp
   private pose;
   pacingStatus(): PacingStatus;
   private draw;
-  private onTick;
+  private rest;
+  private listen;
+  private seen;
   private animationIndex;
   private mixOut;
   private adopt;
@@ -193,6 +203,8 @@ export interface MarrowSpineEvents<N extends MarrowNames = MarrowNames> {
 }
 export interface MarrowSpineOptions {
   autoUpdate?: boolean;
+  ticker?: SpineTicker;
+  label?: string;
   renderMode?: "auto" | "mesh" | "batched";
   tightMesh?: "auto" | "on" | "off";
   occlusion?: "auto" | "off";
@@ -207,6 +219,13 @@ export interface MarrowSpineOptions {
 }
 export type OffscreenMode = "update" | "throttle" | "pause";
 export type OutlinesState = "given" | "scanned" | "scanning" | "unread" | "off";
+export interface PacingStatus {
+  rate: number | "display";
+  offscreen: ResolvedPerf["offscreen"];
+  hidden: boolean;
+  size: number;
+  reduced: boolean;
+}
 export interface PageRect {
   x: number;
   y: number;
@@ -218,10 +237,15 @@ export interface PerfEntry {
   value: string;
   reason: string;
   animation?: string;
+  rule?: string;
+  docs?: string;
+  data?: Record<string, number | string | boolean>;
 }
 export type PerfFeature = "perf" | "pacing" | "renderMode" | "instancing" | "motion" | "links" | "drawCalls" | "blend" | "pages" | "clipping" | "tightMesh" | "occlusion" | "outlines" | "darkTint" | "physics" | "bake" | "constraints" | "bones" | "slots" | "vertices" | "uploads" | "layout";
 export interface PerfMemory {
   shared: number;
+  baked: number;
+  bakeBudget: number;
   instance: number;
   gpu: number;
   gpuBuffers: number;
@@ -256,6 +280,41 @@ export interface PlayOptions {
   eventThreshold?: number;
   entry?: TrackFields;
 }
+export interface PoseEngine {
+  readonly state: PoseState;
+  readonly bytes: number;
+  timeScale: number;
+  defaultMix: number;
+  setMix(from: number, to: number, duration: number): void;
+  setAnimation(track: number, animation: number, loop: boolean): TrackEntry;
+  addAnimation(track: number, animation: number, loop: boolean, delay: number): TrackEntry;
+  setEmptyAnimation(track: number, mixDuration: number): TrackEntry;
+  addEmptyAnimation(track: number, mixDuration: number, delay: number): TrackEntry;
+  configure(entry: TrackEntry, fields: TrackFields): void;
+  clearTrack(track: number): void;
+  clearTracks(): void;
+  setSkin(skin: number): void;
+  setSkins(skins: readonly number[]): void;
+  readonly skins: readonly number[];
+  readonly slotPose: SlotPose;
+  setAttachment(slot: number, attachment: AttachmentData | null): void;
+  setColor(slot: number, r: number, g: number, b: number, a: number): void;
+  setDarkColor(slot: number, r: number, g: number, b: number): void;
+  setupPose(): void;
+  setupPoseBones(): void;
+  setupPoseSlots(): void;
+  physics: PhysicsMode;
+  physicsTranslate(x: number, y: number): void;
+  physicsRotate(x: number, y: number, degrees: number): void;
+  deform: boolean;
+  update(dt: number): void;
+  source: PoseSource | null;
+  solo(): TrackEntry | null;
+  advance(dt: number, time?: Float64Array): void;
+  holdsSetup(animation: number, bones?: Uint8Array): boolean;
+  takeEvents(): PoseEvent[];
+}
+export type PoseEngineFactory = () => PoseEngine;
 export interface QueueOptions extends PlayOptions {
   delay?: number;
 }
@@ -268,6 +327,10 @@ export interface RegionOutline {
   opaque: PageRect | null;
 }
 export declare function registerMarrowAssets(): void;
+export interface ResolvedPerf extends PerfSettings {
+  readonly preset: PerfPreset;
+  readonly given: ReadonlySet<keyof PerfSettings>;
+}
 export type SetupPosePart = "all" | "bones" | "slots";
 export interface SkeletonInfo {
   version: SpineVersion;
@@ -284,13 +347,28 @@ export interface SkeletonInfo {
   counts: SkeletonCounts;
   features: SkeletonFeature[];
 }
+export interface SkeletonModel {
+  version: SpineVersion;
+  editorVersion: string;
+  hash: string | null;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  referenceScale: number;
+  bones: BoneTable;
+  slots: SlotTable;
+  events: EventData[];
+  constraints: ConstraintData[];
+  skins: SkinData[];
+  animations: AnimationData[];
+}
 export type SkinningMode = "auto" | "cpu" | "gpu";
 export declare class Slot<N extends MarrowNames = MarrowNames> {
   readonly name: N["slots"];
   readonly bone: N["bones"];
   private readonly engine;
   private readonly index;
-  constructor(engine: PoseEngine, index: number, name: N["slots"]);
   get attachment(): string | null;
   set attachment(name: string | null);
   get tint(): number;
@@ -300,11 +378,15 @@ export declare class Slot<N extends MarrowNames = MarrowNames> {
   get darkTint(): number | null;
   set darkTint(value: number | null);
 }
+export type SpineEventName<N extends MarrowNames, K> = K extends keyof Emitted<N> ? K : string extends K ? K : symbol extends K ? K : never;
 export declare abstract class SpineLinks<N extends MarrowNames = MarrowNames> extends Container {
   protected links: Links | undefined;
   private linkParts;
   private readonly handles;
   private readonly slotHandles;
+  on: <K extends string | symbol>(event: SpineEventName<N, K>, listener: SpineListener<N, K>, context?: unknown) => this;
+  once: <K extends string | symbol>(event: SpineEventName<N, K>, listener: SpineListener<N, K>, context?: unknown) => this;
+  off: <K extends string | symbol>(event: SpineEventName<N, K>, listener?: SpineListener<N, K>, context?: unknown, once?: boolean) => this;
   bone(name: N["bones"]): Bone<N>;
   slot(name: N["slots"]): Slot<N>;
   get skin(): N["skins"] | null;
@@ -316,22 +398,48 @@ export declare abstract class SpineLinks<N extends MarrowNames = MarrowNames> ex
   unfollow(container: Container): void;
   attach(slot: N["slots"], container: Container, options?: AttachOptions): void;
   detach(container: Container): void;
-  protected linkTo(parts: LinkParts): void;
-  private parts;
+  protected linkTo(parts: LinkParts | undefined): void;
+  protected parts(): LinkParts;
   private linked;
 }
+export type SpineListener<N extends MarrowNames, K> = (...args: K extends keyof Emitted<N> ? Emitted<N>[K] : unknown[]) => void;
 export declare abstract class SpinePhysics<N extends MarrowNames = MarrowNames> extends SpineLinks<N> {
   abstract readonly engine: PoseEngine;
+  protected clock: SpineTicker;
+  private ticking;
+  protected dozes: boolean;
   private afterReset;
   private reduced;
   private hidDeform;
+  protected probe: UpdateProbe | null;
+  abstract update(seconds: number): void;
+  get ticker(): SpineTicker;
+  get autoUpdate(): boolean;
+  set autoUpdate(value: boolean);
+  get timeScale(): number;
+  set timeScale(value: number);
+  get defaultMix(): number;
+  set defaultMix(seconds: number);
+  get updateProbe(): UpdateProbe | null;
+  set updateProbe(probe: UpdateProbe | null);
   get physics(): PhysicsMode;
   set physics(mode: PhysicsMode);
   resetPhysics(): void;
   physicsTranslate(x: number, y: number): void;
   physicsRotate(x: number, y: number, degrees: number): void;
   protected poseAt(seconds: number, small: boolean): void;
+  private onTick;
+  protected calm(): void;
+  protected checkStep(seconds: number): void;
   private settleReset;
+}
+export interface SpineTicker {
+  add(callback: (ticker: {
+    deltaMS: number;
+  }) => void, context?: unknown): unknown;
+  remove(callback: (ticker: {
+    deltaMS: number;
+  }) => void, context?: unknown): unknown;
 }
 export interface StopOptions {
   track?: number;
@@ -345,10 +453,11 @@ export interface Track<N extends MarrowNames = MarrowNames> {
   alpha: number;
   readonly additive: boolean;
   readonly time: number;
-  readonly finished: Promise<void>;
+  readonly finished: Promise<TrackEnd>;
   stop(options?: Pick<StopOptions, "mix">): void;
   configure(fields: TrackFields): void;
 }
+export type TrackEnd = "complete" | "interrupted" | "stopped" | "destroyed";
 export type TrackField = "loop" | "delay" | "trackTime" | "trackEnd" | "timeScale" | "alpha" | "mixTime" | "mixDuration" | "reverse" | "shortestRotation" | "eventThreshold" | "animationStart" | "animationEnd" | "animationLast" | "holdPrevious" | "mixBlend" | "attachmentThreshold" | "drawOrderThreshold" | "mixAttachmentThreshold" | "alphaAttachmentThreshold" | "mixDrawOrderThreshold" | "additive" | "keepHold";
 export type TrackFields = Partial<Record<TrackField, number | boolean | string>>;
 export interface UpdateProbe {
@@ -376,6 +485,11 @@ export interface ViewStats {
   skips: number;
   placedSlots: number;
   coloredSlots: number;
+  transformReplaces: number;
+  tintRewrites: number;
+  instructionBuilds: number;
+  uploadBytes: UploadBytes;
+  frameBytes: number;
 }
 ```
 
@@ -535,13 +649,15 @@ export declare class MarrowError extends Error {
   readonly fix: string;
   readonly validNames: readonly string[];
   readonly closest: string | undefined;
+  readonly docs: string | undefined;
   constructor(code: MarrowErrorCode, message: string, details: MarrowErrorDetails);
 }
-export type MarrowErrorCode = "invalid-data" | "unsupported-version" | "unsupported-feature" | "unknown-name";
+export type MarrowErrorCode = "invalid-data" | "unsupported-version" | "unsupported-feature" | "unknown-name" | "invalid-option" | "not-found" | "not-registered" | "not-loaded" | "destroyed";
 export interface MarrowErrorDetails {
   fix: string;
   validNames?: readonly string[];
-  closest?: string;
+  closest?: string | undefined;
+  docs?: string;
 }
 export interface MeshAttachmentData extends VertexData {
   type: "mesh";
@@ -1059,6 +1175,9 @@ export interface BakeOptions {
 }
 export declare function decodeBakedClips(bytes: Uint8Array): BakedClip[];
 export declare function encodeBakedClips(clips: readonly BakedClip[]): Uint8Array;
+export declare function setBakeBudget(asset: {
+  readonly model: SkeletonModel;
+}, bytes: number): void;
 ```
 
 ## pixi-marrow/debug
@@ -1116,6 +1235,272 @@ export declare class MarrowDebug extends Container {
 export interface PathShape {
   readonly points: Float64Array;
   readonly closed: boolean;
+}
+```
+
+## pixi-marrow/diagnose
+
+```ts
+export interface DevtoolsOptions {
+  warn?: boolean;
+  root?: Container;
+  renderer?: RendererLike;
+  ticker?: WarnTicker;
+  every?: number;
+}
+export declare function diagnose(root: Container, options?: DiagnoseOptions): Diagnosis;
+export interface DiagnoseOptions extends TreeOptions {
+  since?: Watch | undefined;
+}
+export declare function diagnoseTree(dump: TreeDump): Diagnosis;
+export interface Diagnosis {
+  skeletons: number;
+  hits: RuleHit[];
+  scene: SceneTotals;
+}
+export declare function formatHit(hit: RuleHit): string;
+export declare function inspect(hero: Inspected): SkeletonInspection;
+export declare function installDevtools(options?: DevtoolsOptions): MarrowDevtools;
+export declare function isMarrowSpine(node: object): node is MarrowSpine;
+export interface MarrowDevtools {
+  readonly version: 1;
+  readonly docs: string;
+  readonly rules: readonly PerfRule[];
+  instances(root?: Container): string[];
+  inspect(root?: Container): SkeletonInspection[];
+  tree(root?: Container): TreeDump;
+  diagnose(root?: Container): Diagnosis;
+  watch(root?: Container): Watch;
+  diagnoseTree(dump: TreeDump): Diagnosis;
+  uninstall(): void;
+}
+export interface PerfRule {
+  readonly id: string;
+  readonly slug: string;
+  readonly title: string;
+  readonly severity: RuleSeverity;
+  readonly cost: readonly RuleCost[];
+  readonly detect: "static" | "dynamic" | "both";
+  readonly pattern: string;
+  readonly does: string;
+  readonly source: string;
+  readonly check: string;
+  readonly fix: string;
+  readonly since: string;
+  readonly docs: string;
+}
+export interface RendererInfo {
+  type: string;
+  roundPixels: boolean;
+  antialias: boolean;
+  width: number;
+  height: number;
+  maxBatchTextures: number;
+}
+export interface RendererLike {
+  readonly type?: number;
+  readonly roundPixels?: boolean;
+  readonly view?: {
+    readonly antialias?: boolean;
+  };
+  readonly screen?: {
+    readonly width: number;
+    readonly height: number;
+  };
+  readonly limits?: {
+    readonly maxBatchableTextures?: number;
+  };
+}
+export type RuleCost = "draw-calls" | "cpu-vertex" | "cpu-pose" | "upload" | "overdraw" | "memory";
+export interface RuleHit {
+  id: string;
+  slug: string;
+  severity: RuleSeverity;
+  node: string;
+  nodes: string[];
+  cause: string;
+  cost: RuleCost[];
+  measured: Record<string, number>;
+  message: string;
+  fix: string;
+  docs: string;
+}
+export declare const RULES: readonly PerfRule[];
+// exported as RULES_DOCS
+export declare const DOCS = "https://pixi-marrow.schmooky.dev/performance/rules/";
+export type RuleSeverity = "warn" | "info";
+export interface SceneTotals {
+  drawn: number;
+  batched: number;
+  mesh: number;
+  instanced: number;
+  assets: number;
+  vertices: number;
+  indices: number;
+  meshDrawCalls: number;
+  frameBytes: number;
+  instanceBytes: number;
+  gpuBufferBytes: number;
+}
+export declare function serializeTree(root: Container, options?: TreeOptions): TreeDump;
+export interface SkeletonInspection {
+  kind: "pixi-marrow/skeleton";
+  version: 1;
+  label: string;
+  asset: {
+    id: number;
+    spine: string;
+    editorVersion: string;
+    hash: string | null;
+    instances: number;
+  };
+  counts: {
+    bones: number;
+    slots: number;
+    visibleSlots: number;
+    vertices: number;
+    indices: number;
+    atlasPages: number;
+    constraints: Record<string, number>;
+  };
+  render: {
+    mode: "mesh" | "batched";
+    option: "auto" | "mesh" | "batched";
+    modeReason: string;
+    batchVertices: number;
+    batchLimit: number;
+    drawCalls: number;
+    sharedBy: number;
+    runs: number;
+    blendSlots: number;
+    skinning: "cpu" | "gpu";
+    instancing: {
+      active: boolean;
+      why: string | null;
+      run: number;
+      draws: number;
+    };
+    darkTint: boolean;
+    clips: number;
+    maskDraws: number;
+    attached: number;
+    following: number;
+  };
+  cuts: {
+    outlines: string;
+    occlusion: "auto" | "off";
+    tightMesh: "auto" | "on" | "off";
+    blockedBy: string[];
+    pageBlocks: string[];
+    coveredSlots: number;
+    tightRanges: number;
+  };
+  frame: {
+    posed: boolean;
+    skipped: boolean;
+    placedSlots: number;
+    coloredSlots: number;
+    uploadBytes: number;
+  };
+  totals: {
+    skips: number;
+    transformReplaces: number;
+    tintRewrites: number;
+    templateBuilds: number;
+    indexRebuilds: number;
+    instructionBuilds: number;
+    positionUploads: number;
+    colorUploads: number;
+    uvUploads: number;
+    boneUploads: number;
+    maskUploads: number;
+    uploadBytes: {
+      positions: number;
+      statics: number;
+      indices: number;
+      bones: number;
+      masks: number;
+    };
+  };
+  pacing: {
+    autoUpdate: boolean;
+    rate: number | "display";
+    offscreen: string;
+    hidden: boolean;
+    size: number | null;
+    reduced: boolean;
+    drawn: boolean;
+    onScreen: boolean | null;
+  };
+  perf: {
+    preset: string;
+    given: string[];
+    settings: Record<string, string | number>;
+  };
+  idle: {
+    setting: string;
+    showing: boolean;
+  };
+  bake: {
+    setting: string;
+    active: boolean;
+    baked: number;
+    unbaked: number;
+    last: string;
+    bytes: number;
+  };
+  physics: {
+    constraints: number;
+    mode: string;
+  };
+  memory: {
+    shared: number;
+    baked: number;
+    instance: number;
+    gpuBuffers: number;
+    gpuTextures: number;
+  };
+  rules: string[];
+}
+export interface TreeDump {
+  kind: "pixi-marrow/tree";
+  version: 1;
+  pixi: string;
+  renderer: RendererInfo | null;
+  root: TreeNode;
+}
+export interface TreeNode {
+  type: string;
+  label: string;
+  path: string;
+  visible: boolean;
+  renderable: boolean;
+  alpha: number;
+  tint: number;
+  blendMode: string;
+  x: number;
+  y: number;
+  scaleX: number;
+  scaleY: number;
+  rotation: number;
+  zIndex: number;
+  sortableChildren: boolean;
+  filters: number;
+  mask: boolean;
+  renderGroup: boolean;
+  cacheAsTexture: boolean;
+  draws: boolean;
+  marrow?: SkeletonInspection;
+  children: TreeNode[];
+}
+export interface TreeOptions {
+  renderer?: RendererLike | undefined;
+}
+export declare function watch(root: Container, options?: TreeOptions): Watch;
+export interface Watch {
+  sample(): void;
+  report(): Diagnosis;
+  stop(): void;
 }
 ```
 

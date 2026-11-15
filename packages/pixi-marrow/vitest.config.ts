@@ -23,6 +23,22 @@ export default defineConfig({
                 functions: 90,
                 statements: 90,
                 branches: 85,
+                // The pose core and the readers are the parts that parity decides. The numbers for
+                // the whole source would let one of them fall far while the rest holds the mean.
+                // So each has thresholds of its own, set just under the coverage of 2026-11-15:
+                // pose 99.77, 99.88, 99.31 and 94.32, formats 99.93, 100, 99.60 and 94.82.
+                'src/pose/**': {
+                    lines: 99.5,
+                    functions: 99.5,
+                    statements: 99,
+                    branches: 94,
+                },
+                'src/formats/**': {
+                    lines: 99.5,
+                    functions: 99.5,
+                    statements: 99,
+                    branches: 94.5,
+                },
             },
         },
     },

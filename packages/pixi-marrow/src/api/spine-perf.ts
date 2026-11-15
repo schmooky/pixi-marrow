@@ -24,6 +24,17 @@ export interface PerfMemory {
      */
     shared: number;
     /**
+     * The bytes of the baked clips of the asset, which count in `shared` too: those from
+     * `addBakedClips` and those baked while the game played. 0 for an instance without the
+     * `bake` setting, and until the code of baked playback has loaded.
+     */
+    baked: number;
+    /**
+     * The most bytes the clips hold that were baked while the game played. Over it the clip that
+     * played longest ago goes. `setBakeBudget` of `pixi-marrow/bake` sets it. 0 where `baked` is.
+     */
+    bakeBudget: number;
+    /**
      * What this instance holds in typed arrays. First `engine.bytes`: the pose and what
      * constraints add to it. Then the arrays of the view: the vertex and index data, the clip
      * masks, the list of visible slots and the test of covered slots.
@@ -46,6 +57,14 @@ export interface PerfMemory {
      * A compressed texture takes less than is counted. The image a texture was made from is not counted.
      */
     gpuTextures: number;
+}
+
+/** What `pixi-marrow/diagnose` reads of a display object: its owner, its view and its containers. */
+export interface PerfParts {
+    readonly owner: PerfOwner;
+    readonly view: SkeletonView;
+    /** The containers that follow a bone or are attached to a slot at the moment. */
+    readonly links: readonly Link[];
 }
 
 /** What the perf tools read of the display object they belong to. */
@@ -75,6 +94,7 @@ export class MarrowPerf {
     private readonly links: () => readonly Link[];
 
     /**
+     * @internal
      * @param view The view that draws the display object.
      * @param links Hands out the containers that follow a bone or are attached to a slot at the moment.
      */
@@ -85,8 +105,21 @@ export class MarrowPerf {
     }
 
     /**
+     * What the entry `pixi-marrow/diagnose` reads the instance from. Not stable: use `inspect` of
+     * that entry, which returns plain data.
+     *
+     * @internal
+     */
+    parts(): PerfParts {
+        return { owner: this.owner, view: this.view, links: this.links() };
+    }
+
+    /**
      * Every decision the runtime made for this instance, with its reason and the counters behind
-     * it, as plain objects. The rows come in a fixed order, one per feature.
+     * it, as plain objects. The rows come in a fixed order, one per feature. A row that names a
+     * cause of cost carries the id of its rule in `rule` and the address of the rule in `docs`.
+     *
+     * @see https://pixi-marrow.schmooky.dev/performance/rules/
      *
      * The instance is read when the promise resolves. The first call loads the code first, which
      * takes a moment: the rows then show the instance as its last update before that left it.

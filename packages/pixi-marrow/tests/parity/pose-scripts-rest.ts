@@ -311,6 +311,35 @@ function tracks(rig: PoseRigInfo): PoseScript[] {
             s.clearTrack(1);
             s.update(DT, 3);
         }),
+        script('long rest of ended entries on two tracks, below full alpha and on the upper track alone', (s) => {
+            s.set(0, a, false);
+            const upper = s.set(1, b, false, { alpha: 0.5 });
+
+            past(s, Math.max(duration(a), duration(b)));
+            // an entry below full alpha mixes toward its keys: it takes many updates to arrive, then both rest
+            s.update(DT, 150);
+            s.update(ODD, 30);
+            s.slotColor(0, 0.25, 0.5, 0.75, 1);
+            s.update(DT, 3);
+            s.configure(upper, { alpha: 0.75 });
+            s.update(DT, 90);
+            // the upper track alone
+            s.clearTrack(0);
+            s.update(DT, 90);
+            s.setupPoseBones();
+            s.update(DT, 70);
+            // one entry below full alpha on the lower track, with the upper track at rest
+            const lower = s.set(0, c, false, { alpha: 0.5 });
+
+            past(s, duration(c));
+            s.update(DT, 150);
+            s.clearTrack(1);
+            s.update(DT, 90);
+            s.setupPose();
+            s.update(DT, 40);
+            // the track time went on while the entry was at rest
+            clock(s, lower);
+        }),
     ];
 }
 

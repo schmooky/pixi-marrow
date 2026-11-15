@@ -1,6 +1,26 @@
 /** How a view draws: with meshes of its own, or as a part of the batches of its render group. */
 export type DrawMode = 'mesh' | 'batched';
 
+/**
+ * Bytes a view handed to the GPU, by what they hold.
+ *
+ * In the batched mode they are the bytes the view wrote into the buffers of its batch. The batch
+ * can upload more: it joins stretches that lie near each other, and pixi.js before 8.23 uploads
+ * one stretch per buffer on WebGL. A view that draws instanced counts nothing: its pool uploads.
+ */
+export interface UploadBytes {
+    /** Vertex positions. */
+    positions: number;
+    /** What a pose does not move: texture coordinates, colors, the tint and the flags of the batched mode. */
+    statics: number;
+    /** Indices. */
+    indices: number;
+    /** The texels of bones and of the palette, with `skinning: 'gpu'`. */
+    bones: number;
+    /** The polygons and the triangles of clip masks, in the mesh mode. */
+    masks: number;
+}
+
 /** Counters a view keeps, for the perf report and for tests. Where not said otherwise they only grow. */
 export interface ViewStats {
     /**
@@ -13,7 +33,8 @@ export interface ViewStats {
      * Draw calls the view takes per frame at the moment. In the mesh mode they are its own: one
      * per range and two per clip mask. In the batched mode they are the batches it draws in,
      * which it shares with the skeletons next to it in the render group. That is 1 unless a
-     * slot multiplies or screens. A skeleton that shows nothing is in no batch and has 0.
+     * slot multiplies or screens. A skeleton that shows nothing has 0. Once it was in a batch it
+     * stays there with triangles without area, so that Pixi builds no instructions again.
      * Polygons and skipped slots never change this number.
      */
     drawCalls: number;
@@ -34,7 +55,10 @@ export interface ViewStats {
     positionUploads: number;
     /** How often vertex colors were handed on. With `skinning: 'gpu'` that is the palette of the slots. */
     colorUploads: number;
-    /** How often bone matrices were uploaded, for a vertex shader that places vertices: `skinning: 'gpu'`. */
+    /**
+     * Updates that wrote bone matrices for a vertex shader that places vertices: `skinning: 'gpu'`.
+     * They upload once per frame, before Pixi draws the view, and not while the view is hidden.
+     */
     boneUploads: number;
     /** How often texture coordinates were handed on after the build: when a sequence showed another region. */
     uvUploads: number;
@@ -85,6 +109,31 @@ export interface ViewStats {
     placedSlots: number;
     /** Visible slots whose colors that update wrote: the ones whose color changed. */
     coloredSlots: number;
+    /**
+     * Frames of the batched mode that placed every vertex again because a display object above
+     * the skeleton moved. The pose can be at rest in such a frame. A parent that is a render
+     * group moves on the GPU and counts nothing.
+     */
+    transformReplaces: number;
+    /**
+     * Frames of the batched mode that wrote the static data of every vertex again because the
+     * tint or the alpha of a display object above the skeleton changed.
+     */
+    tintRewrites: number;
+    /**
+     * How often Pixi built the instructions of the render group with the skeleton in a batch.
+     * Each build writes the whole skeleton again, and the batch uploads its buffers whole.
+     */
+    instructionBuilds: number;
+    /** The bytes the view handed to the GPU so far. */
+    uploadBytes: UploadBytes;
+    /**
+     * The bytes of all kinds the view handed to the GPU since its last update began: those of one
+     * frame, for a view that is updated once per frame. It is 0 after a frame in which the
+     * skeleton and every display object above it rested. A draw without an update before it adds
+     * to the same number.
+     */
+    frameBytes: number;
 }
 
 /**
@@ -116,5 +165,10 @@ export function createViewStats(vertices: number, bufferBytes: number, renderMod
         skips: 0,
         placedSlots: 0,
         coloredSlots: 0,
+        transformReplaces: 0,
+        tintRewrites: 0,
+        instructionBuilds: 0,
+        uploadBytes: { positions: 0, statics: 0, indices: 0, bones: 0, masks: 0 },
+        frameBytes: 0,
     };
 }

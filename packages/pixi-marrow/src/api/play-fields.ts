@@ -1,9 +1,8 @@
-import { MarrowError } from '../base/errors';
-import { closestName } from '../base/names';
 import type { SpineVersion } from '../base/version';
 import type { SkeletonModel } from '../model/model';
 import type { TrackField, TrackFields } from '../pose/engine';
 import type { PlayOptions, QueueOptions } from './options';
+import { checkKeys, finite, wrongValue } from './values';
 
 /*
  * Play and queue options, checked and turned into fields of the official track entry. A wrong
@@ -73,38 +72,10 @@ export function applyPlan(handle: { configure(fields: TrackFields): void }, plan
     if (plan.extra !== undefined) handle.configure(plan.extra);
 }
 
-function wrongValue(option: string, value: unknown, expected: string): MarrowError {
-    const shown = typeof value === 'string' ? `"${value}"` : String(value);
-
-    return new MarrowError('invalid-data', `The option "${option}" was set to ${shown}.`, {
-        fix: `Pass ${expected}.`,
-    });
-}
-
-/** A number that is not NaN and not infinite, or the error that names the option. */
-function finite(option: string, value: unknown): number {
-    if (typeof value !== 'number' || !Number.isFinite(value)) throw wrongValue(option, value, 'a finite number');
-
-    return value;
-}
-
 function flag(option: string, value: unknown): boolean {
     if (typeof value !== 'boolean') throw wrongValue(option, value, 'true or false');
 
     return value;
-}
-
-/** Throws for a key that is no option of the method, with the closest option. */
-function checkKeys(options: object, method: 'play' | 'queue', valid: readonly string[]): void {
-    for (const key of Object.keys(options)) {
-        if (valid.includes(key)) continue;
-
-        throw new MarrowError('unknown-name', `"${key}" is not an option of ${method}.`, {
-            fix: `Pass one of the options: ${valid.join(', ')}.`,
-            validNames: valid,
-            closest: closestName(key, valid) ?? 'track',
-        });
-    }
 }
 
 function trackIndex(value: unknown): number {
@@ -143,7 +114,7 @@ function namedFields(options: PlayOptions, version: SpineVersion): TrackFields |
 
 /**
  * Checks play or queue options and turns them into what the engine takes. Throws a
- * {@link MarrowError} for a key that is no option, and for a value of the wrong type.
+ * `MarrowError` for a key that is no option, and for a value of the wrong type.
  *
  * @param version The Spine version of the skeleton, which decides how `additive` is set.
  *
@@ -152,6 +123,8 @@ function namedFields(options: PlayOptions, version: SpineVersion): TrackFields |
  * console.log(plan.track, plan.fields); // 0 { mixDuration: 0.2, mixBlend: 'add' }
  */
 export function planPlay(options: QueueOptions, method: 'play' | 'queue', version: SpineVersion): PlayPlan {
+    if (typeof options !== 'object' || options === null)
+        throw wrongValue(`The options of ${method}`, options, 'an object');
     checkKeys(options, method, method === 'play' ? PLAY_OPTIONS : QUEUE_OPTIONS);
     const { entry } = options;
 

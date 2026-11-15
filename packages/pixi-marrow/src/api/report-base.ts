@@ -1,3 +1,4 @@
+import { ruleDocs } from '../base/errors';
 import type { AtlasModel } from '../model/atlas';
 import type { SkeletonInfo } from '../model/info';
 import type { SkeletonModel } from '../model/model';
@@ -47,6 +48,28 @@ export interface PerfEntry {
     reason: string;
     /** The animation the row is about. A row about the whole instance has none. */
     animation?: string;
+    /**
+     * The id of the performance rule that names the cause of the row, such as `MARROW012`. A row
+     * without a cause of cost has none.
+     *
+     * @see https://pixi-marrow.schmooky.dev/performance/rules/
+     */
+    rule?: string;
+    /** The address of that rule in the docs. */
+    docs?: string;
+    /** The facts of the row for a program: the counts and the names behind `value` and `reason`. */
+    data?: Record<string, number | string | boolean>;
+}
+
+/**
+ * A row with the id of the rule that names its cause, and the address of the rule in the docs.
+ *
+ * @example
+ * const row = ruled({ feature: 'links', value: '1 attached, 0 following', reason }, 'MARROW012');
+ * console.log(row.docs); // 'https://pixi-marrow.schmooky.dev/performance/rules/#marrow012'
+ */
+export function ruled(entry: PerfEntry, rule: string | false): PerfEntry {
+    return rule === false ? entry : { ...entry, rule, docs: ruleDocs(rule) };
 }
 
 /** What the rows of a report are read from. */
@@ -86,6 +109,8 @@ export interface BakeReading {
     last: string;
     /** The bytes of the clips that every instance of the asset shares. */
     bytes: number;
+    /** The most bytes the clips hold that were baked while the game played. */
+    budget: number;
 }
 
 /** How many names a reason spells out before it counts the rest. */

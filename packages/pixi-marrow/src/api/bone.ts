@@ -1,7 +1,7 @@
 import { Matrix, Point, type PointData } from 'pixi.js';
 import { LOCAL_STRIDE, nextVersion, type PoseState, WORLD_STRIDE } from '../pose/state';
-import { finiteArgument } from './checks';
 import type { MarrowNames } from './options';
+import { finite } from './values';
 
 const DEGREES = 180 / Math.PI;
 
@@ -32,7 +32,10 @@ export class Bone<N extends MarrowNames = MarrowNames> {
     private readonly world: number;
     private readonly index: number;
 
-    /** @param index The index of the bone in the skeleton. */
+    /**
+     * @internal
+     * @param index The index of the bone in the skeleton.
+     */
     constructor(state: PoseState, index: number, name: N['bones']) {
         this.state = state;
         this.index = index;
@@ -184,7 +187,7 @@ export class Bone<N extends MarrowNames = MarrowNames> {
         const { state } = this;
 
         // the text that names the bone is built for the error only: a write in every frame allocates nothing
-        if (!Number.isFinite(value)) finiteArgument(`bone("${this.name}")`, name, value);
+        if (!Number.isFinite(value)) finite(`bone("${this.name}").${name}`, value);
         state.local[this.local + field] = value;
         state.version = nextVersion(state.version);
     }
