@@ -7,6 +7,7 @@ description: Bones say where things are, and the GPU draws triangles. See how a 
 import Diagram from '../../components/Diagram.astro';
 import Preview from '../../components/Preview.astro';
 import Snippet from '../../components/Snippet.astro';
+import facts from '../../../../../scripts/facts.json';
 import source from '../../previews/vertices.ts?raw';
 
 <Preview name="vertices" height={460} rows={4} caption="One attachment of the bee of the slot game Bzzz over the dimmed bee: its triangles, its vertices, and the bones one vertex follows. On the right is the place of the image on the atlas page, magnified, with the same triangles." />
@@ -57,10 +58,10 @@ An animation can move the vertices of a mesh directly too, with deform keys. The
 
 A region costs 4 vertices, however it moves. A mesh costs as many vertices as it has, and a weighted vertex costs work for every bone it follows. The attachments of the bee have 161 vertices in all: 21 regions of 4, and 6 meshes with 77.
 
-The runtime batches a skeleton of up to 1024 vertices with the skeletons around it. So the bee and the other skeletons of its set share draw calls. A larger one gets meshes of its own.
+The runtime batches a skeleton of up to {facts.batch.autoVertices} vertices with the skeletons around it. So the bee and the other skeletons of its set share draw calls. A larger one gets meshes of its own. In both modes the CPU places the vertices, unless a game sets `skinning: 'gpu'` for the mesh mode.
 
 ## What pixi-marrow does
 
-The vertex math is the arithmetic of the official runtime, and it is public in `pixi-marrow/core`. The runtime computes the corners of every region once into a layout, and every copy of the asset shares it. Each frame, a copy places, colors and uploads only what changed since the frame before.
+The vertex math is the arithmetic of the official runtime, and it is public in `pixi-marrow/core`. The runtime computes the corners of every region once into a layout, and every instance of the asset shares it. Each frame, an instance places, colors and uploads only what changed since the frame before.
 
-With `skinning: 'gpu'`, a skeleton in the mesh mode leaves the weighting to the vertex shader. It then uploads its bone matrices, 24 bytes a bone, in place of its vertices. [Performance](/performance/) says when that pays.
+With `skinning: 'gpu'`, a skeleton in the mesh mode leaves the weighting to the vertex shader. It then uploads its bone matrices, 24 bytes a bone, in place of its vertices. The CPU still places a mesh while a deform is on it, and a region with a sequence. The setting does nothing in the batched mode. [Performance](/performance/#skinning) says when it pays.

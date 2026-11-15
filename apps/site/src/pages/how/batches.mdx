@@ -6,6 +6,7 @@ description: The vertices are ready, and now the CPU must tell the GPU to draw t
 
 import Diagram from '../../components/Diagram.astro';
 import Preview from '../../components/Preview.astro';
+import facts from '../../../../../scripts/facts.json';
 
 <Preview name="batches" height={460} rows={4} caption="Fifteen symbols of the slot game Bzzz. The counter counts the draw calls of each frame on the WebGL context of this preview. Use a switch to break the batch." />
 
@@ -14,6 +15,8 @@ import Preview from '../../components/Preview.astro';
 Inside a skeleton, the slots draw from the back to the front, as the anatomy page showed. Between skeletons, Pixi decides. The children of a container draw in order, and the last child draws on top.
 
 Every two seconds a symbol wins in the preview. It grows a little, so it must draw over its neighbours. The preview moves it to the end of the container with `reels.addChild(symbol)`, and the counter stays at one.
+
+The draw call count stays, but the move is not free. A change of the order makes Pixi build the instructions of that render group again. Each skeleton in it then writes itself into the batch again. Once every two seconds is fine. A game that changes the order in every frame pays that in every frame. `stats.instructionBuilds` counts the builds.
 
 ## Draw calls
 
@@ -31,7 +34,7 @@ The batched mode writes the triangles of skeletons that follow each other into o
 
 - the same shader
 - the same blend state
-- at most 16 atlas pages.
+- at most {facts.batch.pages} atlas pages.
 
 The Bzzz symbols share one page, so the 15 symbols take one call.
 
@@ -43,24 +46,44 @@ The glow of the coin is additive: it brightens what lies under it. Additive blen
 
 pixi-marrow draws with premultiplied alpha, where a color is already multiplied by its alpha. The GPU then blends with one rule: the new color, plus what lies under it times one minus the new alpha. A normal pixel covers what is under it by its alpha. An additive pixel writes an alpha of 0. So what lies under it stays whole, and the color adds to it. One rule serves both, and the coin stays in the batch.
 
+One result follows from the alpha of 0. An additive slot adds no alpha to the target. Over an opaque background that changes nothing. In a transparent canvas or a render texture, a glow over nothing stays transparent in the alpha channel. What the page shows behind such a canvas then shines through the glow.
+
 ## What ends a batch
 
 Use the switches one at a time:
 
 - **text between** puts a Pixi text into the container, between two symbols. The frame takes 3 calls: the symbols before the text, the text, and the symbols after it. Keep texts, frames and effects above or below the symbols, never between them.
 - **multiply** makes one symbol multiply what is under it. That needs another blend state, so the frame takes 3 calls again. A slot that multiplies or screens inside a skeleton ends the batch the same way. Additive slots do not.
-- **meshes** changes every symbol to the mesh mode, where a skeleton draws its own mesh. The frame takes 15 calls. `renderMode: 'auto'` picks that mode for a skeleton of more than 1024 vertices. It picks the batched mode for every smaller one.
+- **meshes** changes every symbol to the mesh mode, where a skeleton draws its own mesh. The frame takes 15 calls. `renderMode: 'auto'` picks that mode for a skeleton of more than {facts.batch.autoVertices} vertices. It picks the batched mode for every smaller one.
 
-A batch also ends when its skeletons need more than 16 atlas pages. So a set of skeletons on a few pages keeps its batches long.
+Four more things end a batch, and the preview has no switch for them:
+
+- **Too many pages.** A batch ends when its skeletons need more than {facts.batch.pages} atlas pages. So a set of skeletons on a few pages keeps its batches long. In the mesh mode one draw samples up to {facts.mesh.pages} pages.
+- **A dark tint.** A skeleton with a dark tint on a slot draws with a second batcher, whose vertices carry one more color. So a batch ends where a skeleton with a dark tint follows one without. The other way round costs nothing: a skeleton without a dark tint joins the open batch of one with it. Keep skeletons with a dark tint next to each other in the display list.
+- **A render group, a mask or a filter.** Each starts draw calls of its own in Pixi.
+- **A container attached to a slot.** The skeleton ends its draw call at that slot.
+
+A device can also refuse the batch. Some devices sample fewer textures in one draw than the pages one skeleton needs, up to {facts.batch.pages}. The skeleton then draws in the mesh mode, also with `renderMode: 'batched'`. `stats.renderMode` names the mode in use, and the `renderMode` row of `perf.report()` gives the reason.
 
 ## Uploads
 
 Before a draw, the GPU needs the vertices. The batched mode keeps them in two buffers. Positions change with the pose. Texture coordinates, colors and flags change now and then.
 
-Every skeleton notes the parts of the buffer that it wrote. Before the draw, the runtime uploads only those parts. A skeleton at rest uploads nothing, so a reel that stands still costs one draw call and no upload.
+Every skeleton notes the stretches of the buffer that it wrote. Before the draw, the runtime uploads them. How exact that is depends on the renderer and on the version of pixi.js:
+
+| Mode | Renderer and pixi.js | What uploads |
+|---|---|---|
+| Batched | WebGPU, and WebGL2 from 8.23 | Each stretch that changed |
+| Batched | WebGL2 on 8.21 and 8.22 | One stretch per buffer, from the first change to the last |
+| Mesh | From 8.23 | The range that changed |
+| Mesh | 8.21 and 8.22 | The whole buffer of the skeleton |
+
+When many stretches changed, the runtime uploads the used part of the buffer whole, because that is cheaper than many small calls. After Pixi builds the instructions of a render group again, the buffers of its batches upload whole too.
+
+A skeleton at rest uploads nothing, so a reel that stands still costs one draw call and no upload. That holds while no display object above the skeleton moves, fades or changes its tint. In the batched mode such a parent makes each skeleton below it write every vertex again. `stats.frameBytes` is 0 after a frame in which a skeleton sent nothing. [Performance caveats](/performance/caveats/#a-parent-that-moves-or-fades) has the fix, and the rule is [MARROW001](/performance/rules/#marrow001).
 
 ## What pixi-marrow does
 
-pixi-marrow has two batchers of its own. An element of a batch is a whole skeleton, with up to 16 pages of its atlas. The batch goes to the batch pipe of Pixi like any other batch. So skeletons mix with Pixi objects in the display list and keep their order.
+pixi-marrow has two batchers of its own, one for skeletons with a dark tint and one for the others. An element of a batch is a whole skeleton, with up to {facts.batch.pages} pages of its atlas. The batch goes to the batch pipe of Pixi like any other batch. So skeletons mix with Pixi objects in the display list and keep their order.
 
 `stats.drawCalls` gives the draw calls of one skeleton, and `perf.report()` says why it takes them.
