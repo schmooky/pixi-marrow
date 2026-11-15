@@ -109,11 +109,15 @@ interface InstancingReport {
     drawnWith: number;
     /** The vertices the vertex shader runs per instance: every entry of every slot of the layout. */
     unionVertices: number;
+    /** The vertices the setup pose shows with the skin, in the mesh mode. 0 in the batched mode. */
+    setupVertices: number;
     /** The bytes of its slot in the pool. */
     slotBytes: number;
     /** The slots of the pools of its layout that views take, and their room. */
     poolSlots: number;
     poolRoom: number;
+    /** The uploads of the pools of its layout so far, which every view of the layout shares. */
+    poolUploads: number;
 }
 
 /** How much of a skeleton moved for its view, as plain data. */
@@ -307,10 +311,12 @@ function describeInstancing({ paints, template }: ViewParts, batched: boolean): 
     const pools = instance?.layout?.pools ?? [];
     let poolSlots = 0;
     let poolRoom = 0;
+    let poolUploads = 0;
 
     for (const pool of pools) {
         poolSlots += pool.used;
         poolRoom += pool.room;
+        poolUploads += pool.uploads;
     }
 
     return {
@@ -319,9 +325,11 @@ function describeInstancing({ paints, template }: ViewParts, batched: boolean): 
         draws: instance?.body.run?.draws ?? 0,
         drawnWith: instance?.body.drawnWith ?? 0,
         unionVertices: template.vertexCount,
+        setupVertices: mesh?.setupVertices(template) ?? 0,
         slotBytes: instance?.bytes ?? 0,
         poolSlots,
         poolRoom,
+        poolUploads,
     };
 }
 
@@ -393,7 +401,10 @@ export function inspectView(view: SkeletonView): ViewReport {
             (paints.mesh?.instanced?.bytes ?? 0) +
             (paints.body?.element.arrayBytes ?? 0) +
             batchBytes,
-        layoutBytes: layoutArrayBytes(template) + (paints.mesh?.instanced?.layout?.bytes ?? 0),
+        layoutBytes:
+            layoutArrayBytes(template) +
+            (paints.mesh?.sharedSkinBytes ?? 0) +
+            (paints.mesh?.instanced?.layout?.bytes ?? 0),
         gpuBytes: meshBufferBytes(view.container) + batchBytes,
     };
 }

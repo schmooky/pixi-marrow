@@ -1,4 +1,4 @@
-import { Buffer, BufferUsage, type Shader, type TextureSource } from 'pixi.js';
+import type { Buffer, Shader, TextureSource } from 'pixi.js';
 import type { SkeletonModel } from '../model/model';
 import type { PoseState } from '../pose/state';
 import type { PosePass } from './pose-pass';
@@ -11,8 +11,9 @@ import type { VisibleList } from './visible';
 
 /**
  * What a view of the mesh mode draws with when its vertex shader places the vertices. That is
- * the vertex buffer `aSkin` on the skin data of its layout, the bone and palette textures, and a
- * shader per group of pages that reads them. The skin data is shared by the views of a layout.
+ * the vertex buffer `aSkin` of the skin data of its layout, the bone and palette textures, and a
+ * shader per group of pages that reads them. The skin data and its buffer are shared by the
+ * views of a layout.
  * The textures of its own exist once the view draws alone: a view that draws instanced writes
  * its pose into a slot of shared ones, see {@link use}.
  *
@@ -22,8 +23,6 @@ import type { VisibleList } from './visible';
  * skin.pose(pass, template, state, seen);
  */
 export class MeshSkin {
-    /** Per vertex: the first influence, and the influence count with the slot. See `skin-layout.ts`. */
-    readonly buffer: Buffer;
     private readonly textures: SkinPose;
     /** The bone and palette textures of the view, once it drew alone. */
     private own: TextureStore | undefined;
@@ -43,17 +42,24 @@ export class MeshSkin {
         this.layout = retainSkinLayout(template, model);
         this.own = new TextureStore(model);
         this.textures = new SkinPose(model, this.own);
-        this.buffer = new Buffer({
-            data: this.layout.vertices,
-            label: 'marrow-skin',
-            usage: BufferUsage.VERTEX | BufferUsage.COPY_DST,
-            shrinkToFit: false,
-        });
     }
 
-    /** The bytes of the bone and palette textures of the view. The skin data of the layout is shared. */
+    /**
+     * Per vertex: the first influence, and the influence count with the slot. See `skin-layout.ts`.
+     * The buffer of the layout: another one after {@link resize} took another layout.
+     */
+    get buffer(): Buffer {
+        return this.layout.buffer;
+    }
+
+    /** The bytes of the bone and palette textures of the view. The skin data of the layout is shared, see {@link sharedBytes}. */
     get bytes(): number {
         return this.own?.bytes ?? 0;
+    }
+
+    /** The bytes of the skin data of the layout, which its views share. */
+    get sharedBytes(): number {
+        return this.layout.bytes;
     }
 
     /** The skin data of the layout the view draws with. */
@@ -103,7 +109,6 @@ export class MeshSkin {
 
         if (after !== before) {
             this.layout = after;
-            this.buffer.data = after.vertices;
             // a destroyed shader has no resources
             for (const shader of this.shaders)
                 if (shader.resources !== null) shader.resources.uInfluences = after.influences;
@@ -127,10 +132,9 @@ export class MeshSkin {
         this.textures.settle(template, this.layout, state, visible);
     }
 
-    /** Frees the buffer and the textures, and gives the skin data back. The draw ranges destroy the shaders. */
+    /** Frees the textures, and gives the skin data and its buffer back. The draw ranges destroy the shaders. */
     destroy(): void {
         releaseSkinLayout(this.template, this.layout);
-        this.buffer.destroy();
         this.own?.destroy();
         this.own = undefined;
         this.shaders.length = 0;

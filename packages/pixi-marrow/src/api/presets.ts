@@ -24,11 +24,14 @@ export interface PerfSettings {
     /**
      * `auto` draws the instances that follow each other in Pixi's render order and share a layout
      * as one instanced draw, where the vertex shader places their vertices: the mesh mode with
-     * `skinning: 'gpu'`. The picture is the same to the bit. It pays for many copies of one rig
-     * next to each other, and not for a grid of different skeletons. No preset sets it. `off`
-     * (the default) draws each instance alone.
+     * `skinning: 'gpu'`. The pixel check found the picture the same to the bit, on an Apple M4 in
+     * Chrome. Another GPU may round it apart. It pays for many copies of one rig
+     * next to each other, and not for a grid of different skeletons. An instanced draw runs every
+     * attachment of every slot, so `auto` leaves a layout alone whose attachments have more than
+     * twice the vertices of what the setup pose shows. `on` draws that one instanced too. No
+     * preset sets either. `off` (the default) draws each instance alone.
      */
-    instancing: 'auto' | 'off';
+    instancing: 'auto' | 'on' | 'off';
     /**
      * `auto` plays an animation from frames baked at load time, where it can be: one track, no
      * mix, no physics, no handle that writes a bone. The pose equals the played one at the
@@ -118,7 +121,7 @@ const PRESETS = Object.keys(PERF_PRESETS) as PerfPreset[];
 const CHOICES: Record<keyof PerfSettings, readonly string[]> = {
     tightMesh: ['auto', 'on', 'off'],
     skinning: ['auto', 'cpu', 'gpu'],
-    instancing: ['auto', 'off'],
+    instancing: ['auto', 'off', 'on'],
     bake: ['off', 'auto'],
     idleCache: ['off', 'auto'],
     offscreen: ['update', 'throttle', 'pause'],

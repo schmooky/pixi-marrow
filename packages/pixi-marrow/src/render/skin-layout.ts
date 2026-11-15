@@ -1,4 +1,4 @@
-import { BufferImageSource } from 'pixi.js';
+import { Buffer, BufferImageSource, BufferUsage } from 'pixi.js';
 import { type FloatArray, f32, float, i16, i32 } from '../geometry/read';
 import type { VertexData } from '../model/attachments';
 import type { SkeletonModel } from '../model/model';
@@ -25,6 +25,10 @@ const DATA_ROW = 2048;
 export interface SkinLayout {
     /** Per vertex two numbers. The first influence, then the influence count and the slot as `count | slot << 16`. */
     readonly vertices: Uint32Array;
+    /** The vertex buffer `aSkin` on {@link vertices}, which every view of the layout draws with. */
+    readonly buffer: Buffer;
+    /** The bytes of {@link vertices} and of the influences, once for all views of the layout. */
+    readonly bytes: number;
     /** Per influence: bone, x, y, weight. */
     readonly influences: BufferImageSource;
     /** Per entry: 1 when the vertex shader can place its vertices. */
@@ -189,7 +193,23 @@ function layOut(template: Template, slotBones: Int16Array): SkinLayout {
         if (placeable[entry] === 1) texel = writeEntry(template, entry, i16(slotBones, slot), vertices, out, texel);
     }
 
-    return { vertices, influences, placeable, count, uses: 0, instances: undefined };
+    const buffer = new Buffer({
+        data: vertices,
+        label: 'marrow-skin',
+        usage: BufferUsage.VERTEX | BufferUsage.COPY_DST,
+        shrinkToFit: false,
+    });
+
+    return {
+        vertices,
+        buffer,
+        bytes: vertices.byteLength + out.byteLength,
+        influences,
+        placeable,
+        count,
+        uses: 0,
+        instances: undefined,
+    };
 }
 
 /** Per layout, by an array that all instances of it share: its skin data while a view draws with it. */
@@ -218,7 +238,7 @@ export function retainSkinLayout(template: Template, model: SkeletonModel): Skin
 
 /**
  * Gives skin data of {@link retainSkinLayout} back. The last view that gives it back frees its
- * texture, and the next view lays it out again.
+ * buffer and its texture, and the next view lays it out again.
  *
  * @example
  * releaseSkinLayout(template, skin);
@@ -230,5 +250,6 @@ export function releaseSkinLayout(template: Template, layout: SkinLayout): void 
     // the shaders of the instanced draw bind the influences
     layout.instances?.destroy();
     layout.instances = undefined;
+    layout.buffer.destroy();
     layout.influences.destroy();
 }

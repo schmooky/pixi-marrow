@@ -1,4 +1,4 @@
-import { Buffer, BufferUsage, Geometry, type Shader, type TextureSource } from 'pixi.js';
+import { Buffer, BufferUsage, Geometry, type Shader, type State, type TextureSource } from 'pixi.js';
 import type { InstanceLayout, Union } from './instance-layout';
 import type { InstanceBody } from './instance-paint';
 import type { InstancePool } from './instance-pool';
@@ -7,6 +7,10 @@ import type { InstancePool } from './instance-pool';
  * One instanced draw of a run, with what it drew with last: its buffer of instance data, the
  * geometries of the draw orders it drew lately, and its shader. A run keeps a part per draw of
  * a frame, see `instance-pipe.ts`.
+ *
+ * A part that a frame does not draw with lets go of its shader and of what that was made for:
+ * the layout, the pool and the pages. A part that rests for many frames in a row is freed, so a
+ * run that once drew in many parts shrinks again.
  */
 
 /** Numbers of instance data per instance: three columns of the transform, the color and three bases. */
@@ -36,23 +40,15 @@ class SharedGeometry extends Geometry {
     }
 }
 
-/** What the shader of a draw is made for: the layout, the pool, the pages and the variant. */
-export interface Shaded {
-    layout: InstanceLayout;
-    pool: InstancePool;
-    pages: readonly TextureSource[];
-    dark: boolean;
-    round: boolean;
+/** What a part hands the encoder of a renderer for its draw. */
+export interface DrawCall {
+    geometry: Geometry;
+    shader: Shader;
+    state: State;
+    size: number;
+    start: number;
+    instanceCount: number;
 }
-
-/** Whether two draws take the same shader. */
-const sameShader = (a: Shaded | undefined, b: Shaded): boolean =>
-    a !== undefined &&
-    a.layout === b.layout &&
-    a.pool === b.pool &&
-    a.pages === b.pages &&
-    a.dark === b.dark &&
-    a.round === b.round;
 
 /**
  * One instanced draw of a run, with what it drew with last.
@@ -60,7 +56,8 @@ const sameShader = (a: Shaded | undefined, b: Shaded): boolean =>
  * @example
  * const part = new RunPart();
  * part.write(0, body);
- * renderer.encoder.draw({ geometry: part.geometry(layout, union), shader: part.shade(want), instanceCount: 1 });
+ * const shader = part.shade(layout, pool, pages, false, false);
+ * renderer.encoder.draw(part.drawCall(part.geometry(layout, union), shader, state, union.count, 1));
  */
 export class RunPart {
     readonly buffer: Buffer;
@@ -71,8 +68,16 @@ export class RunPart {
     private readonly geometries: SharedGeometry[] = [];
     private readonly unions: Union[] = [];
     private shader: Shader | undefined;
-    /** What {@link shader} was made for. */
-    private shaded: Shaded | undefined;
+    /** What {@link shader} was made for: the layout, the pool, the pages and the variant. */
+    private layout: InstanceLayout | undefined;
+    private pool: InstancePool | undefined;
+    private pages: readonly TextureSource[] | undefined;
+    private dark = false;
+    private round = false;
+    /** What the part hands the encoder. One object, made again after a rest. */
+    private call: DrawCall | undefined;
+    /** Frames in a row in which the part drew nothing. */
+    rested = 0;
 
     constructor() {
         this.buffer = new Buffer({
@@ -173,18 +178,77 @@ export class RunPart {
      * The shader of a draw. The layout keeps its shaders, and the part asks it again when the
      * draw is another one, or when the pool grew and has other textures.
      */
-    shade(want: Shaded): Shader {
-        const { shader, shaded: was } = this;
+    shade(
+        layout: InstanceLayout,
+        pool: InstancePool,
+        pages: readonly TextureSource[],
+        dark: boolean,
+        round: boolean,
+    ): Shader {
+        const { shader } = this;
 
-        if (shader !== undefined && sameShader(was, want) && shader.resources?.uPose === want.pool.pose) return shader;
-        this.shaded = { ...want };
-        this.shader = want.layout.shader(want.pool, want.pages, want.dark, want.round);
+        if (
+            shader !== undefined &&
+            this.layout === layout &&
+            this.pool === pool &&
+            this.pages === pages &&
+            this.dark === dark &&
+            this.round === round &&
+            shader.resources?.uPose === pool.pose
+        ) {
+            return shader;
+        }
+        this.layout = layout;
+        this.pool = pool;
+        this.pages = pages;
+        this.dark = dark;
+        this.round = round;
+        this.shader = layout.shader(pool, pages, dark, round);
 
         return this.shader;
     }
 
+    /** What the encoder draws for the part: one object for every draw of the part. */
+    drawCall(geometry: Geometry, shader: Shader, state: State, size: number, instanceCount: number): DrawCall {
+        this.call ??= { geometry, shader, state, size, start: 0, instanceCount };
+        const { call } = this;
+
+        call.geometry = geometry;
+        call.shader = shader;
+        call.state = state;
+        call.size = size;
+        call.instanceCount = instanceCount;
+
+        return call;
+    }
+
+    /** The part drew nothing this frame: it counts the frame and lets go, see {@link release}. */
+    rest(): void {
+        this.rested++;
+        this.release();
+    }
+
+    /**
+     * Lets go of the shader and of what it was made for, and of the geometries on buffers that
+     * are gone with their layout. The next draw asks the layout again.
+     */
+    release(): void {
+        this.shader = undefined;
+        this.layout = undefined;
+        this.pool = undefined;
+        this.pages = undefined;
+        this.call = undefined;
+        for (let i = this.geometries.length - 1; i >= 0; i--) {
+            if (this.unions[i]?.buffer.destroyed !== true) continue;
+            this.geometries[i]?.release();
+            this.geometries.splice(i, 1);
+            this.unions.splice(i, 1);
+        }
+    }
+
     /** Frees the buffer of instance data and the geometries. The other buffers and the shaders belong to the layouts. */
     destroy(): void {
+        this.release();
         for (const geometry of this.geometries) geometry.release();
         this.geometries.length = 0;
         this.unions.length = 0;

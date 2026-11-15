@@ -269,13 +269,17 @@ export function poseEntries(
 /**
  * Counts in the stats of a view what a pass over its visible entries did.
  *
+ * @param pooled True for a view that draws instanced. It writes into the pool of its layout,
+ *   which uploads once at the draw for all its views and counts that itself, see `InstancePool.uploads`.
+ *
  * @example
  * poseEntries(pass, template, state, bones, hasDark, seen, element);
- * notePass(view.stats, pass);
+ * notePass(view.stats, pass, false);
  */
-export function notePass(stats: ViewStats, pass: PosePass): void {
+export function notePass(stats: ViewStats, pass: PosePass, pooled: boolean): void {
     stats.placedSlots = pass.placed;
     stats.coloredSlots = pass.colored;
+    if (pooled) return;
     if (pass.placed > 0) stats.positionUploads++;
     if (pass.colored > 0) stats.colorUploads++;
     if (pass.skinned > 0) stats.boneUploads++;

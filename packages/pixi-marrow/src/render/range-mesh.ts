@@ -11,8 +11,12 @@ export interface VertexBuffers {
     readonly statics: Buffer;
     /** The light color per vertex, and with dark colors the dark color after it. None where a palette holds the colors. */
     readonly colors?: Buffer | undefined;
-    /** Where the vertex shader finds the influences and the slot of each vertex, see `skin-layout.ts`. */
-    readonly skin?: Buffer | undefined;
+    /**
+     * Where the vertex shader finds the influences and the slot of each vertex, see
+     * `skin-layout.ts`. It is the buffer of the skin data of a layout, which the views of the
+     * layout share, so a view that takes another layout takes another buffer.
+     */
+    skin?: Buffer | undefined;
 }
 
 /**
@@ -56,10 +60,29 @@ export function createRangeMesh(
         usage: BufferUsage.INDEX | BufferUsage.COPY_DST,
         shrinkToFit: false,
     });
+    const geometry = rangeGeometry(buffers, dark, measure, buffer);
+
+    return { mesh: new RangeMesh({ geometry, shader, label }), buffer };
+}
+
+/**
+ * The geometry of a draw range: the vertex buffers of the view as they are now, and the index
+ * buffer of the range.
+ *
+ * @example
+ * range.mesh.geometry = rangeGeometry(buffers, false, measure, range.buffer);
+ */
+function rangeGeometry(
+    buffers: VertexBuffers,
+    dark: boolean,
+    measure: () => Bounds,
+    indexBuffer: Buffer,
+): MeasuredGeometry {
     const { colors, skin } = buffers;
     const colorStride = dark ? 8 : 4;
     const staticStride = STATIC_STRIDE * 4;
-    const geometry = new MeasuredGeometry(
+
+    return new MeasuredGeometry(
         {
             attributes: {
                 aPosition: { buffer: buffers.positions, format: 'float32x2', stride: 8, offset: 0 },
@@ -73,10 +96,33 @@ export function createRangeMesh(
                     ? { aDark: { buffer: colors, format: 'unorm8x4', stride: colorStride, offset: 4 } }
                     : {}),
             },
-            indexBuffer: buffer,
+            indexBuffer,
         },
         measure,
     );
+}
 
-    return { mesh: new RangeMesh({ geometry, shader, label }), buffer };
+/**
+ * Gives a range a geometry on the vertex buffers as they are now when its geometry reads another
+ * buffer of skin data. A view that takes the skin data of another layout takes its shared buffer
+ * too. The index buffer of the range stays.
+ *
+ * @example
+ * followSkin(range.mesh, range.buffer, { buffers, dark, measure });
+ */
+export function followSkin(
+    mesh: RangeMesh,
+    indexBuffer: Buffer,
+    options: { readonly buffers: VertexBuffers; readonly dark: boolean; readonly measure: () => Bounds },
+): void {
+    const old = mesh.geometry;
+    const { buffers } = options;
+
+    if (old.attributes.aSkin?.buffer === buffers.skin) return;
+    const geometry = rangeGeometry(buffers, options.dark, options.measure, indexBuffer);
+
+    geometry.indexCount = old.indexCount;
+    mesh.geometry = geometry;
+    // the buffers stay: they belong to the view, the layout and the range
+    old.destroy();
 }

@@ -83,6 +83,32 @@ describe('the option instancing and its row of the report', () => {
         ]);
     });
 
+    it('leaves a layout alone whose attachments have more than twice the vertices of the setup pose, unless on', async () => {
+        const stage = createStage();
+        const speedy = await fixtureAsset('4.2/speedy-ess.skel');
+        const raptor = await fixtureAsset('4.3/raptor-pro.skel');
+        // speedy-ess has 108 vertices in all, and its setup pose shows 44
+        const auto = [0, 1].map(() => create(speedy));
+        const on = [0, 1].map(() => create(speedy, { instancing: 'on' }));
+
+        for (const spine of [...auto, ...on]) stage.root.addChild(spine);
+        stage.render();
+        const [declined, forced] = await Promise.all([
+            row(auto[0] ?? on[0] ?? create(raptor)),
+            row(on[0] ?? create(raptor)),
+        ]);
+
+        expect(declined).toEqual({
+            feature: 'instancing',
+            value: 'off',
+            reason: 'an instanced draw runs all 108 vertices of the attachments of every slot per instance, more than twice the 44 the setup pose shows, so "auto" draws it alone. "on" draws it instanced anyway',
+        });
+        expect(forced.value).toBe('on, run of 2, 1 draw call');
+        // raptor-pro shows 642 of its 679 vertices in the setup pose
+        expect((await row(create(raptor))).reason).not.toContain('setup pose');
+        expect(create(raptor, { instancing: 'on' }).perfSettings.instancing).toBe('on');
+    });
+
     it('names the run and its draws, and an instance that is alone in its run', async () => {
         const stage = createStage();
         const asset = await fixtureAsset('4.3/raptor-pro.skel');
@@ -122,5 +148,42 @@ describe('the option instancing and its row of the report', () => {
         expect(mine.instance).toBeGreaterThan(0);
         expect(mine.instance).not.toBe(theirs.instance);
         expect(mine.shared).toBeGreaterThan(theirs.shared);
+    });
+
+    it('counts no uploads of its own while it draws instanced, and the uploads of the pool where they happen', async () => {
+        const stage = createStage();
+        const asset = await fixtureAsset('4.3/raptor-pro.skel');
+        const spines = [0, 1, 2].map(() => create(asset));
+
+        for (const spine of spines) {
+            spine.play('walk', { loop: true });
+            stage.root.addChild(spine);
+        }
+        stage.render();
+        for (let frame = 0; frame < 5; frame++) {
+            for (const spine of spines) spine.update(1 / 60);
+            stage.render();
+        }
+        const [first] = spines;
+
+        if (first === undefined) throw new Error('three spines');
+        const { stats } = first;
+
+        expect([stats.positionUploads, stats.colorUploads, stats.boneUploads, stats.uvUploads]).toEqual([0, 0, 0, 0]);
+        const uploads = (await first.perf.report()).find((entry) => entry.feature === 'uploads');
+
+        expect(uploads?.value).toBe('shared');
+        // one pool for the three: at most a pose and a palette upload in each of the 6 frames, not 3 of each
+        const count = Number(/(\d+) uploads? so far/.exec(uploads?.reason ?? '')?.[1]);
+
+        expect(count).toBeGreaterThanOrEqual(6);
+        expect(count).toBeLessThanOrEqual(12);
+        expect(uploads?.reason).toContain('shared by 3 instances');
+        // the same skeleton drawn alone counts its own
+        const alone = create(asset, { instancing: 'off' });
+
+        alone.play('walk', { loop: true });
+        alone.update(1 / 60);
+        expect(alone.stats.boneUploads).toBeGreaterThan(0);
     });
 });

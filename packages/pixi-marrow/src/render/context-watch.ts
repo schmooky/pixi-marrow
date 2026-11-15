@@ -1,4 +1,5 @@
 import type { Renderer } from 'pixi.js';
+import { MarrowError } from '../base/errors';
 
 /*
  * Whether the renderer that draws at the moment has lost its WebGL context.
@@ -23,6 +24,11 @@ import type { Renderer } from 'pixi.js';
  *
  * The context is asked once per render of a renderer, not per skeleton. A WebGPU device that is
  * lost is another event, and nothing here watches it.
+ *
+ * A renderer of WebGL1 throws a `MarrowError` here, in every render that draws a skeleton. Every
+ * program of this library is GLSL 3.00, which WebGL1 cannot compile, and Pixi falls back to
+ * WebGL1 where a browser has no WebGL2. The words of the error are short: this is in the root
+ * import, which is near its limit.
  */
 
 /** The renderers that tell this module before each of their renders. */
@@ -47,7 +53,8 @@ export function contextLost(): boolean {
  * call for a renderer adds one listener to it, later calls do nothing. Call it before the
  * renderer first draws a skeleton: the answer for the render that is under way is set at once.
  *
- * A renderer without a WebGL context, as the one of WebGPU, never counts as lost.
+ * A renderer without a WebGL context, as the one of WebGPU, never counts as lost. A renderer of
+ * WebGL1 throws a `MarrowError`, and is not watched, so that its next render throws too.
  *
  * @example
  * watchContext(renderer);
@@ -55,6 +62,9 @@ export function contextLost(): boolean {
  */
 export function watchContext(renderer: Renderer): void {
     if (watched.has(renderer)) return;
+    if ('gl' in renderer && renderer.context?.webGLVersion === 1) {
+        throw new MarrowError('unsupported-feature', 'WebGL1 found.', { fix: 'Use WebGL2 or WebGPU.' });
+    }
     watched.add(renderer);
     // every renderer that draws skeletons answers, so the answer of another one never stays
     const watch = {

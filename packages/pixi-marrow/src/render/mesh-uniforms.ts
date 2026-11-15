@@ -9,6 +9,7 @@ import {
     RendererType,
     type Shader,
     UniformGroup,
+    VERSION,
     type WebGPURenderer,
 } from 'pixi.js';
 import { RangeMesh } from './range-mesh';
@@ -27,14 +28,29 @@ import { RangeMesh } from './range-mesh';
  * Pixi's mesh pipe calls its adaptor once per mesh, with the values of the mesh in the pipe's
  * `localUniforms`. The pipe of a WebGPU renderer gets an adaptor that wraps Pixi's own: every
  * mesh that is not ours, and every mesh of ours while the buffer has room, goes to Pixi's.
+ *
+ * This reads parts of Pixi that are private: the field `_adaptor` of the mesh pipe, and the
+ * fields `byteIndex`, `data` and `_minUniformOffsetAlignment` of `_batchBuffer` of the pipe
+ * `uniformBatch`. They are checked against the source of 8.21.0 and 8.23.0. Where one is
+ * missing, the console says so once, with the version of Pixi.
  */
 
-/** The bytes of one slot of Pixi's batch of uniforms on WebGPU. */
+/** The bytes of one slot of Pixi's batch of uniforms on WebGPU, where the batch does not say. */
 const SLOT_BYTES = 128;
-/** The room of the batch that stays for the rest of the scene: Graphics, sprites in filters, other meshes. */
-const RESERVE_BYTES = 256 * SLOT_BYTES;
+/** The slots of the batch that stay for the rest of the scene: Graphics, sprites in filters, other meshes. */
+const RESERVE_SLOTS = 256;
 /** Marks an adaptor that is already wrapped. */
 const WRAPPED = Symbol('marrow uniforms');
+
+/** True once the console was told that a private part of Pixi is missing. */
+let reported = false;
+
+/** Tells the console once that a private part of Pixi this file reads is not there, and what that costs. */
+function reportMissing(part: string, cost: string): void {
+    if (reported) return;
+    reported = true;
+    console.warn(`pixi-marrow: pixi.js ${VERSION} has no ${part}. ${cost} Report this with the version of pixi.js.`);
+}
 
 /** The uniforms of the mesh pipe, as Pixi fills them for a mesh. */
 interface LocalValues {
@@ -57,16 +73,27 @@ interface OwnUniforms {
 
 const owned = new WeakMap<RangeMesh, OwnUniforms>();
 
-/** The bytes still free in Pixi's batch of uniforms this frame, or 0 where it cannot be read. */
-function batchRoom(renderer: Renderer): number {
+/**
+ * The slots still free in Pixi's batch of uniforms this frame, or 0 where they cannot be read.
+ * Then every mesh of ours binds a buffer of its own, which draws the same picture.
+ */
+function batchSlots(renderer: Renderer): number {
     const pipe: unknown = Reflect.get(renderer.renderPipes, 'uniformBatch');
     const batch: unknown = typeof pipe === 'object' && pipe !== null ? Reflect.get(pipe, '_batchBuffer') : null;
+    const used: unknown = typeof batch === 'object' && batch !== null ? Reflect.get(batch, 'byteIndex') : null;
+    const data: unknown = typeof batch === 'object' && batch !== null ? Reflect.get(batch, 'data') : null;
 
-    if (typeof batch !== 'object' || batch === null) return 0;
-    const used: unknown = Reflect.get(batch, 'byteIndex');
-    const data: unknown = Reflect.get(batch, 'data');
+    if (typeof used !== 'number' || !(data instanceof Float32Array)) {
+        reportMissing(
+            'renderPipes.uniformBatch._batchBuffer with byteIndex and data',
+            'Every mesh of the mesh mode binds a uniform buffer of its own on WebGPU, which costs an upload where it moves.',
+        );
 
-    return typeof used === 'number' && data instanceof Float32Array ? data.byteLength - used : 0;
+        return 0;
+    }
+    const slot: unknown = Reflect.get(batch as object, '_minUniformOffsetAlignment');
+
+    return Math.floor((data.byteLength - used) / (typeof slot === 'number' && slot > 0 ? slot : SLOT_BYTES));
 }
 
 /** The uniform buffer of a mesh, made the first time the mesh needs it and freed with it. */
@@ -74,11 +101,15 @@ function ownOf(mesh: RangeMesh): OwnUniforms {
     let own = owned.get(mesh);
 
     if (own === undefined) {
-        const group = new UniformGroup({
-            uTransformMatrix: { value: new Matrix(), type: 'mat3x3<f32>' as const },
-            uColor: { value: new Float32Array([1, 1, 1, 1]), type: 'vec4<f32>' as const },
-            uRound: { value: 0, type: 'f32' as const },
-        });
+        // static: Pixi uploads the buffer only after `update`, which `writeOwn` calls for new values
+        const group = new UniformGroup(
+            {
+                uTransformMatrix: { value: new Matrix(), type: 'mat3x3<f32>' as const },
+                uColor: { value: new Float32Array([1, 1, 1, 1]), type: 'vec4<f32>' as const },
+                uRound: { value: 0, type: 'f32' as const },
+            },
+            { isStatic: true },
+        );
         const made: OwnUniforms = { group, bind: new BindGroup({ 0: group }), fresh: true };
 
         own = made;
@@ -154,7 +185,15 @@ export function watchUniformBatch(renderer: Renderer): void {
     if (typeof pipe !== 'object' || pipe === null) return;
     const inner: unknown = Reflect.get(pipe, '_adaptor');
 
-    if (typeof inner !== 'object' || inner === null || Reflect.get(inner, WRAPPED) === true) return;
+    if (typeof inner !== 'object' || inner === null) {
+        reportMissing(
+            'renderPipes.mesh._adaptor',
+            'A frame with more than about 2000 meshes on WebGPU throws "ubo batch got too big" in Pixi.',
+        );
+
+        return;
+    }
+    if (Reflect.get(inner, WRAPPED) === true) return;
     const adaptor = inner as MeshAdaptor;
     const wrapped: MeshAdaptor & { [WRAPPED]: true } = {
         [WRAPPED]: true,
@@ -163,7 +202,7 @@ export function watchUniformBatch(renderer: Renderer): void {
         execute(meshPipe: MeshPipe, mesh: Mesh): void {
             const ours = mesh instanceof RangeMesh && mesh.shader?.gpuProgram?.autoAssignLocalUniforms === true;
 
-            if (ours && batchRoom(renderer) < RESERVE_BYTES) drawOwn(renderer as WebGPURenderer, meshPipe, mesh);
+            if (ours && batchSlots(renderer) < RESERVE_SLOTS) drawOwn(renderer as WebGPURenderer, meshPipe, mesh);
             else adaptor.execute(meshPipe, mesh);
         },
         destroy: () => adaptor.destroy(),

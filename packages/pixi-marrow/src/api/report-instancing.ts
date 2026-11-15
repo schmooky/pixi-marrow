@@ -20,6 +20,11 @@ function alone(source: ReportSource): string {
     }
     if (why === 'pages') return 'the atlas has more than 8 pages, which one draw cannot sample';
     if (why === 'size') return 'the layout has more attachments than an instanced draw can tell apart';
+    if (why === 'vertices') {
+        const { unionVertices, setupVertices } = source.view.instancing;
+
+        return `an instanced draw runs all ${unionVertices} vertices of the attachments of every slot per instance, more than twice the ${setupVertices} the setup pose shows, so "auto" draws it alone. "on" draws it instanced anyway`;
+    }
     if (why === 'clip') {
         return 'a clipping attachment cuts a visible slot, which takes a stencil mask. It draws alone while that lasts';
     }
@@ -60,6 +65,24 @@ export function instancingRow(source: ReportSource): PerfEntry {
         feature: 'instancing',
         value: run === 1 ? 'on, alone' : `on, run of ${run}, ${plural(draws, 'draw call')}`,
         reason: `${runs}. ${own}. ${shading}`,
+    };
+}
+
+/**
+ * The row of uploads of a view that draws instanced. The view uploads nothing of its own: it
+ * writes into its slot of a pool, and the pool uploads at the draw, once for all its views.
+ *
+ * @example
+ * const row = instancedUploadsRow(source);
+ * console.log(row.value); // 'shared'
+ */
+export function instancedUploadsRow(source: ReportSource): PerfEntry {
+    const { poolUploads, poolSlots } = source.view.instancing;
+
+    return {
+        feature: 'uploads',
+        value: 'shared',
+        reason: `The skeleton writes its pose into its slot in a pool of its layout and uploads nothing itself. Each pool uploads one stretch per texture in a frame that wrote to it: ${plural(poolUploads, 'upload')} so far, shared by ${plural(poolSlots, 'instance')}`,
     };
 }
 

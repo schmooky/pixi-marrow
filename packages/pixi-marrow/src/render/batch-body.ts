@@ -13,8 +13,8 @@ export interface BatchBodyOptions extends Omit<BatchElementOptions, 'place'> {
 /** Puts the pipe of the batched mode into the renderer that is about to draw a body. */
 function link(this: BatchBody, renderer: Renderer): void {
     if (renderer === this.linked) return;
-    this.linked = renderer;
     linkRenderer(renderer);
+    this.linked = renderer;
     // a GPU that cannot sample the pages of one run in a batch: the view goes back to meshes before Pixi collects it
     if (renderer.limits.maxBatchableTextures < Math.min(this.element.pages.length, GROUP_PAGES)) {
         this.gate.refuseBatch();

@@ -37,8 +37,8 @@ export interface SkeletonViewOptions extends CutChoice {
     renderMode?: RenderMode | undefined;
     /** `gpu` places the mesh-mode vertices in the vertex shader where it can. `cpu` and `auto` use the CPU. */
     skinning?: 'auto' | 'cpu' | 'gpu' | undefined;
-    /** `auto` draws views of the mesh mode with `gpu` instanced where it can, see `instance-pipe.ts`. */
-    instancing?: 'auto' | 'off' | undefined;
+    /** `auto` draws views of the mesh mode with `gpu` instanced where it pays, `on` where it can. See `instance-pipe.ts`. */
+    instancing?: 'auto' | 'on' | 'off' | undefined;
 }
 
 /** A view looks at its page textures in one update of this many. A power of two. */
@@ -164,7 +164,7 @@ export class SkeletonView implements DrawGate {
             stats: this.stats,
             measure: () => this.measure(),
             gpu: options.skinning === 'gpu',
-            instancing: options.instancing !== 'off',
+            instancing: options.instancing ?? 'auto',
         });
         this.stats.renderMode = this.paints.pick(this.choice, this.slots.plain, false) ?? 'batched';
         // a view that is made for the mesh mode asks for its code, also after a load that failed
@@ -399,7 +399,7 @@ export class SkeletonView implements DrawGate {
 
         if (element === undefined && mesh !== undefined) mesh.pose(pass, template, state, seen);
         else poseEntries(pass, template, state, bones, hasDark, seen, element);
-        notePass(stats, pass);
+        notePass(stats, pass, element === undefined && mesh?.instanced !== undefined);
         const moved = pass.placed > 0 || pass.skinned > 0 || pass.reshaped || listed;
 
         if (moved) this.boundsDirty = true;
