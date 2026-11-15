@@ -10,15 +10,17 @@ import source from '../../snippets/guide-mix.ts?raw';
 
 ## Queue
 
-<Diagram name="mix-queue" lanes={3} timeline rows={1} height={260} caption="A landing bounces a square once, and an idle loop that pulses its scale is queued after it with a mix of 0.2 seconds. Pick a delay to see where the idle loop starts. The light band is the mix." />
+<Diagram name="mix-queue" lanes={3} timeline rows={1} height={260} caption="A landing bounces a square once. Then a queued idle loop pulses its scale, with a mix of 0.2 seconds. Pick a delay to see where the idle loop starts. The light band is the mix." />
 
 `queue` plays an animation after what the track holds now, with no gap between them. On an empty track it plays at once. A short animation that ends in a loop is the common case: a bounce and then rest, a hit and then idle.
 
-At `delay 0` the mix ends exactly where the landing ends. The landing plays to its end, but over its last 0.2 seconds the pulse mixes in, so the bounce comes down lower than it would alone. At `delay -0.2` the idle loop starts while the square is still in the air, and the bounce is cut short. At `delay 0.15` it starts 0.15 seconds after the landing started, which is how a reaction can begin before the action is over.
+- At `delay 0` the mix ends exactly where the landing ends. The landing plays to its end, but over its last 0.2 seconds the pulse mixes in. So the bounce comes down lower than it would alone.
+- At `delay -0.2` the idle loop starts while the square is still in the air, and the bounce ends early.
+- At `delay 0.15` the idle loop starts 0.15 seconds after the landing started. That is how a reaction can start before the action is over.
 
 <Snippet source={source} regions="queue" />
 
-`delay` above 0 starts the queued animation that many seconds after the one before it started. At 0 or below it counts from the end of the one before, less the mix, so a negative delay starts it a little early.
+`delay` above 0 starts the queued animation that many seconds after the one before it started. At 0 or below it counts from the end of the one before, less the mix. So a negative delay starts it a little early.
 
 <Snippet source={source} regions="delay" />
 
@@ -26,11 +28,11 @@ At `delay 0` the mix ends exactly where the landing ends. The landing plays to i
 
 When one animation replaces another, the pose would jump from one to the other. A mix blends them over some time instead: the outgoing animation fades while the incoming one grows.
 
-<Diagram name="mix-time" lanes={3} timeline rows={1} height={260} caption="One track plays A, which moves a square right, then B, which scales it up, then A again. Each is replaced at its far end. Pick a mix to see how long the change takes. The light bands are the mixes." />
+<Diagram name="mix-time" lanes={3} timeline rows={1} height={260} caption="One track plays A, which moves a square right, then B, which grows it, then A again. The next animation replaces each one at its far end. Pick a mix to see how long the change takes. The light bands are the mixes." />
 
-Pick **0 s** first. The square jumps: one frame it is far to the right, the next it is home, where B starts to scale it. When A comes back, the grown square jumps back to its own size. With **0.5 s** it slides home while B starts to scale it. Each value goes from where the old animation has it to where the new one has it, a little further every frame.
+Pick **0 s** first. The square jumps: one frame it is far to the right, the next it is home, where B starts to scale it. When A returns, the grown square jumps back to its own size. With **0.5 s** it slides home while B starts to scale it. Each value goes from where the old animation has it to where the new one has it, a little further every frame.
 
-A value that the new animation does not key goes back to the setup pose over the mix. B keys no position, so the square slides home. If B moved the square too, it would slide from where A had it to where B has it.
+A value that the new animation does not key returns to the setup pose over the mix. B keys no position, so the square slides home. If B moved the square too, it would slide from where A had it to where B has it.
 
 <Snippet source={source} regions="mix" />
 
@@ -40,7 +42,7 @@ The mix comes from three places, and the most specific wins:
 - `setMix` holds for one pair of animations.
 - `defaultMix` holds for every other pair. It is 0 unless you set it.
 
-`mix: 0` cuts at once. Use it where the change has to happen on a beat, such as a bounce that must start the moment something lands.
+`mix: 0` cuts at once. Use it where the change has to happen on a beat. An example is a bounce that must start the moment something lands.
 
 A mix blends what moves: bones, colors and deforms. The image a slot shows does not fade. By default it switches when the mix starts. The entry field `mixAttachmentThreshold` moves that point on a skeleton of Spine 4.2 or 4.3, and `attachmentThreshold` on one of 4.1. The name of the other version throws a `MarrowError`.
 
@@ -50,7 +52,7 @@ A mix blends what moves: bones, colors and deforms. The image a slot shows does 
 
 Each track holds one animation, and a higher track applies over the lower ones. An animation on track 1 sets the bones and slots it keys, and the others keep what track 0 gives them. So an overlay can wave a hand while the legs keep walking.
 
-The two tracks key different values, so nothing competes: the square moves and scales at once. Pick **stop()**, and track 1 ends at once. The scale does not go back to the setup pose. No track keys it any more, so it stays where track 1 left it. Pick **plays**, then **stop, mix 0.5**, and the scale fades back to the setup pose over half a second.
+The two tracks key different values, so nothing competes: the square moves and scales at once. Pick **stop()**, and track 1 ends at once. The scale does not return to the setup pose. No track keys it any more, so it stays where track 1 left it. Pick **plays**, then **stop, mix 0.5**, and the scale fades back to the setup pose over half a second.
 
 <Snippet source={source} regions="layers" />
 
@@ -62,7 +64,7 @@ When two tracks key the same value, the higher one decides how they combine:
 - **alpha 0.5**: track 1 applies half way. The scale sits between what track 0 and track 1 give, so the two partly cancel.
 - **additive**: track 1 adds its change from the setup pose. Track 0 grows the square by 0.8 and track 1 shrinks it by 0.5, so the result grows by 0.3 at most.
 
-`alpha` sets the share in code, and `additive: true` makes a track add. An additive track suits a change that should come on top of anything, such as a breath or a recoil. On a skeleton of Spine 4.1 or 4.2, track 0 never adds: put an additive animation on track 1 or higher.
+`alpha` sets the share in code, and `additive: true` makes a track add. An additive track suits a change that should apply over anything, such as a breath or a recoil. On a skeleton of Spine 4.1 or 4.2, track 0 never adds: put an additive animation on track 1 or higher.
 
 <Snippet source={source} regions="fade" />
 
