@@ -1,8 +1,11 @@
 /*
  * How the runtime combines animations, on a square with three values: x, y and a scale. The
- * rules are those of the official runtime for a bone. Track 0 starts from the setup pose. A
- * higher track replaces what it keys, part of the way when its alpha is below 1, or adds to it.
- * A mix on one track blends from the animation before to the new one over the mix time.
+ * rules are those of the official runtime for a bone. The pose stays from one update to the
+ * next: a value that no track keys keeps what was written last, and nothing puts it back to the
+ * setup pose. A track replaces what it keys, part of the way when its alpha is below 1, or adds
+ * to it. A mix on one track blends from the animation before to the new one over the mix time.
+ * A track that is stopped with a mix fades what it keys back to what the tracks below give, or
+ * to the setup pose where they key nothing. Stopped without a mix, it leaves the values as they are.
  */
 
 /** The values of the square. In the setup pose it stands at 0, 0 with scale 1. */
@@ -52,6 +55,26 @@ export function mix(from: Keys, to: Keys, weight: number): Pose {
     const result = { ...SETUP };
 
     for (const name of NAMES) result[name] = lerp(from[name] ?? SETUP[name], to[name] ?? SETUP[name], weight);
+
+    return result;
+}
+
+/**
+ * A higher track that `stop` mixes out, `share` of the way from 0 to 1, over a value no lower
+ * track keys. The official runtime blends what it keys from the setup pose toward the animation,
+ * with an alpha that falls from 1 to 0 over the mix.
+ *
+ * @example
+ * fadeOut({ x: 100, y: 0, scale: 1.4 }, { scale: 1.6 }, 0.5); // { x: 100, y: 0, scale: 1.3 }
+ */
+export function fadeOut(below: Pose, keys: Keys, share: number): Pose {
+    const result = { ...below };
+
+    for (const name of NAMES) {
+        const value = keys[name];
+
+        if (value !== undefined) result[name] = lerp(SETUP[name], value, 1 - share);
+    }
 
     return result;
 }
