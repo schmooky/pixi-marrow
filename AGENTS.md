@@ -30,9 +30,11 @@ Entry points:
 |---|---|
 | `pixi-marrow` | `MarrowSpine`, the display object, with `MarrowAsset`, `Track` and `MarrowError`. Needs `pixi.js`. |
 | `pixi-marrow/core` | `importSkeleton`, `importAtlas`, `createPoseEngine`, the geometry functions, `describeSkeleton` and the model types. No Pixi. Runs in Node. |
-| `pixi-marrow/optimize` | `generateNames`, `buildAtlasOutlines`, `decodePng` and the `pixi-marrow` command line tool (`info`, `typegen`, `outlines`). Runs in Node. |
+| `pixi-marrow/optimize` | `generateNames`, `buildAtlasOutlines`, `decodePng` and the `pixi-marrow` command line tool (`info`, `typegen`, `outlines`, `rules`, `diagnose`). Runs in Node. |
 | `pixi-marrow/debug` | `MarrowDebug`: overlays of bones, attachment shapes, bounding boxes, clipping, paths, points, events and overdraw over a `MarrowSpine`. Draws with the optional peer `pixi-silk`. |
 | `pixi-marrow/bake` | `bakeAnimation` and `bakeAnimations`: animations sampled at a fixed rate, at build time in Node or in a game. `encodeBakedClips`, `decodeBakedClips` and `addBakedClips` hand the clips to an asset. No Pixi. |
+| `pixi-marrow/diagnose` | `diagnose`, `watch`, `inspect`, `serializeTree`, `diagnoseTree` and `installDevtools`. They read every skeleton of a Pixi scene tree as plain data. They name each cause of cost with a rule id and a docs address. For coding agents and PixiJS DevTools. |
+| `pixi-marrow/perf-rules.json` | The catalogue of the performance rules as JSON: id, pattern, cost, fix and docs address of each. |
 | `pixi-marrow/perf` | `createProbe`: times the pose, geometry and event work of every update of one `MarrowSpine` and counts what the renderer did. For benchmarks and profiling. |
 <!-- /facts:entry-points -->
 

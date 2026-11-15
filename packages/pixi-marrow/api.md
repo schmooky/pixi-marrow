@@ -231,6 +231,9 @@ export interface PerfEntry {
   value: string;
   reason: string;
   animation?: string;
+  rule?: string;
+  docs?: string;
+  data?: Record<string, number | string | boolean>;
 }
 export type PerfFeature = "perf" | "pacing" | "renderMode" | "instancing" | "motion" | "links" | "drawCalls" | "blend" | "pages" | "clipping" | "tightMesh" | "occlusion" | "outlines" | "darkTint" | "physics" | "bake" | "constraints" | "bones" | "slots" | "vertices" | "uploads" | "layout";
 export interface PerfMemory {
@@ -1226,6 +1229,272 @@ export declare class MarrowDebug extends Container {
 export interface PathShape {
   readonly points: Float64Array;
   readonly closed: boolean;
+}
+```
+
+## pixi-marrow/diagnose
+
+```ts
+export interface DevtoolsOptions {
+  warn?: boolean;
+  root?: Container;
+  renderer?: RendererLike;
+  ticker?: WarnTicker;
+  every?: number;
+}
+export declare function diagnose(root: Container, options?: DiagnoseOptions): Diagnosis;
+export interface DiagnoseOptions extends TreeOptions {
+  since?: Watch | undefined;
+}
+export declare function diagnoseTree(dump: TreeDump): Diagnosis;
+export interface Diagnosis {
+  skeletons: number;
+  hits: RuleHit[];
+  scene: SceneTotals;
+}
+export declare function formatHit(hit: RuleHit): string;
+export declare function inspect(hero: Inspected): SkeletonInspection;
+export declare function installDevtools(options?: DevtoolsOptions): MarrowDevtools;
+export declare function isMarrowSpine(node: object): node is MarrowSpine;
+export interface MarrowDevtools {
+  readonly version: 1;
+  readonly docs: string;
+  readonly rules: readonly PerfRule[];
+  instances(root?: Container): string[];
+  inspect(root?: Container): SkeletonInspection[];
+  tree(root?: Container): TreeDump;
+  diagnose(root?: Container): Diagnosis;
+  watch(root?: Container): Watch;
+  diagnoseTree(dump: TreeDump): Diagnosis;
+  uninstall(): void;
+}
+export interface PerfRule {
+  readonly id: string;
+  readonly slug: string;
+  readonly title: string;
+  readonly severity: RuleSeverity;
+  readonly cost: readonly RuleCost[];
+  readonly detect: "static" | "dynamic" | "both";
+  readonly pattern: string;
+  readonly does: string;
+  readonly source: string;
+  readonly check: string;
+  readonly fix: string;
+  readonly since: string;
+  readonly docs: string;
+}
+export interface RendererInfo {
+  type: string;
+  roundPixels: boolean;
+  antialias: boolean;
+  width: number;
+  height: number;
+  maxBatchTextures: number;
+}
+export interface RendererLike {
+  readonly type?: number;
+  readonly roundPixels?: boolean;
+  readonly view?: {
+    readonly antialias?: boolean;
+  };
+  readonly screen?: {
+    readonly width: number;
+    readonly height: number;
+  };
+  readonly limits?: {
+    readonly maxBatchableTextures?: number;
+  };
+}
+export type RuleCost = "draw-calls" | "cpu-vertex" | "cpu-pose" | "upload" | "overdraw" | "memory";
+export interface RuleHit {
+  id: string;
+  slug: string;
+  severity: RuleSeverity;
+  node: string;
+  nodes: string[];
+  cause: string;
+  cost: RuleCost[];
+  measured: Record<string, number>;
+  message: string;
+  fix: string;
+  docs: string;
+}
+export declare const RULES: readonly PerfRule[];
+// exported as RULES_DOCS
+export declare const DOCS = "https://pixi-marrow.schmooky.dev/performance/rules/";
+export type RuleSeverity = "warn" | "info";
+export interface SceneTotals {
+  drawn: number;
+  batched: number;
+  mesh: number;
+  instanced: number;
+  assets: number;
+  vertices: number;
+  indices: number;
+  meshDrawCalls: number;
+  frameBytes: number;
+  instanceBytes: number;
+  gpuBufferBytes: number;
+}
+export declare function serializeTree(root: Container, options?: TreeOptions): TreeDump;
+export interface SkeletonInspection {
+  kind: "pixi-marrow/skeleton";
+  version: 1;
+  label: string;
+  asset: {
+    id: number;
+    spine: string;
+    editorVersion: string;
+    hash: string | null;
+    instances: number;
+  };
+  counts: {
+    bones: number;
+    slots: number;
+    visibleSlots: number;
+    vertices: number;
+    indices: number;
+    atlasPages: number;
+    constraints: Record<string, number>;
+  };
+  render: {
+    mode: "mesh" | "batched";
+    option: "auto" | "mesh" | "batched";
+    modeReason: string;
+    batchVertices: number;
+    batchLimit: number;
+    drawCalls: number;
+    sharedBy: number;
+    runs: number;
+    blendSlots: number;
+    skinning: "cpu" | "gpu";
+    instancing: {
+      active: boolean;
+      why: string | null;
+      run: number;
+      draws: number;
+    };
+    darkTint: boolean;
+    clips: number;
+    maskDraws: number;
+    attached: number;
+    following: number;
+  };
+  cuts: {
+    outlines: string;
+    occlusion: "auto" | "off";
+    tightMesh: "auto" | "on" | "off";
+    blockedBy: string[];
+    pageBlocks: string[];
+    coveredSlots: number;
+    tightRanges: number;
+  };
+  frame: {
+    posed: boolean;
+    skipped: boolean;
+    placedSlots: number;
+    coloredSlots: number;
+    uploadBytes: number;
+  };
+  totals: {
+    skips: number;
+    transformReplaces: number;
+    tintRewrites: number;
+    templateBuilds: number;
+    indexRebuilds: number;
+    instructionBuilds: number;
+    positionUploads: number;
+    colorUploads: number;
+    uvUploads: number;
+    boneUploads: number;
+    maskUploads: number;
+    uploadBytes: {
+      positions: number;
+      statics: number;
+      indices: number;
+      bones: number;
+      masks: number;
+    };
+  };
+  pacing: {
+    autoUpdate: boolean;
+    rate: number | "display";
+    offscreen: string;
+    hidden: boolean;
+    size: number | null;
+    reduced: boolean;
+    drawn: boolean;
+    onScreen: boolean | null;
+  };
+  perf: {
+    preset: string;
+    given: string[];
+    settings: Record<string, string | number>;
+  };
+  idle: {
+    setting: string;
+    showing: boolean;
+  };
+  bake: {
+    setting: string;
+    active: boolean;
+    baked: number;
+    unbaked: number;
+    last: string;
+    bytes: number;
+  };
+  physics: {
+    constraints: number;
+    mode: string;
+  };
+  memory: {
+    shared: number;
+    baked: number;
+    instance: number;
+    gpuBuffers: number;
+    gpuTextures: number;
+  };
+  rules: string[];
+}
+export interface TreeDump {
+  kind: "pixi-marrow/tree";
+  version: 1;
+  pixi: string;
+  renderer: RendererInfo | null;
+  root: TreeNode;
+}
+export interface TreeNode {
+  type: string;
+  label: string;
+  path: string;
+  visible: boolean;
+  renderable: boolean;
+  alpha: number;
+  tint: number;
+  blendMode: string;
+  x: number;
+  y: number;
+  scaleX: number;
+  scaleY: number;
+  rotation: number;
+  zIndex: number;
+  sortableChildren: boolean;
+  filters: number;
+  mask: boolean;
+  renderGroup: boolean;
+  cacheAsTexture: boolean;
+  draws: boolean;
+  marrow?: SkeletonInspection;
+  children: TreeNode[];
+}
+export interface TreeOptions {
+  renderer?: RendererLike | undefined;
+}
+export declare function watch(root: Container, options?: TreeOptions): Watch;
+export interface Watch {
+  sample(): void;
+  report(): Diagnosis;
+  stop(): void;
 }
 ```
 

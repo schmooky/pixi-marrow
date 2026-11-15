@@ -33,7 +33,7 @@ export const ENTRY_POINTS = [
     },
     {
         specifier: 'pixi-marrow/optimize',
-        holds: '`generateNames`, `buildAtlasOutlines`, `decodePng` and the `pixi-marrow` command line tool (`info`, `typegen`, `outlines`). Runs in Node.',
+        holds: '`generateNames`, `buildAtlasOutlines`, `decodePng` and the `pixi-marrow` command line tool (`info`, `typegen`, `outlines`, `rules`, `diagnose`). Runs in Node.',
     },
     {
         specifier: 'pixi-marrow/debug',
@@ -42,6 +42,14 @@ export const ENTRY_POINTS = [
     {
         specifier: 'pixi-marrow/bake',
         holds: '`bakeAnimation` and `bakeAnimations`: animations sampled at a fixed rate, at build time in Node or in a game. `encodeBakedClips`, `decodeBakedClips` and `addBakedClips` hand the clips to an asset. No Pixi.',
+    },
+    {
+        specifier: 'pixi-marrow/diagnose',
+        holds: '`diagnose`, `watch`, `inspect`, `serializeTree`, `diagnoseTree` and `installDevtools`. They read every skeleton of a Pixi scene tree as plain data. They name each cause of cost with a rule id and a docs address. For coding agents and PixiJS DevTools.',
+    },
+    {
+        specifier: 'pixi-marrow/perf-rules.json',
+        holds: 'The catalogue of the performance rules as JSON: id, pattern, cost, fix and docs address of each.',
     },
     {
         specifier: 'pixi-marrow/perf',
