@@ -1,4 +1,4 @@
-import type { Bounds } from 'pixi.js';
+import { Bounds } from 'pixi.js';
 import { f32, i16, i32 } from '../geometry/read';
 import { computeRegionWorldVertices } from '../geometry/region';
 import type { Template } from './template';
@@ -58,5 +58,50 @@ export function measureEntries(
             corners,
         );
         addPoints(bounds, corners, 0, 8);
+    }
+}
+
+/** A coarse reader gets a box that is at most this many of its reads old. */
+const COARSE_READS = 8;
+
+/**
+ * The box of a view and when it is measured again. A pose that moved a vertex makes the box
+ * old. A reader that needs the exact box has it measured then. A coarse reader, the pacing of
+ * updates, takes a box that is up to {@link COARSE_READS} of its reads old. A new layout and a
+ * change of the visible slots are measured at once for both.
+ *
+ * So the pacing does not place the vertices of a skeleton with `skinning: 'gpu'` on the CPU
+ * in every frame. The box is in the space of the skeleton: Pixi moves it by the transform of
+ * the moment, so a skeleton that moves, turns or changes its scale is seen at once.
+ *
+ * @example
+ * if (box.due()) measureEntries(box.bounds, template, visible, count, state.world, model.slots.bones);
+ */
+export class ViewBox {
+    readonly bounds: Bounds = new Bounds();
+    /** True while a coarse reader reads: the pacing sets it around its read. */
+    coarse = false;
+    /** True when a pose moved a vertex since the box was measured. */
+    private old = true;
+    /** True when the layout or the list of visible slots changed since the box was measured. */
+    private relisted = true;
+    /** The coarse reads since the box was measured that found it old. */
+    private reads = 0;
+
+    /** Notes that a pose moved a vertex, and whether the layout or the visible slots changed with it. */
+    moved(relisted: boolean): void {
+        this.old = true;
+        if (relisted) this.relisted = true;
+    }
+
+    /** True when the reader of now needs the box measured. The caller measures it then. */
+    due(): boolean {
+        if (!this.old) return false;
+        if (this.coarse && !this.relisted && ++this.reads < COARSE_READS) return false;
+        this.old = false;
+        this.relisted = false;
+        this.reads = 0;
+
+        return true;
     }
 }

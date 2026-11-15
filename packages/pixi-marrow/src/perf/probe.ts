@@ -237,12 +237,12 @@ export class PerfProbe implements UpdateProbe {
  */
 export function createProbe(spine: ProbeTarget): PerfProbe {
     if (spine.destroyed) {
-        throw new MarrowError('invalid-data', 'The display object was destroyed and updates no more.', {
+        throw new MarrowError('destroyed', 'The display object was destroyed and updates no more.', {
             fix: 'Create the probe for a display object that is in use.',
         });
     }
     if (spine.updateProbe !== null) {
-        throw new MarrowError('invalid-data', 'The display object has a probe that measures its updates.', {
+        throw new MarrowError('invalid-option', 'The display object has a probe that measures its updates.', {
             fix: 'Call stop() on that probe first, or read that one.',
         });
     }

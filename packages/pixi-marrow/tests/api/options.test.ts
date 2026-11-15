@@ -282,7 +282,7 @@ describe.each(VERSIONS)('the track options of a Spine %s skeleton', (version) =>
             const track = spine.play('aim', { track: 1, additive: true });
             const error = thrownBy(() => track.configure({ animationEnd: 'late' }));
 
-            expect(error.code).toBe('invalid-data');
+            expect(error.code).toBe('invalid-option');
             expect(error.message).toContain('"animationEnd"');
             expect(track.additive).toBe(true);
         });

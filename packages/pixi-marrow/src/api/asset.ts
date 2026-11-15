@@ -7,13 +7,14 @@ import type { AtlasOutlines } from '../model/outlines';
 import type { PoseEngineFactory } from '../pose/engine';
 import { loadCutCode } from '../render/cut-code';
 import { loadMeshCode } from '../render/mesh-code';
-import { type AssetParts, checkOutlines, fetchAsset, loadCode, loadKey } from './asset-fetch';
+import { type AssetParts, assetName, checkOutlines, fetchAsset, loadCode, loadKey } from './asset-fetch';
 import { type AssetHolds, trackAsset } from './asset-holds';
 import type { MarrowAssetData, MarrowLoadOptions, OutlinesState } from './asset-options';
 import type { MarrowAssetsOptions } from './assets';
 import { cacheReader } from './cache-hook';
 import { renderMode } from './checks';
 import { configureTexture, isStillImage } from './textures';
+import { wrongValue } from './values';
 
 export type { MarrowAssetData, MarrowLoadOptions, OutlinesState } from './asset-options';
 
@@ -55,6 +56,12 @@ export class MarrowAsset {
     readonly atlas: AtlasModel;
     /** One texture per atlas page, in page order. */
     readonly textures: readonly Texture[];
+    /**
+     * What the asset is called: the `name` option of the load, else the file name of the
+     * skeleton URL without its extension, or the empty string for a skeleton in memory. A
+     * display object without a `label` gets the label `MarrowSpine:<name>` from it.
+     */
+    readonly name: string;
     /** Creates the pose engine of one more instance. Synchronous. */
     readonly createEngine: PoseEngineFactory;
     /** Gives back what the asset took to exist: the page images it loaded. */
@@ -80,7 +87,7 @@ export class MarrowAsset {
 
         if (textures.length !== atlas.pages.length) {
             throw new MarrowError(
-                'invalid-data',
+                'invalid-option',
                 `The atlas has ${atlas.pages.length} pages, but ${textures.length} textures were passed.`,
                 {
                     fix: `Pass one texture per page, in this order: ${atlas.pages.map((page) => page.name).join(', ')}.`,
@@ -93,6 +100,7 @@ export class MarrowAsset {
             if (texture !== undefined) configureTexture(texture, page);
         });
         this.model = model;
+        this.name = parts.name;
         this.atlas = atlas;
         this.textures = [...textures];
         this.createEngine = createEngine;
@@ -148,7 +156,7 @@ export class MarrowAsset {
      * page images, which sets {@link outlines}. Resolves at once when there is no such work. A
      * page that cannot be read keeps its quads, and the promise still resolves.
      *
-     * An asset of `MarrowAsset.get` checks given outlines in the background. The promise rejects
+     * An asset of `MarrowAsset.fromCache` checks given outlines in the background. The promise rejects
      * with a `MarrowError` when their content is damaged. Outlines of another atlas throw at once.
      *
      * Display objects take the outlines at their next update.
@@ -184,6 +192,9 @@ export class MarrowAsset {
      * const fromBytes = await MarrowAsset.load({ skeleton: bytes, atlas: 'hero.atlas' });
      */
     static load(options: MarrowLoadOptions): Promise<MarrowAsset> {
+        // a shared asset keeps its name, and a name that is no string still fails
+        if (typeof (options.name ?? '') !== 'string')
+            return Promise.reject(wrongValue('name', options.name, 'a string'));
         const key = loadKey(options);
         const cached = key === undefined ? undefined : shared.get(key);
 
@@ -219,15 +230,28 @@ export class MarrowAsset {
      * @example
      * const model = await importSkeleton(bytes);
      * const atlas = importAtlas(atlasText);
-     * const asset = await MarrowAsset.from({ model, atlas, textures: [pageTexture] });
+     * const asset = await MarrowAsset.fromData({ model, atlas, textures: [pageTexture] });
      */
-    static async from(data: MarrowAssetData): Promise<MarrowAsset> {
+    static async fromData(data: MarrowAssetData): Promise<MarrowAsset> {
         const { model, atlas, textures } = data;
+        const name = assetName(data.name, undefined);
         const outlines = await checkOutlines(data.outlines, atlas);
 
         const createEngine = await loadCode(model, atlas, renderMode(data.renderMode ?? 'auto'));
 
-        return new MarrowAsset({ model, atlas, textures, outlines }, createEngine, () => undefined);
+        return new MarrowAsset({ model, atlas, textures, outlines, name }, createEngine, () => undefined);
+    }
+
+    /**
+     * The older name of {@link fromData}. It does the same.
+     *
+     * @deprecated Call `MarrowAsset.fromData`. This name goes away in a later release.
+     *
+     * @example
+     * const asset = await MarrowAsset.from({ model, atlas, textures: [pageTexture] });
+     */
+    static from(data: MarrowAssetData): Promise<MarrowAsset> {
+        return MarrowAsset.fromData(data);
     }
 
     /**
@@ -245,13 +269,13 @@ export class MarrowAsset {
      *
      * @example
      * await Assets.load(['hero.skel', 'hero.atlas']);
-     * const asset = MarrowAsset.get({ skeleton: 'hero.skel', atlas: 'hero.atlas' });
+     * const asset = MarrowAsset.fromCache({ skeleton: 'hero.skel', atlas: 'hero.atlas' });
      */
-    static get(options: MarrowAssetsOptions): MarrowAsset {
+    static fromCache(options: MarrowAssetsOptions): MarrowAsset {
         const read = cacheReader();
 
         if (read === undefined) {
-            throw new MarrowError('invalid-data', 'Pixi Assets has no parsers of pixi-marrow yet.', {
+            throw new MarrowError('not-registered', 'Pixi Assets has no parsers of pixi-marrow yet.', {
                 fix: 'Call registerMarrowAssets() before the first load of a Spine file through Assets.',
             });
         }
@@ -261,8 +285,18 @@ export class MarrowAsset {
     }
 
     /**
+     * The first name of {@link fromCache}. It does the same, and it stays.
+     *
+     * @example
+     * const asset = MarrowAsset.get({ skeleton: 'hero.skel', atlas: 'hero.atlas' });
+     */
+    static get(options: MarrowAssetsOptions): MarrowAsset {
+        return MarrowAsset.fromCache(options);
+    }
+
+    /**
      * Lets one owner of the asset go: call it once for each `MarrowAsset.load` or
-     * `MarrowAsset.from` that returned the asset. The asset ends when no owner is left and no
+     * `MarrowAsset.fromData` that returned the asset. The asset ends when no owner is left and no
      * display object made from it is alive. So a display object on the stage never loses its
      * textures, and a screen that lets go does not break another screen that shares the asset.
      *
@@ -270,8 +304,8 @@ export class MarrowAsset {
      * holds them. An image that the game loaded through Pixi `Assets` itself is never unloaded,
      * and textures that were passed in are left alone. A scan of the page images stops.
      *
-     * More calls than owners do nothing. An asset of `MarrowAsset.get` has Pixi `Assets` as its
-     * owner: a call lets that owner go early, and the next `MarrowAsset.get` makes a new asset.
+     * More calls than owners do nothing. An asset of `MarrowAsset.fromCache` has Pixi `Assets` as its
+     * owner: a call lets that owner go early, and the next `MarrowAsset.fromCache` makes a new asset.
      *
      * @example
      * const asset = await MarrowAsset.load({ skeleton: 'hero.skel', atlas: 'hero.atlas' });

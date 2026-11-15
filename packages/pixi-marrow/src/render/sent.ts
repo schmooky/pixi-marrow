@@ -1,4 +1,5 @@
-import type { Buffer } from 'pixi.js';
+import type { Buffer, Renderer } from 'pixi.js';
+import { i32 } from '../geometry/read';
 
 /*
  * Bytes the mesh mode handed to the GPU where no view is at hand: the index buffers of the draw
@@ -17,19 +18,33 @@ import type { Buffer } from 'pixi.js';
 export const sent = { indices: 0, masks: 0 };
 
 /**
- * Uploads the items of a buffer from `from` up to `to`, or the whole buffer where Pixi cannot
- * upload a stretch on its own. Does nothing for an empty stretch. Returns the bytes it uploaded.
+ * Uploads the stretch of a vertex buffer that waits, and notes that nothing waits. The stretch
+ * is two whole numbers at `at` in `waiting`: its first vertex and the one behind its last. An
+ * empty stretch uploads nothing. Returns the bytes it uploaded.
  *
- * @param ranged What `uploadsStretch` says about this Pixi.
- * @param itemBytes The bytes of one item.
+ * @param itemBytes The bytes of one vertex in the buffer.
+ * @param push A renderer whose buffers keep a stretch until they are bound, which uploads it
+ * now, or null. That is WebGL before pixi.js 8.23, see `uploadsStretch`.
  *
  * @example
- * uploadStretch(positions, ranged, pass.from, pass.to, 8);
+ * stats.uploadBytes.positions += uploadWaiting(positions, waiting, 0, 8, null);
  */
-export function uploadStretch(buffer: Buffer, ranged: boolean, from: number, to: number, itemBytes: number): number {
-    if (to <= from) return 0;
-    if (ranged) buffer.update((to - from) * itemBytes, from * itemBytes);
-    else buffer.update();
+export function uploadWaiting(
+    buffer: Buffer,
+    waiting: Int32Array,
+    at: number,
+    itemBytes: number,
+    push: Renderer | null,
+): number {
+    const from = i32(waiting, at);
+    const bytes = (i32(waiting, at + 1) - from) * itemBytes;
 
-    return ranged ? (to - from) * itemBytes : buffer.data.byteLength;
+    if (bytes <= 0) return 0;
+    waiting[at] = 0;
+    waiting[at + 1] = 0;
+    buffer.update(bytes, from * itemBytes);
+    // a renderer without a GPU has no buffer to upload
+    if (push !== null && 'buffer' in push) push.buffer.updateBuffer(buffer);
+
+    return bytes;
 }

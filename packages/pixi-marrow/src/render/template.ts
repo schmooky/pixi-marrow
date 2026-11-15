@@ -10,7 +10,7 @@ import type { AttachmentLookup } from '../pose/shared/lookup';
 import { cutCode } from './cut-code';
 import { type Cuts, NO_CUT } from './cuts';
 import { type Draft, type Drawable, draftEntries, isDrawable, weightBones } from './drafts';
-import { layoutKey, shareLayout } from './layouts';
+import { draftLayout, shareLayout } from './layouts';
 
 /*
  * The stable vertex layout of one skeleton instance. Every region and mesh attachment a slot can
@@ -310,8 +310,11 @@ export function buildTemplate(
     cuts?: Cuts,
     vertexColors: boolean = true,
 ): Template {
-    const drafts = draftEntries(model, atlas, lookup, skin, shown, cuts);
-    const key = layoutKey(atlas, skin, dark, cuts, drafts);
+    // a skin of the model with nothing shown is the layout a view starts with: the same for every view
+    const keep = shown === null && skin < model.skins.length;
+    const { drafts, key } = draftLayout(model, atlas, skin, dark, cuts, cutCode() !== undefined, keep, () =>
+        draftEntries(model, atlas, lookup, skin, shown, cuts),
+    );
 
     return shareLayout(model, key, vertexColors, () => layOut(model, atlas, skin, drafts, dark));
 }

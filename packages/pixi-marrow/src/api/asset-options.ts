@@ -48,9 +48,14 @@ export interface MarrowLoadOptions {
      * draws in a batch until it is there.
      */
     renderMode?: 'auto' | 'mesh' | 'batched';
+    /**
+     * The name of the asset, see `MarrowAsset.name`. Default: the file name of the skeleton URL
+     * without its extension. Loads that share one asset keep the name of the first load.
+     */
+    name?: string;
 }
 
-/** What `MarrowAsset.from` takes: a skeleton and an atlas that are in memory. */
+/** What `MarrowAsset.fromData` takes: a skeleton and an atlas that are in memory. */
 export interface MarrowAssetData {
     model: SkeletonModel;
     atlas: AtlasModel;
@@ -63,6 +68,8 @@ export interface MarrowAssetData {
     outlines?: 'auto' | 'off' | AtlasOutlines;
     /** The render mode the display objects will ask for, see `MarrowLoadOptions.renderMode`. Default `auto`. */
     renderMode?: 'auto' | 'mesh' | 'batched';
+    /** The name of the asset, see `MarrowAsset.name`. Default: the empty string. */
+    name?: string;
 }
 
 /**

@@ -379,12 +379,12 @@ describe('the calls of the 4.3 pose engine', () => {
 
     it('refuses tracks, animations and skins that do not exist', () => {
         expect(errorOf(() => engine.setAnimation(-1, MOVE, true)).message).toContain('-1 is not a track index');
-        expect(errorOf(() => engine.addAnimation(1.5, MOVE, true, 0)).code).toBe('invalid-data');
-        expect(errorOf(() => engine.addEmptyAnimation(Number.NaN, 0, 0)).code).toBe('invalid-data');
+        expect(errorOf(() => engine.addAnimation(1.5, MOVE, true, 0)).code).toBe('invalid-option');
+        expect(errorOf(() => engine.addEmptyAnimation(Number.NaN, 0, 0)).code).toBe('invalid-option');
         expect(errorOf(() => engine.setAnimation(0, 99, true)).message).toContain('no animation 99');
         // the empty animation has its own calls
         expect(errorOf(() => engine.addAnimation(0, -1, true, 0)).fix).toContain('setEmptyAnimation');
-        expect(errorOf(() => engine.setMix(MOVE, 7, 0.2)).code).toBe('invalid-data');
+        expect(errorOf(() => engine.setMix(MOVE, 7, 0.2)).code).toBe('invalid-option');
         expect(errorOf(() => engine.setSkin(3)).message).toContain('no skin 3');
     });
 });

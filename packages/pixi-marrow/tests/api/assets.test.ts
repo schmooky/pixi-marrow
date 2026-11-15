@@ -238,7 +238,7 @@ describe('Pixi Assets', () => {
             MarrowSpine.from({ skeleton: 'art/nobody.skel', atlas: 'art/boy.atlas' }),
         );
 
-        expect(missing.code).toBe('invalid-data');
+        expect(missing.code).toBe('not-loaded');
         expect(missing.message).toContain('"art/nobody.skel"');
         expect(missing.fix).toContain(
             "registerMarrowAssets() before the load, then load it: await Assets.load('art/nobody.skel')",
@@ -253,8 +253,28 @@ describe('Pixi Assets', () => {
             MarrowAsset.get({ skeleton: 'art/boy.skel', atlas: 'art/boy.atlas', outlines: 'file.json' }),
         );
 
+        expect(outlines.code).toBe('not-loaded');
         expect(outlines.message).toContain('Pixi Assets holds no outlines file under "file.json".');
         expect(outlines.fix).toContain("await Assets.load('file.json')");
+        const wrong = await rejection(() =>
+            MarrowAsset.fromCache({ skeleton: 'art/boy.skel', atlas: 'art/boy.atlas', outlines: 7 } as never),
+        );
+
+        expect(wrong.code).toBe('invalid-option');
+        expect(wrong.message).toContain('outlines got 7.');
+    });
+
+    it('names the asset after the skeleton alias, and fromCache is the same call as get', async () => {
+        await Assets.load(['art/boy.skel', 'art/boy.atlas']);
+        const options = { skeleton: 'art/boy.skel', atlas: 'art/boy.atlas' } as const;
+        const asset = MarrowAsset.fromCache(options);
+        const hero = MarrowSpine.from({ ...options, autoUpdate: false });
+
+        expect(MarrowAsset.get(options)).toBe(asset);
+        expect(hero.asset).toBe(asset);
+        expect(asset.name).toBe('boy');
+        expect(hero.label).toBe('MarrowSpine:boy');
+        hero.destroy();
     });
 
     it('takes a page as a texture source, and one image alone as the first page', async () => {

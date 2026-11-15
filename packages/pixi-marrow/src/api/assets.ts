@@ -24,10 +24,12 @@ import { loadCutCode } from '../render/cut-code';
 import { loadMeshCode } from '../render/mesh-code';
 import { hasClip, startsWithMeshes } from '../render/mode';
 import type { MarrowAsset } from './asset';
+import { assetName } from './asset-fetch';
 import { ownAsset } from './asset-holds';
 import { fileError, holdPage, loadPages, releasePage } from './asset-load';
 import { type CachedAssetParts, setCacheReader } from './cache-hook';
 import { renderMode } from './checks';
+import { wrongValue } from './values';
 
 /*
  * Spine files through Pixi `Assets`, so that a manifest, a bundle and the output of AssetPack
@@ -114,7 +116,7 @@ function asksFor(resolved: ResolvedAsset | undefined, name: string): boolean {
 /** Fetches a file for a parser. An error is a `MarrowError` that names the URL. */
 async function fetchFile(url: string, what: string): Promise<Response> {
     const failed = (reason: string): MarrowError =>
-        new MarrowError('invalid-data', `The ${what} at ${url} did not load: ${reason}`, {
+        new MarrowError('not-found', `The ${what} at ${url} did not load: ${reason}`, {
             fix: 'Check the URL and that the server allows the request.',
         });
     const response = await DOMAdapter.get()
@@ -260,7 +262,7 @@ export function registerMarrowAssets(): void {
     setCacheReader(sharedFromCache);
 }
 
-/** What `MarrowAsset.get` and `MarrowSpine.from` take: the aliases a skeleton and its atlas were loaded under. */
+/** What `MarrowAsset.fromCache` and `MarrowSpine.from` take: the aliases a skeleton and its atlas were loaded under. */
 export interface MarrowAssetsOptions {
     /** The alias of a `.skel` file or a Spine `.json` file that Pixi `Assets` loaded. */
     skeleton: string;
@@ -281,6 +283,11 @@ export interface MarrowAssetsOptions {
     outlines?: 'auto' | 'off' | string | AtlasOutlines;
     /** The render mode the display objects will ask for, see `MarrowLoadOptions.renderMode`. Default `auto`. */
     renderMode?: 'auto' | 'mesh' | 'batched';
+    /**
+     * The name of the asset, see `MarrowAsset.name`. Default: the skeleton alias without its
+     * folders and its extension. Calls that share one asset keep the name of the first call.
+     */
+    name?: string;
 }
 
 /**
@@ -290,7 +297,7 @@ export interface MarrowAssetsOptions {
 const fromCache = new WeakMap<LoadedAtlas, WeakMap<SkeletonModel, Map<unknown, MarrowAsset>>>();
 
 function notLoaded(alias: string, what: string): MarrowError {
-    return new MarrowError('invalid-data', `Pixi Assets holds no ${what} that pixi-marrow loaded under "${alias}".`, {
+    return new MarrowError('not-loaded', `Pixi Assets holds no ${what} that pixi-marrow loaded under "${alias}".`, {
         fix: `Call registerMarrowAssets() before the load, then load it: await Assets.load('${alias}'). Do not register another Spine runtime for the same files.`,
     });
 }
@@ -322,11 +329,15 @@ function loadedFiles(options: MarrowAssetsOptions): {
  * that is no word names such a file in Pixi `Assets`, by its alias or its URL.
  */
 function outlinesSource(option: NonNullable<MarrowAssetsOptions['outlines']>): object | 'auto' | 'off' {
-    if (option === 'auto' || option === 'off' || typeof option !== 'string') return option;
+    if (typeof option === 'object' && option !== null) return option;
+    if (typeof option !== 'string') {
+        throw wrongValue('outlines', option, "'auto', 'off', the alias of an outlines file or its parsed content");
+    }
+    if (option === 'auto' || option === 'off') return option;
     const file = cached(option);
 
     if (typeof file !== 'object' || file === null) {
-        throw new MarrowError('invalid-data', `Pixi Assets holds no outlines file under "${option}".`, {
+        throw new MarrowError('not-loaded', `Pixi Assets holds no outlines file under "${option}".`, {
             fix: `Load the file that pixi-marrow outlines wrote before the call: await Assets.load('${option}'). Or pass 'auto', 'off' or the parsed file.`,
         });
     }
@@ -336,7 +347,7 @@ function outlinesSource(option: NonNullable<MarrowAssetsOptions['outlines']>): o
 
 /**
  * The asset of a skeleton and an atlas that Pixi `Assets` loaded under two aliases, for
- * `MarrowAsset.get`. Calls with the same files and outlines share one asset. Pixi `Assets` owns
+ * `MarrowAsset.fromCache`. Calls with the same files and outlines share one asset. Pixi `Assets` owns
  * it: it ends when Pixi unloads the atlas or the skeleton and no display object draws with it.
  * `make` is the constructor of `MarrowAsset`, which is private.
  *
@@ -349,6 +360,7 @@ function sharedFromCache(
 ): MarrowAsset {
     const { skeleton, createEngine, atlas, load } = loadedFiles(options);
     const mode = renderMode(options.renderMode ?? 'auto');
+    const name = assetName(options.name, options.skeleton);
     const source = outlinesSource(options.outlines ?? 'off');
     const made = mapOf(
         mapOf(fromCache, atlas, () => new WeakMap()),
@@ -381,7 +393,7 @@ function sharedFromCache(
     for (const url of loaded) holdPage(url, loader);
     try {
         asset = make(
-            { model: skeleton, atlas: atlas.atlas, textures: atlas.textures, outlines },
+            { model: skeleton, atlas: atlas.atlas, textures: atlas.textures, outlines, name },
             createEngine,
             release,
         );

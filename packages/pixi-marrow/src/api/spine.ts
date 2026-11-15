@@ -92,7 +92,7 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
         const mode = renderMode(options.renderMode ?? 'auto');
 
         this.asset = asset;
-        this.label = options.label ?? 'MarrowSpine';
+        this.label = options.label ?? (asset.name === '' ? 'MarrowSpine' : `MarrowSpine:${asset.name}`);
         if (options.ticker !== undefined) this.clock = options.ticker;
         this.perfSettings = settings;
         this.engine = bakingEngine(asset, asset.createEngine(), settings.bake);

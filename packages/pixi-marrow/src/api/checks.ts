@@ -30,6 +30,7 @@ const SPINE_OPTIONS: readonly string[] = [
     'atlas',
     'textures',
     'outlines',
+    'name',
 ];
 
 /** Options of other Spine runtimes that are no options here, each with what to do in its place. */

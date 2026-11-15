@@ -50,26 +50,68 @@ function idOf(thing: object): number {
     return id;
 }
 
+/** The drafts of a layout and what decides it, see {@link draftLayout}. */
+export interface DraftedLayout {
+    readonly drafts: readonly Draft[];
+    /** What decides the layout, as text. Two instances with the same text can share their layout. */
+    readonly key: string;
+}
+
 /**
- * What decides a layout, as text: the atlas, the skin, the cuts and the attachments of the
- * entries in their order. Two instances with the same text can share their layout.
+ * Per model: what the layout of the setup of a skin is drafted from, by the atlas, the skin and
+ * the cuts. Every view asks for it when it is made, and the answer is the same for each.
+ */
+const setups = new WeakMap<SkeletonModel, Map<string, DraftedLayout>>();
+
+/** The most setups kept per model. One more forgets them all: they hold outlines of their cuts. */
+const MAX_SETUPS = 8;
+
+/**
+ * The drafts of a layout and what decides it, as text: the atlas, the skin, the cuts and the
+ * attachments of the entries in their order.
+ *
+ * With `keep` the answer is kept per model, for the next view of the model that asks with the
+ * same atlas, skin and cuts. That is for a layout only the model decides: a skin of its own,
+ * and no attachment that a slot happens to show.
+ *
+ * @param cutting Whether the code that makes the cuts is loaded: without it the drafts have none.
  *
  * @example
- * const key = layoutKey(atlas, state.skin, false, cuts, draftEntries(model, atlas, lookup, state.skin, null, cuts));
+ * const { drafts, key } = draftLayout(model, atlas, -1, false, cuts, true, true, () =>
+ *     draftEntries(model, atlas, lookup, -1, null, cuts),
+ * );
  */
-export function layoutKey(
+export function draftLayout(
+    model: SkeletonModel,
     atlas: AtlasModel,
     skin: number,
     dark: boolean,
     cuts: Cuts | undefined,
-    drafts: readonly Draft[],
-): string {
+    cutting: boolean,
+    keep: boolean,
+    draft: () => readonly Draft[],
+): DraftedLayout {
     const cut =
         cuts === undefined
             ? 'none'
             : `${idOf(cuts.outlines)} ${cuts.tight} ${cuts.hollow} ${cuts.opaque} ${cuts.pages.join('')}`;
+    const prefix = `${idOf(atlas)} ${skin} ${dark} ${cut}`;
+    let kept = keep ? setups.get(model) : undefined;
+    const known = kept?.get(`${prefix} ${cutting}`);
 
-    return `${idOf(atlas)} ${skin} ${dark} ${cut} ${drafts.map((draft) => idOf(draft.attachment)).join(' ')}`;
+    if (known !== undefined) return known;
+    const drafts = draft();
+    const drafted = { drafts, key: `${prefix} ${drafts.map((item) => idOf(item.attachment)).join(' ')}` };
+
+    if (keep) {
+        if (kept === undefined || kept.size >= MAX_SETUPS) {
+            kept = new Map();
+            setups.set(model, kept);
+        }
+        kept.set(`${prefix} ${cutting}`, drafted);
+    }
+
+    return drafted;
 }
 
 /**

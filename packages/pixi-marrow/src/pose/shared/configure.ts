@@ -107,7 +107,7 @@ export function checkFields(fields: TrackFields, rules: FieldRules): CheckedFiel
         if (value === undefined) continue;
         if (!fits(kind, value)) {
             throw new MarrowError(
-                'invalid-data',
+                'invalid-option',
                 `The track entry field "${name}" takes ${described(kind)}, not ${JSON.stringify(value)}.`,
                 { fix: `Pass ${described(kind)}.` },
             );

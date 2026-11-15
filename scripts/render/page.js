@@ -6,6 +6,7 @@
  * scripts/render/scenes.js.
  */
 
+import { bakedCase, bakedClipsReady, bakedSequence } from './baked.js';
 import { bufferCases, drawCallCase, overdrawCase, triangleArea } from './buffers.js';
 import { multisampledCase, premultipliedReadingCase } from './cut-cases.js';
 import { capture, captureSecond, judge, PAIRS } from './judge.js';
@@ -209,6 +210,7 @@ async function runSequence(ctx, sequence, withProof, baked = false) {
             fail(role.key, 'did not start', error);
         }
     }
+    if (baked) await bakedClipsReady(live, fail);
     for (let step = 0; step <= Math.max(...sequence.captures); step++) {
         for (const [key, instance] of live) {
             try {
@@ -347,31 +349,6 @@ async function runRig(env, plan, options) {
     }
 
     return report;
-}
-
-/**
- * A sequence once more for baked playback: one update of 1 / 60 seconds per step, the rate the
- * clips are baked at, so that every capture is at a sample time. The captures stay in the first
- * loop: after the loop point the time of a looped entry falls between two samples.
- */
-function bakedSequence(sequence) {
-    const last = Math.max(0, Math.ceil(sequence.duration * 60) - 1);
-    const captures = [...new Set([0, 7, 15, 26, last])].filter((step) => step <= last).sort((a, b) => a - b);
-
-    return { ...sequence, dt: 1 / 60, captures };
-}
-
-/**
- * What baked playback did on a rig. A rig whose skins turn on no physics constraint and no
- * slider must play baked, else the comparisons of baked playback prove nothing.
- */
-function bakedCase(ctx) {
-    const baked = ctx.baked.reduce((sum, each) => sum + each.baked, 0);
-    const unbaked = ctx.baked.reduce((sum, each) => sum + each.unbaked, 0);
-    const blocked = ctx.baked.find((each) => /physics constraint|slider/.test(each.last));
-    const reasons = baked === 0 && !blocked && ctx.baked.length > 0 ? ['no update played baked'] : [];
-
-    return { label: 'baked updates', kind: 'baked', reasons, info: { baked, unbaked, blocked: blocked?.last ?? null } };
 }
 
 /** The comparison whose first passing frame gets its images saved, as a sample of the rig. */

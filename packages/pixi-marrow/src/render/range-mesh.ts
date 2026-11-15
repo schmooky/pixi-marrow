@@ -1,7 +1,10 @@
-import { type Bounds, Buffer, BufferUsage, Mesh, type Shader } from 'pixi.js';
+import { type Bounds, Buffer, BufferUsage, type Container, Mesh, type Shader } from 'pixi.js';
 import { contextLost } from './context-watch';
 import { MeasuredGeometry } from './measured-geometry';
 import { STATIC_STRIDE } from './template';
+
+/** The label of the container of a clip, which holds the draw ranges the clip cuts. */
+export const CLIP_LABEL = 'marrow-clip';
 
 /** The vertex buffers every draw range of a view reads. */
 export interface VertexBuffers {
@@ -32,6 +35,23 @@ export class RangeMesh extends Mesh<MeasuredGeometry, Shader> {
     /** Whether Pixi draws the mesh: it is visible, and the renderer has its context. */
     override get isRenderable(): boolean {
         return !contextLost() && super.isRenderable;
+    }
+
+    /**
+     * Tells Pixi that the meshes of a view show other vertices: the draw ranges in a container,
+     * and those inside the containers of its clips. Pixi keeps the bounds of a container until a
+     * child says that it changed. An upload of the vertex buffer said so, and the uploads of the
+     * mesh mode wait for a render.
+     */
+    static touchAll(container: Container): void {
+        const { children } = container;
+
+        for (let i = 0; i < children.length; i++) {
+            const child = children[i];
+
+            if (child instanceof RangeMesh) child.onViewUpdate();
+            else if (child?.label === CLIP_LABEL) RangeMesh.touchAll(child);
+        }
     }
 }
 

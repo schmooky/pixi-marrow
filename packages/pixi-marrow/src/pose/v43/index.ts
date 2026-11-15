@@ -37,7 +37,7 @@ import {
 import type { Clip43, Pose43 } from './types';
 import { updateTracks } from './update';
 
-const invalid = (message: string, fix: string): MarrowError => new MarrowError('invalid-data', message, { fix });
+const invalid = (message: string, fix: string): MarrowError => new MarrowError('invalid-option', message, { fix });
 
 /** What `takeEvents` returns when nothing happened. Frozen, because every engine returns this one list. */
 const NO_EVENTS: PoseEvent[] = [];

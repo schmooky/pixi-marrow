@@ -141,7 +141,7 @@ describe.each(VERSIONS)('MarrowSpine of a Spine %s skeleton', (version) => {
             const error = thrownBy(() => spine.play('walk', { speed: 2, entry: { trackEnd: 'never' } }));
             spine.update(FRAME);
 
-            expect(error.code).toBe('invalid-data');
+            expect(error.code).toBe('invalid-option');
             expect(started).toHaveBeenCalledOnce();
             expect(started.mock.calls[0]?.[0]).toMatchObject({ animation: 'walk', speed: 2 });
         });

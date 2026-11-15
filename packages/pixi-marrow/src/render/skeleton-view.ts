@@ -1,4 +1,4 @@
-import { Bounds, Container, Texture } from 'pixi.js';
+import { type Bounds, Container, Texture } from 'pixi.js';
 import { i32 } from '../geometry/read';
 import type { AtlasModel } from '../model/atlas';
 import type { AttachmentData } from '../model/attachments';
@@ -8,7 +8,7 @@ import { type AttachmentLookup, createAttachmentLookup } from '../pose/shared/lo
 import type { PoseState } from '../pose/state';
 import type { ViewInserts } from './attach-work';
 import { layoutSlots, type SlotLayout } from './batch-layout';
-import { measureEntries } from './bounds';
+import { measureEntries, ViewBox } from './bounds';
 import { clipCode, clipCodeMissing } from './clip-code';
 import { CoverTest } from './cover';
 import { type CutChoice, CutState } from './cut-state';
@@ -94,7 +94,8 @@ export class SkeletonView implements DrawGate {
     private readonly atlas: AtlasModel;
     private readonly lookup: AttachmentLookup;
     private readonly dark: boolean;
-    private readonly bounds: Bounds = new Bounds();
+    /** The box of the visible slots. The pacing sets `coarse` around its read: an older box will do. */
+    readonly box: ViewBox = new ViewBox();
     /** The outlines, the options and what Pixi did to the last draw. */
     private readonly cutState: CutState;
     /** Finds the slots a later slot covers. Its marks are all 0 while nothing is covered. */
@@ -110,7 +111,6 @@ export class SkeletonView implements DrawGate {
     /** The pose of the last update. */
     private last: PoseState | undefined;
     private template: Template;
-    private boundsDirty = true;
     /** What the last pass over the visible entries did, and the version of the pose it drew. */
     private readonly pass: PosePass = createPosePass();
     /** True when the mode must be picked again: the option, the layout or what a renderer can batch changed. */
@@ -361,7 +361,7 @@ export class SkeletonView implements DrawGate {
         this.pass.all = true;
         this.restyle = true;
         this.seen.dirty = true;
-        this.boundsDirty = true;
+        this.box.moved(true);
         this.stats.templateBuilds++;
         this.stats.vertices = template.vertexCount;
         this.watch();
@@ -403,7 +403,7 @@ export class SkeletonView implements DrawGate {
         notePass(stats, pass, element === undefined && mesh?.instanced !== undefined);
         const moved = pass.placed > 0 || pass.skinned > 0 || pass.reshaped || listed;
 
-        if (moved) this.boundsDirty = true;
+        if (moved) this.box.moved(listed);
         // a sequence on a page of another group of 8 moves its entry to another draw range
         if (pass.regrouped) seen.dirty = true;
         // the slots that can hide others are chosen again when the list or their alpha changed
@@ -482,10 +482,10 @@ export class SkeletonView implements DrawGate {
      * are measured once after an update, and only when somebody asks.
      */
     private measure(): Bounds {
-        const { bounds, last } = this;
+        const { last } = this;
+        const { bounds } = this.box;
 
-        if (!this.boundsDirty) return bounds;
-        this.boundsDirty = false;
+        if (!this.box.due()) return bounds;
         if (last === undefined) bounds.clear();
         else {
             const { list, count } = this.seen;

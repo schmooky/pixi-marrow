@@ -112,7 +112,7 @@ class LegacyEngine implements PoseEngine {
         const mode = PHYSICS_MODES.indexOf(value);
 
         if (mode < 0) {
-            throw new MarrowError('invalid-data', `"${value}" is not a physics mode.`, {
+            throw new MarrowError('invalid-option', `"${value}" is not a physics mode.`, {
                 fix: `Set one of ${PHYSICS_MODES.join(', ')}.`,
             });
         }
@@ -189,7 +189,7 @@ class LegacyEngine implements PoseEngine {
 
     configure(entry: TrackEntry, fields: TrackFields): void {
         if (!(entry instanceof LegacyEntry)) {
-            throw new MarrowError('invalid-data', 'The track entry was not made by a 4.1 or 4.2 pose engine.', {
+            throw new MarrowError('invalid-option', 'The track entry was not made by a 4.1 or 4.2 pose engine.', {
                 fix: 'Pass an entry that setAnimation or addAnimation of this engine returned.',
             });
         }

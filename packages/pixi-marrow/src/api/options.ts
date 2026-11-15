@@ -43,12 +43,15 @@ export interface MarrowSpineOptions {
      * True when the object updates itself from a Pixi ticker. Default true. Pass false where
      * there are no animation frames, as in Node, and call `update` yourself.
      *
-     * An update from the ticker does not draw an object that Pixi does not draw. That is
-     * an object without a parent, and one with `visible` or `renderable` false or an alpha of 0,
-     * on itself or on a parent. Its tracks, its events and `Track.finished` go on. An animation
-     * that plays alone on track 0 is not posed either. With a mix or several tracks the engine
-     * still poses, and no vertex is placed. The render that shows it again poses it first. `bone(name)` reads the pose of its last posed update
-     * until then. An update you call yourself always poses.
+     * An update from the ticker leaves the vertex work out for an object that shows no pixel.
+     * That is an object without a parent, and one with `visible` or `renderable` false or an
+     * alpha of 0, on itself or on a parent. An animation that plays alone on track 0 is not posed
+     * either. A mix, and animations on more tracks, still pose the bones. The tracks, the events
+     * and `Track.finished` go on. The render that shows the object again poses it first.
+     * `bone(name)` reads the pose of its last posed update until then.
+     *
+     * An update you call yourself always poses and does the vertex work, also for a hidden
+     * object. Only `offscreen: 'pause'` and `'throttle'` hold it back.
      */
     autoUpdate?: boolean;
     /**
@@ -57,8 +60,9 @@ export interface MarrowSpineOptions {
      */
     ticker?: SpineTicker;
     /**
-     * The Pixi `label` of the object. Default `MarrowSpine`, so that a dump of the scene tree
-     * names the skeletons in a minified build.
+     * The Pixi `label` of the object, so that a dump of the scene tree names the skeletons in a
+     * minified build. Default `MarrowSpine:<asset.name>`, such as `MarrowSpine:hero`, and
+     * `MarrowSpine` for an asset without a name.
      */
     label?: string;
     /**
@@ -261,8 +265,8 @@ export interface StopOptions {
     /** The index of the track to stop. Default: every track. */
     track?: number;
     /**
-     * Seconds to mix out, to what lower tracks give or to the setup pose where they key nothing.
-     * At 0 the track is cleared at once and the pose keeps what the track did to it. Default 0.
+     * Seconds to mix out to the setup pose. At 0 the track is cleared at once and the pose keeps
+     * what the track did to it. Default 0.
      */
     mix?: number;
 }

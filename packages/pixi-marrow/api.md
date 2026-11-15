@@ -62,6 +62,7 @@ export declare class MarrowAsset {
   readonly model: SkeletonModel;
   readonly atlas: AtlasModel;
   readonly textures: readonly Texture[];
+  readonly name: string;
   readonly createEngine: PoseEngineFactory;
   private readonly release;
   private readonly key;
@@ -80,7 +81,9 @@ export declare class MarrowAsset {
   get outlinesState(): OutlinesState;
   get optimized(): Promise<void>;
   static load(options: MarrowLoadOptions): Promise<MarrowAsset>;
+  static fromData(data: MarrowAssetData): Promise<MarrowAsset>;
   static from(data: MarrowAssetData): Promise<MarrowAsset>;
+  static fromCache(options: MarrowAssetsOptions): MarrowAsset;
   static get(options: MarrowAssetsOptions): MarrowAsset;
   destroy(): void;
   private free;
@@ -93,12 +96,14 @@ export interface MarrowAssetData {
   textures: readonly Texture[];
   outlines?: "auto" | "off" | AtlasOutlines;
   renderMode?: "auto" | "mesh" | "batched";
+  name?: string;
 }
 export interface MarrowAssetsOptions {
   skeleton: string;
   atlas: string;
   outlines?: "auto" | "off" | string | AtlasOutlines;
   renderMode?: "auto" | "mesh" | "batched";
+  name?: string;
 }
 export declare class MarrowError extends Error {
   override readonly name: string;
@@ -131,6 +136,7 @@ export interface MarrowLoadOptions {
   textures?: Readonly<Record<string, Texture | string>>;
   outlines?: "auto" | "off" | string | AtlasOutlines;
   renderMode?: "auto" | "mesh" | "batched";
+  name?: string;
 }
 export interface MarrowNames {
   animations: string;

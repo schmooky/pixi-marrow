@@ -7,7 +7,7 @@ import type { MarrowAsset } from './asset';
 import type { MarrowAssetsOptions } from './assets';
 
 /*
- * The way from `MarrowAsset.get` to the code that reads Pixi `Assets`. `registerMarrowAssets`
+ * The way from `MarrowAsset.fromCache` to the code that reads Pixi `Assets`. `registerMarrowAssets`
  * sets it. A game that never registers does not carry that code, because nothing else refers
  * to it.
  */
@@ -19,6 +19,8 @@ export interface CachedAssetParts {
     textures: readonly Texture[];
     /** A promise gives the outlines once they were checked and the code that cuts with them is loaded. */
     outlines: Promise<AtlasOutlines> | 'auto' | undefined;
+    /** The name of the asset, see `MarrowAsset.name`. */
+    name: string;
 }
 
 /**
