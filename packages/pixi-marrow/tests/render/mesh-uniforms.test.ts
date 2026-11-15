@@ -1,4 +1,14 @@
-import { BindGroup, Matrix, type Mesh, MeshGeometry, Mesh as PixiMesh, RendererType, Texture } from 'pixi.js';
+import {
+    BindGroup,
+    GpuUboSystem,
+    Matrix,
+    type Mesh,
+    MeshGeometry,
+    Mesh as PixiMesh,
+    RendererType,
+    Texture,
+    type UniformGroup,
+} from 'pixi.js';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { loadMeshCode } from '../../src/render/mesh-code';
 import { watchUniformBatch } from '../../src/render/mesh-uniforms';
@@ -105,6 +115,8 @@ describe('the uniforms of the mesh mode on WebGPU', () => {
         const { renderer, pipe, batch } = fakeRenderer(RendererType.WEBGPU);
         const mesh = await rangeMesh();
         const execute = (): void => executeOf(pipe)(pipe, mesh as unknown as Mesh);
+        // what the encoder of a WebGPU renderer does with a uniform group before every draw
+        const ubo = new GpuUboSystem();
 
         watchUniformBatch(renderer as never);
         batch.byteIndex = BATCH_BYTES;
@@ -112,17 +124,50 @@ describe('the uniforms of the mesh mode on WebGPU', () => {
         const own = mesh.shader?.groups[1];
 
         if (!(own instanceof BindGroup)) throw new Error('the mesh binds a buffer of its own');
-        const group = own.resources[0] as unknown as { _dirtyId: number };
-        const first = group._dirtyId;
+        const group = own.resources[0] as UniformGroup;
+        const uploads = (): boolean => ubo.updateUniformGroup(group);
 
+        expect(group.isStatic).toBe(true);
+        expect(uploads()).toBe(true);
+        const buffer = group.buffer;
+
+        if (buffer === undefined) throw new Error('Pixi made the buffer of the group');
+        const written = vi.spyOn(buffer, 'update');
+
+        // the same values: Pixi neither writes nor uploads the buffer
         execute();
-        expect(group._dirtyId).toBe(first);
+        expect(uploads()).toBe(false);
         pipe.localUniforms.uniforms.uTransformMatrix.tx = 11;
         execute();
-        expect(group._dirtyId).toBe(first + 1);
+        expect(uploads()).toBe(true);
+        // a column of a mat3x3 takes 4 floats in a uniform buffer: tx starts the third
+        expect(buffer.data[8]).toBe(11);
+        execute();
+        expect(uploads()).toBe(false);
         pipe.localUniforms.uniforms.uColor[3] = 0.25;
         execute();
-        expect(group._dirtyId).toBe(first + 2);
+        expect(uploads()).toBe(true);
+        expect(written).toHaveBeenCalledTimes(2);
+    });
+
+    it('tells the console once when a private part of Pixi it reads is missing', async () => {
+        const { renderer, pipe, inner } = fakeRenderer(RendererType.WEBGPU);
+        const mesh = await rangeMesh();
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+        Reflect.set(renderer.renderPipes, 'uniformBatch', { _renamed: {} });
+        watchUniformBatch(renderer as never);
+        executeOf(pipe)(pipe, mesh as unknown as Mesh);
+        executeOf(pipe)(pipe, mesh as unknown as Mesh);
+        // without the room of the batch every mesh of ours binds a buffer of its own
+        expect(inner.execute).not.toHaveBeenCalled();
+        expect(renderer.encoder.draw).toHaveBeenCalledTimes(2);
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(String(warn.mock.calls[0]?.[0])).toMatch(/pixi\.js 8\.\d+\.\d+ has no renderPipes\.uniformBatch/);
+        // the one report was given: a renamed adaptor says nothing more
+        watchUniformBatch({ ...renderer, renderPipes: { mesh: {} } } as never);
+        expect(warn).toHaveBeenCalledTimes(1);
+        warn.mockRestore();
     });
 
     it('wraps the adaptor of a renderer once, and does nothing on WebGL', async () => {
