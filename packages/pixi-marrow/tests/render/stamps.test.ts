@@ -9,7 +9,7 @@ import { expectClippedBatch } from './batch-clip-check';
 import { batcherOf, createStage, elementOf, watchUploads } from './batch-stage';
 import { type CoverSlot, coverRig, moveSlot } from './cover-rig';
 import { RANGED_UPLOADS } from './pixi-version';
-import { expectKernel, loadRig, meshes, play, type Rig, slotIndex, step, visibleSlots } from './rig';
+import { expectKernel, flushUploads, loadRig, meshes, play, type Rig, slotIndex, step, visibleSlots } from './rig';
 
 /*
  * A view does the work the stamps of a pose ask for. An engine sets the stamps. Here a test
@@ -158,6 +158,9 @@ describe('a pose of which a part changed', () => {
         const { bones } = rig.model.slots;
         const visible = visibleSlots(rig);
         const head = rig.model.bones.names.indexOf('head');
+
+        // what the first update wrote uploads before the count starts
+        flushUploads(rig.view);
         const uploads = watchBuffers(rig);
         // who follows the head: slots on it, and weighted meshes with a vertex on it
         const followers = visible.filter(({ slot, attachment }) => {
@@ -174,6 +177,9 @@ describe('a pose of which a part changed', () => {
         expect(rig.view.stats).toMatchObject({ placedSlots: followers.length, coloredSlots: 0, skips: 0 });
         // the positions are those of the kernel for every slot, moved or not
         expectKernel(rig);
+        // the stretch that moved uploads when Pixi is about to draw
+        expect(uploads).toEqual({ positions: 0, colors: 0, uvs: 0 });
+        flushUploads(rig.view);
         expect(uploads).toEqual({ positions: 1, colors: 0, uvs: 0 });
         // a bone that no visible slot hangs on moves nothing
         const root = rig.model.bones.names.indexOf('root');
@@ -216,6 +222,8 @@ describe('a pose of which a part changed', () => {
         step(rig, 0.1);
         const { state } = rig.engine;
         const torso = slotIndex(rig, 'torso');
+
+        flushUploads(rig.view);
         const uploads = watchBuffers(rig);
 
         state.colors[torso * 4] = 0.25;
@@ -223,11 +231,13 @@ describe('a pose of which a part changed', () => {
         rig.view.update(state);
         // the slot is newer, so its vertices are placed too: an engine has one stamp per slot
         expect(rig.view.stats).toMatchObject({ placedSlots: 1, coloredSlots: 1 });
+        flushUploads(rig.view);
         expect(uploads).toEqual({ positions: 1, colors: 1, uvs: 0 });
         // a stamp without another color writes none
         stamp(state, [], [torso]);
         rig.view.update(state);
         expect(rig.view.stats).toMatchObject({ placedSlots: 1, coloredSlots: 0 });
+        flushUploads(rig.view);
         expect(uploads).toEqual({ positions: 2, colors: 1, uvs: 0 });
         expectKernel(rig);
     });

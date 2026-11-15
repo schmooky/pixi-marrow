@@ -21,9 +21,9 @@ import type { MeshCode } from './mesh-code';
 import { linkMeshPipe } from './mesh-pipe';
 import { vertexBuffer } from './pages';
 import { type PosePass, poseEntries } from './pose-pass';
-import type { VertexBuffers } from './range-mesh';
+import { RangeMesh, type VertexBuffers } from './range-mesh';
 import { DrawRanges, type DrawRangesOptions } from './ranges';
-import { sent, uploadStretch } from './sent';
+import { sent, uploadWaiting } from './sent';
 import { MeshSkin } from './skin-paint';
 import type { UploadBytes, ViewStats } from './stats';
 import { type Template, templateBytes } from './template';
@@ -106,6 +106,10 @@ export class MeshPaint {
     private readonly dark: boolean;
     /** The bytes of the bone and palette textures that {@link ranges} counts. */
     private counted = 0;
+    /** What waits for {@link flush}: the first vertex whose position changed and the one behind the last, then of the colors. */
+    private readonly waiting = new Int32Array(4);
+    /** The bytes of the colors of one vertex. */
+    private colorBytes = 4;
 
     constructor(options: MeshPaintOptions) {
         const { template, model, gpu, instancing, gate, stats, ...rest } = options;
@@ -123,7 +127,7 @@ export class MeshPaint {
         // a renderer that was created before this code loaded may have no pipe for meshes
         this.stats = stats;
         this.container.onRender = (renderer): void => {
-            this.flush();
+            this.flush(renderer);
             if (renderer === this.linked) return;
             linkMeshPipe(renderer);
             this.linked = renderer;
@@ -185,6 +189,9 @@ export class MeshPaint {
         this.positions.data = template.positions;
         this.statics.data = template.statics;
         if (this.colors !== undefined) this.colors.data = template.colors;
+        // a buffer with other data uploads whole
+        this.waiting.fill(0);
+        this.colorBytes = template.hasDark ? 8 : 4;
         this.skin?.resize(template);
         // the ranges take the buffer of the skin data of the new layout
         this.buffers.skin = this.skin?.buffer;
@@ -200,11 +207,10 @@ export class MeshPaint {
     }
 
     /**
-     * Brings the vertex data of the visible entries in line with a pose and uploads what changed.
-     * That is the positions and the colors of the vertices it wrote, and the texture coordinates
-     * when a sequence showed another region. A stretch uploads on its own where Pixi can do that,
-     * see `uploadsStretch`. With `gpu` the bones and the palette go to the GPU, and the positions
-     * only of what the CPU places.
+     * Brings the vertex data of the visible entries in line with a pose and notes what changed
+     * for {@link flush}. That is the positions and the colors of the vertices it wrote. The
+     * texture coordinates upload whole when a sequence showed another region. With `gpu` the bones
+     * and the palette go to the GPU, and the positions only of what the CPU places.
      */
     pose(pass: PosePass, template: Template, state: PoseState, seen: VisibleList): void {
         const { bones, hasDark } = this.model.slots;
@@ -223,13 +229,13 @@ export class MeshPaint {
             }
         } else {
             poseEntries(pass, template, state, bones, hasDark, seen, undefined);
-            if (pass.colored > 0 && this.colors !== undefined) {
-                const bytes = template.hasDark ? 8 : 4;
-
-                this.note('statics', uploadStretch(this.colors, RANGED, pass.colorFrom, pass.colorTo, bytes));
-            }
+            if (pass.colored > 0) this.wait(pass, 2);
         }
-        if (pass.placed > 0) this.note('positions', uploadStretch(this.positions, RANGED, pass.from, pass.to, 8));
+        if (pass.placed > 0) {
+            this.wait(pass, 0);
+            // Pixi keeps the bounds of a container until a child says that it changed
+            RangeMesh.touchAll(this.container);
+        }
         if (pass.framed > 0) {
             this.statics.update();
             this.note('statics', template.statics.byteLength);
@@ -237,11 +243,35 @@ export class MeshPaint {
     }
 
     /**
-     * Uploads what the passes wrote into the textures of bones and colors, with `gpu`. Pixi calls
-     * it before every render, so the textures upload once per frame, and not while the view is hidden.
+     * Uploads what the passes wrote since the last render: the stretches of the positions and of
+     * the colors, and with `gpu` the textures of bones and colors. Pixi calls it before every
+     * render, so each uploads once per frame, and not while the view is hidden.
+     *
+     * A buffer gets one stretch, from the first vertex that changed to the last. The renderer
+     * says how it takes it. WebGPU writes it at once, and so does WebGL from pixi.js 8.23 on. An
+     * older WebGL buffer keeps one stretch until its geometry is bound, so it uploads here.
+     * Else a render that draws no mesh of the view would let the next stretch replace this one.
      */
-    flush(): void {
-        if (this.skin !== undefined && shown(this.container)) this.note('bones', this.skin.flush());
+    flush(renderer: Renderer): void {
+        const { positions, colors, waiting } = this;
+
+        if (!shown(this.container)) return;
+        if (this.skin !== undefined) this.note('bones', this.skin.flush());
+        // WebGPU writes a stretch at once, and WebGL from pixi.js 8.23 on
+        const push = RANGED || 'gpu' in renderer ? null : renderer;
+
+        this.note('positions', uploadWaiting(positions, waiting, 0, 8, push));
+        if (colors !== undefined) this.note('statics', uploadWaiting(colors, waiting, 2, this.colorBytes, push));
+    }
+
+    /** Notes the vertices a pass wrote in {@link waiting}: positions at 0, colors at 2. No number crosses a call. */
+    private wait(pass: PosePass, at: number): void {
+        const { waiting } = this;
+        const from = at === 0 ? pass.from : pass.colorFrom;
+        const to = at === 0 ? pass.to : pass.colorTo;
+
+        if (i32(waiting, at + 1) === 0 || from < i32(waiting, at)) waiting[at] = from;
+        if (to > i32(waiting, at + 1)) waiting[at + 1] = to;
     }
 
     /** Counts bytes that went to the GPU in the stats of the view. */

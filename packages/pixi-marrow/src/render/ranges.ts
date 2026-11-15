@@ -13,7 +13,7 @@ import { uploadsStretch } from './batch-upload';
 import { ClipMask } from './clip-mask';
 import type { ClipShape } from './clip-shape';
 import type { MeasuredGeometry } from './measured-geometry';
-import { createRangeMesh, followSkin, type VertexBuffers } from './range-mesh';
+import { CLIP_LABEL, createRangeMesh, followSkin, type VertexBuffers } from './range-mesh';
 import { u8, u16 } from './read';
 import { sent } from './sent';
 import { createMaskShader, createViewShader, releaseShader } from './shader';
@@ -450,7 +450,7 @@ export class DrawRanges {
     /** A clip group for a position, with its mask. The mask is a child, so both share a transform. */
     private createGroup(position: number): ClipGroup {
         const { container: parent, measure } = this.options;
-        const container = new Container({ label: 'marrow-clip' });
+        const container = new Container({ label: CLIP_LABEL });
 
         this.maskShader ??= createMaskShader();
         const mask = new ClipMask(this.maskShader, measure);

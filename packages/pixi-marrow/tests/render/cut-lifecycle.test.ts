@@ -9,7 +9,18 @@ import { listAtlasFixtures, loadAtlasFixture } from '../geometry/outline-checks'
 import { DEGREES, regionName, syntheticRig } from '../geometry/synthetic';
 import { cutView, PENTAGON, pageTexture, pageTextures, plainOutlines, setPolygon } from './cuts';
 import { settle, WINDOW } from './heap';
-import { createRig, drawPose, expectKernel, fixtureFiles, meshes, play, readDrawn, step, vertexData } from './rig';
+import {
+    createRig,
+    drawPose,
+    expectKernel,
+    fixtureFiles,
+    flushUploads,
+    meshes,
+    play,
+    readDrawn,
+    step,
+    vertexData,
+} from './rig';
 
 const REGIONS = DEGREES.flatMap((degrees) => [regionName(degrees, false), regionName(degrees, true)]);
 
@@ -260,7 +271,8 @@ describe('memory with cuts', () => {
             state.world[4] = i % 50;
             state.colors[head * 4 + 3] = i % 3 === 0 ? 0 : 1;
             drawPose(rig.view, state);
-            // what Pixi asks before every draw
+            // what Pixi asks before every render, and before every draw
+            flushUploads(rig.view);
             rig.view.beforeDraw(false);
         };
         const windows = settle(run);
