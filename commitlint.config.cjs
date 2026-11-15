@@ -1,7 +1,14 @@
 /**
  * Conventional Commits: <type>(<scope>)!: <subject>
- *   feat(shader): add bevel joins          fix(gradient): clamp hard stops
+ *   feat(render): draw a slot that screens in the batch
+ *   fix(pose): keep the stamp of a bone that a slider writes
+ *   docs(site): explain how a batch ends
+ * The scope is optional. It names a layer of the library (formats, pose, geometry, render, api),
+ * an entry point (bake, debug, perf, optimize) or a part of the repo (site, scripts, ci).
  * `!` or a `BREAKING CHANGE:` footer marks a breaking change (changeset needs `major`).
+ *
+ * CI lints the commits of a pull request and its title: a squash merge makes the title the commit
+ * message on main.
  */
 module.exports = {
     extends: ['@commitlint/config-conventional'],

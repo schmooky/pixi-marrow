@@ -41,7 +41,7 @@
     "changeset:status": "changeset status",
     "version-packages": "changeset version && pnpm install --lockfile-only",
     "commitlint": "commitlint --edit",
-    "prepare": "husky || true"
+    "prepare": "husky || test \"$CI\" = true"
   },
   "devDependencies": {
     "@assetpack/core": "^1.7.0",
