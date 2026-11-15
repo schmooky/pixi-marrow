@@ -2,6 +2,7 @@ import { MarrowError } from '../base/errors';
 import { closestName, unknownName } from '../base/names';
 import type { PhysicsMode } from '../pose/engine';
 import type { RenderMode } from '../render/mode';
+import type { ResolvedPerf } from './presets';
 
 /** The physics modes, as the official `Physics` names them. */
 const PHYSICS_MODES: readonly PhysicsMode[] = ['none', 'reset', 'update', 'pose'];
@@ -81,4 +82,28 @@ export function finiteArgument(method: string, name: string, value: unknown): nu
     }
 
     return value;
+}
+
+/**
+ * Warns once per asset when options that need the outlines of the atlas regions were set by name
+ * and the asset has none: `tightMesh` other than `off`, and `occlusion: 'auto'`. They do nothing
+ * then. An asset loaded with `outlines: 'off'`, the default, has none. The code that warns loads
+ * on demand, so the warning comes a moment later.
+ *
+ * @example
+ * warnWithoutOutlines(asset, settings, options.occlusion);
+ */
+export function warnWithoutOutlines(
+    asset: { readonly outlinesState: string },
+    settings: ResolvedPerf,
+    occlusion: string | undefined,
+): void {
+    const tight = settings.given.has('tightMesh') && settings.tightMesh !== 'off' ? settings.tightMesh : undefined;
+
+    if (asset.outlinesState !== 'off' || (tight === undefined && occlusion !== 'auto')) return;
+    import('./outline-warning').then(
+        ({ warnOnce }) => warnOnce(asset, tight, occlusion === 'auto'),
+        // a chunk that did not load warns of nothing
+        () => undefined,
+    );
 }

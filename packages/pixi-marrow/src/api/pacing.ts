@@ -22,7 +22,10 @@ export interface PacingStatus {
     /** Updates a second, or `display` for every frame. */
     rate: number | 'display';
     offscreen: ResolvedPerf['offscreen'];
-    /** True when the last renders found the skeleton off the screen, or no render reached it. */
+    /**
+     * True when the last renders found the skeleton off the screen or hidden, or no render
+     * reached it. A skeleton is hidden when it or a parent has `visible` or `renderable` false.
+     */
     hidden: boolean;
     /** The size on the screen at the last render, in pixels across. Infinite before a render. */
     size: number;
@@ -30,10 +33,29 @@ export interface PacingStatus {
     reduced: boolean;
 }
 
+/** A display object or one of its parents, as the pacing reads them. */
+interface Shown {
+    readonly visible: boolean;
+    readonly renderable: boolean;
+    readonly parent: Shown | null;
+}
+
 /** What the pacing reads of a display object when it is rendered. */
-export interface Seen {
+export interface Seen extends Shown {
     /** The box the skeleton covers, in the coordinates of the screen, written to `bounds`. */
     getBounds(skipUpdate: boolean, bounds: Bounds): { x: number; y: number; width: number; height: number };
+}
+
+/**
+ * True when Pixi draws nothing of a display object: it or a parent has `visible` or `renderable`
+ * false. Pixi still calls `onRender` then, and `getBounds` looks at no parent.
+ */
+function hiddenInTree(owner: Shown): boolean {
+    for (let node: Shown | null = owner; node !== null; node = node.parent) {
+        if (!node.visible || !node.renderable) return true;
+    }
+
+    return false;
 }
 
 /**
@@ -95,17 +117,23 @@ export class Pacer {
     }
 
     /**
-     * Notes where the skeleton is, from a render of it. A skeleton that shows nothing has an
-     * empty box: it counts as on the screen with the size it had, so that it shows when a slot
-     * does again.
+     * Notes where the skeleton is, from a render of it. A skeleton that is hidden, or has a
+     * hidden parent, counts as off the screen and keeps its size. A skeleton that shows
+     * nothing else has an empty box: it counts as on the screen with the size it had, so that
+     * it shows when a slot does again.
      */
     seen(owner: Seen, renderer: Renderer): void {
         if (!this.watching) return;
+        this.seenAt = this.updates;
+        this.since = 0;
+        if (hiddenInTree(owner)) {
+            this.onScreen = false;
+
+            return;
+        }
         const box = owner.getBounds(false, this.box.clear());
         const { screen } = renderer;
 
-        this.seenAt = this.updates;
-        this.since = 0;
         if (box.width <= 0 && box.height <= 0) {
             this.onScreen = true;
 
@@ -160,7 +188,7 @@ export class Pacer {
         return due;
     }
 
-    /** True when the last renders found the skeleton off the screen, or no render reached it for a while. */
+    /** True when the last renders found the skeleton off the screen or hidden, or no render reached it for a while. */
     private get hidden(): boolean {
         const unseen = this.updates - this.seenAt > UNSEEN && this.since > UNSEEN_SECONDS;
 

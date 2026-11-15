@@ -67,6 +67,40 @@ describe.each(['4.2', '4.3'])('a display object of Spine %s', (version) => {
             spine.destroy();
         });
 
+        it('changes nothing when set to the skins that are active', () => {
+            const spine = new MarrowSpine(mix, { autoUpdate: false });
+            const eye = spine.slot('eye-front-iris');
+            const head = spine.slot('base-head');
+
+            spine.skins = ['skin-base', 'eyes/violet'];
+            eye.attachment = null;
+            head.tint = 0x00ff00;
+            const version = spine.engine.state.version;
+
+            const [list, one] = [spine.skins, spine.skin];
+
+            spine.skins = list;
+            spine.skins = ['skin-base', 'eyes/violet'];
+            // several skins read as null, and null written back keeps them
+            expect(one).toBeNull();
+            spine.skin = one;
+            expect(spine.skins).toEqual(['skin-base', 'eyes/violet']);
+            expect([eye.attachment, head.tint, spine.engine.state.version]).toEqual([null, 0x00ff00, version]);
+            spine.skin = 'full-skins/girl';
+            head.tint = 0x00ff00;
+            spine.skin = 'full-skins/girl';
+            spine.skins = ['full-skins/girl'];
+            expect(head.tint).toBe(0x00ff00);
+            // another order is another skin
+            spine.skins = ['skin-base', 'eyes/violet'];
+            head.tint = 0x00ff00;
+            spine.skins = ['eyes/violet', 'skin-base'];
+            expect(head.tint).toBe(0xffffff);
+            spine.skins = [];
+            expect(spine.skin).toBeNull();
+            spine.destroy();
+        });
+
         it('shares the combined skin of a list between the instances of an asset', () => {
             const one = new MarrowSpine(mix, { autoUpdate: false });
             const two = new MarrowSpine(mix, { autoUpdate: false });

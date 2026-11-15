@@ -10,7 +10,10 @@ import type { SkeletonModel, SkinData } from '../../model/model';
 export interface AttachmentLookup {
     /** The index of the default skin: the last skin named `default`. -1 when there is none. */
     readonly defaultSkin: number;
-    /** How many skins an index can point at: those of the model, then those that {@link add} added. */
+    /**
+     * How many skins an index can point at: those of the model, then those that {@link add} added.
+     * A freed index is used again, so it grows with the skins that live at one time.
+     */
     readonly skinCount: number;
     /** The skin at an index, or undefined for -1, for an index past {@link skinCount} and for one that {@link drop} freed. */
     skin(index: number): SkinData | undefined;
@@ -18,13 +21,14 @@ export interface AttachmentLookup {
     parts(index: number): readonly number[];
     /**
      * Adds a skin made of skins of the model and returns its index. A key that was added before
-     * gives the index it got then, and `make` is not called. `combineSkins` is what calls it.
+     * gives the index it got then, and `make` is not called. A new skin takes the index that
+     * {@link drop} freed last, else the next one. `combineSkins` is what calls it.
      */
     add(key: string, parts: readonly number[], make: () => SkinData): number;
     /**
-     * Frees a skin that {@link add} added: its tables go, and its index stays unused. The next
-     * {@link add} of its key makes a new skin with a new index. Does nothing for a skin of the
-     * model. `combineSkins` decides when, see `releaseSkin`.
+     * Frees a skin that {@link add} added: its tables go, and its index waits for the next new
+     * skin. The next {@link add} of its key makes a new skin. Does nothing for a skin of the
+     * model. `combineSkins` decides when, and tells the caches by skin index to drop the index.
      */
     drop(index: number): void;
     /** The attachment a skin stores under a slot and a name. */
@@ -108,6 +112,8 @@ function buildLookup(model: SkeletonModel): AttachmentLookup {
     const madeParts: (readonly number[] | undefined)[] = [];
     const keys: string[] = [];
     const byKey = new Map<string, number>();
+    // the places in `made` that `drop` freed, for the next skins that `add` adds
+    const free: number[] = [];
     const defaultSkin = model.skins.findLastIndex((skin) => skin.name === 'default');
     const get = (skin: number, slot: number, name: string): AttachmentData | undefined =>
         tables[skin]?.[slot]?.get(name);
@@ -124,12 +130,13 @@ function buildLookup(model: SkeletonModel): AttachmentLookup {
 
             if (index === undefined) {
                 const skin = make();
+                const at = free.pop() ?? made.length;
 
-                index = own + made.length;
-                made.push(skin);
-                madeParts.push(Object.freeze([...parts]));
-                keys.push(key);
-                tables.push(tableOf(skin));
+                index = own + at;
+                made[at] = skin;
+                madeParts[at] = Object.freeze([...parts]);
+                keys[at] = key;
+                tables[index] = tableOf(skin);
                 byKey.set(key, index);
             }
 
@@ -143,6 +150,7 @@ function buildLookup(model: SkeletonModel): AttachmentLookup {
             made[at] = undefined;
             madeParts[at] = undefined;
             tables[index] = [];
+            free.push(at);
         },
         get,
         nameOf(skin, slot, attachment) {

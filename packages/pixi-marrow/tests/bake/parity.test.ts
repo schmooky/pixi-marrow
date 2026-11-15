@@ -19,7 +19,7 @@ import { BAKE_RIGS, bakeable, DT, displayEngine, eventData, hostOf, modelOf, pos
  *
  * Other steps reach a sample time on another path. The pose of 4.1 and 4.2 depends on the pose
  * before in its last bits, so there it is equal within a millionth. Between samples the baked
- * pose is the frame before, and the test checks that it shows that one.
+ * pose is the nearest frame, and the test checks that it shows that one.
  */
 
 /** The time an entry is applied at: the official `getAnimationTime`, from the end in reverse. */
@@ -47,7 +47,7 @@ interface Run {
     live: PoseEngine;
     baked: PoseEngine;
     tally: BakeTally;
-    /** Updates compared at a sample time, and updates checked to show the frame before. */
+    /** Updates compared at a sample time, and updates checked to show the nearest frame. */
     samples: number;
     between: number;
 }

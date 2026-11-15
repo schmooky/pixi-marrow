@@ -200,7 +200,9 @@ export interface PoseEngine {
      * Whether deform timelines apply. Default true. Set to false, it clears every deform at once
      * and leaves the deform timelines out of the updates, so every mesh shows its setup vertices.
      * The pose then differs from the official one. Set back to true, the next update applies
-     * the deform timelines again. The `lod` of the display object sets it for a small skeleton.
+     * the deform timelines again. The deform timelines of an entry that mixes out still run while
+     * it is false, on the hidden deforms, so a mix out leaves the deform the official runtime
+     * leaves. The `lod` of the display object sets it for a small skeleton.
      */
     deform: boolean;
     /**

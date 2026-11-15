@@ -33,11 +33,12 @@ export interface PerfSettings {
      */
     instancing: 'auto' | 'on' | 'off';
     /**
-     * `auto` plays an animation from frames baked at load time, where it can be: one track, no
-     * mix, no physics, no handle that writes a bone. The pose equals the played one at the
-     * baked frames. A list bakes the named animations only. A baked clip keeps 23 KB to 0.9 MB per
-     * animation and skin for the life of the asset, so it is set by name. `off` (the default)
-     * bakes nothing.
+     * `auto` plays an animation from baked frames where it can be: one track, no mix, no entry
+     * queued after it, no physics, no handle that writes a bone. The first time an animation can
+     * play baked, its clip is baked in idle time, and the skeleton plays live until the clip is
+     * there. The pose equals the played one at the baked frames. A list bakes the named
+     * animations only. A clip keeps 23 KB to 0.9 MB per animation and skin, more for a longer
+     * animation, for the life of the asset. So it is set by name. `off` (the default) bakes nothing.
      */
     bake: BakeMode;
     /**
@@ -51,7 +52,8 @@ export interface PerfSettings {
     /**
      * `update` (the `exact` default) updates a skeleton off the screen as one on it. `throttle`
      * updates it 4 times a second, with the time that passed, so events fire late. `pause` does
-     * not update it, so its time stands still until it is on the screen again.
+     * not update it, so its time stands still until it is on the screen again. A skeleton that
+     * is hidden, or under a parent that is, counts as off the screen: `visible` or `renderable` false.
      */
     offscreen: OffscreenMode;
     /**

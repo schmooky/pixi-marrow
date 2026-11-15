@@ -75,7 +75,8 @@ function rest(lookup: AttachmentLookup, holds: Holds, index: number): void {
 
 /**
  * Asks to be told when a combined skin of a model is freed, so that a cache by skin index can
- * drop its entry. The rig of an engine does that for its update caches and attachment rows.
+ * drop its entry. The index goes to the next combined skin, which must find nothing of the
+ * freed one. The rig of an engine does that for its update caches and attachment rows.
  *
  * @example
  * onSkinFreed(lookup, (index) => caches.delete(index));
@@ -138,11 +139,15 @@ export function combineSkins(lookup: AttachmentLookup, model: SkeletonModel, ski
         }
     }
     if (skins.length < 2) return skins[0] ?? -1;
-    const count = lookup.skinCount;
-    const index = lookup.add(skins.join(','), skins, () => makeSkin(model, skins));
+    let made = false;
+    const index = lookup.add(skins.join(','), skins, () => {
+        made = true;
+
+        return makeSkin(model, skins);
+    });
 
     // a new skin waits with the others until an engine shows it
-    if (index >= count) rest(lookup, holdsOf(lookup), index);
+    if (made) rest(lookup, holdsOf(lookup), index);
 
     return index;
 }

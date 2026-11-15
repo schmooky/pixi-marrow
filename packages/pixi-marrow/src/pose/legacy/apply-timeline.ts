@@ -15,7 +15,7 @@ import {
 } from './bones';
 import { applyAlpha, applyRgb, applyRgb2, applyRgba, applyRgba2 } from './colors';
 import { applyConstraintTimeline } from './constraint-timelines';
-import { applyDeform } from './deform';
+import { applyDeform, applyHiddenDeform } from './deform';
 import { applyPhysicsTimeline } from './physics-timelines';
 import type { LegacyPlayer } from './player';
 import { applyAttachment, applyDrawOrder, applyEvents, applySequence } from './slots';
@@ -124,7 +124,8 @@ function applySlotTimeline(player: LegacyPlayer, timeline: LegacyTimeline, blend
             applyAttachment(rig, pose, timeline, blend, direction);
             break;
         case K_DEFORM:
-            if (player.deforms) applyDeform(rig, pose, timeline, blend, values);
+            if (player.deforms) applyDeform(rig, pose, pose.deformLengths, timeline, blend, values);
+            else if (player.mixingOut) applyHiddenDeform(rig, pose, timeline, blend, values);
             break;
         case K_SEQUENCE:
             applySequence(rig, pose, timeline, blend, direction);

@@ -98,18 +98,25 @@ export interface MarrowSpineOptions {
     instancing?: PerfSettings['instancing'];
     /**
      * See {@link PerfSettings.bake}. With `auto` an animation is baked the first time it plays
-     * alone on track 0, at 60 frames per second. A list bakes the animations it names, and a name
-     * the skeleton lacks throws a `MarrowError`. The clips are shared by the instances of the
-     * asset, per skin. Clips from `addBakedClips` of `pixi-marrow/bake` play in place of baking.
+     * alone on track 0, at 60 frames per second. The bake runs in idle time, a frame of the
+     * animation or more per slice, and the object plays live until the clip is there. A list
+     * bakes the animations it names, and a name the skeleton lacks throws a `MarrowError`. Clips
+     * from `addBakedClips` of `pixi-marrow/bake` play in place of baking.
+     *
+     * The clips are shared by the instances of the asset, per skin. They stay for the life of
+     * the asset, and those of a combined skin until the skin is freed. They grow with the
+     * duration of the animations and with the number of skins that play them.
      *
      * An update plays baked when one entry plays alone on track 0 at alpha 1, with no mix, and
-     * the update before it played that entry too. Nothing may have written the pose since. The
+     * the update before it played that entry too. An entry with another one queued after it, as
+     * `queue` adds one, plays live until it is the last. Nothing may have written the pose since. The
      * skin, the place of the skeleton and the physics mode must be the same. Any other update is
      * posed as without baking. A skin that turns on a physics constraint or a slider bakes nothing.
      *
      * Events, loops, time scales, reverse and the `start` and `end` options stay as without
      * baking. At a sample time the pose equals the played one, rounded to 32 bits. Between two
-     * samples the frame before is shown. While baked frames play, `bone(name)` reads the local
+     * samples the nearer frame is shown, so a display of 60 Hz shows each frame once whatever the
+     * jitter of its ticks. While baked frames play, `bone(name)` reads the local
      * values of the last update the engine posed. Its world values are those of the frame.
      */
     bake?: PerfSettings['bake'];

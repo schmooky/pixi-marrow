@@ -27,16 +27,111 @@ describe('the frames of a clip', () => {
         expect(frameCount(Math.fround(16 / 60), 60)).toBe(18);
     });
 
-    it('shows the sample at or before a time, and the last frame from the duration on', () => {
+    it('shows the sample nearest to a time, and the last frame from the duration on', () => {
         const clip = { frames: 61, duration: 1, fps: 60 };
 
         expect(frameAt(clip, 0)).toBe(0);
         expect(frameAt(clip, 0.5)).toBe(30);
         expect(frameAt(clip, 0.5 - 1e-12)).toBe(30);
-        expect(frameAt(clip, 0.5 - 1e-3)).toBe(29);
+        expect(frameAt(clip, 0.5 - 1e-3)).toBe(30);
+        expect(frameAt(clip, 0.5 + 1e-3)).toBe(30);
+        expect(frameAt(clip, 0.5 - 0.6 / 60)).toBe(29);
+        expect(frameAt(clip, 1 - 0.4 / 60)).toBe(60);
         expect(frameAt(clip, 1)).toBe(60);
         expect(frameAt(clip, 7)).toBe(60);
         expect(frameAt(clip, -1)).toBe(0);
+        expect(Object.is(frameAt(clip, -0.001), 0)).toBe(true);
+    });
+
+    it('takes the last frame, at the duration, where it is nearer than the frame before', () => {
+        // 0.99 seconds: frame 59 at 59 / 60, the last frame 60 at 0.99, the middle at 0.98667
+        const clip = { frames: frameCount(0.99, 60), duration: 0.99, fps: 60 };
+
+        expect(clip.frames).toBe(61);
+        expect(frameAt(clip, 0.985)).toBe(59);
+        expect(frameAt(clip, 0.9866)).toBe(59);
+        expect(frameAt(clip, 0.9868)).toBe(60);
+        expect(frameAt(clip, 0.98999)).toBe(60);
+        expect(frameAt({ frames: 1, duration: 0, fps: 60 }, 0)).toBe(0);
+        expect(frameAt({ frames: 2, duration: 0.01, fps: 60 }, 0.004)).toBe(0);
+        expect(frameAt({ frames: 2, duration: 0.01, fps: 60 }, 0.006)).toBe(1);
+    });
+
+    it('shows each frame once for the ticks of a 60 Hz display with jitter in their timestamps', () => {
+        const clip = { frames: frameCount(4, 60), duration: 4, fps: 60 };
+        let seed = 7;
+        // a fixed sequence, from -0.5 to 0.5 milliseconds
+        const noise = (): number => {
+            seed = (seed * 1103515245 + 12345) % 2 ** 31;
+
+            return (seed / 2 ** 31 - 0.5) / 1000;
+        };
+        let time = 0;
+        let before = 0;
+        let stamp = 0;
+
+        for (let tick = 1; tick < 240; tick++) {
+            const next = tick / 60 + noise();
+
+            // the delta between two timestamps, summed as the engine sums its updates
+            time += next - stamp;
+            stamp = next;
+            const frame = frameAt(clip, time);
+
+            expect(frame, `tick ${tick}`).toBe(before + 1);
+            before = frame;
+        }
+    });
+});
+
+describe('baked playback at the ticks of a display', () => {
+    it('shows the next frame in every update of a 60 Hz display with jitter in its timestamps', async () => {
+        const model = await modelOf('4.2/spineboy-pro.skel');
+        const host = await hostOf(model);
+        const engine = displayEngine(host);
+        const tally = playBaked(host, engine, null);
+        const walk = model.animations.findIndex(({ name }) => name === 'walk');
+        let seed = 11;
+        // a fixed sequence, from -0.5 to 0.5 milliseconds
+        const noise = (): number => {
+            seed = (seed * 1103515245 + 12345) % 2 ** 31;
+
+            return (seed / 2 ** 31 - 0.5) / 1000;
+        };
+        /** True when the engine shows frame `frame` of the clip for every bone the clip moves. */
+        const shows = (frame: number): boolean => {
+            const clip = bakesOf(model).find(engine.state.skin, walk, null)?.clip;
+            const { world } = engine.state;
+
+            return (
+                clip !== undefined &&
+                Array.from(clip.bones).every((bone, j) =>
+                    [0, 1, 2, 3, 4, 5].every(
+                        (i) => world[bone * 6 + i] === clip.world[(frame * clip.bones.length + j) * 6 + i],
+                    ),
+                )
+            );
+        };
+        let stamp = 0;
+        const tick = (at: number): void => {
+            const next = at / 60 + noise();
+
+            engine.update(next - stamp);
+            stamp = next;
+        };
+
+        engine.setAnimation(0, walk, false);
+        // posed by the engine, which bakes the clip, then baked
+        tick(1);
+        tick(2);
+        const frames = bakesOf(model).find(engine.state.skin, walk, null)?.clip.frames ?? 0;
+
+        expect(frames).toBeGreaterThan(40);
+        for (let at = 3; at < frames - 2; at++) {
+            tick(at);
+            expect(shows(at), `update ${at}`).toBe(true);
+        }
+        expect(tally.baked).toBe(frames - 4);
     });
 });
 

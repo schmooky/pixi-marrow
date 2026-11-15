@@ -24,6 +24,17 @@ async function playing(model: SkeletonModel, rig: (typeof RIGS)[number]): Promis
     return engine;
 }
 
+/** The slots that the deform timelines of an animation write. */
+function deformSlots(model: SkeletonModel, animation: number): Set<number> {
+    const slots = new Set<number>();
+
+    for (const timeline of model.animations[animation]?.timelines ?? []) {
+        if (timeline.kind === 'deform') slots.add(timeline.target);
+    }
+
+    return slots;
+}
+
 /** The slots with a deform, and their lengths. */
 function deformed(engine: PoseEngine): number[] {
     return [...engine.state.deformLengths].flatMap((length, slot) => (length > 0 ? [slot] : []));
@@ -139,6 +150,57 @@ describe.each(VERSIONS)('the deform switch of the %s engine', (version) => {
         engine.deform = true;
         expect(deformed(engine)).toEqual(deformed(reference));
         both(3);
+        expectSamePose(engine, reference);
+    });
+
+    it.each(RIGS)('mixes a deform out to the setup shape while the switch is off: $file', async (rig) => {
+        const { model } = await importRig(`${version}/${rig.file}.skel`);
+        const animation = animationIndex(model, rig.animation);
+        const keyed = deformSlots(model, animation);
+        // another animation that deforms none of those slots, so that only the mix out writes them
+        const other = model.animations.findIndex(
+            (_, i) => i !== animation && [...deformSlots(model, i)].every((slot) => !keyed.has(slot)),
+        );
+
+        for (const next of [-1, other]) {
+            const engine = await playing(model, rig);
+            const reference = await playing(model, rig);
+            const both = (call: (pose: PoseEngine) => void): void => {
+                call(engine);
+                call(reference);
+            };
+
+            for (let i = 0; i < 12; i++) both((pose) => pose.update(FRAME));
+            engine.deform = false;
+            if (next < 0) both((pose) => pose.setEmptyAnimation(0, 0.2));
+            else both((pose) => pose.configure(pose.setAnimation(0, next, true), { mixDuration: 0.2 }));
+            for (let i = 0; i < 40; i++) both((pose) => pose.update(FRAME));
+            engine.deform = true;
+            for (let i = 0; i < 3; i++) both((pose) => pose.update(FRAME));
+            expectSamePose(engine, reference);
+        }
+    });
+
+    it.each(RIGS)('takes up a mix out that is under way when the switch is back on: $file', async (rig) => {
+        const { model } = await importRig(`${version}/${rig.file}.skel`);
+        const engine = await playing(model, rig);
+        const reference = await playing(model, rig);
+        const both = (times: number): void => {
+            for (let i = 0; i < times; i++) {
+                engine.update(FRAME);
+                reference.update(FRAME);
+            }
+        };
+
+        both(12);
+        engine.deform = false;
+        engine.setEmptyAnimation(0, 0.5);
+        reference.setEmptyAnimation(0, 0.5);
+        both(10);
+        engine.deform = true;
+        both(1);
+        expectSamePose(engine, reference);
+        both(40);
         expectSamePose(engine, reference);
     });
 
