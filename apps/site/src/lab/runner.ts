@@ -123,7 +123,7 @@ async function send(result: LabResult): Promise<string | null> {
             body: JSON.stringify(result),
         });
 
-        return answer.ok ? 'The result was also saved on the computer that serves this page.' : null;
+        return answer.ok ? 'The lab also saved the result on the computer that serves this page.' : null;
     } catch {
         return null;
     }
@@ -306,7 +306,7 @@ async function run(test: LabTest, page: LabPage, progress: Status): Promise<LabR
             ? await grow(runs, scene, start, test.noun)
             : await steady(runs, scene, start, settings.seconds ?? test.seconds ?? PLAY);
 
-    if (lost) throw new Error('The browser took the WebGL context away during the run.');
+    if (lost) throw new Error('The browser removed the WebGL context during the run.');
     const seconds = (performance.now() - started) / 1000;
     const device = await describeDevice(app.renderer, { refresh: runs.rate(), idleRefresh, timerStep: clock.step });
     // Pixi makes a WebGL renderer where WebGPU was asked for and does not start
@@ -416,7 +416,7 @@ async function grow(runs: Run, scene: BuiltScene, first: number, noun: string): 
         }
     }
     if (best !== null && over !== null) {
-        say(`Narrowing it down between ${best.count} and ${over.count} ${noun}.`);
+        say(`Searching between ${best.count} and ${over.count} ${noun}.`);
         [best, over] = await narrow(playCount, best, over);
     }
 

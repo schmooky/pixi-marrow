@@ -167,7 +167,7 @@ export class SelectionControls {
                 () => this.later(() => (this.reportOpen = !this.reportOpen)),
                 this.reportOpen ? 'on' : 'plain',
             ),
-            makeButton('delete', () => this.later(() => scene.remove(entry)), 'danger'),
+            makeButton('remove', () => this.later(() => scene.remove(entry)), 'danger'),
         ];
     }
 

@@ -41,8 +41,8 @@ export default defineDiagram({
             line.show(time);
             say(
                 time < 1
-                    ? '{first:Speed 1} makes the whole move in 1 s. {second:Speed 0.5} is only halfway. {result:The part} plays the middle half, twice as often.'
-                    : '{first:Speed 1} plays the move again. {second:Speed 0.5} ends its one move at 2 s. {result:The part} never reaches the ends.',
+                    ? '{first:Speed 1} makes the whole move in 1 s, and {second:Speed 0.5} makes half of it. {result:The part} plays the middle half, twice as often.'
+                    : '{first:Speed 1} plays the move again, and {second:Speed 0.5} ends its one move at 2 s. {result:The part} never reaches the ends.',
             );
         });
     },

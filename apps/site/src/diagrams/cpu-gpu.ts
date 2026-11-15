@@ -102,7 +102,7 @@ export default defineDiagram({
             show(
                 late
                     ? `${calls} calls: the CPU is still sending them when the frame should end, so the picture is late`
-                    : `${calls} ${calls === 1 ? 'call' : 'calls'}: the CPU is done early, and the frame has time left`,
+                    : `${calls} ${calls === 1 ? 'call' : 'calls'}: the CPU finishes early, and the frame has time left`,
             );
         };
 

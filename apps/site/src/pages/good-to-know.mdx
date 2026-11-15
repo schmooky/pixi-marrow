@@ -9,21 +9,21 @@ import source from '../snippets/good-to-know.ts?raw';
 
 ## What is automatic
 
-- **Skeletons share draw calls.** Skeletons of up to 1024 vertices are batched: 200 instances of a small rig draw in one call. A Pixi object between two skeletons in the draw order ends a batch, so keep skeletons next to each other in the display list.
-- **A skeleton at rest costs close to nothing.** When its animation ended, or it never played one, no timeline runs and nothing is uploaded. It wakes with the next `play`.
-- **Less overdraw, once you pass outlines.** Outlines are off by default. Write the outlines of an atlas at build time with `pixi-marrow outlines` and pass the file as `outlines`. A region without a visible pixel is then not drawn, and a slot behind the opaque part of a later slot is skipped. The picture stays the same.
+- **Skeletons share draw calls.** The runtime batches skeletons of up to 1024 vertices: 200 instances of a small rig draw in one call. A Pixi object between two skeletons in the draw order ends a batch. So keep skeletons next to each other in the display list.
+- **A skeleton at rest costs close to nothing.** When its animation ended, or it never played one, no timeline runs and the runtime uploads nothing. It wakes with the next `play`.
+- **Less overdraw, once you pass outlines.** Outlines are off by default. Write the outlines of an atlas at build time with `pixi-marrow outlines`. Then pass the file as `outlines`. The runtime then skips a region without a visible pixel, and a slot behind the opaque part of a later slot. The picture stays the same.
 
 ## Render mode
 
 <Snippet source={source} regions="render-mode" />
 
-`renderMode` is `auto` by default: a skeleton of up to 1024 vertices is batched, and a larger one gets meshes of its own. `mesh` and `batched` force one mode. `stats.renderMode` names the mode in use.
+`renderMode` is `auto` by default. The runtime then batches a skeleton of up to 1024 vertices, and gives a larger one meshes of its own. `mesh` and `batched` force one mode. `stats.renderMode` names the mode in use.
 
 ## Physics
 
 <Snippet source={source} regions="physics" />
 
-`physics` is the official mode: `update`, `pose`, `reset` or `none`. Physics does not follow the Pixi position by itself, so tell it with `physicsTranslate` and `physicsRotate`. A skeleton with physics constraints keeps simulating at rest.
+`physics` is the official mode: `update`, `pose`, `reset` or `none`. Physics does not follow the Pixi position by itself. Tell it with `physicsTranslate` and `physicsRotate`. A skeleton with physics constraints keeps simulating at rest.
 
 ## Why is it slow
 
@@ -39,12 +39,12 @@ The report lists what the runtime decided for this instance and why: draw calls,
 | PixiJS | Version 8, from 8.21 |
 | Renderer | WebGL2 and WebGPU |
 
-Every constraint is solved: IK, transform, path, physics and sliders. Clipping works.
+The runtime solves every constraint: IK, transform, path, physics and sliders. Clipping works.
 
 ## Limits
 
 - No Canvas 2D and no WebGL1.
 - No Spine 3.8 and no Spine 4.0.
-- The runtime plays skeletons. Editing them stays in the Spine editor.
-- The speed was measured on one desktop machine. The only phone measured so far is a Galaxy A05, for the idle cache, see [Performance](/performance/).
+- The runtime plays skeletons. To edit them, use the Spine editor.
+- The numbers for speed come from one desktop machine. The only phone measured so far is a Galaxy A05, for the idle cache. See [Performance](/performance/).
 - The licence is the Spine Runtimes License, as for the official runtimes. Each user of a product built on it needs a Spine Editor licence of their own.

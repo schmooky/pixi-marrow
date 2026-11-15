@@ -75,7 +75,7 @@ export default defineDiagram({
                 }
             }
             show(
-                `${total} pixels painted for one picture: ${mode === 'whole rectangles' ? 'transparent pixels are painted too' : 'only pixels that show are painted'}`,
+                `${total} pixels painted for one picture: ${mode === 'whole rectangles' ? 'the GPU paints transparent pixels too' : 'the GPU paints only the pixels that show'}`,
             );
         };
 

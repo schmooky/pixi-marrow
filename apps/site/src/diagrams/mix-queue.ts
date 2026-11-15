@@ -72,13 +72,13 @@ export default defineDiagram({
             if (time < start) show('{first:The landing} bounces. {second:Idle} waits in the queue until its turn.');
             else if (weight < 1) {
                 show(
-                    `Mix: {result:the track} turns from {first:the landing} into {second:idle}, ${Math.floor(weight * 10) * 10} percent of the way.${time < LANDING ? ' The landing is still in the air.' : ''}`,
+                    `Mix: {result:the track} changes from {first:the landing} to {second:idle}, ${Math.floor(weight * 10) * 10} percent of the way.${time < LANDING ? ' The landing is still in the air.' : ''}`,
                 );
             } else {
                 show(
                     delay < 0
                         ? '{second:Idle} alone. It started early, so the bounce never landed.'
-                        : '{second:Idle} alone: the queue handed over, and it loops from here.',
+                        : '{second:Idle} alone. The queue gave it the track, and it loops from here.',
                 );
             }
         });

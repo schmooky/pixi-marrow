@@ -7,7 +7,7 @@ description: An animation is a list of timelines, and a timeline is a list of ke
 import Diagram from '../../components/Diagram.astro';
 import Preview from '../../components/Preview.astro';
 
-<Preview name="timeline" height={520} rows={5} caption="The win of the bee of the slot game Bzzz as a dope sheet. Each row is a bone or a slot, each dot a key. Drag over the sheet to set the time, or slow it down." />
+<Preview name="timeline" height={520} rows={5} caption="The win of the bee of the slot game Bzzz as a dope sheet. Each row is a bone or a slot, and each dot is a key. Drag over the sheet to set the time, or play it slower." />
 
 ## Timelines
 
@@ -19,39 +19,45 @@ The win of the bee has 44 timelines. The sheet puts the timelines of one part on
 
 A key is a value at a time. The dots of a row are its keys, colored by what they change. Between two keys the runtime computes the value, so a few keys make a smooth move.
 
-Look at the rows of the wings, `wingl` and `wingr`. Each has 41 keys that alternate between two angles, one every 2 frames. That is the flapping of the wings, and it is all keys, because the animator wanted that exact rhythm.
+Look at the rows of the wings, `wingl` and `wingr`. Each has 41 keys that alternate between two angles, one every 2 frames. That is the flapping of the wings. It is all keys, because the animator wanted that exact rhythm.
 
 ## Curves
 
 <Diagram name="animation-curves" height={200} rows={1} caption="One value keyed at three times: 0, then 100, then 0. Pick a curve and watch the value between the keys." />
 
-The keys are the same in all three, and only the way between them changes. Linear moves at an even speed. Stepped holds and jumps at the next key. Bezier starts slowly, speeds up and slows down again.
+The keys are the same in all three, and only the way between them changes. Linear moves at an even speed. Stepped holds and jumps at the next key. Bezier starts slowly, gets faster and gets slower again.
 
 A key also says how the value moves to the next key. Linear moves at an even speed. Stepped holds the value and jumps at the next key. A bezier curve eases in and out, as the animator drew it in the graph editor.
 
-In the win, 95 moves between keys are bezier, 87 stepped and 13 linear. The keys of the wings are stepped, so a wing jumps from one angle to the other and the eye sees a blur.
+In the win, the moves between keys are 95 bezier, 87 stepped and 13 linear. The wings use stepped keys, so a wing jumps from one angle to the other and the eye sees a blur.
 
 ## Images and colors
 
-The rows that start with `slot` change slots. A white square swaps the image a slot shows: the hands of the bee come out and the open smile takes the place of the joy face. The pink dots change the color of the closed eyes, which fade in and out.
+The rows that start with `slot` change slots. A white square changes the image that a slot shows. That is how the hands of the bee appear and the open smile replaces the joy face. The pink dots change the color of the closed eyes, which fade in and out.
 
-This is how the bee turns blurred and dims as well. Its `blur_in` swaps images and its `disable` changes colors. Pick `blur_in` to see it.
+This is how the bee turns blurred and dims as well. Its `blur_in` changes images and its `disable` changes colors. Pick `blur_in` to see it.
 
 ## Events
 
-The yellow diamond at 0.33 seconds is the event `onBeeWow`. An event key changes nothing in the pose. The runtime emits it when the time of the animation passes it, and the game plays a sound there or starts a counter. [Events](/guide/events/) shows how to listen for it.
+The yellow diamond at 0.33 seconds is the event `onBeeWow`. An event key changes nothing in the pose. The runtime emits it when the time of the animation passes it. There, the game plays a sound or starts a counter. [Events](/guide/events/) shows how to listen for it.
 
 ## From a time to a pose
 
-At every update the runtime moves the time of each track. For each timeline it finds the keys before and after that time, follows the curve between them, and writes the value into the pose of its bone or slot. A looping animation starts its time again at the end.
+At every update the runtime moves the time of each track. Then, for each timeline, it does three things:
 
-During a mix two animations apply at once. The outgoing one fades as the incoming one grows, over the time of the mix.
+1. It finds the keys before and after that time.
+2. It follows the curve between them.
+3. It writes the value into the pose of its bone or slot.
+
+A looping animation starts its time again at the end.
+
+During a mix, two animations apply at once. Over the time of the mix, the outgoing one fades and the incoming one grows.
 
 ## What pixi-marrow does
 
-pixi-marrow computes every value with the same arithmetic as the official runtime, and its poses equal the official ones to the bit. It finds keys the same way too, by a scan from the first key. A lookup reads 2.4 keys on average, and a cursor that remembered the last key was measured and did not pay.
+pixi-marrow computes every value with the same arithmetic as the official runtime. Its poses equal the official ones to the bit. It finds keys the same way too, by a scan from the first key. A lookup reads 2.4 keys on average. In the measurements, a cursor that remembered the last key did not pay.
 
 What it skips is work that cannot change the picture:
 
-- An animation that would apply the same values as in the update before is left out. That is an animation past its end, or one whose timelines all hold one value, such as `disable`.
-- A bone is posed again only when its own values, its parent or the place of the skeleton changed. A skeleton at rest so costs close to nothing.
+- The runtime skips an animation that would apply the same values as in the update before. That is an animation past its end, or one whose timelines all hold one value, such as `disable`.
+- The runtime poses a bone again only when its own values, its parent or the place of the skeleton changed. So a skeleton at rest costs close to nothing.

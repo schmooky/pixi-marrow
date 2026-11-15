@@ -89,7 +89,7 @@ export default defineDiagram({
             outline.setAttribute('cx', String(cx));
             outline.setAttribute('cy', String(cy));
             counter.textContent = String(frame);
-            show(`${lit} of ${cells.length} pixels lit, all decided again in this frame`);
+            show(`${lit} of ${cells.length} pixels lit, and this frame decides each one again`);
         });
     },
 });

@@ -42,7 +42,7 @@ export default defineDiagram({
             line.show(time);
             if (time < CUT)
                 say(
-                    'Both wins play. {first:The left one} will play to its end, {second:the right one} is replaced at 0.6 s.',
+                    'Both wins play. {first:The left one} will play to its end, and another animation will replace {second:the right one} at 0.6 s.',
                 );
             else if (time < WIN) {
                 say(
@@ -50,7 +50,7 @@ export default defineDiagram({
                 );
             } else {
                 say(
-                    '{first:Left}: played to its end, so finished resolved at 1.2 s with no interrupt. {second:Right} was cut short.',
+                    '{first:Left}: played to its end, so finished resolved at 1.2 s with no interrupt. {second:Right} stopped early.',
                 );
             }
         });

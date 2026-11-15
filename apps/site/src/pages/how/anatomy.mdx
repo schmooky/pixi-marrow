@@ -1,15 +1,15 @@
 ---
 layout: ../../layouts/Docs.astro
 title: Anatomy of a skeleton
-description: A Spine skeleton is bones, slots, attachments and an atlas. Take a skeleton apart to see each, and why the runtime keeps them the way it does.
+description: A Spine skeleton is bones, slots, attachments and an atlas. See each part on a live skeleton, and why the runtime keeps them the way it does.
 ---
 
 import Diagram from '../../components/Diagram.astro';
 import Preview from '../../components/Preview.astro';
 
-<Preview name="anatomy" height={440} rows={4} caption="Three symbols of the slot game Bzzz. Pick a view to take one apart: its bones, its slots in the order they are drawn, and the shapes of its images." />
+<Preview name="anatomy" height={440} rows={4} caption="Three symbols of the slot game Bzzz. Pick a view to see one part: the bones, the slots in the order they draw, or the shapes of the images." />
 
-This part of the docs explains how a Spine animation becomes a picture, step by step. Its previews take apart the symbols of the slot game Bzzz, which ship with this site. You need no Spine editor to follow it. Each page takes one stage of the work apart in a live preview.
+This part of the docs explains, step by step, how a Spine animation becomes a picture. Its previews show the parts of the symbols of the slot game Bzzz, which this site includes. You need no Spine editor to follow it. Each page shows one stage of the work in a live preview.
 
 ## Bones
 
@@ -17,19 +17,19 @@ Pick **bones**. The lines are the bones of the skeleton, and they form a tree. E
 
 The animator moves bones, not pictures. Turn the root, and the whole tree turns with it. Bend the bone of a wing, and only the wing follows. So an animation is small: the bee of Bzzz has 27 bones, and its idle loop keys 20 rotations, positions and scales of them.
 
-The letter `A` has 3 bones, the coin 8 and the bee 27. A bone is cheap, but every bone of a skeleton is computed in every frame that it moves.
+The letter `A` has 3 bones, the coin has 8 and the bee has 27. A bone is cheap, but the runtime computes every bone of a skeleton in every frame that the bone moves.
 
 ## Slots
 
-A skeleton is painted one picture at a time, and each picture paints over what is already there:
+The GPU paints a skeleton one picture at a time. Each picture paints over what is already there:
 
-<Diagram name="anatomy-order" height={210} rows={1} caption="Three pictures painted one after the other. Pick another order and see which one ends up on top." />
+<Diagram name="anatomy-order" height={210} rows={1} caption="Three pictures painted one after the other. Pick another order and see which one is on top at the end." />
 
 The same three pictures look different in another order, because the last one painted covers the others. That order is the draw order, and its places are the slots.
 
-Now pick **slots** in the preview at the top. The bee builds up from the back to the front, one slot at a time. A slot is a place in the draw order that belongs to one bone. It shows at most one image at a time, the attachment, and it has a color and a blend mode.
+Now pick **slots** in the preview at the top. The preview builds the bee from the back to the front, one slot at a time. A slot is a place in the draw order that belongs to one bone. It shows at most one image at a time, the attachment, and it has a color and a blend mode.
 
-The order of the slots is the order of drawing. Each slot paints over the ones before it, so the wings come before the body and the eyes after it. An animation can change the attachment of a slot, which is how the bee turns blurred, and its color, which is how it dims.
+The order of the slots is the order of drawing. Each slot paints over the ones before it, so the wings come before the body and the eyes after it. An animation can change the attachment of a slot, and that is how the bee turns blurred. It can also change the color of a slot, and that is how the bee dims.
 
 A slot can be empty in the setup pose and get its image from an animation. The closed eyes and the yawn of the bee wait in empty slots. The coin shows one image in its setup pose, and its animations fill its other slots.
 
@@ -39,23 +39,23 @@ Most slots blend normally. The coin has additive slots for its light, which brig
 
 Pick **attachments**. Each outline is the shape of an image, as the idle loop moves it. There are two kinds that draw:
 
-- **A region** is a rectangle cut from the atlas: 4 corners, moved by one bone.
+- **A region** is a rectangle cut from the atlas: 4 corners that one bone moves.
 - **A mesh** is a polygon cut into triangles. Each vertex can follow several bones with a weight, so a mesh bends like skin. The bee has 6 meshes with 77 vertices, and a vertex follows up to 3 bones.
 
 A region costs the same however it moves. A mesh costs work per vertex, and a weighted vertex costs work per bone it follows.
 
-Slots can also hold attachments that draw nothing: bounding boxes for hit tests, points, paths that other bones follow, and clipping shapes that cut what is drawn after them.
+Slots can also hold attachments that draw nothing. They are bounding boxes for hit tests, points, paths that other bones follow, and clipping shapes. A clipping shape cuts what draws after it.
 
 ## Skins
 
-A skin is a set of attachments by slot and name. Swapping the skin swaps the images and keeps the bones and the animations. A game uses skins for versions of one character or object, such as a gold coin and a silver one. The Bzzz symbols use one skin each. [Skins and slots](/skins-and-slots/) shows how to show several at once.
+A skin is a set of attachments by slot and name. A new skin replaces the images and keeps the bones and the animations. A game uses skins for versions of one character or object, such as a gold coin and a silver one. The Bzzz symbols use one skin each. [Skins and slots](/skins-and-slots/) shows how to use several at once.
 
 ## The atlas
 
-The images of all attachments are packed into pages of an atlas. A region is a rectangle of a page, and a mesh keeps the place of each vertex on it. The Bzzz symbols share one page, `symbols.avif`.
+An atlas holds the images of all attachments on its pages. A region is a rectangle of a page, and a mesh keeps the place of each vertex on it. The Bzzz symbols share one page, `symbols.avif`.
 
 One page matters for speed. The GPU draws everything that uses the same textures in one draw call, so a whole set on one page can draw in one call.
 
 ## What pixi-marrow keeps
 
-A loaded skeleton becomes a model of plain tables. The bones are arrays of names, parents and setup values, the slots arrays of bones, colors and blend modes. Every copy of a skeleton shares that model, its atlas and the code that poses it. A copy keeps only its own pose, which is why a scene can hold many copies of one skeleton.
+A loaded skeleton becomes a model of plain tables. The bones are arrays of names, parents and setup values. The slots are arrays of bones, colors and blend modes. Every copy of a skeleton shares that model, its atlas and the code that poses it. A copy keeps only its own pose. That is why a scene can hold many copies of one skeleton.

@@ -96,7 +96,7 @@ export default defineDiagram({
             show(
                 time < LENGTH
                     ? 'first pass: the animation plays'
-                    : 'second pass: from 0.7 s another animation takes over',
+                    : 'second pass: from 0.7 s another animation replaces it',
             );
         });
     },
