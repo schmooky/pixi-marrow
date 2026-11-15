@@ -373,9 +373,9 @@ describe('the calls of the 4.3 pose engine', () => {
     it('refuses fields no version has and values of the wrong type', () => {
         const entry = engine.setAnimation(0, MOVE, true);
 
-        expect(errorOf(() => engine.configure(entry, { nothing: 1 } as object)).code).toBe('invalid-data');
+        expect(errorOf(() => engine.configure(entry, { nothing: 1 } as object)).code).toBe('unknown-name');
         expect(errorOf(() => engine.configure(entry, { alpha: true })).message).toContain('takes a number');
-        expect(errorOf(() => engine.configure(entry, { loop: 1 })).message).toContain('takes a boolean');
+        expect(errorOf(() => engine.configure(entry, { loop: 1 })).message).toContain('takes true or false');
         expect(errorOf(() => engine.configure(entry, { animationLast: 'now' })).message).toContain('takes a number');
         expect(errorOf(() => engine.configure({ ...entry }, { alpha: 1 })).message).toContain('not from this pose');
     });

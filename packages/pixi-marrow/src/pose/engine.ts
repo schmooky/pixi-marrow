@@ -130,7 +130,15 @@ export interface PoseEngine {
     setEmptyAnimation(track: number, mixDuration: number): TrackEntry;
     /** Queues mixing a track out to nothing. */
     addEmptyAnimation(track: number, mixDuration: number, delay: number): TrackEntry;
-    /** Sets fields of a track entry. A field this Spine version does not have throws a `MarrowError`. */
+    /**
+     * Sets fields of a track entry. Every field is checked before the first one is written, so a
+     * call that throws changes nothing. The rules are the same in every Spine version.
+     *
+     * - A field that only another Spine version has throws a `MarrowError` with the code `unsupported-feature`.
+     * - A name that no version has throws one with the code `unknown-name`.
+     * - A value of the wrong type throws one with the code `invalid-data`.
+     * - A field whose value is `undefined` stays as it is.
+     */
     configure(entry: TrackEntry, fields: TrackFields): void;
     /** Removes what a track holds, without mixing out. The pose keeps what the track did to it. */
     clearTrack(track: number): void;
