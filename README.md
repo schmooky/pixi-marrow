@@ -27,7 +27,7 @@ app.stage.addChild(hero);
 hero.play('run', { loop: true });
 ```
 
-Every constraint is solved: IK, transform, path, physics and sliders. Clipping works.
+pixi-marrow solves every constraint: IK, transform, path, physics and sliders. Clipping works.
 
 ## Pixi Assets and AssetPack
 
@@ -45,7 +45,7 @@ const hero = MarrowSpine.from({ skeleton: 'hero.skel', atlas: 'hero.atlas' });
 
 An atlas named like `hero@0.5x.webp.atlas` counts as resolution 0.5 in WebP, so `texturePreference` picks among its variants. The `data` of an atlas takes `images` and `imageMetadata`, as in the official runtime.
 
-Unloading an atlas destroys the assets made from it, so destroy their display objects first. Do not register another Spine runtime in the same game: both claim the same file extensions.
+Unloading an atlas destroys the assets made from it. So destroy their display objects first. Do not register another Spine runtime in the same game: both claim the same file extensions.
 
 ## Tracks and physics
 
@@ -58,7 +58,9 @@ hero.resetPhysics();
 hero.physicsTranslate(dx, dy);
 ```
 
-`entry` and `track.configure` take any field of the official `TrackEntry` by its official name, which depends on the Spine version. A 4.1 skeleton takes `attachmentThreshold` and `drawOrderThreshold`, and 4.2 and 4.3 take `mixAttachmentThreshold` and `mixDrawOrderThreshold`. A name the version lacks throws a `MarrowError` that lists the names it has. `physics` is the official mode: `update`, `pose`, `reset` or `none`. Physics does not follow the Pixi position by itself: tell it with `physicsTranslate` and `physicsRotate`.
+`entry` and `track.configure` take any field of the official `TrackEntry` by its official name, which depends on the Spine version. A 4.1 skeleton takes `attachmentThreshold` and `drawOrderThreshold`, and 4.2 and 4.3 take `mixAttachmentThreshold` and `mixDrawOrderThreshold`. A name the version lacks throws a `MarrowError` that lists the names it has.
+
+`physics` is the official mode: `update`, `pose`, `reset` or `none`. Physics does not follow the Pixi position by itself: tell it with `physicsTranslate` and `physicsRotate`.
 
 ## Bones and placeholders
 
@@ -73,7 +75,7 @@ hero.follow('gun', flash);
 hero.attach('placeholder', symbol);
 ```
 
-`bone` gives a handle: the pose next to the parent bone to read and write, and the place in the skeleton to read. `follow` moves a container with a bone. `attach` draws a container at the place of a slot in the draw order, between the parts of the skeleton, and moves it with the bone of the slot. An attached container costs one draw call.
+`bone` gives a handle: the pose next to the parent bone to read and write, and the place in the skeleton to read. `follow` moves a container with a bone. `attach` draws a container at the place of a slot in the draw order, between the parts of the skeleton. It also moves the container with the bone of the slot. An attached container costs one draw call.
 
 ## Skins and slots
 
@@ -91,22 +93,26 @@ hero.stop();
 hero.setupPose();
 ```
 
-`skins` makes a list of skins active as one, as `Skin.addSkin` does in the official runtime. Where two skins store an attachment under one slot and name, the later one wins. The instances of an asset share the combined skin of a list. `slot` gives a handle to the attachment, the tint, the alpha and the dark tint of one slot. A write stays until an animation keys the slot or the setup pose is set, which a new skin list does. `localToWorld` and `worldToLocal` take points between a bone and the skeleton. `setupPose` takes `'bones'` or `'slots'` for one half.
+`skins` makes a list of skins active as one, as `Skin.addSkin` does in the official runtime. Where two skins store an attachment under one slot and name, the later one wins. The instances of an asset share the combined skin of a list.
+
+`slot` gives a handle to the attachment, the tint, the alpha and the dark tint of one slot. A write stays until an animation keys the slot or the slot returns to its setup pose. A new skin list returns the slots to their setup pose.
+
+`localToWorld` and `worldToLocal` take points between a bone and the skeleton. `setupPose` takes `'bones'` or `'slots'` for one half.
 
 ## Many skeletons
 
-Skeletons of up to 1024 vertices share draw calls: 200 instances of a small rig draw in one call. Nothing to set up. A Pixi object between two skeletons in draw order ends a batch, so keep skeletons next to each other in the display list where you can.
+Skeletons of up to 1024 vertices share draw calls: 200 instances of a small rig draw in one call. It needs no option. A Pixi object between two skeletons in draw order ends a batch. So keep skeletons next to each other in the display list where you can.
 
 ```ts
 const boss = await MarrowSpine.load({ skeleton: 'boss.skel', atlas: 'boss.atlas', renderMode: 'mesh' });
 console.log(boss.stats.renderMode);
 ```
 
-`renderMode` is `auto` by default. `mesh` draws a skeleton with meshes of its own, which pays for large rigs. `batched` forces the batch.
+`renderMode` is `auto` by default. `mesh` draws a skeleton with meshes of its own, which is worth it for large rigs. `batched` forces the batch.
 
 ## Skeletons at rest
 
-A skeleton whose animation ended, or that never played one, costs close to nothing: no timeline runs, no vertex is placed, nothing is uploaded. It wakes with the next `play`. Physics is the exception: a skeleton with physics constraints keeps simulating, as in the official runtime.
+A skeleton whose animation ended, or that never played one, costs close to nothing. The runtime runs no timeline, places no vertex and uploads nothing for it. It wakes with the next `play`. Physics is the exception: a skeleton with physics constraints keeps simulating, as in the official runtime.
 
 ## Trade exactness for speed
 
@@ -117,13 +123,13 @@ const fan = await MarrowSpine.load({ skeleton: 'fan.skel', atlas: 'fan.atlas', p
 
 `perf` is `exact` by default, which changes nothing. The presets set when a skeleton updates, and nothing else. `balanced` updates a skeleton off the screen 4 times a second. `fast` pauses a skeleton off the screen and poses batched skeletons 30 times a second. `offscreen` and `updateRate` are options of their own too.
 
-Everything that costs memory, vertices or draw calls is in no preset, because what it costs depends on the device and the scene. Set it by name where it pays:
+Everything that costs memory, vertices or draw calls is in no preset, because what it costs depends on the device and the scene. Set it by name where it is worth its cost:
 
-- `bake: 'auto'` bakes an animation in idle time the first time it plays alone on track 0, and plays it live until the clip is ready. An animation with another one queued after it is not baked. A clip keeps 23 KB to 0.9 MB per animation and skin while the asset holds that skin.
-- `tightMesh: 'on'` draws regions as tight polygons, see below. It adds vertices, which a phone whose CPU is the limit pays for.
+- `bake: 'auto'` bakes an animation in idle time the first time it plays alone on track 0. Until the clip is ready, the animation plays live. It does not bake an animation with another one queued after it. A clip keeps 23 KB to 0.9 MB per animation and skin while the asset holds that skin.
+- `tightMesh: 'on'` draws regions as tight polygons, see below. It adds vertices, and a phone whose CPU is the limit pays for them.
 - `idleCache: 'auto'` draws a skeleton at rest as one image. Each image is a texture of its own, so many of them take memory and split batches. On a low-end phone small resting symbols drew slower with it.
-- `lod: 'auto'` leaves physics and deform out of a skeleton drawn smaller than 96 pixels. Its meshes then show their setup shape.
-- `instancing: 'auto'` with `skinning: 'gpu'` draws copies of one rig that follow each other in the display list in one instanced call. It pays for many copies of one rig, and not for a grid of different symbols, which the batched mode draws in fewer calls.
+- `lod: 'auto'` skips physics and deform for a skeleton drawn smaller than 96 pixels. Its meshes then show their setup shape.
+- `instancing: 'auto'` with `skinning: 'gpu'` draws instances of one rig that follow each other in the display list in one instanced call. It is worth it for many instances of one rig, and not for a grid of different symbols. The batched mode draws such a grid in fewer calls.
 
 `bakeAnimations` of `pixi-marrow/bake` bakes at build time. The first two rows of `perf.report()` say which settings are in effect and how often the skeleton updates.
 
@@ -138,7 +144,7 @@ The report lists what the runtime decided for this instance and why: draw calls,
 
 ## Less overdraw
 
-With the outlines of its atlas a skeleton draws no region without a visible pixel, and skips a slot behind the opaque part of a later slot. The picture stays the same, bit for bit. Outlines are off by default.
+With the outlines of its atlas, a skeleton draws no region without a visible pixel. It also skips a slot behind the opaque part of a later slot. The picture stays the same, bit for bit. Outlines are off by default.
 
 ```ts
 const hero = await MarrowSpine.load({
@@ -149,9 +155,11 @@ const hero = await MarrowSpine.load({
 });
 ```
 
-`tightMesh: 'on'` also draws every region as the polygon around its visible pixels. On five rigs of the bench that shades 2.6 to 12.9 percent less triangle area, and a scene bound by fill rendered 3 to 12 percent faster on one desktop GPU. The picture is the same to the eye and not to the bit: some pixels move by 1 of 255 levels.
+`tightMesh: 'on'` also draws every region as the polygon around its visible pixels. On five rigs of the bench, that shades 2.6 to 12.9 percent less triangle area. A scene bound by fill rendered 3 to 12 percent faster on one desktop GPU. The picture is the same to the eye and not to the bit: some pixels move by 1 of 255 levels.
 
-`pixi-marrow outlines hero.atlas` writes the outlines to `hero.outlines.json` at build time. Pass that URL as `outlines` in the load options, and nothing is read at load time. `outlines: 'auto'` reads the page images in idle time after the load instead. That draws each page into a canvas, 32 MB for a page of 2048 by 2048 for a moment, which a phone with little memory can fail on.
+`pixi-marrow outlines hero.atlas` writes the outlines to `hero.outlines.json` at build time. Pass that URL as `outlines` in the load options. Then the runtime reads nothing at load time.
+
+`outlines: 'auto'` reads the page images in idle time after the load instead. That draws each page into a canvas. For a moment, a page of 2048 by 2048 takes 32 MB. A phone with little memory can fail on that.
 
 ## Debug overlays
 
@@ -162,7 +170,7 @@ const debug = new MarrowDebug(hero, { layers: { meshTriangles: true, overdraw: t
 debug.layers.bones = false;
 ```
 
-`MarrowDebug` draws over a skeleton: bones, region and mesh shapes, bounding boxes, clipping, paths, point attachments, event names and overdraw. The shapes are the ones the official runtime computes, to the bit. The `overdraw` layer fills every triangle the skeleton draws with a color that adds up, so the bright parts are where the GPU paints a pixel many times. The overlays draw with [pixi-silk](https://pixi-silk.schmooky.dev), an optional peer: `npm install pixi-silk` to use them.
+`MarrowDebug` draws over a skeleton: bones, region and mesh shapes, bounding boxes, clipping, paths, point attachments, event names and overdraw. The shapes are the ones the official runtime computes, to the bit. The `overdraw` layer fills every triangle that the skeleton draws with an additive color. So the bright parts are where the GPU paints a pixel many times. The overlays draw with [pixi-silk](https://pixi-silk.schmooky.dev), an optional peer: `npm install pixi-silk` to use them.
 
 ## Docs site
 
@@ -170,7 +178,7 @@ debug.layers.bones = false;
 pnpm site:dev
 ```
 
-The site in `apps/site`, served at [pixi-marrow.schmooky.dev](https://pixi-marrow.schmooky.dev), holds the guide, the pages of How it works with their diagrams and live previews, a lab and a playground. The previews show the symbols of the slot game Bzzz, whose rigs are in `fixtures/bzzz`.
+The site in `apps/site` holds the guide, How it works with its diagrams and live previews, a lab and a playground. It is at [pixi-marrow.schmooky.dev](https://pixi-marrow.schmooky.dev). The previews show the symbols of the slot game Bzzz, whose rigs are in `fixtures/bzzz`.
 
 ## Goals
 
@@ -204,16 +212,16 @@ pnpm test         # unit tests and the parity suite
 pnpm parity:ref   # one line per fixture: the poses the official cores give
 ```
 
-The parity suite runs on the official Spine example exports. `pnpm fixtures` downloads them into `fixtures/.cache`. They are not committed.
+The parity suite runs on the official Spine example exports. `pnpm fixtures` downloads them into `fixtures/.cache`. The repo does not hold them.
 
-Your own rigs go into `fixtures/local/`: a `.json` or `.skel` file with its `.atlas` next to it. The suite picks them up. That folder is not committed either.
+Your own rigs go into `fixtures/local/`: a `.json` or `.skel` file with its `.atlas` next to it. The suite includes them. The repo does not hold that folder either.
 
 [AGENTS.md](AGENTS.md) explains the layout and the rules.
 
 ## Licence
 
-The Spine Runtimes License, in [LICENSE](LICENSE). The pose core of pixi-marrow is ported from the official Spine Runtimes, so pixi-marrow is a derivative work of them.
+The Spine Runtimes License, in [LICENSE](LICENSE). The pose core of pixi-marrow is a port of the official Spine Runtimes, so pixi-marrow is a derivative work of them.
 
 Each user of pixi-marrow needs their own Spine Editor licence, as for the official runtimes. A copy of pixi-marrow in any form must include the licence and its copyright notice.
 
-The rigs in `fixtures/bzzz` are not covered by it, see [their notes](fixtures/bzzz/README.md).
+The licence does not cover the rigs in `fixtures/bzzz`. See [their notes](fixtures/bzzz/README.md).

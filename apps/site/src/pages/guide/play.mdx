@@ -11,7 +11,7 @@ import source from '../../snippets/guide-play.ts?raw';
 
 ## An animation is a stretch of time
 
-An animation has a length, such as 1.33 seconds. Playing it puts it on a track, and the track has a playhead that moves through that length as time passes. In every frame the runtime reads the pose at the playhead and draws it, as [One frame](/how/frame/) shows. Everything on this page changes how the playhead moves.
+An animation has a length, such as 1.33 seconds. Playing it puts it on a track. The track has a playhead that moves through that length as time passes. In every frame the runtime reads the pose at the playhead and draws it, as [One frame](/how/frame/) shows. Everything that follows changes how the playhead moves.
 
 ## Know the names
 
@@ -39,7 +39,7 @@ A skeleton usually has one animation per state it can be in. The symbols of Bzzz
 The first second, all of them move. Then they part:
 
 - With `loop: true` the playhead jumps back to the start, and the move plays again.
-- With `loop: false` the playhead stops at the end, and the square **holds its last frame**. It does not go back to the setup pose.
+- With `loop: false` the playhead stops at the end, and the square **holds its last frame**. It does not return to the setup pose.
 - An animation of 0 seconds has only a last frame, so it is a pose that holds from the start.
 
 <Snippet source={source} regions="loop hold" />
@@ -50,7 +50,7 @@ The first second, all of them move. Then they part:
 
 <Diagram name="play-speed" lanes={3} timeline height={250} rows={0} caption="The same one-second move at speed 1, at speed 0.5, and with only its middle half played." />
 
-`speed` makes the playhead move faster or slower: at 0.5 the move takes two seconds. `start` and `end` cut a part out of the animation, and a loop repeats that part only. `reverse` moves the playhead backwards. `timeScale` sets the speed of the whole skeleton, every track at once.
+`speed` makes the playhead move faster or slower: at 0.5 the move takes two seconds. `start` and `end` play only a part of the animation, and a loop repeats that part only. `reverse` moves the playhead backwards. `timeScale` sets the speed of the whole skeleton, every track at once.
 
 <Snippet source={source} regions="speed" />
 
@@ -58,13 +58,13 @@ The first second, all of them move. Then they part:
 
 <Snippet source={source} regions="stop" />
 
-`stop` takes the animation off a track, or off all tracks when you name none. Without a mix the pose stays as the track left it, because nothing changes it any more. With a mix the track fades back to the setup pose over that time.
+`stop` removes the animation from a track, or from all tracks when you name none. Without a mix the pose stays as the track left it, because nothing changes it any more. With a mix the track fades back to the setup pose over that time.
 
 ## Know when it ends
 
-<Diagram name="play-finished" lanes={2} timeline height={250} rows={0} caption="A win of 1.2 seconds, played whole on the left and replaced by another animation at 0.6 seconds on the right." />
+<Diagram name="play-finished" lanes={2} timeline height={250} rows={0} caption="A win of 1.2 seconds. On the left it plays whole. On the right another animation replaces it at 0.6 seconds." />
 
-`play` returns a `Track`, the handle on that animation. Its `finished` promise resolves when the animation has played to its end. It also resolves when something else takes its place first, as on the right. Code that waits for a win before it shows the total must therefore check whether the win was cut short. [Events](/guide/events/) shows how.
+`play` returns a `Track`, the handle on that animation. Its `finished` promise resolves when the animation reaches its end. It also resolves when something else takes its place first, as on the right. Code that waits for a win before it shows the total must therefore check whether the win reached its end. [Events](/guide/events/) shows how.
 
 <Snippet source={source} regions="finished" />
 

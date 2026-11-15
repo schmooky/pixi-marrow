@@ -1,7 +1,7 @@
 ---
 layout: ../../layouts/Docs.astro
 title: Transparency and blending
-description: Pictures with transparent parts are painted over each other. How the colors combine is blending, and every pixel painted twice costs GPU time.
+description: The GPU paints pictures with transparent parts over each other. How the colors combine is blending, and every pixel painted twice costs GPU time.
 ---
 
 import Diagram from '../../components/Diagram.astro';
@@ -16,14 +16,14 @@ When the GPU paints a pixel over another, it combines the two colors. That is bl
 
 <Diagram name="batches-blend" height={190} rows={1} caption="A pixel on the screen, a color painted over it at half cover, and the result. Pick how it blends." />
 
-Normal blending covers what is under the new color by its alpha. Additive blending brightens what is under it, which is how glows and sparks are made. Multiply darkens it, like a shadow. Each rule is a setting of the GPU, and changing the setting between two pictures ends a batch, as [The GPU and draw calls](/basics/gpu/) explains.
+Normal blending covers what is under the new color by its alpha. Additive blending brightens what is under it. Games make glows and sparks with it. Multiply darkens it, like a shadow. Each rule is a setting of the GPU. Changing the setting between two pictures ends a batch, as [The GPU and draw calls](/basics/gpu/) explains.
 
 ## Overdraw
 
-<Diagram name="overdraw" height={400} rows={0} caption="Three pictures overlap, each a round shape in a transparent rectangle. Each pixel shows how many times it was painted. Pick how they are drawn." />
+<Diagram name="overdraw" height={400} rows={0} caption="Three pictures overlap, each a round shape in a transparent rectangle. Each pixel shows how many times the GPU painted it. Pick how the GPU draws them." />
 
-The GPU paints every pixel of every triangle it draws, also where the texture is transparent and nothing changes. Drawn as whole rectangles, the three pictures paint many pixels two or three times, mostly in their invisible corners. Cut to their shapes, the counts drop, and the picture is the same. Painting a pixel more than once is overdraw. It is the main GPU cost of 2D games, and phones have little GPU time to spare.
+The GPU paints every pixel of every triangle it draws, also where the texture is transparent and nothing changes. Drawn as whole rectangles, the three pictures paint many pixels two or three times, mostly in their invisible corners. With the pictures cut to their shapes, the counts drop, and the picture is the same. Painting a pixel more than once is overdraw. It is the main GPU cost of 2D games. Phones have little GPU time to spare.
 
 ## What this means for animation
 
-A skeleton is many pictures painted over each other in its draw order, most of them with transparent space around them. pixi-marrow can cut those transparent parts with outlines. It also keeps additive and normal slots in one batch, as [Draw order and batches](/how/batches/) and [Why it is fast](/how/fast/) show. From here, the [guide](/start/) shows how to use the runtime, and [How it works](/how/frame/) takes a frame of it apart.
+A skeleton is many pictures painted over each other in its draw order. Most of them have transparent space around them. pixi-marrow can cut those transparent parts with outlines. It also keeps additive and normal slots in one batch, as [Draw order and batches](/how/batches/) and [Why it is fast](/how/fast/) show. From here, the [guide](/start/) shows how to use the runtime. [How it works](/how/frame/) splits one frame of the runtime into its parts.

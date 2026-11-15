@@ -14,7 +14,7 @@ The animator draws in the units of the Spine editor. A skeleton 300 units wide s
 
 <Diagram name="size-units" height={210} rows={3} caption="A skeleton with a bone 100 units right of its origin. Pick a scale for its container." />
 
-The picture grows and shrinks with the scale. The bone does not move inside the skeleton: it stays 100 units from the origin. Only its place on the stage changes, and `toGlobal` works that out with the scale.
+The picture grows and shrinks with the scale. The bone does not move inside the skeleton: it stays 100 units from the origin. Only its place on the stage changes. `toGlobal` computes that place with the scale.
 
 The origin of a skeleton is where the animator put the root bone. That can be its middle, its feet or a corner. So place a skeleton by its box, not by its origin.
 
@@ -22,7 +22,9 @@ The origin of a skeleton is where the animator put the root bone. That can be it
 
 <Diagram name="size-box" height={200} rows={0} caption="A square that grows and lifts, fitted into a cell two ways." />
 
-On the left the square is fitted by its box in each frame. That box hugs the square, so the fit shrinks every growth away and centres every lift away, and the animation is lost. On the right the square is fitted once by the box of its setup pose, and the animation plays as it was made. With a real skeleton, whose parts move differently, a fit per frame also makes it jitter. Measure the setup pose once per asset, and keep the box with it.
+On the left, the game fits the square by its box in each frame. That box hugs the square. So the fit shrinks the square as much as it grows, and centres it again when it lifts. The animation disappears. On the right, the game fits the square once, by the box of its setup pose. The animation plays as the animator made it.
+
+With a real skeleton, whose parts move differently, a fit per frame also makes it jitter. Measure the setup pose once per asset, and keep the box with it.
 
 <Snippet source={source} regions="measure" />
 
@@ -36,7 +38,7 @@ Fitted each by its own box, a small skeleton grows and a large one shrinks. With
 
 <Snippet source={source} regions="design" />
 
-Skeletons that belong together are often drawn on one frame, such as the symbols of a slot game on 256 by 256 units. Ask the animator for that frame. One scale for the whole set keeps the sizes as designed, and a glow may reach beyond the frame as intended.
+Animators often draw skeletons that belong together on one frame, such as the symbols of a slot game on 256 by 256 units. Ask the animator for that frame. One scale for the whole set keeps the sizes that the designer chose. A glow may reach beyond the frame, as intended.
 
 ## What the scale changes
 
@@ -48,8 +50,8 @@ The scale of the container scales the picture. The skeleton inside keeps its uni
 
 <Snippet source={source} regions="units" />
 
-`toGlobal` turns a point of the skeleton into a point of the stage, with its scale and place. A container that `follow` or `attach` puts into the skeleton is scaled with it.
+`toGlobal` turns a point of the skeleton into a point of the stage, with its scale and place. A container that `follow` or `attach` puts into the skeleton scales with it.
 
-The scale is also the one a game tweens. A pop to 1.2 times the size multiplies the base scale, and goes back to it.
+The scale is also the one a game tweens. A pop to 1.2 times the size multiplies the base scale, and returns to it.
 
-The official runtime can also scale a skeleton while it loads, so that bones and bounds come out in pixels. pixi-marrow scales with the container only.
+The official runtime can also scale a skeleton while it loads, so that bones and bounds are in pixels. In pixi-marrow, a skeleton scales with its container only.
