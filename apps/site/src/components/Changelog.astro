@@ -1,0 +1,46 @@
+---
+import { releasedChanges, waitingChanges } from '../lib/changelog';
+
+/*
+ * The changelog of the package, from `packages/pixi-marrow/CHANGELOG.md` and the changeset files
+ * that wait for the next release. `part` picks which of the two the component shows.
+ */
+
+interface Props {
+    part: 'released' | 'waiting';
+}
+const { part } = Astro.props;
+const released = part === 'released' ? releasedChanges() : undefined;
+const waiting = part === 'waiting' ? waitingChanges() : [];
+---
+
+{released && (
+    <Fragment>
+        <ul>
+            {released.versions.map((version) => (
+                <li><a href={`#${version.slug}`}>{version.text}</a></li>
+            ))}
+        </ul>
+        <div class="changelog" set:html={released.html} />
+    </Fragment>
+)}
+{part === 'waiting' && waiting.length === 0 && <p>No change waits. The newest version holds everything.</p>}
+{waiting.map((change) => <div class="changelog changelog-waiting" set:html={change} />)}
+
+<style>
+    .changelog :global(h3) {
+        margin-top: 2.5rem;
+        border-top-width: 1px;
+        padding-top: 1.5rem;
+    }
+    .changelog :global(h4) {
+        margin: 1.6rem 0 0.4rem;
+        font-size: 0.95rem;
+        font-weight: 650;
+    }
+    .changelog-waiting + .changelog-waiting {
+        margin-top: 1.5rem;
+        border-top-width: 1px;
+        padding-top: 0.5rem;
+    }
+</style>
