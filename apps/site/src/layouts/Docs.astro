@@ -1,6 +1,9 @@
 ---
 import type { MarkdownHeading } from 'astro';
-import { PAGES, pagesOf, SECTIONS, SITE } from '../lib/site';
+import { docPage, markdownPath } from '../lib/content';
+import { dayInWords, dayOf } from '../lib/git';
+import { PAGES, pagesOf, SECTIONS } from '../lib/site';
+import { modifiedOf } from '../lib/structured';
 import Base from './Base.astro';
 
 interface Props {
@@ -15,9 +18,12 @@ const previous = index > 0 ? PAGES[index - 1] : undefined;
 const next = index >= 0 ? PAGES[index + 1] : undefined;
 const sections = headings.filter((heading) => heading.depth === 2);
 const page = index >= 0 ? PAGES[index] : undefined;
+/** When git last saw the source of this page change, and the page as Markdown. */
+const modified = modifiedOf(path);
+const twin = docPage(path) === undefined ? undefined : markdownPath(path);
 ---
 
-<Base title={`${frontmatter.title} | ${SITE.name}`} description={frontmatter.description}>
+<Base title={frontmatter.title} description={frontmatter.description} article>
     <div class="container-page docs">
         <aside class="docs-side">
             <nav aria-label="Docs">
@@ -64,6 +70,16 @@ const page = index >= 0 ? PAGES[index] : undefined;
                     </a>
                 )}
             </nav>
+            {(modified || twin) && (
+                <footer class="docs-updated">
+                    {modified && (
+                        <span>
+                            Last updated <time datetime={dayOf(modified)}>{dayInWords(modified)}</time>
+                        </span>
+                    )}
+                    {twin && <a href={twin}>This page as Markdown</a>}
+                </footer>
+            )}
         </article>
         <aside class="docs-toc">
             {sections.length > 0 && (
@@ -79,3 +95,24 @@ const page = index >= 0 ? PAGES[index] : undefined;
         </aside>
     </div>
 </Base>
+
+<style>
+    .docs-updated {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 0.5rem 1.5rem;
+        margin-top: 2rem;
+        border-top-width: 1px;
+        padding-top: 1rem;
+        font-size: 0.8125rem;
+        color: hsl(var(--muted-foreground));
+    }
+    .docs-updated a {
+        text-decoration: underline;
+        text-underline-offset: 3px;
+    }
+    .docs-updated a:hover {
+        color: hsl(var(--foreground));
+    }
+</style>

@@ -3,16 +3,61 @@ import CopyCommand from '../components/CopyCommand.astro';
 import Snippet from '../components/Snippet.astro';
 import source from '../landing/bee.ts?raw';
 import Base from '../layouts/Base.astro';
+import { docPage } from '../lib/content';
+import { dayInWords, dayOf, lastCommitDate } from '../lib/git';
+import { routeExists, SITE_ROOT } from '../lib/routes';
+import { INSTALL } from '../lib/seo';
 import { SITE } from '../lib/site';
 
 const arrow = 'M5 12h14M13 6l6 6-6 6';
+/** When the changelog of the package last changed: the day of the release that the page names. */
+const released = lastCommitDate('../../packages/pixi-marrow/CHANGELOG.md', SITE_ROOT);
+const changelog = `${SITE.repository}/blob/main/packages/pixi-marrow/CHANGELOG.md`;
+
+/** The entry points of the package, as AGENTS.md lists them. */
+const ENTRIES = [
+    { name: 'pixi-marrow', holds: 'MarrowSpine, the display object. It needs pixi.js.' },
+    { name: 'pixi-marrow/core', holds: 'The importers and the pose engine, without Pixi. It runs in Node.' },
+    { name: 'pixi-marrow/optimize', holds: 'Typed names, atlas outlines and the command line tool.' },
+    { name: 'pixi-marrow/debug', holds: 'MarrowDebug, the overlays of bones, shapes, clipping and overdraw.' },
+    { name: 'pixi-marrow/bake', holds: 'Animations sampled at a fixed rate, at build time or in a game.' },
+    { name: 'pixi-marrow/perf', holds: 'A probe that times the work of every update of one skeleton.' },
+];
+
+/** The pages a new reader needs first. Each link says what its page answers. */
+const NEXT = [
+    { href: '/start/', text: 'Start: install pixi-marrow and play a Spine animation', note: 'Install the package, load a skeleton and play an animation in PixiJS v8.' },
+    { href: '/performance/', text: 'Performance: presets, pacing and the settings with a cost', note: 'What each setting trades, and how to see which are in effect.' },
+    { href: '/how/batches/', text: 'Draw order and batches: many Spine skeletons in one draw call', note: 'How the batched mode shares draw calls, and what ends a batch.' },
+    { href: '/good-to-know/', text: 'Good to know: versions, options and limits', note: 'What the runtime does on its own, and what it does not support.' },
+    { href: '/lab/', text: 'Lab: test Spine performance on your own device', note: 'Scenes that count frames and CPU time on the phone that opens them.' },
+    { href: '/playground/', text: 'Playground: play your own Spine files', note: 'Drop skeletons, atlases and images. The files stay in the browser.' },
+];
+
+/**
+ * Pages that other work adds later. A link shows only when the build has the page, at the first
+ * of its addresses that exists. So this list needs no change when such a page arrives.
+ */
+const LATER = [
+    { routes: ['/compare/', '/compare/spine-pixi-v8/'], text: 'Compare pixi-marrow with spine-pixi-v8' },
+    { routes: ['/benchmarks/'], text: 'Benchmarks against the official Spine runtime for PixiJS' },
+    { routes: ['/migrate/'], text: 'Migrate from spine-pixi-v8 to pixi-marrow' },
+    { routes: ['/faq/'], text: 'Questions and answers about pixi-marrow' },
+].flatMap((item) => {
+    const href = item.routes.find(routeExists);
+
+    return href === undefined ? [] : [{ href, text: item.text, note: docPage(href)?.description }];
+});
 ---
 
 <Base>
     <section class="container-page landing">
         <div class="landing-head">
             <h1 class="landing-title">A Spine runtime for PixiJS v8</h1>
-            <p class="landing-lead">pixi-marrow plays Spine 4.1, 4.2 and 4.3 skeletons. Here is a bee, and the code that draws it.</p>
+            <p class="landing-lead">
+                pixi-marrow is a Spine runtime for PixiJS v8. It plays Spine 4.1, 4.2 and 4.3 skeletons on WebGL2 and WebGPU. It is an
+                alternative to <code>@esotericsoftware/spine-pixi-v8</code>, the official runtime. Here is a bee, and the code that draws it.
+            </p>
         </div>
         <div class="landing-bee" data-landing-bee role="img" aria-label="The bee of the slot game Bzzz, playing its idle animation."></div>
         <div class="landing-code">
@@ -23,14 +68,213 @@ const arrow = 'M5 12h14M13 6l6 6-6 6';
                 Read the docs
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d={arrow} /></svg>
             </a>
-            <CopyCommand command={SITE.install} />
+            <CopyCommand command={INSTALL} />
         </div>
     </section>
+    <section class="container-page about">
+        <div class="about-text">
+            <h2>What pixi-marrow is</h2>
+            <p>
+                pixi-marrow loads the skeletons that the Spine editor exports, as JSON or binary files. It plays their animations in a PixiJS v8
+                scene. It has its own pose core and its own render path. The package does not ship <code>spine-core</code>, and its one
+                required peer dependency is <code>pixi.js</code>.
+            </p>
+            <p>
+                The pose core is a port of the official Spine Runtimes. One engine plays 4.1 and 4.2 skeletons, and one plays 4.3 skeletons. They
+                solve every constraint: IK, transform, path, physics and sliders. A parity suite compares the poses with the official
+                core, <code>spine-core</code>.
+            </p>
+            <p>
+                The render path has two modes. The batched mode puts small skeletons into the batches of Pixi, so skeletons that follow each
+                other share draw calls. The mesh mode draws a large skeleton as a mesh of its own. The runtime poses a skeleton again only when
+                something changed, so a skeleton at rest costs little CPU time.
+            </p>
+            <p>
+                The docs teach readers who have never used Spine or a GPU. Each idea starts with a diagram, then the words, then the call. Many
+                examples use the symbols of a slot game.
+            </p>
+        </div>
+        <div class="about-facts">
+            <h2>Key facts</h2>
+            <dl>
+                <dt>Spine versions</dt>
+                <dd>4.1, 4.2 and 4.3, as JSON or binary exports. The runtime does not read Spine 3.8 or 4.0.</dd>
+                <dt>Renderers</dt>
+                <dd>WebGL2 and WebGPU. The runtime does not draw on Canvas 2D or WebGL1.</dd>
+                <dt>PixiJS</dt>
+                <dd>Version 8, from 8.21.</dd>
+                <dt>Install</dt>
+                <dd><code>{INSTALL}</code></dd>
+                <dt>Latest version</dt>
+                <dd>
+                    <a href={SITE.npm}>{SITE.version}</a>, a pre-release on the <code>next</code> tag of npm.{' '}
+                    {released && (
+                        <span>
+                            The <a href={changelog}>changelog</a> last changed on <time datetime={dayOf(released)}>{dayInWords(released)}</time>.
+                        </span>
+                    )}
+                </dd>
+                <dt>Licence</dt>
+                <dd>
+                    The <a href={`${SITE.repository}/blob/main/LICENSE`}>Spine Runtimes License</a>. Each user needs their own Spine Editor licence,
+                    as for the official runtimes.
+                </dd>
+                <dt>Entry points</dt>
+                <dd>
+                    <ul class="about-entries">
+                        {ENTRIES.map((entry) => (
+                            <li>
+                                <code>{entry.name}</code>
+                                <span>{entry.holds}</span>
+                            </li>
+                        ))}
+                    </ul>
+                </dd>
+            </dl>
+        </div>
+        <nav class="about-next" aria-labelledby="about-next-title">
+            <h2 id="about-next-title">Where to go next</h2>
+            <ul>
+                {[...NEXT, ...LATER].map((item) => (
+                    <li>
+                        <a href={item.href} class="card-link">
+                            <strong>{item.text}</strong>
+                            {item.note && <span>{item.note}</span>}
+                        </a>
+                    </li>
+                ))}
+            </ul>
+        </nav>
+    </section>
 </Base>
-<script>
-    import { mountBee } from '../landing/bee';
 
+<style>
+    .landing-lead code,
+    .about code {
+        font-size: 0.875em;
+        color: hsl(var(--foreground));
+    }
+    .about {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 3rem;
+        border-top: 1px solid hsl(var(--border));
+        padding-block: 3.5rem 4.5rem;
+    }
+    .about h2 {
+        font-size: 1.375rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+    }
+    .about-text p {
+        margin-top: 1rem;
+        max-width: 62ch;
+        line-height: 1.65;
+        color: hsl(var(--muted-foreground));
+    }
+    .about a:not(.card-link) {
+        color: hsl(var(--foreground));
+        text-decoration: underline;
+        text-underline-offset: 3px;
+    }
+    .about-facts dl {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        margin: 1rem 0 0;
+        font-size: 0.9375rem;
+        line-height: 1.55;
+    }
+    .about-facts dt {
+        border-top: 1px solid hsl(var(--border));
+        padding-top: 0.75rem;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: hsl(var(--marrow-text));
+    }
+    .about-facts dd {
+        margin: 0.25rem 0 0.75rem;
+        color: hsl(var(--muted-foreground));
+    }
+    .about-entries {
+        display: grid;
+        gap: 0.5rem;
+        padding: 0;
+        list-style: none;
+    }
+    .about-entries span {
+        display: block;
+    }
+    .about-next ul {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+        gap: 0.75rem;
+        margin-top: 1rem;
+        padding: 0;
+        list-style: none;
+    }
+    .about-next .card-link {
+        height: 100%;
+    }
+    @media (min-width: 960px) {
+        .about {
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            column-gap: 3rem;
+        }
+        .about-next {
+            grid-column: 1 / -1;
+        }
+        .about-facts dl {
+            grid-template-columns: 9.5rem minmax(0, 1fr);
+        }
+        .about-facts dd {
+            margin: 0;
+            border-top: 1px solid hsl(var(--border));
+            padding-block: 0.75rem;
+        }
+        .about-facts dt {
+            padding-bottom: 0.75rem;
+        }
+    }
+</style>
+
+<script>
+    /*
+     * The bee starts after the first paint, and only when her box is on the screen. The page shows
+     * its text first, and the browser loads Pixi and the runtime when it has nothing else to do.
+     */
     const host = document.querySelector<HTMLElement>('[data-landing-bee]');
 
-    if (host !== null) void mountBee(host);
+    if (host !== null) {
+        const start = (): void => {
+            import('../landing/bee')
+                .then(({ mountBee }) => mountBee(host))
+                .catch(() => {
+                    const line = document.createElement('p');
+
+                    line.className = 'landing-bee-note';
+                    line.textContent = 'The bee did not load. The code beside her is the same.';
+                    host.removeAttribute('role');
+                    host.removeAttribute('aria-label');
+                    host.replaceChildren(line);
+                });
+        };
+        const whenIdle = (): void => {
+            if ('requestIdleCallback' in window) requestIdleCallback(start, { timeout: 1500 });
+            else setTimeout(start, 200);
+        };
+
+        if ('IntersectionObserver' in window) {
+            const seen = new IntersectionObserver((entries) => {
+                if (!entries.some((entry) => entry.isIntersecting)) return;
+                seen.disconnect();
+                whenIdle();
+            });
+
+            seen.observe(host);
+        } else {
+            whenIdle();
+        }
+    }
 </script>
