@@ -370,12 +370,9 @@ describe('the calls of the 4.3 pose engine', () => {
         }
     });
 
-    it('refuses fields no version has and values of the wrong type', () => {
+    it('refuses a value of the wrong type and an entry of another engine: see also configure.test.ts', () => {
         const entry = engine.setAnimation(0, MOVE, true);
 
-        expect(errorOf(() => engine.configure(entry, { nothing: 1 } as object)).code).toBe('unknown-name');
-        expect(errorOf(() => engine.configure(entry, { alpha: true })).message).toContain('takes a number');
-        expect(errorOf(() => engine.configure(entry, { loop: 1 })).message).toContain('takes true or false');
         expect(errorOf(() => engine.configure(entry, { animationLast: 'now' })).message).toContain('takes a number');
         expect(errorOf(() => engine.configure({ ...entry }, { alpha: 1 })).message).toContain('not from this pose');
     });
@@ -409,23 +406,13 @@ describe('data the official 4.3 core fails on', () => {
 
         return errorOf(() => engine.update(0.2)).message;
     };
-    /**
-     * The error of creating an engine after `damage` changed the model, as text. With `animation`
-     * it is the error of playing that animation: an animation is prepared when it is first played.
-     */
-    const createError = async (damage: Damage, animation?: number): Promise<string> => {
+    /** The error of creating an engine after `damage` changed the model, and of playing `animation` when one is given. */
+    const createError = async (damage: Damage, animation = -1): Promise<string> => {
         const model = await importSkeleton(LAB);
+        const start = (engine: PoseEngine): unknown => animation < 0 || engine.setAnimation(0, animation, true);
 
         damage(model);
-        try {
-            const engine = await play(model);
-
-            if (animation !== undefined) engine.setAnimation(0, animation, true);
-        } catch (reason) {
-            return String(reason);
-        }
-
-        return 'nothing was thrown';
+        return String(await play(model).then(start).catch(String));
     };
 
     it('names what is wrong when an update meets it', async () => {
@@ -486,9 +473,7 @@ describe('the attachment timeline of the 4.3 pose engine', () => {
         const pose = createPose(prepareRig(await importSkeleton(LAB)));
         const { state } = pose;
         const shown = (animation: number, time: number, from: number, out: boolean): string | undefined => {
-            const timeline = clipOf(pose.rig, animation)?.timelines.find(
-                (candidate) => candidate.kind === 'attachment',
-            );
+            const timeline = clipOf(pose.rig, animation)?.timelines.find(({ kind }) => kind === 'attachment');
 
             if (timeline === undefined) throw new Error('The animation has no attachment timeline');
             setClock(-1, time, 1);
