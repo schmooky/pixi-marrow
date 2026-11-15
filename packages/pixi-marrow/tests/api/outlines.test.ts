@@ -7,6 +7,7 @@ import { type AtlasOutlines, MarrowAsset, MarrowError, MarrowSpine } from '../..
 import type { PageReader } from '../../src/render/page-alpha';
 import { fixtureFiles, importRig } from './helpers';
 import { boyAsset, pixelPages } from './pages';
+import { useLocalUrls } from './urls';
 
 async function rejection(promise: Promise<unknown>): Promise<MarrowError> {
     const error = await promise.then(
@@ -311,7 +312,7 @@ describe('MarrowAsset.load with outlines', () => {
             ? new Response('', { status: 404 })
             : new Response(typeof body === 'string' ? body : body.slice());
     });
-    const pixiAssets: { load(asset: unknown): Promise<unknown>; unload(url: unknown): Promise<void> } = Assets;
+    const pixiAssets: { load(asset: unknown): Promise<unknown>; unload(url: unknown): Promise<void> } = Assets.loader;
     const loadImage = vi.spyOn(pixiAssets, 'load');
     const unloadImage = vi.spyOn(pixiAssets, 'unload');
     const assets: MarrowAsset[] = [];
@@ -321,10 +322,13 @@ describe('MarrowAsset.load with outlines', () => {
     async function load(options: Parameters<typeof MarrowAsset.load>[0]): Promise<MarrowAsset> {
         const asset = await MarrowAsset.load(options);
 
-        if (!assets.includes(asset)) assets.push(asset);
+        // each load is an owner: the asset is let go once per load
+        assets.push(asset);
 
         return asset;
     }
+
+    useLocalUrls();
 
     beforeEach(async () => {
         const boy = await pixelPages('4.2/spineboy.atlas');

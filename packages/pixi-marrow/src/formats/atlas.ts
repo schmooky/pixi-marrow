@@ -136,13 +136,18 @@ function applyRegionField(region: number[], entry: Entry): boolean {
 
 /**
  * Reads the text of a `.atlas` file, the way the official `TextureAtlas` reads it.
- * Throws a {@link MarrowError} when the text holds no page or names an unknown texture filter.
+ * Throws a {@link MarrowError} when the text holds no page, names an unknown texture filter or is a web page.
  *
  * @example
  * const atlas = importAtlas(await (await fetch('hero.atlas')).text());
  * console.log(atlas.pages.map((page) => page.name), atlas.regionNames.length);
  */
 export function importAtlas(text: string): AtlasModel {
+    if (/^[\s\uFEFF]*</.test(text)) {
+        throw new MarrowError('invalid-data', 'The text is an HTML or XML page, not an atlas: it starts with "<".', {
+            fix: 'Check the URL of the atlas. A server that does not find a file can answer with its index page.',
+        });
+    }
     const lines = text.split(/\r\n|\r|\n/);
     const pages: AtlasPage[] = [];
     const regionNames: string[] = [];
