@@ -21,8 +21,8 @@ export interface AttachmentLookup {
     parts(index: number): readonly number[];
     /**
      * Adds a skin made of skins of the model and returns its index. A key that was added before
-     * gives the index it got then, and `make` is not called. A new skin takes the lowest index
-     * that {@link drop} freed, else the next one. `combineSkins` is what calls it.
+     * gives the index it got then, and `make` is not called. A new skin takes the index that
+     * {@link drop} freed last, else the next one. `combineSkins` is what calls it.
      */
     add(key: string, parts: readonly number[], make: () => SkinData): number;
     /**
@@ -130,8 +130,7 @@ function buildLookup(model: SkeletonModel): AttachmentLookup {
 
             if (index === undefined) {
                 const skin = make();
-                const lowest = free.length === 0 ? -1 : free.indexOf(Math.min(...free));
-                const at = lowest < 0 ? made.length : (free.splice(lowest, 1)[0] ?? made.length);
+                const at = free.pop() ?? made.length;
 
                 index = own + at;
                 made[at] = skin;

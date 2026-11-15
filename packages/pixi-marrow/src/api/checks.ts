@@ -84,13 +84,11 @@ export function finiteArgument(method: string, name: string, value: unknown): nu
     return value;
 }
 
-/** The assets that warned of options without outlines. Each one warns once. */
-const warned = new WeakSet<object>();
-
 /**
  * Warns once per asset when options that need the outlines of the atlas regions were set by name
  * and the asset has none: `tightMesh` other than `off`, and `occlusion: 'auto'`. They do nothing
- * then. An asset loaded with `outlines: 'off'`, the default, has none.
+ * then. An asset loaded with `outlines: 'off'`, the default, has none. The code that warns loads
+ * on demand, so the warning comes a moment later.
  *
  * @example
  * warnWithoutOutlines(asset, settings, options.occlusion);
@@ -100,15 +98,12 @@ export function warnWithoutOutlines(
     settings: ResolvedPerf,
     occlusion: string | undefined,
 ): void {
-    if (asset.outlinesState !== 'off' || warned.has(asset)) return;
-    const tight = settings.given.has('tightMesh') && settings.tightMesh !== 'off';
-    const asked = [tight ? `tightMesh: '${settings.tightMesh}'` : '', occlusion === 'auto' ? "occlusion: 'auto'" : ''];
-    const named = asked.filter((option) => option !== '');
+    const tight = settings.given.has('tightMesh') && settings.tightMesh !== 'off' ? settings.tightMesh : undefined;
 
-    if (named.length === 0) return;
-    warned.add(asset);
-    console.warn(
-        `pixi-marrow: the asset has no outlines of the atlas regions, so these options do nothing: ${named.join(', ')}. ` +
-            "Load the asset with outlines: 'auto', or with the file of pixi-marrow outlines.",
+    if (asset.outlinesState !== 'off' || (tight === undefined && occlusion !== 'auto')) return;
+    import('./outline-warning').then(
+        ({ warnOnce }) => warnOnce(asset, tight, occlusion === 'auto'),
+        // a chunk that did not load warns of nothing
+        () => undefined,
     );
 }

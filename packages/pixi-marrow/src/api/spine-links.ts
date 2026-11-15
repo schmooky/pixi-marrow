@@ -130,9 +130,9 @@ export abstract class SpineLinks<N extends MarrowNames = MarrowNames> extends Co
             });
         }
         const skins = names.map((name) => namedIndex('skin', model.skins, String(name)));
-        const active = engine.skins;
 
-        if (skins.length === active.length && skins.every((skin, i) => skin === active[i])) return;
+        // the same indices in the same order
+        if (String(skins) === String(engine.skins)) return;
         engine.setSkins(skins);
         engine.setupPoseSlots();
     }
