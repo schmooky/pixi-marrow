@@ -61,6 +61,24 @@ describe('a playing pose engine', () => {
         expect(result.quiet, `${last} bytes per update in the last windows of ${WINDOW} updates`).toBe(true);
     });
 
+    it.each(['4.2/spineboy-pro.skel', '4.3/spineboy-pro.skel'])(
+        'keeps its events until takeEvents is called: %s',
+        async (id) => {
+            const engine = await playing(id, ['walk']);
+
+            // ten seconds of a walk that nobody asks for its events: every `complete` and every footstep waits
+            for (let i = 0; i < 600; i++) engine.update(1 / 60);
+            const events = engine.takeEvents();
+
+            expect(events.length).toBeGreaterThan(20);
+            expect(events[0]?.type).toBe('start');
+            // taken once, and an update without events hands out one shared empty list
+            expect(engine.takeEvents()).toEqual([]);
+            expect(engine.takeEvents()).toBe(engine.takeEvents());
+            expect(Object.isFrozen(engine.takeEvents())).toBe(true);
+        },
+    );
+
     it('is measured while the pose changes', async () => {
         const engine = await playing('4.2/spineboy-pro.skel', ['walk']);
         const before = engine.state.version;
