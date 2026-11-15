@@ -83,6 +83,32 @@ describe('the option instancing and its row of the report', () => {
         ]);
     });
 
+    it('leaves a layout alone whose attachments have more than twice the vertices of the setup pose, unless on', async () => {
+        const stage = createStage();
+        const speedy = await fixtureAsset('4.2/speedy-ess.skel');
+        const raptor = await fixtureAsset('4.3/raptor-pro.skel');
+        // speedy-ess has 108 vertices in all, and its setup pose shows 44
+        const auto = [0, 1].map(() => create(speedy));
+        const on = [0, 1].map(() => create(speedy, { instancing: 'on' }));
+
+        for (const spine of [...auto, ...on]) stage.root.addChild(spine);
+        stage.render();
+        const [declined, forced] = await Promise.all([
+            row(auto[0] ?? on[0] ?? create(raptor)),
+            row(on[0] ?? create(raptor)),
+        ]);
+
+        expect(declined).toEqual({
+            feature: 'instancing',
+            value: 'off',
+            reason: 'an instanced draw runs all 108 vertices of the attachments of every slot per instance, more than twice the 44 the setup pose shows, so "auto" draws it alone. "on" draws it instanced anyway',
+        });
+        expect(forced.value).toBe('on, run of 2, 1 draw call');
+        // raptor-pro shows 642 of its 679 vertices in the setup pose
+        expect((await row(create(raptor))).reason).not.toContain('setup pose');
+        expect(create(raptor, { instancing: 'on' }).perfSettings.instancing).toBe('on');
+    });
+
     it('names the run and its draws, and an instance that is alone in its run', async () => {
         const stage = createStage();
         const asset = await fixtureAsset('4.3/raptor-pro.skel');

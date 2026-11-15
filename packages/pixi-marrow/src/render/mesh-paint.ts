@@ -14,7 +14,7 @@ import { isNewer, type PoseState } from '../pose/state';
 import { uploadStretch, uploadsStretch } from './batch-upload';
 import { clipCode, clipCodeMissing } from './clip-code';
 import { bendsEdges, type DrawGate } from './gate';
-import { instanceBlock, instanceLayout } from './instance-layout';
+import { instanceBlock, instanceLayout, setupVertices, unionSpread } from './instance-layout';
 import { InstancePaint, type InstanceWhy } from './instance-paint';
 import type { MeshCode } from './mesh-code';
 import { linkMeshPipe } from './mesh-pipe';
@@ -44,8 +44,8 @@ export interface MeshPaintOptions extends Omit<DrawRangesOptions, 'buffers' | 'b
     readonly model: SkeletonModel;
     /** Whether the vertex shader places the vertices from the bones where it can: `skinning: 'gpu'`. */
     readonly gpu: boolean;
-    /** Whether the view draws instanced where it can, with `gpu`: `instancing: 'auto'`. */
-    readonly instancing: boolean;
+    /** Whether the view draws instanced with `gpu`: where it pays, where it can, or never. */
+    readonly instancing: 'auto' | 'on' | 'off';
     /** The view, which the pipe of instanced draws asks before every draw. */
     readonly gate: DrawGate;
 }
@@ -86,7 +86,7 @@ export class MeshPaint {
     private instance: InstancePaint | undefined;
     /** Why the view drew alone in its last update. */
     private blocked: InstanceWhy;
-    private readonly instancing: boolean;
+    private readonly instancing: 'auto' | 'on' | 'off';
     private readonly gate: DrawGate;
     private readonly measure: () => Bounds;
     private readonly pages: readonly TextureSource[];
@@ -155,6 +155,11 @@ export class MeshPaint {
     /** Why the view draws alone, or null while it draws instanced. */
     get why(): InstanceWhy {
         return this.instanced === undefined ? this.blocked : null;
+    }
+
+    /** The vertices the setup pose shows with the skin of a template, which `instancing: 'auto'` weighs. */
+    setupVertices(template: Template): number {
+        return setupVertices(template, this.model);
     }
 
     /** Points the buffers at the data of other vertex ranges and makes room for their indices. */
@@ -354,10 +359,11 @@ export class MeshPaint {
         const { skin } = this;
 
         if (skin === undefined) return 'cpu';
-        if (!this.instancing) return 'off';
+        if (this.instancing === 'off') return 'off';
         const block = instanceBlock(template, this.model, skin.skinLayout, this.pages.length);
 
         if (block !== null) return block;
+        if (this.instancing === 'auto' && unionSpread(template, this.model, skin.skinLayout)) return 'vertices';
         const shared = instanceLayout(template, this.model, skin.skinLayout, this.pages.length);
 
         if (seen.clipped > 0) return 'clip';

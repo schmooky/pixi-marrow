@@ -189,7 +189,7 @@ export const loadInstanced = (
         options: (atlas) => ({
             renderMode: 'mesh',
             skinning: 'gpu',
-            instancing: alone ? 'off' : 'auto',
+            instancing: alone ? 'off' : 'on',
             ...more(atlas),
         }),
     });

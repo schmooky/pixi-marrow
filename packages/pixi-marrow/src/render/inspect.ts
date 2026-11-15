@@ -109,6 +109,8 @@ interface InstancingReport {
     drawnWith: number;
     /** The vertices the vertex shader runs per instance: every entry of every slot of the layout. */
     unionVertices: number;
+    /** The vertices the setup pose shows with the skin, in the mesh mode. 0 in the batched mode. */
+    setupVertices: number;
     /** The bytes of its slot in the pool. */
     slotBytes: number;
     /** The slots of the pools of its layout that views take, and their room. */
@@ -323,6 +325,7 @@ function describeInstancing({ paints, template }: ViewParts, batched: boolean): 
         draws: instance?.body.run?.draws ?? 0,
         drawnWith: instance?.body.drawnWith ?? 0,
         unionVertices: template.vertexCount,
+        setupVertices: mesh?.setupVertices(template) ?? 0,
         slotBytes: instance?.bytes ?? 0,
         poolSlots,
         poolRoom,

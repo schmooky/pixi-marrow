@@ -1,12 +1,13 @@
 import { Buffer, BufferUsage, type Shader, type TextureSource } from 'pixi.js';
 import { i16, i32 } from '../geometry/read';
 import type { SkeletonModel } from '../model/model';
+import { createAttachmentLookup } from '../pose/shared/lookup';
 import { InstancePool, NO_ENTRY, type PoolShape, type PoolSlot } from './instance-pool';
 import { createInstanceShader } from './instance-shader';
 import { ownsStatics } from './layouts';
 import { u8, u16 } from './read';
 import type { SkinLayout } from './skin-layout';
-import { MAX_PAGES, type Template } from './template';
+import { findEntry, MAX_PAGES, type Template } from './template';
 
 /*
  * What the instanced views of one layout share, next to its skin data: the vertex buffers of an
@@ -422,4 +423,55 @@ export function instanceLayout(
     skin.instances = made;
 
     return made;
+}
+
+/**
+ * How many times the vertices of what the setup pose shows the union of a layout may have, before
+ * `instancing: 'auto'` lets its views draw alone. An instanced draw runs every vertex of the union
+ * per instance, and drops those of the entries a slot does not show.
+ */
+const MOST_SPREAD = 2;
+
+/** Per skin data of a layout: whether its union has more than {@link MOST_SPREAD} times the vertices of the setup pose. */
+const spreads = new WeakMap<SkinLayout, boolean>();
+
+/**
+ * The vertices the slots show in the setup pose with the skin of a template: the setup
+ * attachment of each slot, found in that skin and then in the default skin.
+ *
+ * @example
+ * console.log(setupVertices(template, model), template.vertexCount);
+ */
+export function setupVertices(template: Template, model: SkeletonModel): number {
+    const lookup = createAttachmentLookup(model);
+    let count = 0;
+
+    for (let slot = 0; slot < model.slots.count; slot++) {
+        const name = model.slots.attachments[slot] ?? null;
+        const attachment = name === null || name === '' ? undefined : lookup.find(template.skin, slot, name);
+        const entry = attachment === undefined ? -1 : findEntry(template, slot, attachment);
+
+        if (entry >= 0) count += i32(template.counts, entry);
+    }
+
+    return count;
+}
+
+/**
+ * Whether the union of a layout has more than twice the vertices that the setup pose shows.
+ * `instancing: 'auto'` then lets its views draw alone: speedy-ess, at 108 against 44, ran 2.45
+ * times the visible vertices per instance.
+ *
+ * @example
+ * if (mode === 'auto' && unionSpread(template, model, skinLayout)) why = 'vertices';
+ */
+export function unionSpread(template: Template, model: SkeletonModel, skin: SkinLayout): boolean {
+    let spread = spreads.get(skin);
+
+    if (spread === undefined) {
+        spread = template.vertexCount > MOST_SPREAD * setupVertices(template, model);
+        spreads.set(skin, spread);
+    }
+
+    return spread;
 }
