@@ -39,6 +39,7 @@ import {
     floats,
     indexer,
     meshData,
+    modelHash,
     orZero,
     pathData,
     regionData,
@@ -206,7 +207,7 @@ export function officialModel42(files: RigFiles): SkeletonModel {
     return {
         version: '4.2',
         editorVersion: data.version ?? '',
-        hash: data.hash ?? null,
+        hash: modelHash(data.hash, files.skeleton),
         x: orZero(data.x),
         y: orZero(data.y),
         width: orZero(data.width),

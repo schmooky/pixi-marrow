@@ -1,5 +1,6 @@
 import type { SkeletonModel } from '../../model/model';
 import { BinaryInput } from '../shared/binary-input';
+import { checkModel } from '../shared/checks';
 import { readAnimations } from './animations';
 import { readConstraints, resolveSliders } from './constraints';
 import type { ImportState } from './reader';
@@ -39,7 +40,7 @@ export function importBinary43(bytes: Uint8Array): SkeletonModel {
 
     resolveSliders(state, animations.length);
 
-    return {
+    return checkModel({
         version: '4.3',
         editorVersion: header.editorVersion,
         hash: header.hash,
@@ -54,5 +55,5 @@ export function importBinary43(bytes: Uint8Array): SkeletonModel {
         constraints: state.constraints,
         skins: state.skins.map(toSkinData),
         animations,
-    };
+    });
 }

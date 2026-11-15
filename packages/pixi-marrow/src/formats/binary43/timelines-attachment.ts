@@ -2,7 +2,7 @@ import type { AttachmentData, AttachmentRef, VertexData } from '../../model/atta
 import type { TimelineData } from '../../model/timelines';
 import type { BinaryInput } from '../shared/binary-input';
 import { TimelineWriter } from '../shared/timeline-writer';
-import { checkChoice, findAttachment, type ImportState, invalid, readIndex } from './reader';
+import { checkChoice, findAttachment, type ImportState, invalid, readCount, readIndex } from './reader';
 import { checkBezierRoom, pushTimeline, readCurveType, readFrameCount, type TimelineSink } from './timelines-curve';
 
 const ATTACHMENT_DEFORM = 0;
@@ -66,7 +66,7 @@ function readDeformTimeline(
     frameCount: number,
 ): TimelineData {
     const deformLength = geometry.bones === null ? geometry.vertices.length : (geometry.vertices.length / 3) * 2;
-    const writer = new TimelineWriter(frameCount, 1, input.readInt(true));
+    const writer = new TimelineWriter(frameCount, 1, readCount(input, 'Bezier curves'));
     const vertices: Float32Array[] = [];
     let time = input.readFloat();
 
@@ -135,13 +135,13 @@ function readAttachmentTimeline(state: ImportState, skin: number, slot: number):
 export function readAttachmentTimelines(state: ImportState, sink: TimelineSink): void {
     const input = state.input;
 
-    for (let i = 0, n = input.readInt(true); i < n; i++) {
+    for (let i = 0, n = readCount(input, 'entries'); i < n; i++) {
         const skin = readIndex(input, state.skins.length, 'skin');
 
-        for (let ii = 0, nn = input.readInt(true); ii < nn; ii++) {
+        for (let ii = 0, nn = readCount(input, 'entries'); ii < nn; ii++) {
             const slot = readIndex(input, state.slotCount, 'slot');
 
-            for (let iii = 0, nnn = input.readInt(true); iii < nnn; iii++) {
+            for (let iii = 0, nnn = readCount(input, 'entries'); iii < nnn; iii++) {
                 const timeline = readAttachmentTimeline(state, skin, slot);
 
                 pushTimeline(sink, timeline, timeline.kind === 'sequence' ? SEQUENCE_ENTRIES : 1);

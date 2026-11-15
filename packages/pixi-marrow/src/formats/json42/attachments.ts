@@ -9,18 +9,9 @@ import type {
     VertexData,
 } from '../../model/attachments';
 import { writeHexColor } from '../shared/color';
+import { requireAtMost } from '../shared/limits';
 import type { JsonAttachment, JsonSequence } from './schema';
-import {
-    invalid,
-    type NameIndex,
-    numberAt,
-    pick,
-    requireAtMost,
-    requireList,
-    requireName,
-    requireNumber,
-    resolve,
-} from './values';
+import { invalid, type NameIndex, numberAt, pick, requireList, requireName, requireNumber, resolve } from './values';
 
 const ATTACHMENT_TYPES: readonly string[] = [
     'region',

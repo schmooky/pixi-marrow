@@ -10,9 +10,12 @@ export class BinaryInput {
     /** The string table of the file. `readStringRef` reads from it. */
     readonly strings: string[] = [];
     private readonly view: DataView;
+    /** The size of the file in bytes. No list in the file has more entries than this. */
+    readonly byteLength: number;
     private index = 0;
 
     constructor(bytes: Uint8Array) {
+        this.byteLength = bytes.byteLength;
         this.view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     }
 

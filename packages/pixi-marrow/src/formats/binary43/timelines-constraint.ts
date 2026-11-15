@@ -2,7 +2,7 @@ import type { ConstraintData } from '../../model/constraints';
 import type { TimelineData, TimelineKind } from '../../model/timelines';
 import type { BinaryInput } from '../shared/binary-input';
 import { TimelineWriter } from '../shared/timeline-writer';
-import { type ImportState, invalid, pick, readIndex } from './reader';
+import { type ImportState, invalid, pick, readCount, readIndex } from './reader';
 import {
     pushTimeline,
     readBezier,
@@ -80,7 +80,7 @@ function writeIkKey(
 /** Reads one IK timeline. Each key starts with a flags byte that also holds the curve type to reach it. */
 function readIkTimeline(input: BinaryInput, target: number): TimelineData {
     const frameCount = readFrameCount(input);
-    const writer = new TimelineWriter(frameCount, IK_ENTRIES, input.readInt(true));
+    const writer = new TimelineWriter(frameCount, IK_ENTRIES, readCount(input, 'Bezier curves'));
     let flags = input.readByte();
     let time = input.readFloat();
     let mix = readIkMix(input, flags);
@@ -112,10 +112,10 @@ function readIkTimeline(input: BinaryInput, target: number): TimelineData {
 export function readIkAndTransformTimelines(state: ImportState, sink: TimelineSink): void {
     const input = state.input;
 
-    for (let i = 0, n = input.readInt(true); i < n; i++) {
+    for (let i = 0, n = readCount(input, 'entries'); i < n; i++) {
         pushTimeline(sink, readIkTimeline(input, readConstraintIndex(state, 'ik')), IK_ENTRIES);
     }
-    for (let i = 0, n = input.readInt(true); i < n; i++) {
+    for (let i = 0, n = readCount(input, 'entries'); i < n; i++) {
         const target = readConstraintIndex(state, 'transform');
         const frameCount = readFrameCount(input);
         const timeline = readCurveTimeline(
@@ -135,10 +135,10 @@ export function readIkAndTransformTimelines(state: ImportState, sink: TimelineSi
 export function readPathTimelines(state: ImportState, sink: TimelineSink): void {
     const input = state.input;
 
-    for (let i = 0, n = input.readInt(true); i < n; i++) {
+    for (let i = 0, n = readCount(input, 'entries'); i < n; i++) {
         const target = readConstraintIndex(state, 'path');
 
-        for (let ii = 0, nn = input.readInt(true); ii < nn; ii++) {
+        for (let ii = 0, nn = readCount(input, 'entries'); ii < nn; ii++) {
             const [kind, valueCount] = pick(PATH_TIMELINES, input.readByte(), 'path timeline type');
             const frameCount = readFrameCount(input);
 
@@ -163,11 +163,11 @@ function readPhysicsReset(input: BinaryInput, target: number, frameCount: number
 export function readPhysicsTimelines(state: ImportState, sink: TimelineSink): void {
     const input = state.input;
 
-    for (let i = 0, n = input.readInt(true); i < n; i++) {
+    for (let i = 0, n = readCount(input, 'entries'); i < n; i++) {
         const stored = input.readInt(true);
         const target = stored === 0 ? -1 : checkPhysics(state, stored - 1);
 
-        for (let ii = 0, nn = input.readInt(true); ii < nn; ii++) {
+        for (let ii = 0, nn = readCount(input, 'entries'); ii < nn; ii++) {
             const type = input.readByte();
             const frameCount = readFrameCount(input);
 
@@ -194,10 +194,10 @@ function checkPhysics(state: ImportState, index: number): number {
 export function readSliderTimelines(state: ImportState, sink: TimelineSink): void {
     const input = state.input;
 
-    for (let i = 0, n = input.readInt(true); i < n; i++) {
+    for (let i = 0, n = readCount(input, 'entries'); i < n; i++) {
         const target = readConstraintIndex(state, 'slider');
 
-        for (let ii = 0, nn = input.readInt(true); ii < nn; ii++) {
+        for (let ii = 0, nn = readCount(input, 'entries'); ii < nn; ii++) {
             const kind = pick(SLIDER_TIMELINES, input.readByte(), 'slider timeline type');
             const frameCount = readFrameCount(input);
 

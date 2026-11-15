@@ -11,7 +11,7 @@ import type {
 } from '../../model/attachments';
 import type { BinaryInput } from '../shared/binary-input';
 import { writeRgba8888 } from '../shared/color';
-import { type ImportState, invalid, readIndex } from './reader';
+import { type ImportState, invalid, readCount, readIndex } from './reader';
 
 const TYPE_REGION = 0;
 const TYPE_BOUNDING_BOX = 1;
@@ -56,14 +56,14 @@ function readSequence(input: BinaryInput, stored: boolean): SequenceData | null 
 /** Reads vertices in the official encoding. See `VertexData` for the layout. */
 function readVertices(state: ImportState, weighted: boolean): VertexData {
     const input = state.input;
-    const worldVerticesLength = input.readInt(true) << 1;
+    const worldVerticesLength = readCount(input, 'vertices') << 1;
 
     if (!weighted) return { vertices: readFloats(input, worldVerticesLength), bones: null, worldVerticesLength };
     const bones: number[] = [];
     const weights: number[] = [];
 
-    for (const n = input.readInt(true); bones.length < n; ) {
-        const boneCount = input.readInt(true);
+    for (const n = readCount(input, 'vertex weights'); bones.length < n; ) {
+        const boneCount = readCount(input, 'vertex weights');
 
         bones.push(boneCount);
         for (let i = 0; i < boneCount; i++) {
@@ -106,7 +106,7 @@ function readBoundingBox(state: ImportState, flags: number, name: string): Bound
 
 /** Reads the other slots that the deform and sequence timelines of a mesh also apply to. */
 function readTimelineSlots(state: ImportState): Int16Array {
-    const slots = new Int16Array(state.input.readInt(true));
+    const slots = new Int16Array(readCount(state.input, 'indices'));
 
     for (let i = 0; i < slots.length; i++) slots[i] = readIndex(state.input, state.slotCount, 'slot');
 
@@ -118,7 +118,7 @@ function readMeshEditorData(state: ImportState): { width: number; height: number
     const input = state.input;
 
     if (!state.nonessential) return { width: 0, height: 0 };
-    for (let i = 0, n = input.readInt(true); i < n; i++) input.readInt(true);
+    for (let i = 0, n = readCount(input, 'entries'); i < n; i++) input.readInt(true);
     const width = input.readFloat();
     const height = input.readFloat();
 
@@ -130,7 +130,7 @@ function readMesh(state: ImportState, flags: number, name: string): MeshAttachme
     const path = (flags & 16) !== 0 ? input.readStringRef() : name;
     const color = readColor(input, (flags & 32) !== 0);
     const sequence = readSequence(input, (flags & 64) !== 0);
-    const hull = input.readInt(true);
+    const hull = readCount(input, 'hull vertices');
     const vertices = readVertices(state, (flags & 128) !== 0);
     const regionUVs = readFloats(input, vertices.worldVerticesLength);
     const triangles = new Uint16Array(Math.max(0, (vertices.worldVerticesLength - hull - 2) * 3));

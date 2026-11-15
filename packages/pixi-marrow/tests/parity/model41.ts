@@ -38,6 +38,7 @@ import {
     floats,
     indexer,
     meshData,
+    modelHash,
     orZero,
     POSITION_MODES,
     pathData,
@@ -279,7 +280,7 @@ export function officialModel41(files: RigFiles): SkeletonModel {
     return {
         version: '4.1',
         editorVersion: data.version ?? '',
-        hash: data.hash ?? null,
+        hash: modelHash(data.hash, files.skeleton),
         x: orZero(data.x),
         y: orZero(data.y),
         width: orZero(data.width),
