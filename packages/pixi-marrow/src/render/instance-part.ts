@@ -222,12 +222,17 @@ export class RunPart {
         return call;
     }
 
-    /**
-     * The part drew nothing this frame: it lets go of its shader and of what that was made for,
-     * and of the geometries on buffers that are gone with their layout.
-     */
+    /** The part drew nothing this frame: it counts the frame and lets go, see {@link release}. */
     rest(): void {
         this.rested++;
+        this.release();
+    }
+
+    /**
+     * Lets go of the shader and of what it was made for, and of the geometries on buffers that
+     * are gone with their layout. The next draw asks the layout again.
+     */
+    release(): void {
         this.shader = undefined;
         this.layout = undefined;
         this.pool = undefined;
@@ -243,7 +248,7 @@ export class RunPart {
 
     /** Frees the buffer of instance data and the geometries. The other buffers and the shaders belong to the layouts. */
     destroy(): void {
-        this.rest();
+        this.release();
         for (const geometry of this.geometries) geometry.release();
         this.geometries.length = 0;
         this.unions.length = 0;

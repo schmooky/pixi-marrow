@@ -65,12 +65,23 @@ describe('what instanced draws hold on to', () => {
 
         expect(held(a) && held(b) && held(c)).toBe(true);
         const gone = [bodyOf(b), bodyOf(c)];
+        // the build took one run. The two others hold no member and no shader
+        const spare = booksOf(stage)[0]?.runs.slice(1) ?? [];
 
+        expect(spare.map((run) => run.members.length)).toEqual([0, 0]);
+        expect(spare.map((run) => (Reflect.get(run, 'parts') as object[]).length)).toEqual([1, 1]);
+        expect(spare.flatMap((run) => Reflect.get(run, 'parts') as object[]).flatMap(heldBy)).not.toContainEqual(
+            expect.anything(),
+        );
         b.view.destroy();
         c.view.destroy();
         expect(
             booksOf(stage).some((book) => book.runs.some((run) => gone.some((body) => run.members.includes(body)))),
         ).toBe(false);
+        // the next build frees the runs the one before did not take
+        stage.render();
+        expect(booksOf(stage)[0]?.runs).toHaveLength(1);
+        expect(spare.map((run) => (Reflect.get(run, 'parts') as object[]).length)).toEqual([0, 0]);
     });
 
     it('frees the runs of an instruction set that is gone, also where Pixi does not say so', async () => {

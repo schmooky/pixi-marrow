@@ -82,6 +82,12 @@ export class InstanceRun implements Instruction {
         if (at >= 0) this.members.splice(at, 1);
     }
 
+    /** A new build takes the run again, or not: it lets go of its members and of what its parts drew with. */
+    clear(): void {
+        this.members.length = 0;
+        for (const part of this.parts) part.release();
+    }
+
     /** Frees the buffers of the parts. */
     destroy(): void {
         for (const part of this.parts) part.destroy();
@@ -285,10 +291,12 @@ export class InstancePipe {
         }
         const { last } = book;
 
-        // a new build: the run added last is no longer where it was put. The runs let go of their members
+        // a new build: the run added last is no longer where it was put. The runs the build before
+        // did not take are freed, and the others let go of their members and of what they drew with
         if (last === undefined || last.at >= set.instructionSize || set.instructions[last.at] !== last) {
+            for (const old of book.runs.splice(book.used)) old.destroy();
             book.used = 0;
-            for (const old of book.runs) old.members.length = 0;
+            for (const old of book.runs) old.clear();
         }
         let run = book.runs[book.used];
 
