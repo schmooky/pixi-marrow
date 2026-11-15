@@ -1,0 +1,49 @@
+---
+import Base from '../layouts/Base.astro';
+import { PAGES } from '../lib/site';
+
+/*
+ * The page for an address that the site does not have. The server sends it with status 404, as
+ * `DEPLOY.md` sets it. Search engines do not index it.
+ */
+
+const start = PAGES.find((page) => page.href === '/start/');
+---
+
+<Base title="Page not found" description="This address has no page. Go to the home page of pixi-marrow or to the start of the guide." noindex>
+    <section class="container-page missing">
+        <p class="eyebrow">Error 404</p>
+        <h1 class="display-3">This page does not exist</h1>
+        <p class="lead">The address has no page on this site. The page moved, or the link has a typing error.</p>
+        <ul>
+            <li><a href="/">The home page of pixi-marrow</a>, a Spine runtime for PixiJS v8</li>
+            {start && <li><a href={start.href}>{start.title}</a>: {start.description}</li>}
+            <li><a href="/good-to-know/">Versions, options and limits</a> of the runtime</li>
+        </ul>
+    </section>
+</Base>
+
+<style>
+    .missing {
+        max-width: 720px;
+        padding-block: 5rem 2rem;
+    }
+    .missing h1 {
+        margin-top: 0.75rem;
+    }
+    .missing .lead {
+        margin-top: 1rem;
+    }
+    .missing ul {
+        display: grid;
+        gap: 0.6rem;
+        margin-top: 2rem;
+        padding-left: 1.25rem;
+        color: hsl(var(--muted-foreground));
+    }
+    .missing a {
+        color: hsl(var(--foreground));
+        text-decoration: underline;
+        text-underline-offset: 3px;
+    }
+</style>

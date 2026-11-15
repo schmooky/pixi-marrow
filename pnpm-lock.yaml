@@ -44,6 +44,9 @@ importers:
       '@astrojs/mdx':
         specifier: ^8.1.5
         version: 8.1.5(@astrojs/markdown-satteri@0.4.9)(astro@7.4.11(@types/node@24.19.2)(jiti@2.7.0)(yaml@2.9.1))
+      '@astrojs/sitemap':
+        specifier: ^3.7.5
+        version: 3.7.5
       animejs:
         specifier: 4.5.0
         version: 4.5.0
@@ -225,6 +228,9 @@ packages:
 
   '@astrojs/runtime@0.1.1':
     resolution: {integrity: sha512-2Tr9IJ4aQBPDFzlSLq139eWS9OZnuhL0yU2al8cCpnTE/RszygSyGIP8piBmEio1zDUaItb/+YxxsrmldUCBmg==}
+
+  '@astrojs/sitemap@3.7.5':
+    resolution: {integrity: sha512-rxSbFcxdcOoVRR02q0aFxyZ6chwXZpUOHMg8e+3iWPo7xYV4hlYBU4ztFd1Xl/pWtr6pe+TVCFKJfyPe0sp8iA==}
 
   '@astrojs/telemetry@3.4.2':
     resolution: {integrity: sha512-2JOMRUxJrBSfiVDfeKLv1wBmvSIx1Y6u2YEO8awZ9qSq3u/rNAiUyFdOYi8dHv91kHrmYEQX7pRDw0J4xyj3UA==}
@@ -1983,6 +1989,9 @@ packages:
   '@types/object-hash@3.0.6':
     resolution: {integrity: sha512-fOBV8C1FIu2ELinoILQ+ApxcUKz4ngq+IWUYrxSGjXzzjUALijilampwkMgEtJ+h2njAW3pi853QpzNVCHB73w==}
 
+  '@types/sax@1.2.7':
+    resolution: {integrity: sha512-rO73L89PJxeYM3s3pPPjiPgVVcymqU490g0YO5n5By0k2Erzj6tay/4lr1CHAAU4JyOWd1rpQ8bCf6cZfHU96A==}
+
   '@types/unist@3.0.3':
     resolution: {integrity: sha512-ko/gIFJRv177XgZsZcBwnqJN5x/Gien8qNOn0D5bQU/zAzVf9Zt3BlcUiLqhV9y4ARk0GbT3tnUiPNgnTXzc/Q==}
 
@@ -3561,6 +3570,11 @@ packages:
     resolution: {integrity: sha512-2WCqLdt12eN6ehLI50S2/ZxoowXU3DD1KVPRyVP0WEsFahrGZZmCdq1K59qjJljMRIDTwx1D9YaRK+hDneBUMg==}
     engines: {node: '>=20'}
 
+  sitemap@10.0.0:
+    resolution: {integrity: sha512-KSjl4H4KBEnGX5KXgzInPAycdOFhwLar0EmksDcYn6NqW2O+zLiMGeV2THE6tpuv3LCVdv+6xsSo2SWLGaBDKw==}
+    engines: {node: '>=22.22.1', npm: '>=10.8.2'}
+    hasBin: true
+
   smol-toml@1.9.1:
     resolution: {integrity: sha512-j7WyPdf0CJoutMzMoPLF/bVXHtKZIT9Rb4eGeEbWw8X2t5oirjPgpL+OpaENZrILYaXqYwnVH+qgUwVbl+pUJQ==}
     engines: {node: '>= 18'}
@@ -4207,6 +4221,11 @@ snapshots:
     dependencies:
       '@oslojs/encoding': 1.1.0
       clsx: 2.1.1
+
+  '@astrojs/sitemap@3.7.5':
+    dependencies:
+      sitemap: 10.0.0
+      zod: 4.6.7
 
   '@astrojs/telemetry@3.4.2':
     dependencies:
@@ -5770,6 +5789,10 @@ snapshots:
       undici-types: 7.24.6
 
   '@types/object-hash@3.0.6': {}
+
+  '@types/sax@1.2.7':
+    dependencies:
+      '@types/node': 24.19.2
 
   '@types/unist@3.0.3': {}
 
@@ -7477,6 +7500,12 @@ snapshots:
   simple-xml-to-json@1.2.7: {}
 
   sisteransi@2.0.0: {}
+
+  sitemap@10.0.0:
+    dependencies:
+      '@types/node': 24.19.2
+      '@types/sax': 1.2.7
+      sax: 1.6.1
 
   smol-toml@1.9.1: {}
 
