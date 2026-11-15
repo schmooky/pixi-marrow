@@ -10,7 +10,7 @@
  * The root import also has a limit of its own, `ROOT_IMPORT_LIMIT` of scripts/size-limit.mjs. The
  * baseline moves with every accepted change, so 10% over it can add up to far more than the limit.
  * The readers, the pose engines, the mesh mode and the code for clips load on demand, and each
- * has a limit too: `ON_DEMAND_LIMITS`.
+ * has a limit too: `ON_DEMAND_LIMITS`. So has the entry `pixi-marrow/diagnose`: `ENTRY_LIMITS`.
  *
  * scripts/facts.mjs imports `measureSizes` for the sizes that the docs state, so the docs and this
  * check read one measurement. The report and the verdict run only when this file is the script.
@@ -24,7 +24,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 import { rolldown } from 'rolldown';
-import { ON_DEMAND_LIMITS, ROOT_IMPORT_ENTRY, ROOT_IMPORT_LIMIT } from './size-limit.mjs';
+import { ENTRY_LIMITS, ON_DEMAND_LIMITS, ROOT_IMPORT_ENTRY, ROOT_IMPORT_LIMIT } from './size-limit.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const pkgDir = join(root, 'packages/pixi-marrow');
@@ -64,6 +64,9 @@ const IMPORTS = {
             'the next update plays baked',
             // instanced draws are in the chunk of the mesh mode: the name of their pipe
             'marrowInstances',
+            // the rules and the tree walk are in pixi-marrow/diagnose: the kind of its data, and a rule id
+            'pixi-marrow/skeleton',
+            'MARROW004',
         ],
     ],
     // the headless core has no Pixi in it. pixi.js is external, so an import of it stays visible
@@ -82,6 +85,11 @@ const IMPORTS = {
     'debug (MarrowDebug)': ['MarrowDebug', [], '/debug'],
     // the baker runs in Node: no Pixi and no code of the root import
     'bake (bakeAnimation)': ['bakeAnimation', ['pixi.js', 'marrow-skeleton'], '/bake'],
+    // a development build pays for the whole entry: the rules, the tree walk, the report code and the hook
+    'diagnose (everything)': ['*', [], '/diagnose'],
+    // a tool that reads a pasted tree dump needs no Pixi and no code of the root import. The texts of
+    // the rules name pixi.js, so the marker is the import itself, as a minifier writes it
+    'diagnose (diagnoseTree)': ['diagnoseTree', ['from"pixi.js"', 'marrow-skeleton'], '/diagnose'],
 };
 
 /**
@@ -238,7 +246,7 @@ async function main() {
     }
 
     // a limit is not a baseline: --update does not accept a size over one
-    const limits = { [ROOT_IMPORT_ENTRY]: ROOT_IMPORT_LIMIT, ...ON_DEMAND_LIMITS };
+    const limits = { [ROOT_IMPORT_ENTRY]: ROOT_IMPORT_LIMIT, ...ENTRY_LIMITS, ...ON_DEMAND_LIMITS };
     const overLimit = [];
 
     for (const [name, limit] of Object.entries(limits)) {

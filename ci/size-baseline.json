@@ -1,59 +1,65 @@
 {
   "everything": {
-    "gzip": 37154
+    "gzip": 37361
   },
   "root (MarrowSpine)": {
-    "gzip": 32183
+    "gzip": 32421
   },
   "core (everything)": {
-    "gzip": 6468
+    "gzip": 6580
   },
   "core (sniffSkeleton)": {
-    "gzip": 1058
+    "gzip": 1185
   },
   "core (importSkeleton)": {
-    "gzip": 1440
+    "gzip": 1564
   },
   "core (importAtlas)": {
-    "gzip": 1380
+    "gzip": 1509
   },
   "core (createPoseEngine)": {
-    "gzip": 185
+    "gzip": 186
   },
   "optimize (generateNames)": {
-    "gzip": 546
+    "gzip": 682
   },
   "perf (createProbe)": {
-    "gzip": 1066
+    "gzip": 1204
   },
   "debug (MarrowDebug)": {
-    "gzip": 5032
+    "gzip": 5160
   },
   "bake (bakeAnimation)": {
-    "gzip": 3784
+    "gzip": 3917
+  },
+  "diagnose (everything)": {
+    "gzip": 14396
+  },
+  "diagnose (diagnoseTree)": {
+    "gzip": 8156
   },
   "on demand (reader of 4.1 and 4.2 JSON)": {
-    "gzip": 9074
+    "gzip": 9079
   },
   "on demand (reader of 4.1 and 4.2 binary)": {
-    "gzip": 9281
+    "gzip": 9285
   },
   "on demand (reader of 4.3 JSON)": {
-    "gzip": 8821
+    "gzip": 8824
   },
   "on demand (reader of 4.3 binary)": {
-    "gzip": 8767
+    "gzip": 8771
   },
   "on demand (pose engine of 4.1 and 4.2)": {
-    "gzip": 32517
+    "gzip": 32522
   },
   "on demand (pose engine of 4.3)": {
-    "gzip": 34324
+    "gzip": 34329
   },
   "on demand (mesh mode)": {
-    "gzip": 18136
+    "gzip": 18124
   },
   "on demand (clipping)": {
-    "gzip": 7589
+    "gzip": 7592
   }
 }
