@@ -13,6 +13,12 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 /** The numbers a baseline keeps of a side: each as the median, the smallest and the largest run. */
 const TIMES = ['update', 'cpu', 'frame'];
 
+/**
+ * A text of a run with every absolute path replaced by `<folder>`. A baseline is committed, and a
+ * path of the machine it was taken on, such as the folder of `--dist`, means nothing elsewhere.
+ */
+const portable = (text) => text?.replace(/(^|[\s=])(?:[A-Za-z]:)?[\\/][^\s,]*/g, '$1<folder>');
+
 /** What a combined side of a rig keeps in a baseline, or null for a side that did not run. */
 function keep(side) {
     if (!side) return null;
@@ -58,8 +64,8 @@ function extractBaseline(result, instances) {
     return {
         what: 'Numbers of one run of pnpm bench:ab, for the verdict of later runs. Times are ms: median, smallest and largest run.',
         date: result.date,
-        command: result.command,
-        build: result.build,
+        command: portable(result.command),
+        build: portable(result.build),
         machine: result.machine,
         versions: result.versions,
         runs: result.settings.runs,
