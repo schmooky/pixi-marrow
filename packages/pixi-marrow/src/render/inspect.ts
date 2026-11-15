@@ -114,6 +114,8 @@ interface InstancingReport {
     /** The slots of the pools of its layout that views take, and their room. */
     poolSlots: number;
     poolRoom: number;
+    /** The uploads of the pools of its layout so far, which every view of the layout shares. */
+    poolUploads: number;
 }
 
 /** How much of a skeleton moved for its view, as plain data. */
@@ -307,10 +309,12 @@ function describeInstancing({ paints, template }: ViewParts, batched: boolean): 
     const pools = instance?.layout?.pools ?? [];
     let poolSlots = 0;
     let poolRoom = 0;
+    let poolUploads = 0;
 
     for (const pool of pools) {
         poolSlots += pool.used;
         poolRoom += pool.room;
+        poolUploads += pool.uploads;
     }
 
     return {
@@ -322,6 +326,7 @@ function describeInstancing({ paints, template }: ViewParts, batched: boolean): 
         slotBytes: instance?.bytes ?? 0,
         poolSlots,
         poolRoom,
+        poolUploads,
     };
 }
 

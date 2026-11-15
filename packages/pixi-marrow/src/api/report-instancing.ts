@@ -64,6 +64,24 @@ export function instancingRow(source: ReportSource): PerfEntry {
 }
 
 /**
+ * The row of uploads of a view that draws instanced. The view uploads nothing of its own: it
+ * writes into its slot of a pool, and the pool uploads at the draw, once for all its views.
+ *
+ * @example
+ * const row = instancedUploadsRow(source);
+ * console.log(row.value); // 'shared'
+ */
+export function instancedUploadsRow(source: ReportSource): PerfEntry {
+    const { poolUploads, poolSlots } = source.view.instancing;
+
+    return {
+        feature: 'uploads',
+        value: 'shared',
+        reason: `The skeleton writes its pose into its slot in a pool of its layout and uploads nothing itself. Each pool uploads one stretch per texture in a frame that wrote to it: ${plural(poolUploads, 'upload')} so far, shared by ${plural(poolSlots, 'instance')}`,
+    };
+}
+
+/**
  * The row of draw calls of a view that draws instanced: it shares the draw of its run.
  *
  * @example

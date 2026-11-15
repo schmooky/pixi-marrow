@@ -70,6 +70,8 @@ export class InstancePool {
     used = 0;
     /** Slots the pool has room for. */
     room = 0;
+    /** Uploads of the two textures so far: one stretch each in a frame that wrote to it. */
+    uploads = 0;
     private readonly slots: (PoolSlot | undefined)[] = [];
     private readonly free: number[] = [];
     /** The stretches written since the last upload, in texels, empty when the low end is past the high one. */
@@ -156,6 +158,7 @@ export class InstancePool {
         }
         this.poseLow = this.paletteLow = Number.POSITIVE_INFINITY;
         this.poseHigh = this.paletteHigh = 0;
+        this.uploads += uploads;
 
         return uploads;
     }
