@@ -28,7 +28,8 @@ export interface PerfSettings {
      * Chrome. Another GPU may round it apart. It pays for many copies of one rig
      * next to each other, and not for a grid of different skeletons. An instanced draw runs every
      * attachment of every slot, so `auto` leaves a layout alone whose attachments have more than
-     * twice the vertices of what the setup pose shows. `on` draws that one instanced too. No
+     * twice the vertices a pose shows. That counts the setup attachments, and the largest
+     * attachment of a slot that is empty in the setup pose. `on` draws that one instanced too. No
      * preset sets either. `off` (the default) draws each instance alone.
      */
     instancing: 'auto' | 'on' | 'off';

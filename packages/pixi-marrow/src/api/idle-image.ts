@@ -1,20 +1,11 @@
-import {
-    Batch,
-    Bounds,
-    Container,
-    getLocalBounds,
-    Matrix,
-    type Renderer,
-    RenderTexture,
-    Texture,
-    type TextureSource,
-} from 'pixi.js';
+import { Batch, Bounds, Container, getLocalBounds, Matrix, type Renderer, RenderTexture, Texture } from 'pixi.js';
 import { i32 } from '../geometry/read';
 import { BLEND_MODES, type SkeletonModel } from '../model/model';
 import type { PoseState } from '../pose/state';
 import { ImageBody } from '../render/batch-image';
 import { linkRenderer } from '../render/batch-pipe';
 import { drawsPlain } from '../render/gate';
+import { INSTANCE_PIPE } from '../render/instance-id';
 import { u8 } from '../render/read';
 import type { SkeletonView } from '../render/skeleton-view';
 import type { IdleCache, IdleCode } from './idle-cache';
@@ -125,6 +116,12 @@ function spareTexture(texture: RenderTexture): void {
     spares.push(texture);
 }
 
+/** A page texture or its source, as far as the idle cache listens to it. */
+type Heard = {
+    on(event: 'update', listener: () => void): unknown;
+    off(event: 'update', listener: () => void): unknown;
+};
+
 /** How often the WebGL context of a renderer came back. An image drawn before that holds nothing. */
 const restores = new WeakMap<Renderer, { count: number }>();
 
@@ -152,11 +149,17 @@ function restoresOf(renderer: Renderer): number {
  * The next capture builds them again, since the studio gets another child. A batcher of ours
  * keeps its batches for the next build, and each one was in the instructions of its last build.
  */
-function releaseStudio(group: Container): void {
+function releaseStudio(group: Container, renderer: Renderer): void {
     const renderGroup = group.renderGroup;
 
     if (renderGroup === null || renderGroup === undefined) return;
     const set = renderGroup.instructionSet;
+    // the pipe of instanced draws keeps its runs per instruction set, and their members with them
+    const instances: unknown = Reflect.get(renderer.renderPipes, INSTANCE_PIPE);
+
+    if (typeof instances === 'object' && instances !== null && 'destroyInstructionSet' in instances) {
+        (instances as { destroyInstructionSet(set: unknown): void }).destroyInstructionSet(set);
+    }
 
     for (let i = 0; i < set.instructionSize; i++) {
         const instruction = set.instructions[i];
@@ -222,14 +225,13 @@ class IdleImage implements IdleCache {
     private refused = false;
     private destroyed = false;
     private readonly onSeen = (renderer: Renderer): void => this.seen(renderer);
-    /** The page textures, and the source each one had at the last look. */
+    /** The page textures of the asset. */
     private readonly pages: readonly Texture[];
-    private readonly sources: TextureSource[];
+    /** The page textures and their sources, each once, that tell of a change while an image shows. */
+    private heard: Heard[] = [];
     /** True when a page texture or its source changed since the last update. */
     private paged = false;
-    private readonly onPage = (): void => {
-        this.paged = true;
-    };
+    private readonly onPage: () => void;
 
     constructor(owner: Container, view: SkeletonView, state: PoseState, pages: readonly Texture[]) {
         this.owner = owner;
@@ -237,10 +239,15 @@ class IdleImage implements IdleCache {
         this.state = state;
         this.dark = state.model.slots.hasDark.includes(1);
         this.pages = pages;
-        this.sources = pages.map((page) => page.source);
-        // a texture tells of another source or frame, a source of other pixels: a canvas or a video
-        for (const page of pages) page.on('update', this.onPage);
-        for (const source of this.sources) source.on('update', this.onPage);
+        // the pages live as long as the asset: what they hear must not keep a skeleton that was
+        // dropped without destroy() alive, so the listener holds this image weakly
+        const self = new WeakRef(this);
+
+        this.onPage = (): void => {
+            const image = self.deref();
+
+            if (image !== undefined) image.paged = true;
+        };
     }
 
     update(): void {
@@ -255,7 +262,6 @@ class IdleImage implements IdleCache {
         // a container between the slots draws on its own, and a skeleton that shows nothing needs no image
         const fits = (view.inserts?.containers.length ?? 0) === 0 && stats.drawCalls > 0;
 
-        if (this.paged) this.repage();
         if (!same || !fits) {
             this.note();
             this.drop();
@@ -278,33 +284,36 @@ class IdleImage implements IdleCache {
         if (this.destroyed) return;
         this.destroyed = true;
         this.drop();
-        for (const page of this.pages) page.off('update', this.onPage);
-        for (const source of this.sources) source.off('update', this.onPage);
         if (this.body === undefined) return;
         this.body.onRender = null;
         this.body.destroy();
     }
 
-    /** Hears the source a page texture has now, after one took another. */
-    private repage(): void {
-        const { pages, sources } = this;
+    /**
+     * Hears the pages while an image shows: a texture tells of another source or frame, a source
+     * of other pixels, as a canvas or a video does. Each is heard once, because `off` removes every
+     * copy of a listener.
+     */
+    private listen(): void {
+        this.quiet();
+        const heard = new Set<Heard>();
 
-        this.paged = false;
-        for (let i = 0; i < pages.length; i++) {
-            const now = pages[i]?.source;
-            const was = sources[i];
+        for (const page of this.pages) heard.add(page as Heard).add(page.source as Heard);
+        for (const it of heard) it.on('update', this.onPage);
+        this.heard = [...heard];
+    }
 
-            if (now === undefined || now === was) continue;
-            was?.off('update', this.onPage);
-            now.on('update', this.onPage);
-            sources[i] = now;
-        }
+    /** Stops hearing the pages. */
+    private quiet(): void {
+        for (const it of this.heard) it.off('update', this.onPage);
+        this.heard = [];
     }
 
     /** Notes what the picture depends on now. */
     private note(): void {
         const { view } = this;
 
+        this.paged = false;
         this.version = this.state.version;
         this.builds = view.stats.templateBuilds;
         this.mode = view.stats.renderMode;
@@ -423,7 +432,7 @@ class IdleImage implements IdleCache {
             throw error;
         } finally {
             owner.addChildAt(container, index);
-            releaseStudio(studio);
+            releaseStudio(studio, renderer);
         }
         this.show(texture, box.x, box.y, renderer, bytes);
         // a draw can lay the vertex ranges out again, which changes no pixel
@@ -448,6 +457,7 @@ class IdleImage implements IdleCache {
             owner.addChildAt(body, owner.getChildIndex(container) + 1);
         }
         this.image = { texture, bytes, place: Float64Array.from(last), renderer, restores: restoresOf(renderer) };
+        this.listen();
         imageBytes += bytes;
     }
 
@@ -455,6 +465,7 @@ class IdleImage implements IdleCache {
     private drop(): void {
         const { image, body } = this;
 
+        this.quiet();
         if (image === null || body === undefined) return;
         this.image = null;
         imageBytes -= image.bytes;

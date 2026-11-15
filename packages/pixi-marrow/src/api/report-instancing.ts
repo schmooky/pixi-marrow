@@ -23,7 +23,7 @@ function alone(source: ReportSource): string {
     if (why === 'vertices') {
         const { unionVertices, setupVertices } = source.view.instancing;
 
-        return `an instanced draw runs all ${unionVertices} vertices of the attachments of every slot per instance, more than twice the ${setupVertices} the setup pose shows, so "auto" draws it alone. "on" draws it instanced anyway`;
+        return `an instanced draw runs all ${unionVertices} vertices of the attachments of every slot per instance, more than twice the ${setupVertices} a pose shows (the setup attachments, and the largest attachment of a slot that is empty in the setup pose), so "auto" draws it alone. "on" draws it instanced anyway`;
     }
     if (why === 'clip') {
         return 'a clipping attachment cuts a visible slot, which takes a stencil mask. It draws alone while that lasts';

@@ -83,7 +83,7 @@ describe('the option instancing and its row of the report', () => {
         ]);
     });
 
-    it('leaves a layout alone whose attachments have more than twice the vertices of the setup pose, unless on', async () => {
+    it('leaves a layout alone whose attachments have more than twice the vertices a pose shows, unless on', async () => {
         const stage = createStage();
         const speedy = await fixtureAsset('4.2/speedy-ess.skel');
         const raptor = await fixtureAsset('4.3/raptor-pro.skel');
@@ -101,11 +101,11 @@ describe('the option instancing and its row of the report', () => {
         expect(declined).toEqual({
             feature: 'instancing',
             value: 'off',
-            reason: 'an instanced draw runs all 108 vertices of the attachments of every slot per instance, more than twice the 44 the setup pose shows, so "auto" draws it alone. "on" draws it instanced anyway',
+            reason: 'an instanced draw runs all 108 vertices of the attachments of every slot per instance, more than twice the 44 a pose shows (the setup attachments, and the largest attachment of a slot that is empty in the setup pose), so "auto" draws it alone. "on" draws it instanced anyway',
         });
         expect(forced.value).toBe('on, run of 2, 1 draw call');
         // raptor-pro shows 642 of its 679 vertices in the setup pose
-        expect((await row(create(raptor))).reason).not.toContain('setup pose');
+        expect((await row(create(raptor))).reason).not.toContain('a pose shows');
         expect(create(raptor, { instancing: 'on' }).perfSettings.instancing).toBe('on');
     });
 

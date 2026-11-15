@@ -109,7 +109,7 @@ interface InstancingReport {
     drawnWith: number;
     /** The vertices the vertex shader runs per instance: every entry of every slot of the layout. */
     unionVertices: number;
-    /** The vertices the setup pose shows with the skin, in the mesh mode. 0 in the batched mode. */
+    /** The vertices a pose shows with the skin at a guess: the setup attachments, and the largest attachment of a slot empty in the setup pose. In the mesh mode, 0 in the batched mode. */
     setupVertices: number;
     /** The bytes of its slot in the pool. */
     slotBytes: number;

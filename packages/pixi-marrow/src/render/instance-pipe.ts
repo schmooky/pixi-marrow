@@ -1,6 +1,7 @@
 import { type Instruction, type InstructionSet, type Renderer, State } from 'pixi.js';
 import { contextLost, watchContext } from './context-watch';
 import { bendsEdges } from './gate';
+import { INSTANCE_PIPE } from './instance-id';
 import type { InstanceBody } from './instance-paint';
 import { RunPart } from './instance-part';
 
@@ -22,9 +23,6 @@ import { RunPart } from './instance-part';
  * Nothing registers at import. The pipe goes into a renderer when the renderer is about to draw
  * its first instanced body, see {@link linkInstancePipe}.
  */
-
-/** The name a renderer finds the pipe under. */
-export const INSTANCE_PIPE = 'marrowInstances';
 
 /** Frames in a row a part of a run may draw nothing before it is freed. */
 const SPARE_FRAMES = 60;
@@ -132,6 +130,8 @@ interface RunBook {
  * const pipe = linkInstancePipe(renderer);
  * pipe.addRenderable(body, instructionSet);
  */
+export { INSTANCE_PIPE };
+
 export class InstancePipe {
     private renderer: Renderer | null;
     private readonly books = new WeakMap<InstructionSet, RunBook>();

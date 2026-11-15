@@ -432,23 +432,36 @@ export function instanceLayout(
  */
 const MOST_SPREAD = 2;
 
-/** Per skin data of a layout: whether its union has more than {@link MOST_SPREAD} times the vertices of the setup pose. */
+/** Per skin data of a layout: whether its union has more than {@link MOST_SPREAD} times the vertices a pose shows, see {@link setupVertices}. */
 const spreads = new WeakMap<SkinLayout, boolean>();
 
 /**
- * The vertices the slots show in the setup pose with the skin of a template: the setup
- * attachment of each slot, found in that skin and then in the default skin.
+ * The vertices a pose of the template shows at a guess. A slot with a setup attachment counts
+ * that attachment, found in the skin of the template and then in the default skin. A slot that
+ * is empty in the setup pose counts its largest attachment, because an animation fills it. A rig
+ * of effects is often empty in the setup pose, and shows most of what it has once it plays.
  *
  * @example
  * console.log(setupVertices(template, model), template.vertexCount);
  */
 export function setupVertices(template: Template, model: SkeletonModel): number {
     const lookup = createAttachmentLookup(model);
+    const largest = new Int32Array(model.slots.count);
     let count = 0;
 
+    for (let entry = 0; entry < template.slots.length; entry++) {
+        const slot = i32(template.slots, entry);
+
+        largest[slot] = Math.max(i32(largest, slot), i32(template.counts, entry));
+    }
     for (let slot = 0; slot < model.slots.count; slot++) {
         const name = model.slots.attachments[slot] ?? null;
-        const attachment = name === null || name === '' ? undefined : lookup.find(template.skin, slot, name);
+
+        if (name === null || name === '') {
+            count += i32(largest, slot);
+            continue;
+        }
+        const attachment = lookup.find(template.skin, slot, name);
         const entry = attachment === undefined ? -1 : findEntry(template, slot, attachment);
 
         if (entry >= 0) count += i32(template.counts, entry);
@@ -458,7 +471,8 @@ export function setupVertices(template: Template, model: SkeletonModel): number 
 }
 
 /**
- * Whether the union of a layout has more than twice the vertices that the setup pose shows.
+ * Whether the union of a layout has more than twice the vertices that a pose shows, as
+ * {@link setupVertices} guesses them.
  * `instancing: 'auto'` then lets its views draw alone: speedy-ess, at 108 against 44, ran 2.45
  * times the visible vertices per instance.
  *

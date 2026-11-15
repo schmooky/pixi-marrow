@@ -69,6 +69,27 @@ describe('the limits of the idle cache', () => {
         page.source = before;
     });
 
+    it('hears the pages only while an image shows, so a skeleton dropped without destroy() is not held', async () => {
+        const spine = await resting();
+        const fake = fakeRenderer(spine);
+        const [page] = spine.asset.textures;
+
+        if (page === undefined) throw new Error('speedy-ess has a page');
+        const texture = page.listenerCount('update');
+        const source = page.source.listenerCount('update');
+
+        expect(framesUntilCached(spine, fake)).toBeGreaterThan(0);
+        expect(page.listenerCount('update')).toBe(texture + 1);
+        expect(page.source.listenerCount('update')).toBe(source + 1);
+        // a change of the pose drops the image, and the pages are not heard any more
+        spine.play('run', { loop: false });
+        spine.update(0.1);
+        frame(spine, fake);
+        expect(cached(spine)).toBe(false);
+        expect(page.listenerCount('update')).toBe(texture);
+        expect(page.source.listenerCount('update')).toBe(source);
+    });
+
     it('keeps the skeleton live under a filter or a mask, of its own or of a container above it', async () => {
         const spine = await resting();
         const fake = fakeRenderer(spine);
@@ -131,8 +152,14 @@ describe('the limits of the idle cache', () => {
         const studios: Container[] = [];
         const batchers = new Set<MarrowBatcher>();
 
+        const released: unknown[] = [];
+
         Reflect.set(stage.renderer.renderTarget.renderTarget, 'resolution', 1);
         Reflect.set(stage.renderer.runners, 'contextChange', { add: () => undefined });
+        // the pipe of instanced draws keeps runs per instruction set: the studio must give its own back
+        Reflect.set(stage.renderer.renderPipes, 'marrowInstances', {
+            destroyInstructionSet: (set: unknown) => released.push(set),
+        });
         Reflect.set(stage.renderer, 'render', ({ container }: { container: Container }) => {
             stage.draw(container);
             studios.push(container);
@@ -155,6 +182,7 @@ describe('the limits of the idle cache', () => {
         expect(studio?.children).toEqual([]);
         expect(studio?.renderGroup?.instructionSet.instructions).toEqual([]);
         expect(studio?.renderGroup?.instructionSet.renderables).toEqual([]);
+        expect(released).toContain(studio?.renderGroup?.instructionSet);
         for (const batcher of batchers) {
             const pool: unknown = Reflect.get(batcher, 'pool');
 
