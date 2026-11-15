@@ -3,8 +3,7 @@ import { defineConfig } from 'tsdown';
 
 /*
  * Plain JavaScript, and `build` passes `--config-loader native`: Node imports this file as it
- * is. A TypeScript config needs a Node that strips types, 22.18 or later, or the package
- * `unrun`. The root `engines` start at Node 22.12, which has neither.
+ * is, with no loader for TypeScript.
  */
 
 /** @type {{ exports: Record<string, string | { default: string }> }} */

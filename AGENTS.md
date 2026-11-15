@@ -143,7 +143,6 @@ It runs every gate, in this order:
 CI is in `.github/workflows`. `ci.yml` has four jobs:
 
 - `ci` runs the steps above without the typecheck of the site. It also lints the commit messages of a pull request.
-- `node-floor` builds on Node 24. Then it runs the unit tests, the command line tool and the entries for Node on Node <!-- fact:floor.node -->22.12<!-- /fact -->, the start of `engines`.
 - `pixi-floor` installs the lowest peers that the package allows. Then it runs the typecheck and the unit tests.
 - `site` builds the library, then it type-checks and builds the site.
 

@@ -12,6 +12,8 @@ import type { Diagnosis, SceneTotals, TreeDump, TreeNode } from './types';
 const UNIFORM_DRAWS = 1791;
 /** The first pixi.js 8 minor whose buffers upload a stretch. */
 const RANGED_MINOR = 23;
+/** From this many batched skeletons, one stretch per buffer can cost more than a stretch for each. */
+const MANY_BATCHED = 8;
 
 /** A tree in draw order: the skeletons Pixi draws, the steps of the order, and all skeletons. */
 interface Flat {
@@ -68,13 +70,16 @@ function sceneRules(dump: TreeDump, drawn: readonly Seen[], scene: SceneTotals, 
     const [major = 0, minor = 0] = dump.pixi.split('.').map(Number);
     const [first] = meshes;
 
-    if (major === 8 && minor < RANGED_MINOR && drawn.length > 0 && dump.renderer?.type !== 'webgpu') {
+    const batched = drawn.filter(({ marrow }) => marrow.render.mode === 'batched').length;
+
+    // one stretch per buffer costs more only when several skeletons of a batch change in a frame
+    if (major === 8 && minor < RANGED_MINOR && batched >= MANY_BATCHED && dump.renderer?.type !== 'webgpu') {
         hits.add(
             'MARROW026',
             dump.root.path,
             '',
-            { skeletons: drawn.length },
-            `pixi.js ${dump.pixi} on WebGL uploads one stretch per buffer for the ${drawn.length} skeletons, from the first change to the last.`,
+            { skeletons: batched },
+            `pixi.js ${dump.pixi} on WebGL uploads one stretch per buffer for the ${batched} batched skeletons, from the first change to the last.`,
         );
     }
     if (first === undefined) return;

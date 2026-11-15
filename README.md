@@ -220,7 +220,7 @@ With the outlines of its atlas, a skeleton draws no region without a visible pix
 npx pixi-marrow outlines hero.atlas
 ```
 
-The command writes the outlines to `hero.outlines.json` at build time. `--out <file>` names another file. The tool reads PNG pages. For an atlas with WebP or AVIF pages, `--pages <dir>` names the folder with the PNG sources of the pages. The command line tool needs Node <!-- fact:floor.node -->22.12<!-- /fact --> or later.
+The command writes the outlines to `hero.outlines.json` at build time. `--out <file>` names another file. The tool reads PNG pages. For an atlas with WebP or AVIF pages, `--pages <dir>` names the folder with the PNG sources of the pages. The command line tool needs Node <!-- fact:floor.node -->24.0<!-- /fact --> or later.
 
 ```ts
 const hero = await MarrowSpine.load({
@@ -291,7 +291,7 @@ The site in `apps/site` holds the guide, How it works with its diagrams and live
 
 ## Work on it
 
-Node <!-- fact:floor.node -->22.12<!-- /fact --> or later and pnpm 10. CI runs Node 24, and one job runs the tests on Node 22.12.
+Node <!-- fact:floor.node -->24.0<!-- /fact --> or later and pnpm 10. CI runs Node 24.
 
 ```bash
 pnpm install

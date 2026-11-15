@@ -410,7 +410,7 @@ export const RULES: readonly PerfRule[] = [
         severity: 'info',
         cost: ['upload'],
         detect: 'static',
-        pattern: 'The game runs pixi.js 8.21 or 8.22 on WebGL2, and many skeletons change in a frame.',
+        pattern: 'The game runs pixi.js 8.21 or 8.22 on WebGL2, and 8 or more batched skeletons draw.',
         does: "Before pixi.js 8.23 a WebGL buffer keeps one stretch until Pixi binds it. So each buffer uploads one stretch, from the first change to the last. A data texture of `skinning: 'gpu'` uploads whole. From 8.23 the runtime uploads each stretch that changed.",
         source: 'src/render/batch-upload.ts',
         check: 'The tree dump states the pixi.js version and the renderer.',

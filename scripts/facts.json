@@ -28,7 +28,7 @@
     "pixi": "8.21.0",
     "pixiShort": "8.21",
     "pixiSilk": "1.0.1",
-    "node": "22.12"
+    "node": "24.0"
   },
   "size": {
     "root": 32,

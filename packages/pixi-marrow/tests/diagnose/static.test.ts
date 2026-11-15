@@ -342,13 +342,17 @@ describe('the static rules about the scene', () => {
         expect(hitsOf(diagnoseTree(many), 'MARROW024')).toEqual([]);
     });
 
-    it('MARROW026 hits on WebGL with pixi.js before 8.23', async () => {
-        const dump = await owlDump(() => undefined);
+    it('MARROW026 hits for many batched skeletons on WebGL with pixi.js before 8.23', async () => {
+        const owls = await Promise.all(Array.from({ length: 8 }, () => spine(OWL)));
+        const many = serializeTree(stageOf(...owls));
+        const one = await owlDump(() => undefined);
 
-        dump.pixi = '8.23.0';
-        expect(hitsOf(diagnoseTree(dump), 'MARROW026')).toEqual([]);
-        dump.pixi = '8.21.0';
-        expect(hitsOf(diagnoseTree(dump), 'MARROW026')[0]?.measured).toMatchObject({ skeletons: 1 });
+        many.pixi = '8.23.0';
+        expect(hitsOf(diagnoseTree(many), 'MARROW026')).toEqual([]);
+        many.pixi = '8.21.0';
+        one.pixi = '8.21.0';
+        expect(hitsOf(diagnoseTree(many), 'MARROW026')[0]?.measured).toMatchObject({ skeletons: 8 });
+        expect(hitsOf(diagnoseTree(one), 'MARROW026')).toEqual([]);
     });
 });
 
