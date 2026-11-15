@@ -121,7 +121,7 @@ A change to `src/render`, `src/api` or the shaders also needs the pixel check, w
 pnpm check:render
 ```
 
-It draws rigs with pixi-marrow and with the official Pixi runtime in headless Chrome, on WebGL2 and WebGPU, and compares the pixels. It also compares pixi-marrow with its overdraw cuts on and off. Images of failing cases land in `.shots/render/`.
+It draws rigs with pixi-marrow and with the official Pixi runtime in headless Chrome, on WebGL2 and WebGPU, and compares the pixels. CI does not run it, because its runners have no GPU. Run it on your own machine. It also compares pixi-marrow with its overdraw cuts on and off. Images of failing cases land in `.shots/render/`.
 
 A frame that fails against the official runtime is drawn again, moved by a fraction of a pixel, and fails only when it fails at both places. The two runtimes place vertices in different code, so a vertex on a subpixel boundary can round two ways. A defect stays wrong after the move.
 
