@@ -139,6 +139,21 @@ function component(tag: string, name: string, file: string, imports: Map<string,
     return `> ${kind}: ${caption}`;
 }
 
+let facts: unknown;
+
+/** The value of `{facts.a.b}` on a page: a number of `scripts/facts.json`, which the pages import. */
+function fact(path: string): string {
+    facts ??= JSON.parse(readFileSync(join(SITE_ROOT, '../../scripts/facts.json'), 'utf8'));
+    let at: unknown = facts;
+
+    for (const key of path.split('.')) {
+        at = typeof at === 'object' && at !== null ? (at as Record<string, unknown>)[key] : undefined;
+    }
+    if (typeof at !== 'string' && typeof at !== 'number') throw new Error(`scripts/facts.json has no value "${path}".`);
+
+    return String(at);
+}
+
 /** MDX prose as Markdown: no imports, no comments, and each component as its code or its caption. */
 function prose(text: string, file: string, imports: Map<string, string>): string {
     return text
@@ -148,6 +163,7 @@ function prose(text: string, file: string, imports: Map<string, string>): string
         .replace(/<([A-Z]\w*)\b[^>]*?(?:\/>|>[\s\S]*?<\/\1>)/g, (tag, name: string) =>
             component(tag, name, file, imports),
         )
+        .replace(/\{facts\.([\w.]+)\}/g, (_, path: string) => fact(path))
         .replace(/\]\(\/(?!\/)/g, `](${ORIGIN}/`);
 }
 
