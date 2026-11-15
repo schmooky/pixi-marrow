@@ -1,4 +1,4 @@
-import type { AttachmentData } from '../../model/attachments';
+import { endWalk, startWalk, walkAttachment, walkFloats, walkInt, walkInts } from '../shared/kept';
 import type { LegacyEntry } from './entry';
 import type { LegacyPlayer } from './player';
 
@@ -8,60 +8,10 @@ import type { LegacyPlayer } from './player';
  * the settings of the apply before, and that one left every number of the pose as it was, this
  * one would leave them too. Then the timelines are not applied.
  *
- * Whether an apply left the pose as it was is not assumed, it is looked at: the pose is copied
- * before such an apply and compared after it, bit for bit. A timeline that mixes toward its key
- * moves the pose a little in every apply, and can take many applies to arrive.
+ * Whether an apply left the pose as it was is not assumed, it is looked at, with the walk of
+ * shared/kept.ts. A timeline that mixes toward its key moves the pose a little in every apply,
+ * and can take many applies to arrive.
  */
-
-/** Scratch of the comparison: every fractional number an apply can write. It grows with the largest pose. */
-let floats = new Float64Array(0);
-/** Scratch of the comparison: every whole number an apply can write. */
-let ints = new Int32Array(0);
-/** Scratch of the comparison: the attachment of every slot. */
-const shown: (AttachmentData | null)[] = [];
-/** Where the walk over the pose is in `floats` and in `ints`. */
-let floatAt = 0;
-let intAt = 0;
-
-/** Copies `count` numbers to the scratch, or with `check` compares them with it. Returns false when one differs. */
-function walkFloats(source: Float64Array, count: number, check: boolean): boolean {
-    const at = floatAt;
-
-    floatAt += count;
-    if (!check) {
-        for (let i = 0; i < count; i++) floats[at + i] = Number(source[i]);
-
-        return true;
-    }
-    for (let i = 0; i < count; i++) {
-        const now = Number(source[i]);
-        const before = Number(floats[at + i]);
-
-        // by bits, where every number that is not a number counts as the same
-        if (now === before ? now === 0 && 1 / now !== 1 / before : !(Number.isNaN(now) && Number.isNaN(before))) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-/** The same as {@link walkFloats} for whole numbers. */
-function walkInts(source: ArrayLike<number>, count: number, check: boolean): boolean {
-    const at = intAt;
-
-    intAt += count;
-    if (!check) {
-        for (let i = 0; i < count; i++) ints[at + i] = Number(source[i]);
-
-        return true;
-    }
-    for (let i = 0; i < count; i++) {
-        if (Number(source[i]) !== ints[at + i]) return false;
-    }
-
-    return true;
-}
 
 /** The rotation numbers of the entries that are applied: an apply that mixes writes them. */
 function walkRotations(player: LegacyPlayer, check: boolean): boolean {
@@ -69,8 +19,7 @@ function walkRotations(player: LegacyPlayer, check: boolean): boolean {
         if (current === null || current.delay > 0) continue;
         const rotations = current.timelinesRotation;
 
-        if (!check) ints[intAt] = current.rotationLength;
-        if (ints[intAt++] !== current.rotationLength) return false;
+        if (!walkInt(current.rotationLength, check)) return false;
         if (rotations !== null && !walkFloats(rotations, rotations.length, check)) return false;
     }
 
@@ -98,22 +47,12 @@ function walk(player: LegacyPlayer, check: boolean): boolean {
     const slots = pose.attachments.length;
     const bones = pose.inherit.length;
 
-    floatAt = 0;
-    intAt = 0;
-    if (!check) {
-        const needed = floatCount(player);
-
-        if (floats.length < needed) floats = new Float64Array(needed);
-        if (ints.length < bones + slots * 3 + player.tracks.length) {
-            ints = new Int32Array(bones + slots * 3 + player.tracks.length);
-        }
-    }
+    startWalk(check, check ? 0 : floatCount(player), bones + slots * 3 + player.tracks.length);
     // the deform lengths first: they decide how many numbers of a deform count
     if (!walkInts(pose.deformLengths, slots, check)) return false;
     for (let slot = 0; slot < slots; slot++) {
-        if (check ? shown[slot] !== pose.attachments[slot] : false) return false;
-        shown[slot] = pose.attachments[slot] ?? null;
-        if (!walkFloats(pose.deform[slot] ?? floats, Number(pose.deformLengths[slot]), check)) return false;
+        if (!walkAttachment(pose.attachments[slot] ?? null, slot, check)) return false;
+        if (!walkFloats(pose.deform[slot], Number(pose.deformLengths[slot]), check)) return false;
     }
 
     return (
@@ -138,8 +77,7 @@ export function keepPose(player: LegacyPlayer): void {
 export function poseIsKept(player: LegacyPlayer): boolean {
     const kept = walk(player, true);
 
-    // the scratch must not keep the attachments of a skeleton alive
-    shown.fill(null);
+    endWalk();
 
     return kept;
 }

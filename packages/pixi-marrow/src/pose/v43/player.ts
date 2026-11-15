@@ -43,14 +43,16 @@ export interface Player43 {
     /** The listener calls since the last `takeEvents`. */
     listened: PoseEvent[];
     /**
-     * The entry of track 0 when the last apply was that entry alone, replacing the setup pose.
-     * Applied again at the same time it writes the same pose, so the apply can be left out.
+     * True when the next apply cannot be the one before again: a call changed an entry or the
+     * animated pose, or an update started, ended or advanced an entry. See repeat.ts.
      */
-    rested: Entry | null;
-    /** The official `applyTime` of the entry that was applied last. */
-    restedTime: number;
-    /** The track time of that entry at that apply. */
-    restedTrack: number;
+    stirred: boolean;
+    /** True when the last apply left every number of the pose as it was. Then the same apply need not run again. */
+    settled: boolean;
+    /** How many applies to wait before the next one is checked for leaving the pose as it is. */
+    patience: number;
+    /** How long that wait was the last time. It doubles while the pose keeps changing. */
+    waited: number;
 }
 
 /** Creates the player of an engine, with no tracks. */
@@ -72,9 +74,10 @@ export function createPlayer(pose: Pose43): Player43 {
         queueCount: 0,
         drainDisabled: false,
         listened: [],
-        rested: null,
-        restedTime: Number.NaN,
-        restedTrack: Number.NaN,
+        stirred: true,
+        settled: false,
+        patience: 0,
+        waited: 0,
     };
 }
 
@@ -86,6 +89,8 @@ export function obtainEntry(player: Player43): Entry {
 function push(player: Player43, type: number, entry: Entry, key: EventKey | null): void {
     const at = player.queueCount++;
 
+    // an entry started, ended or was interrupted. `complete` and `event` come from the apply itself
+    if (type !== COMPLETE && type !== EVENT) player.stirred = true;
     player.queueTypes[at] = type;
     player.queueEntries[at] = entry;
     player.queueKeys[at] = key;
@@ -133,8 +138,6 @@ function listen(player: Player43, type: PoseEventType, entry: Entry): void {
 
 function free(player: Player43, entry: Entry): void {
     entry.reset();
-    // the object can stand for a later entry, which has not been applied
-    if (player.rested === entry) player.rested = null;
     player.pool.push(entry);
 }
 

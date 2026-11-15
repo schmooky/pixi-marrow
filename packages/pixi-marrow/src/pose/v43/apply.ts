@@ -17,6 +17,7 @@ import {
 import type { Entry } from './entry';
 import { animationsChanged } from './hold';
 import { drain, type Player43 } from './player';
+import { applyRepeats, keepPose, poseIsKept } from './repeat';
 import { setSlotAttachment, setupAttachment } from './slots';
 import { applyTimeline } from './timelines';
 import { applyRelative } from './timelines-bone';
@@ -361,13 +362,8 @@ function applyMixingFrom(player: Player43, to: Entry, from: Entry): void {
     from.nextTrackLast = from.trackTime;
 }
 
-/**
- * Applies the current entry of a track, after the entries it mixes from. Returns true when the
- * entry alone replaced the setup pose: it is on track 0 at full alpha and mixes from nothing.
- * Such an apply writes the same pose again when it is repeated at the same time.
- */
-function applyCurrent(player: Player43, current: Entry, track: number): boolean {
-    const mixing = current.mixingFrom !== null;
+/** Applies the current entry of a track, after the entries it mixes from. */
+function applyCurrent(player: Player43, current: Entry, track: number): void {
     let alpha = current.alpha;
 
     if (current.mixingFrom) {
@@ -375,59 +371,13 @@ function applyCurrent(player: Player43, current: Entry, track: number): boolean 
         alpha *= current.mixed;
     } else if (current.trackTime >= current.trackEnd && !current.next) alpha = 0;
     const events = current.reverse ? null : player.fired;
-    const replaces = track === 0 && alpha === 1;
 
     setTimes(current);
     SHARED[ALPHA] = alpha;
-    player.restedTime = Number(SHARED[TIME]);
-    player.restedTrack = current.trackTime;
-    if (replaces) applyFromSetup(player, current, events);
+    // an entry on track 0 at full alpha replaces the setup pose
+    if (track === 0 && alpha === 1) applyFromSetup(player, current, events);
     else applyMixed(player, current, events);
     finish(player, current);
-
-    return replaces && !mixing;
-}
-
-/** This apply has timelines to run. */
-const APPLY = 0;
-/** No track has an entry to apply. */
-const NOTHING = 1;
-/** The one entry to apply would write the pose it wrote last time. */
-const REPEAT = 2;
-
-/**
- * Says whether this apply would write the pose the last apply left, so that no timeline has to
- * run: one of `APPLY`, `NOTHING` and `REPEAT`. It repeats when the one entry to apply is the one
- * that replaced the setup pose last time, at the same time, and nothing else has changed the
- * pose since. The times of that entry are in `SHARED` then.
- */
-function restsAsApplied(player: Player43): number {
-    const tracks = player.tracks;
-    let only: Entry | null = null;
-
-    for (let i = 0, n = tracks.length; i < n; i++) {
-        const current = tracks[i];
-
-        if (!current || current.delay > 0) continue;
-        if (i !== 0) return APPLY;
-        only = current;
-    }
-    if (only === null) return NOTHING;
-    if (only !== player.rested || player.pose.solve.dirty || only.mixingFrom !== null) return APPLY;
-    if (only.alpha !== 1 || (only.trackTime >= only.trackEnd && !only.next)) return APPLY;
-    // an entry that moved on and is not at its end is at another time: no need to work the time out twice
-    const playing = only.loop
-        ? only.animationEnd > only.animationStart
-        : only.trackTime < only.animationEnd - only.animationStart;
-
-    if (playing && only.trackTime !== player.restedTrack) return APPLY;
-    setTimes(only);
-    const time = Number(SHARED[TIME]);
-
-    if (Number(SHARED[ANIMATION_TIME]) !== only.animationLast || time !== player.restedTime) return APPLY;
-
-    // a reversed entry is applied at another time than its last time: a physics reset timeline can fire there
-    return only.clip.resets && time !== only.animationLast ? APPLY : REPEAT;
 }
 
 /** Gives a slot its setup attachment back when its attachment was set for deform timelines only. */
@@ -440,38 +390,78 @@ function restoreSetupAttachments(player: Player43): void {
     }
 }
 
-/**
- * The official `AnimationState.apply`: poses the skeleton with the entries of every track.
- *
- * An apply that would write the pose the last one left runs no timeline. It still does what the
- * official apply does to the entry: it fires its `complete` and keeps its times. The pose is
- * marked as changed whenever a timeline ran.
- */
-export function applyTracks(player: Player43): void {
+/** Applies the entries of every track to the animated pose. */
+function poseTracks(player: Player43): void {
     const tracks = player.tracks;
     let applied = 0;
-    let replaced = false;
 
-    if (player.animationsChanged) animationsChanged(player);
-    const rest = restsAsApplied(player);
-
-    if (rest !== APPLY) {
-        // no event timeline fires at the time of the last apply: the entry has its times to keep and its `complete`
-        if (rest === REPEAT && player.rested !== null) finish(player, player.rested);
-        drain(player);
-
-        return;
-    }
     for (let i = 0, n = tracks.length; i < n; i++) {
         const current = tracks[i];
 
         if (!current || current.delay > 0) continue;
-        replaced = applyCurrent(player, current, i);
+        applyCurrent(player, current, i);
         applied++;
     }
     restoreSetupAttachments(player);
     player.unkeyedState += 2;
-    player.rested = applied === 1 && replaced ? (tracks[0] ?? null) : null;
     if (applied > 0) player.pose.solve.dirty = true;
+}
+
+/**
+ * What is left of an apply whose timelines need not run: the times of every entry move on, and
+ * an entry that completes a loop says so. No event timeline fires at the time of the last apply.
+ */
+function settleTracks(player: Player43): void {
+    const tracks = player.tracks;
+
+    for (let i = 0, n = tracks.length; i < n; i++) {
+        const current = tracks[i];
+
+        if (!current || current.delay > 0) continue;
+        setTimes(current);
+        finish(player, current);
+    }
+}
+
+/** The longest wait between two looks at whether an apply leaves the pose as it is, in applies. */
+const LONGEST_WAIT = 64;
+
+/**
+ * An apply that repeats the one before. It is first looked at: when it leaves the pose as it
+ * was, the applies after it that repeat it too are not run, as repeat.ts explains. While it does
+ * not, the next look comes after a wait that doubles, so that a pose which keeps moving costs little.
+ */
+function applyAgain(player: Player43): void {
+    if (player.settled) {
+        settleTracks(player);
+    } else if (player.patience-- > 0) {
+        poseTracks(player);
+    } else {
+        keepPose(player);
+        poseTracks(player);
+        player.settled = poseIsKept(player);
+        player.waited = Math.min(Math.max(1, player.waited * 2), LONGEST_WAIT);
+        player.patience = player.waited;
+    }
+}
+
+/**
+ * The official `AnimationState.apply`: poses the skeleton with the entries of every track.
+ *
+ * An apply that would write the pose the last one left runs no timeline. It still does what the
+ * official apply does to every entry: it fires its `complete` and keeps its times. That holds
+ * for entries on every track and at every alpha.
+ */
+export function applyTracks(player: Player43): void {
+    if (player.animationsChanged) animationsChanged(player);
+    if (applyRepeats(player)) applyAgain(player);
+    else {
+        player.stirred = false;
+        // a look sets the wait: without one, the other two are as they start
+        player.settled = false;
+        player.patience = 0;
+        player.waited = 0;
+        poseTracks(player);
+    }
     drain(player);
 }

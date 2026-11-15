@@ -89,13 +89,22 @@ class Engine43 implements PoseEngine {
     private open(): void {
         const { solve } = this.pose;
 
-        if (this.state.version !== solve.seen) distrust(this.pose);
+        if (this.state.version !== solve.seen) {
+            distrust(this.pose);
+            this.player.stirred = true;
+        }
         solve.pending = nextVersion(this.state.version);
     }
 
     /** Ends a call that can change the pose. */
     private close(): void {
         this.pose.solve.seen = this.state.version;
+    }
+
+    /** Ends a command that changed the animated pose or an entry: the next update applies the timelines again. */
+    private changed(): void {
+        this.close();
+        this.player.stirred = true;
     }
 
     get bytes(): number {
@@ -128,7 +137,7 @@ class Engine43 implements PoseEngine {
         this.open();
         // the deform timelines apply in the next update, whatever the pose did before
         switchDeforms(this.pose, value);
-        this.close();
+        this.changed();
     }
 
     get timeScale(): number {
@@ -190,6 +199,7 @@ class Engine43 implements PoseEngine {
         }
         this.catchUp();
         configureEntry(entry, fields);
+        this.player.stirred = true;
     }
 
     clearTrack(track: number): void {
@@ -215,7 +225,7 @@ class Engine43 implements PoseEngine {
 
         this.open();
         setSkin(this.pose, skin);
-        this.close();
+        this.changed();
         changeSkin(this.pose.rig.lookup, this.state.model, before, this.state.skin);
     }
 
@@ -234,6 +244,7 @@ class Engine43 implements PoseEngine {
     setAttachment(slot: number, attachment: AttachmentData | null): void {
         checkSlot(this.state.model, slot);
         this.open();
+        // a write that changes the slot makes the pose dirty, which stops a repeat: see repeat.ts
         writeSlotAttachment(this.pose, slot, attachment);
         this.close();
     }
@@ -241,6 +252,7 @@ class Engine43 implements PoseEngine {
     setColor(slot: number, r: number, g: number, b: number, a: number): void {
         checkSlot(this.state.model, slot);
         this.open();
+        // a write that changes the slot makes the pose dirty, which stops a repeat: see repeat.ts
         writeSlotColor(this.pose, slot, r, g, b, a);
         this.close();
     }
@@ -249,6 +261,7 @@ class Engine43 implements PoseEngine {
         checkSlot(this.state.model, slot);
         checkDark(this.state.model, slot);
         this.open();
+        // a write that changes the slot makes the pose dirty, which stops a repeat: see repeat.ts
         writeSlotDark(this.pose, slot, r, g, b);
         this.close();
     }
@@ -258,18 +271,19 @@ class Engine43 implements PoseEngine {
         this.open();
         setupPoseBones(this.pose);
         setupPoseSlots(this.pose);
-        this.close();
+        this.changed();
     }
 
     setupPoseBones(): void {
         this.behind = null;
+        this.player.stirred = true;
         setupPoseBones(this.pose);
     }
 
     setupPoseSlots(): void {
         this.open();
         setupPoseSlots(this.pose);
-        this.close();
+        this.changed();
     }
 
     physicsTranslate(x: number, y: number): void {
@@ -316,6 +330,7 @@ class Engine43 implements PoseEngine {
     private catchUp(): void {
         if (this.behind === null) return;
         poseBehind(this.pose, this.behind, this.behindTime);
+        this.player.stirred = true;
         this.behind = null;
     }
 
