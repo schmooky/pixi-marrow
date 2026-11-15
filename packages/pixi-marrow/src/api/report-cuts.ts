@@ -1,7 +1,7 @@
 import type { CutCodeState } from '../render/cut-code';
 import type { PageBlock } from '../render/page-block';
 import type { OutlinesState } from './asset';
-import { type PerfEntry, plural, type ReportSource, slotNames } from './report-base';
+import { type PerfEntry, plural, type ReportSource, ruled, slotNames } from './report-base';
 
 /*
  * The rows of the perf report about the cuts of overdraw: polygons in place of quads, slots
@@ -70,7 +70,8 @@ function cutsOff({ view, outlinesState }: ReportSource): string | null {
 
 function tightMeshRow(source: ReportSource): PerfEntry {
     const { cuts, visible } = source.view;
-    const off = (reason: string): PerfEntry => ({ feature: 'tightMesh', value: 'off', reason });
+    const off = (reason: string): PerfEntry =>
+        ruled({ feature: 'tightMesh', value: 'off', reason }, cuts.outlines && cuts.hostile && 'MARROW016');
 
     if (cuts.tightMesh === 'off') return off('the option tightMesh is "off": every region is a quad');
     const blocked = cutsOff(source);
@@ -107,7 +108,7 @@ function occlusionRow(source: ReportSource): PerfEntry {
     if (cuts.occlusion === 'off') return row('off', 'the option occlusion is "off": every slot is drawn');
     const blocked = cutsOff(source);
 
-    if (blocked !== null) return row('off', blocked);
+    if (blocked !== null) return ruled(row('off', blocked), cuts.outlines && cuts.hostile && 'MARROW016');
     if (!cuts.opaqueMargin) return row('off', `the margin of the opaque rectangles ${MARGIN}`);
     const none = '0 covered slots';
 
@@ -115,9 +116,12 @@ function occlusionRow(source: ReportSource): PerfEntry {
         return row(none, `no attachment of the layout has an opaque rectangle${pageNotes(source)}`);
     }
     if (!view.plain) {
-        return row(
-            none,
-            'an ancestor has an alpha below 1 or a blend mode of its own, so an opaque slot shows what is behind it',
+        return ruled(
+            row(
+                none,
+                'an ancestor has an alpha below 1 or a blend mode of its own, so an opaque slot shows what is behind it',
+            ),
+            'MARROW003',
         );
     }
     const covered = view.visible.filter((slot) => slot.covered).map(({ slot }) => slot);
@@ -148,7 +152,9 @@ function outlinesRow(source: ReportSource): PerfEntry {
         reason += `: ${found} of ${plural(outlines.regions.length, 'region')} have an outline`;
     } else if (outlinesState === 'unread') reason += pageNotes(source);
 
-    return { feature: 'outlines', value: outlinesState, reason };
+    const missing = outlinesState === 'off' || outlinesState === 'unread';
+
+    return ruled({ feature: 'outlines', value: outlinesState, reason }, missing && 'MARROW020');
 }
 
 /**

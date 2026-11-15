@@ -1,4 +1,5 @@
 import type { Renderer } from 'pixi.js';
+import { DOCS_SITE } from '../base/errors';
 
 /*
  * Whether the renderer that draws at the moment has lost its WebGL context.
@@ -79,7 +80,10 @@ export function watchContext(renderer: Renderer): void {
     watched.add(renderer);
     const old = drawsNothing(renderer);
 
-    if (old) console.warn('pixi-marrow: this renderer draws no skeleton. Use WebGL2 or WebGPU.');
+    if (old)
+        console.warn(
+            `pixi-marrow: this renderer draws no skeleton. Use WebGL2 or WebGPU. ${DOCS_SITE}good-to-know/#limits`,
+        );
     // every renderer that draws skeletons answers, so the answer of another one never stays
     const watch = {
         prerender(): void {

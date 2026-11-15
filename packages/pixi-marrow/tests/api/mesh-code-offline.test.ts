@@ -42,7 +42,7 @@ describe('an asset whose code for the mesh mode does not load', () => {
         spine.play('run', { loop: true });
         for (let frame = 0; frame < 5; frame++) spine.update(FRAME);
         expect(spine.stats).toMatchObject({ renderMode: 'batched', drawCalls: 1 });
-        expect((await spine.perf.report()).find(isModeRow)).toEqual({
+        expect((await spine.perf.report()).find(isModeRow)).toMatchObject({
             feature: 'renderMode',
             value: 'batched',
             reason: 'the option renderMode is "mesh". The code of the mesh mode did not load, so the skeleton stays in a batch',

@@ -35,6 +35,9 @@ const FEATURES: readonly PerfFeature[] = [
     'layout',
 ];
 
+/** The keys a row has only when it has something to say with them. */
+const OPTIONAL = ['rule', 'docs', 'data'];
+
 /** Slots that lie apart, so that none covers another. */
 const apart = (slots: readonly CoverSlot[]): CoverSlot[] =>
     slots.map((slot, index) => ({ ...slot, at: [index * 400, 0] }));
@@ -106,7 +109,12 @@ describe('the perf report of a display object', () => {
             expect(report.map((entry) => entry.feature)).toEqual(FEATURES);
             expect(JSON.parse(JSON.stringify(report))).toEqual(report);
             for (const entry of report) {
-                expect(Object.keys(entry)).toEqual(['feature', 'value', 'reason']);
+                // a row can carry its rule, the docs address of the rule and its facts as data
+                expect(Object.keys(entry).filter((key) => !OPTIONAL.includes(key))).toEqual([
+                    'feature',
+                    'value',
+                    'reason',
+                ]);
                 expect(entry.value).not.toBe('');
                 expect(entry.reason).not.toBe('');
             }
@@ -154,7 +162,7 @@ describe('the perf report of a display object', () => {
             const spine = await fixture('4.2/spineboy-pro.skel');
 
             expect(spine.stats.drawCalls).toBe(1);
-            expect(await row(spine, 'drawCalls')).toEqual({
+            expect(await row(spine, 'drawCalls')).toMatchObject({
                 feature: 'drawCalls',
                 value: '1',
                 reason: '1 draw range: the visible slots share one blend state and one group of pages',
