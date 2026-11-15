@@ -31,6 +31,8 @@ export class LegacyPlayer {
     stirred = true;
     /** False while deform timelines are left out, see `PoseEngine.deform`. */
     deforms = true;
+    /** True while the timelines of an entry that mixes out are applied. */
+    mixingOut = false;
     /** True when the last apply left every number of the pose as it was. Then the same apply need not run again. */
     settled = false;
     /** How many applies to wait before the next one is checked for leaving the pose as it is. */

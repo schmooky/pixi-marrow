@@ -227,6 +227,42 @@ describe('a display object with pacing', () => {
         spine.destroy();
     });
 
+    it('brings back the deform of an animation that mixed out while drawn small as it is without lod', async () => {
+        const asset = await fixtureAsset('4.2/goblins-pro.skel');
+        const spine = new MarrowSpine(asset, { autoUpdate: false, lod: 'auto' });
+        const reference = new MarrowSpine(asset, { autoUpdate: false });
+        const both = (times: number): void => {
+            for (let i = 0; i < times; i++) {
+                spine.update(1 / 60);
+                reference.update(1 / 60);
+            }
+        };
+        const deforms = (of: MarrowSpine): number[][] =>
+            of.engine.state.deform.map((deform, slot) => [
+                ...deform.subarray(0, Number(of.engine.state.deformLengths[slot])),
+            ]);
+
+        for (const of of [spine, reference]) {
+            of.skin = 'goblin';
+            of.play('walk', { loop: true });
+        }
+        rendered(spine);
+        both(12);
+        vi.spyOn(spine, 'getBounds').mockReturnValue({ x: 0, y: 0, width: 40, height: 40 } as never);
+        rendered(spine);
+        both(1);
+        expect(spine.pacingStatus().reduced).toBe(true);
+        spine.stop({ mix: 0.2 });
+        reference.stop({ mix: 0.2 });
+        both(30);
+        vi.spyOn(spine, 'getBounds').mockReturnValue({ x: 0, y: 0, width: 400, height: 400 } as never);
+        rendered(spine);
+        both(3);
+        expect(deforms(spine)).toEqual(deforms(reference));
+        spine.destroy();
+        reference.destroy();
+    });
+
     it('leaves a deform switch the game set alone without lod', async () => {
         const spine = new MarrowSpine(await fixtureAsset('4.2/cloud-pot.skel'), { autoUpdate: false });
 

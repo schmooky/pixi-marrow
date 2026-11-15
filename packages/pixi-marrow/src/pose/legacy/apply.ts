@@ -281,10 +281,13 @@ function applyMixingFrom(player: LegacyPlayer, to: LegacyEntry, from: LegacyEntr
     setTimes(from);
     SHARED[MIX] = mix;
     SHARED[ALPHA_HOLD] = alphaHold;
+    // the deform timelines of this entry run while the deform switch is off, see deform-switch.ts
+    player.mixingOut = true;
     if (blend === ADD) {
         SHARED[ALPHA] = alphaHold * (1 - mix);
         addOutTimelines(player, from, fired);
     } else mixOutTimelines(player, from, blend, fired);
+    player.mixingOut = false;
     if (to.mixDuration > 0) queueEvents(player, from);
     else if (player.fired.length > 0) player.fired.length = 0;
     from.nextAnimationLast = Number(SHARED[ANIMATION_TIME]);

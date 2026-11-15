@@ -1,4 +1,5 @@
 import { MarrowError } from '../../base/errors';
+import { hiddenLengths } from '../shared/deform-switch';
 import { ALPHA, PERCENT, SHARED, search, TIME } from './curves';
 import { followerInfo, stampSlot, timelineActive } from './slots';
 import { type AttachmentInfo, FIRST, type Pose43, SETUP, type Timeline43 } from './types';
@@ -67,10 +68,11 @@ function curvePercent(timeline: Timeline43, frame: number): void {
 /**
  * Sets how many numbers of a slot's deform are in use and returns the array. This is the official
  * `deform.length = length`. Numbers that come into use hold NaN, as an official array holds
- * `undefined` there. Every caller that grows an empty deform writes all of it.
+ * `undefined` there. Every caller that grows an empty deform writes all of it. `lengths` are those
+ * of the pose, or the hidden ones of `shared/deform-switch.ts`.
  */
-function resizeDeform(pose: Pose43, slot: number, length: number): Float64Array {
-    const used = pose.deformLengths[slot] ?? 0;
+function resizeDeform(pose: Pose43, lengths: Int32Array, slot: number, length: number): Float64Array {
+    const used = lengths[slot] ?? 0;
     let deform = pose.deform[slot];
 
     if (deform === undefined || deform.length < length) {
@@ -81,7 +83,7 @@ function resizeDeform(pose: Pose43, slot: number, length: number): Float64Array 
         deform = longer;
     }
     if (used > 0 && length > used) deform.fill(Number.NaN, used, length);
-    pose.deformLengths[slot] = length;
+    lengths[slot] = length;
 
     return deform;
 }
@@ -234,7 +236,7 @@ function holdKey(pose: Pose43, slot: number, key: Float32Array | null): void {
 }
 
 /** The official `DeformTimeline.applyBeforeFirst`: what a slot's deform does before the first key. */
-function applyBeforeFirst(pose: Pose43, timeline: Timeline43, slot: number, from: number): void {
+function applyBeforeFirst(pose: Pose43, lengths: Int32Array, timeline: Timeline43, slot: number, from: number): void {
     const info = followerInfo(pose, slot, timeline);
 
     if (info === null) return;
@@ -242,15 +244,15 @@ function applyBeforeFirst(pose: Pose43, timeline: Timeline43, slot: number, from
 
     holdKey(pose, slot, null);
     // an empty deform counts as the setup pose
-    if (pose.deformLengths[slot] === 0 || from === SETUP || (from === FIRST && alpha === 1)) {
-        if (pose.deformLengths[slot] !== 0) stampSlot(pose, slot);
-        pose.deformLengths[slot] = 0;
+    if (lengths[slot] === 0 || from === SETUP || (from === FIRST && alpha === 1)) {
+        if (lengths[slot] !== 0) stampSlot(pose, slot);
+        lengths[slot] = 0;
 
         return;
     }
     if (from !== FIRST) return;
     const count = timeline.vertices[0]?.length ?? 0;
-    const deform = resizeDeform(pose, slot, count);
+    const deform = resizeDeform(pose, lengths, slot, count);
     const setup = setupVertices(pose, slot, info);
 
     stampSlot(pose, slot);
@@ -271,6 +273,7 @@ function applyBeforeFirst(pose: Pose43, timeline: Timeline43, slot: number, from
 /** The official `DeformTimeline.applyToSlot`: writes the keyed vertices into the deform of one slot. */
 function applyToSlot(
     pose: Pose43,
+    lengths: Int32Array,
     timeline: Timeline43,
     slot: number,
     v1: Float32Array,
@@ -282,17 +285,17 @@ function applyToSlot(
 
     if (info === null) return;
     // an empty deform counts as the setup pose
-    const fromSetup = from === SETUP || pose.deformLengths[slot] === 0;
+    const fromSetup = from === SETUP || lengths[slot] === 0;
     const count = timeline.vertices[0]?.length ?? 0;
     const setup = setupVertices(pose, slot, info);
     const replaces = !(add && !fromSetup) && Number(SHARED[ALPHA]) === 1;
     // the deform becomes the vertices of one key, as they are
     const key = replaces && (v2 === null || Number(SHARED[PERCENT]) === 0) ? v1 : null;
 
-    if (key !== null && heldKey(pose, slot) === key && pose.deformLengths[slot] === count) return;
+    if (key !== null && heldKey(pose, slot) === key && lengths[slot] === count) return;
     // a deform of another length is another deform, whatever its numbers are
-    let changed = pose.deformLengths[slot] !== count;
-    const deform = resizeDeform(pose, slot, count);
+    let changed = lengths[slot] !== count;
+    const deform = resizeDeform(pose, lengths, slot, count);
 
     if (replaces) changed = setKeyed(deform, v1, v2, count) || changed;
     else if (add && !fromSetup) changed = addKeyed(deform, v1, v2, setup, count) || changed;
@@ -302,14 +305,17 @@ function applyToSlot(
     if (changed) stampSlot(pose, slot);
 }
 
-/** The official deform timeline: the vertices of an attachment, in every slot that follows it. */
-export function applyDeform(pose: Pose43, timeline: Timeline43, from: number, add: boolean): void {
+/**
+ * The official deform timeline: the vertices of an attachment, in every slot that follows it.
+ * `lengths` are the deform lengths of the pose, or the hidden ones while `PoseEngine.deform` is off.
+ */
+export function applyDeform(pose: Pose43, lengths: Int32Array, timeline: Timeline43, from: number, add: boolean): void {
     const { frames, target, slots, vertices } = timeline;
 
     if (!timelineActive(pose, target, timeline, slots)) return;
     if (Number(SHARED[TIME]) < Number(frames[0])) {
-        applyBeforeFirst(pose, timeline, target, from);
-        for (let i = 0; i < slots.length; i++) applyBeforeFirst(pose, timeline, slots[i] ?? -1, from);
+        applyBeforeFirst(pose, lengths, timeline, target, from);
+        for (let i = 0; i < slots.length; i++) applyBeforeFirst(pose, lengths, timeline, slots[i] ?? -1, from);
 
         return;
     }
@@ -325,6 +331,16 @@ export function applyDeform(pose: Pose43, timeline: Timeline43, from: number, ad
     const v1 = vertices[frame];
 
     if (v1 === undefined) return;
-    applyToSlot(pose, timeline, target, v1, v2, from, add);
-    for (let i = 0; i < slots.length; i++) applyToSlot(pose, timeline, slots[i] ?? -1, v1, v2, from, add);
+    applyToSlot(pose, lengths, timeline, target, v1, v2, from, add);
+    for (let i = 0; i < slots.length; i++) applyToSlot(pose, lengths, timeline, slots[i] ?? -1, v1, v2, from, add);
+}
+
+/**
+ * The deform timeline of an entry that mixes out while `PoseEngine.deform` is off. It writes the
+ * hidden deforms, as `shared/deform-switch.ts` explains.
+ */
+export function applyHiddenDeform(pose: Pose43, timeline: Timeline43, from: number, add: boolean): void {
+    const hidden = hiddenLengths(pose.deformLengths);
+
+    if (hidden !== undefined) applyDeform(pose, hidden, timeline, from, add);
 }
