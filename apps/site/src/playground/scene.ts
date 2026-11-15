@@ -4,7 +4,7 @@ import { SilkText } from 'pixi-silk/text';
 import { Camera } from 'pixi-silk/ui/camera';
 import { type GizmoMode, TransformGizmo } from 'pixi-silk/ui/gizmo';
 import { CanvasGrid } from 'pixi-silk/ui/grid';
-import { countDraws } from '../lab/measure';
+import { coarseTimer, countDraws, formatMs, timerStep } from '../lab/measure';
 import { TEXT_STYLE } from './kit';
 import { panOnDrag } from './pan';
 import { firstAnimation, firstPicture } from './start';
@@ -15,7 +15,9 @@ import { firstAnimation, firstPicture } from './start';
  * the text of pixi-silk in screen space, so it keeps its size at any zoom. A click selects a
  * skeleton and a drag moves it. The gizmo of pixi-silk then rotates and scales it too.
  *
- * The skeletons do not update themselves: the scene updates each one and times it.
+ * The skeletons do not update themselves: the scene updates each one and times it. A time has
+ * as many decimals as the timer of the browser can tell, which Safari and Firefox round to
+ * about 1 ms, and the readout says so then.
  */
 
 /** The canvas colour, the card colour of the site. */
@@ -74,6 +76,8 @@ export class Scene {
     private readonly labels = new Container({ label: 'labels' });
     private readonly readout: SilkText;
     private readonly draws = countDraws();
+    /** The step of the timer of the browser in milliseconds. */
+    private readonly timer = timerStep();
     private readonly totals: Totals = { fps: 0, update: 0, render: 0, draws: 0 };
     private selected: Entry | null = null;
     private nextId = 1;
@@ -435,7 +439,7 @@ export class Scene {
         return [
             `${entry.name}  ${info.version}`,
             `${info.bones.length} bones, ${stats.vertices} vertices`,
-            `${stats.renderMode}, ${stats.drawCalls} draw${stats.drawCalls === 1 ? '' : 's'}, ${entry.updateMs.toFixed(3)} ms`,
+            `${stats.renderMode}, ${stats.drawCalls} draw${stats.drawCalls === 1 ? '' : 's'}, ${formatMs(entry.updateMs, this.timer)} ms`,
         ].join('\n');
     }
 
@@ -444,15 +448,16 @@ export class Scene {
         const { totals } = this;
         const vertices = this.entries.reduce((sum, entry) => sum + entry.spine.stats.vertices, 0);
         const skinning = this.options.skinning === 'gpu' ? 'GPU skinning' : 'CPU skinning';
+        const rounded = coarseTimer(this.timer) ? `, timer rounded to ${Number(this.timer.toPrecision(2))} ms` : '';
 
         totals.fps = this.app.ticker.FPS;
         // a narrow canvas breaks the lines of the readout
         this.readout.wordWrap = true;
         this.readout.wordWrapWidth = this.app.screen.width - 24;
         this.readout.text = [
-            `${totals.fps.toFixed(0)} fps, update ${totals.update.toFixed(2)} ms, render ${totals.render.toFixed(2)} ms`,
+            `${totals.fps.toFixed(0)} fps, update ${formatMs(totals.update, this.timer)} ms, render ${formatMs(totals.render, this.timer)} ms`,
             `${totals.draws} draw calls with labels and buttons, ${this.entries.length} skeletons, ${vertices} vertices`,
-            `${this.rendererName}, ${String(this.options.perf ?? 'exact')}, ${skinning}`,
+            `${this.rendererName}, ${String(this.options.perf ?? 'exact')}, ${skinning}${rounded}`,
         ].join('\n');
     }
 
