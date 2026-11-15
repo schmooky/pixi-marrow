@@ -4,7 +4,6 @@
 
 The render path sends fewer bytes, and the stats count what a parent costs. These changes come from the second audit.
 
-- A batch uploads only the stretches that changed on pixi.js 8.21 and 8.22 too. WebGPU writes each stretch at once. WebGL writes one stretch per buffer, from the first change to the last. Before, each change uploaded the whole buffer on those versions.
 - A batch keeps 256 stretches per buffer, not 32. When more skeletons change, it uploads one stretch around all of them, not the whole buffer.
 - A slot that changes only its color writes only its own vertices to the batch. Before, the batch uploaded the static data of the whole skeleton.
 - A region whose slot changes only its color keeps its vertices. Before, the view placed them again and uploaded their positions.

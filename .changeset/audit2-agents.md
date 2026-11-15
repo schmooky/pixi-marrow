@@ -6,7 +6,7 @@ A coding agent or a person can now find every skeleton of a scene and name what 
 
 Additions:
 
-- The entry `pixi-marrow/diagnose`. `diagnose(root)` walks a Pixi scene tree and returns the causes of cost that one look finds. Each hit has a stable rule id from `MARROW001` to `MARROW026`. It also has the path of the skeleton, the path of the cause, the numbers, a fix and a docs address.
+- The entry `pixi-marrow/diagnose`. `diagnose(root)` walks a Pixi scene tree and returns the causes of cost that one look finds. Each hit has a stable rule id from `MARROW001` to `MARROW025`. It also has the path of the skeleton, the path of the cause, the numbers, a fix and a docs address.
 - `watch(root)` notes the counters of every skeleton. Its `report()` adds the causes that show only over time, such as a parent that moves or fades.
 - `inspect(hero)` reads one skeleton into plain data: counts, render mode, draw calls, cuts, uploads, pacing, physics and memory.
 - `serializeTree(root)` writes the tree as JSON, and `diagnoseTree(json)` runs the static rules on it without Pixi.
