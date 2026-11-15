@@ -243,9 +243,10 @@ export function oursSide(PIXI, lib, skinning = null) {
                 ...(idle ? { idleCache: 'auto' } : {}),
                 ...(skinning ? { skinning } : {}),
                 ...(bake ? { bake } : {}),
-                // instancing is in no preset: a side with skinning on the GPU names it, as it was the
-                // default when the check was written, and a side that draws alone turns it off
-                ...(instancing ? { instancing } : skinning === 'gpu' ? { instancing: 'auto' } : {}),
+                // instancing is in no preset: a side with skinning on the GPU forces it on, because
+                // `auto` draws a rig with many unused attachments alone and the check would miss it.
+                // A side that draws alone turns it off
+                ...(instancing ? { instancing } : skinning === 'gpu' ? { instancing: 'on' } : {}),
             });
 
             for (let tries = 0; bake && spine.engine.source === null; tries++) {

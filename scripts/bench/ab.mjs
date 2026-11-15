@@ -41,14 +41,15 @@
  * table of a rig says how many instances showed an image and the bytes of their textures.
  *
  * --skinning=gpu adds a side `gpu`: ours in the mesh mode with `skinning: 'gpu'` and
- * `instancing: 'auto'`, so the vertex shader places what hangs on bones alone. With
+ * `instancing: 'on'`, so the vertex shader places what hangs on bones alone. With
  * --render-mode=mesh the side `ours` is the mesh mode with the CPU placing every vertex, and the
  * row `gpu/ours` divides the two in the same seconds. The uploads count textures too, which is
  * where the bones and the palette go.
  *
  * --instancing=compare, with --skinning=gpu, adds a side `alone`: the side `gpu` with
  * `instancing: 'off'`. The default is `off` and no preset sets it, so the side `gpu` asks for
- * `auto` by name: the instances of a layout that follow each other draw in one instanced draw.
+ * `on` by name: the instances of a layout that follow each other draw in one instanced draw.
+ * `auto` would draw a rig with many unused attachments alone, so it would not measure instancing.
  * The row `gpu/alone` divides the two: what instancing gains or costs on this machine.
  *
  * --pixi names the version of pixi.js both sides run on, see `pixiPackage` of

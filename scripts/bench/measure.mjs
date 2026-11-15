@@ -22,7 +22,7 @@ const rounded = (values) => values.map((ms) => Math.round(ms * 1e4) / 1e4);
  * and `options` what its display objects are created with. The side `mesh` is ours once more,
  * with the mesh mode asked for by name. It runs in the scene `play`, where the list of
  * milestone M5 asks for it. The side `gpu` is ours in the mesh mode with `skinning: 'gpu'` and
- * `instancing: 'auto'`, where `--skinning=gpu` asks for it. It runs in every scene.
+ * `instancing: 'on'`, where `--skinning=gpu` asks for it. It runs in every scene.
  *
  * The side `baked` is ours with `bake: 'auto'`, with `--bake`. The side `alone` is the side `gpu`
  * with `instancing: 'off'`, with `--skinning=gpu --instancing=compare`: each instance draws alone,
@@ -44,12 +44,13 @@ export function sidesOf(subject, { renderMode, meshSide, skinning, idleSide, bak
     }
     if (idleSide)
         sides.push({ side: 'idle', runtime: 'ours', options: { ...modeOptions(renderMode), idleCache: 'auto' } });
-    // instancing is in no preset and off by default, so the side names it
+    // instancing is in no preset and off by default. The side forces it on, because `auto` draws
+    // a rig with many unused attachments alone, and the side measures instancing itself
     if (skinning === 'gpu') {
         sides.push({
             side: 'gpu',
             runtime: 'ours',
-            options: { renderMode: 'mesh', skinning: 'gpu', instancing: 'auto' },
+            options: { renderMode: 'mesh', skinning: 'gpu', instancing: 'on' },
         });
     }
     if (skinning === 'gpu' && aloneSide) {
