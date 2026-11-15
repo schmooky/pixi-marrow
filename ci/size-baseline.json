@@ -1,24 +1,24 @@
 {
   "everything": {
-    "gzip": 33959
+    "gzip": 36019
   },
   "root (MarrowSpine)": {
-    "gzip": 32705
+    "gzip": 31034
   },
   "core (everything)": {
-    "gzip": 6141
+    "gzip": 6456
   },
   "core (sniffSkeleton)": {
-    "gzip": 806
+    "gzip": 1048
   },
   "core (importSkeleton)": {
-    "gzip": 1157
+    "gzip": 1430
   },
   "core (importAtlas)": {
-    "gzip": 1251
+    "gzip": 1370
   },
   "core (createPoseEngine)": {
-    "gzip": 188
+    "gzip": 186
   },
   "optimize (generateNames)": {
     "gzip": 537
@@ -27,9 +27,9 @@
     "gzip": 1055
   },
   "debug (MarrowDebug)": {
-    "gzip": 5003
+    "gzip": 5023
   },
   "bake (bakeAnimation)": {
-    "gzip": 3591
+    "gzip": 3722
   }
 }
