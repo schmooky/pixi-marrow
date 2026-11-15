@@ -44,7 +44,7 @@ A skeleton that moves sends new vertex positions to the GPU in each frame. How m
 
 | PixiJS | Batched mode on WebGPU | Batched mode on WebGL2 | Mesh mode, both renderers |
 |---|---|---|---|
-| 8.21 and 8.22 | Each changed stretch of a buffer | One stretch per buffer, from the first change to the last | The whole buffer |
+| 8.21 and 8.22 | Each changed stretch of a buffer | One stretch per buffer, from the first change to the last | One stretch per buffer, from the first change to the last |
 | 8.23 and later | Each changed stretch of a buffer | Each changed stretch of a buffer | One stretch per buffer, from the first change to the last |
 
 A stretch is a part of a buffer that holds the vertices of some skeletons. On WebGPU, a buffer writes a stretch at once in every PixiJS that the package allows. On WebGL2 before PixiJS 8.23, a buffer keeps only one stretch until Pixi binds it.

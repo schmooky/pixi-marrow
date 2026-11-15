@@ -150,7 +150,7 @@ Without the hook, find skeletons by the field `isMarrowSpine` and read `hero.sta
 | [MARROW023](https://pixi-marrow.schmooky.dev/performance/rules/#marrow023) | The runtime builds the vertex layout again and again | Set the skins once. To change one attachment, use `hero.slot(name).attachment`. |
 | [MARROW024](https://pixi-marrow.schmooky.dev/performance/rules/#marrow024) | More mesh draws on WebGPU than the shared uniform buffer of Pixi holds | Use the batched mode for small skeletons, or `skinning: 'gpu'` with `instancing: 'auto'` for large ones. |
 | [MARROW025](https://pixi-marrow.schmooky.dev/performance/rules/#marrow025) | A Spine 4.3 track changes its animation faster than the mix | Let a mix end before the next change, or change with `mix: 0`. |
-| [MARROW026](https://pixi-marrow.schmooky.dev/performance/rules/#marrow026) | The mesh mode uploads whole buffers on pixi.js before 8.23 | Use pixi.js 8.23 or later. |
+| [MARROW026](https://pixi-marrow.schmooky.dev/performance/rules/#marrow026) | Uploads are larger on pixi.js before 8.23 with WebGL | Use pixi.js 8.23 or later, or WebGPU. |
 <!-- /rules:table -->
 
 ## Docs

@@ -310,15 +310,14 @@ Rule: [MARROW025](/performance/rules/#marrow025).
 
 **What you see.** More bytes per frame on pixi.js {facts.floor.pixiShort} and 8.22 than on 8.23.
 
-**Why.** From 8.23, a WebGL buffer of Pixi uploads the range that the runtime names. Before that, three things upload more:
+**Why.** From 8.23, a WebGL buffer of Pixi uploads the range that the runtime names. Before that, two things upload more:
 
-- The mesh mode uploads the whole buffer of a skeleton for each change.
 - The batched mode on WebGL2 uploads one stretch per buffer, from the first change to the last.
 - A data texture of `skinning: 'gpu'` uploads whole.
 
 WebGPU uploads each stretch on every version that the package allows.
 
-**Fix.** Use pixi.js 8.23 or later.
+**Fix.** Use pixi.js 8.23 or later, or WebGPU.
 
 On WebGPU, one more limit holds in the mesh mode. Pixi keeps one uniform buffer for the draws of a frame, with room for about 2,000 draws. Past that room, each mesh of pixi-marrow binds a small uniform buffer of its own. Use the batched mode or instancing for a scene with that many mesh draws.
 

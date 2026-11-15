@@ -33,7 +33,7 @@ const TARBALL = [
     'packages/pixi-marrow/skills/',
     'packages/pixi-marrow/perf-rules.json',
     // how the build makes dist
-    'packages/pixi-marrow/tsdown.config.ts',
+    'packages/pixi-marrow/tsdown.config.mjs',
     'packages/pixi-marrow/tsconfig.build.json',
     'packages/pixi-marrow/tsconfig.json',
     'tsconfig.json',

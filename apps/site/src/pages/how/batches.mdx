@@ -75,10 +75,9 @@ Every skeleton notes the stretches of the buffer that it wrote. Before the draw,
 |---|---|---|
 | Batched | WebGPU, and WebGL2 from 8.23 | Each stretch that changed |
 | Batched | WebGL2 on 8.21 and 8.22 | One stretch per buffer, from the first change to the last |
-| Mesh | From 8.23 | The range that changed |
-| Mesh | 8.21 and 8.22 | The whole buffer of the skeleton |
+| Mesh | From 8.21 | One range per buffer of the skeleton, from the first change to the last |
 
-When many stretches changed, the runtime uploads the used part of the buffer whole, because that is cheaper than many small calls. After Pixi builds the instructions of a render group again, the buffers of its batches upload whole too.
+When more than 256 stretches of one buffer changed, the runtime uploads one stretch around all of them. After Pixi builds the instructions of a render group again, the buffers of its batches upload whole too.
 
 A skeleton at rest uploads nothing, so a reel that stands still costs one draw call and no upload. That holds while no display object above the skeleton moves, fades or changes its tint. In the batched mode such a parent makes each skeleton below it write every vertex again. `stats.frameBytes` is 0 after a frame in which a skeleton sent nothing. [Performance caveats](/performance/caveats/#a-parent-that-moves-or-fades) has the fix, and the rule is [MARROW001](/performance/rules/#marrow001).
 

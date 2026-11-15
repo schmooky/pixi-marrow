@@ -60,7 +60,7 @@ function flatten(root: TreeNode): Flat {
     return flat;
 }
 
-/** MARROW024 and MARROW026: what the renderer and the version of Pixi do with the mesh mode. */
+/** MARROW024 and MARROW026: what the renderer and the version of Pixi do with the draws and the uploads. */
 function sceneRules(dump: TreeDump, drawn: readonly Seen[], scene: SceneTotals, hits: Hits): void {
     const meshes = drawn.filter(({ marrow }) => marrow.render.mode === 'mesh');
     const alone = meshes.filter(({ marrow }) => !marrow.render.instancing.active);
@@ -68,6 +68,15 @@ function sceneRules(dump: TreeDump, drawn: readonly Seen[], scene: SceneTotals, 
     const [major = 0, minor = 0] = dump.pixi.split('.').map(Number);
     const [first] = meshes;
 
+    if (major === 8 && minor < RANGED_MINOR && drawn.length > 0 && dump.renderer?.type !== 'webgpu') {
+        hits.add(
+            'MARROW026',
+            dump.root.path,
+            '',
+            { skeletons: drawn.length },
+            `pixi.js ${dump.pixi} on WebGL uploads one stretch per buffer for the ${drawn.length} skeletons, from the first change to the last.`,
+        );
+    }
     if (first === undefined) return;
     if (dump.renderer?.type === 'webgpu' && draws > UNIFORM_DRAWS) {
         hits.add(
@@ -76,15 +85,6 @@ function sceneRules(dump: TreeDump, drawn: readonly Seen[], scene: SceneTotals, 
             '',
             { meshDrawCalls: scene.meshDrawCalls, limit: UNIFORM_DRAWS },
             `The skeletons in the mesh mode take ${draws} draws in a frame, more than the ${UNIFORM_DRAWS} that share the uniform buffer of Pixi on WebGPU.`,
-        );
-    }
-    if (major === 8 && minor < RANGED_MINOR) {
-        hits.add(
-            'MARROW026',
-            dump.root.path,
-            '',
-            { meshSkeletons: meshes.length },
-            `pixi.js ${dump.pixi} uploads the buffers of the ${meshes.length} skeletons in the mesh mode whole when a slot moves.`,
         );
     }
 }
