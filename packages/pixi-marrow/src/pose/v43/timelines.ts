@@ -1,4 +1,4 @@
-import type { EventKey } from '../../model/timelines';
+import type { Fired } from '../shared/fired';
 import { applyInherit, applyPair, applyRelative, applyScale, applyScalePair } from './timelines-bone';
 import { applyConstraintMixes, applyConstraintValue, applyIkConstraint } from './timelines-constraint';
 import { applyDeform, applyHiddenDeform } from './timelines-deform';
@@ -47,7 +47,7 @@ import {
 export function applyTimeline(
     pose: Pose43,
     timeline: Timeline43,
-    events: EventKey[] | null,
+    events: Fired | null,
     from: number,
     add: boolean,
     out: boolean,

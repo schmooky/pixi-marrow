@@ -259,7 +259,11 @@ describe('the physics constraints of the 4.3 pose engine', () => {
         expect(engine.physics).toBe('update');
         // the keys of the first physics constraint now point at an IK constraint
         damaged.constraints.unshift({ type: 'ik', name: 'aim', skinRequired: false, ...IK });
-        await expect(createPoseEngine(damaged)).rejects.toThrow(
+        const broken = await createPoseEngine(damaged);
+        const keyed = damaged.animations.findIndex((animation) => animation.name === 'keyed');
+
+        // an animation is prepared when it is first played
+        expect(() => broken.setAnimation(0, keyed, true)).toThrow(
             'Animation "keyed" has a physicsConstraintInertia timeline for constraint 0, which is no physics constraint.',
         );
     });

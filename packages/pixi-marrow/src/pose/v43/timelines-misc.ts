@@ -1,5 +1,5 @@
 import { MarrowError } from '../../base/errors';
-import type { EventKey } from '../../model/timelines';
+import type { Fired } from '../shared/fired';
 import { LAST_TIME, SHARED, search, TIME } from './curves';
 import { followerInfo, stampDrawOrder, stampSlot, timelineActive } from './slots';
 import { CURRENT, type Pose43, type Timeline43 } from './types';
@@ -111,7 +111,7 @@ export function applySequence(pose: Pose43, timeline: Timeline43, from: number, 
  * @param checkEnd False when the last time is the start of a new loop. Then the official code
  * does not compare it with the last key.
  */
-function collectEvents(timeline: Timeline43, events: EventKey[], checkEnd: boolean): void {
+function collectEvents(timeline: Timeline43, events: Fired, checkEnd: boolean): void {
     const frames = timeline.frames;
     const frameCount = frames.length;
     const lastTime = Number(SHARED[LAST_TIME]);
@@ -133,12 +133,12 @@ function collectEvents(timeline: Timeline43, events: EventKey[], checkEnd: boole
     for (; i < frameCount && time >= Number(frames[i]); i++) {
         const event = timeline.events[i];
 
-        if (event !== undefined) events.push(event);
+        if (event !== undefined) events.keys[events.count++] = event;
     }
 }
 
 /** The official event timeline: collects the events of the keys after the last time, up to the time. */
-export function applyEvent(timeline: Timeline43, events: EventKey[] | null): void {
+export function applyEvent(timeline: Timeline43, events: Fired | null): void {
     if (!events) return;
     const lastTime = Number(SHARED[LAST_TIME]);
     const time = Number(SHARED[TIME]);

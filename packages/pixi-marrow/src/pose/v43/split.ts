@@ -1,4 +1,5 @@
 import type { AttachmentData } from '../../model/attachments';
+import { NO_DEFORM } from '../state';
 import type { SlotStore, Split43 } from './slider-types';
 import type { ShownSlots } from './solver-types';
 import type { Pose43 } from './types';
@@ -228,7 +229,7 @@ function dormantSlots(count: number): SlotStore {
         darkColors: new Float64Array(count * 3),
         attachments: new Array<AttachmentData | null>(count).fill(null),
         sequenceIndices: new Int32Array(count),
-        deform: Array.from({ length: count }, () => new Float64Array(0)),
+        deform: new Array<Float64Array>(count).fill(NO_DEFORM),
         deformLengths: new Int32Array(count),
     };
 }
@@ -315,7 +316,7 @@ function createShown(pose: Pose43): ShownSlots {
         attachments: new Array<AttachmentData | null>(state.attachments.length).fill(null),
         sequenceIndices: new Int32Array(state.sequenceIndices.length),
         deformLengths: new Int32Array(state.deformLengths.length),
-        deform: state.deform.map(() => new Float64Array(0)),
+        deform: state.deform.map(() => NO_DEFORM),
         drawOrder: new Int16Array(state.drawOrder.length),
     };
 }

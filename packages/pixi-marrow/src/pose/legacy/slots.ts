@@ -1,4 +1,4 @@
-import type { EventKey } from '../../model/timelines';
+import type { Fired } from '../shared/fired';
 import type { PoseState } from '../state';
 import { LAST_TIME, SHARED, search, TIME } from './curves';
 import { factsOf, type Rig } from './rig';
@@ -155,7 +155,7 @@ export function applySequence(
  * @param checkEnd False when the last time is the start of a new loop. Then the official code
  * does not compare it with the last key.
  */
-function collectEvents(timeline: LegacyTimeline, fired: EventKey[], checkEnd: boolean): void {
+function collectEvents(timeline: LegacyTimeline, fired: Fired, checkEnd: boolean): void {
     const { frames, events } = timeline;
     const frameCount = frames.length;
     const last = Number(SHARED[LAST_TIME]);
@@ -177,7 +177,7 @@ function collectEvents(timeline: LegacyTimeline, fired: EventKey[], checkEnd: bo
     for (; i < frameCount && time >= Number(frames[i]); i++) {
         const event = events[i];
 
-        if (event !== undefined) fired.push(event);
+        if (event !== undefined) fired.keys[fired.count++] = event;
     }
 }
 
@@ -185,7 +185,7 @@ function collectEvents(timeline: LegacyTimeline, fired: EventKey[], checkEnd: bo
  * The official `EventTimeline.apply`: adds the events after the last time up to the time to
  * `fired`. Both times are read from `SHARED`. A last time after the time means the animation looped.
  */
-export function applyEvents(timeline: LegacyTimeline, fired: EventKey[]): void {
+export function applyEvents(timeline: LegacyTimeline, fired: Fired): void {
     const last = Number(SHARED[LAST_TIME]);
     const time = Number(SHARED[TIME]);
 

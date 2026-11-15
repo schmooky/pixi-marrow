@@ -1,6 +1,6 @@
 import { MarrowError } from '../../base/errors';
 import type { AttachmentData } from '../../model/attachments';
-import type { EventKey } from '../../model/timelines';
+import type { Fired } from '../shared/fired';
 import { applyTimeline, slotIsActive } from './apply-timeline';
 import { ALPHA, ALPHA_HOLD, ALPHA_MIX, ANIMATION_TIME, LAST_TIME, MIX, SHARED, search, TIME } from './curves';
 import { type LegacyEntry, MODE_UNSET } from './entry';
@@ -113,7 +113,7 @@ function loopCompleted(entry: LegacyEntry, v41: boolean): boolean {
 export function queueEvents(player: LegacyPlayer, entry: LegacyEntry): void {
     const { animationStart, animationEnd } = entry;
     const fired = player.fired;
-    const n = fired.length;
+    const n = fired.count;
     let i = 0;
 
     if (n > 0) {
@@ -121,7 +121,7 @@ export function queueEvents(player: LegacyPlayer, entry: LegacyEntry): void {
 
         // events before complete
         for (; i < n; i++) {
-            const event = fired[i];
+            const event = fired.keys[i];
 
             if (event === undefined || event.time < trackLastWrapped) break;
             // discard events outside animation start and end
@@ -137,11 +137,11 @@ export function queueEvents(player: LegacyPlayer, entry: LegacyEntry): void {
     if (complete) queueComplete(player, entry);
     // events after complete
     for (; i < n; i++) {
-        const event = fired[i];
+        const event = fired.keys[i];
 
         if (event !== undefined && !(event.time < animationStart)) queueEvent(player, entry, event);
     }
-    if (n > 0) fired.length = 0;
+    fired.count = 0;
 }
 
 /**
@@ -175,7 +175,7 @@ function mixOutTimeline(
     player: LegacyPlayer,
     from: LegacyEntry,
     timeline: LegacyTimeline,
-    fired: EventKey[] | null,
+    fired: Fired | null,
     blend: number,
     attachments: boolean,
     drawOrder: boolean,
@@ -196,7 +196,7 @@ function mixOutTimeline(
  * The timelines of an entry that is mixing out, for every blend but `add`. Part of
  * `applyMixingFrom`. The mix and the hold alpha are read from `SHARED`.
  */
-function mixOutTimelines(player: LegacyPlayer, from: LegacyEntry, blend: number, fired: EventKey[] | null): void {
+function mixOutTimelines(player: LegacyPlayer, from: LegacyEntry, blend: number, fired: Fired | null): void {
     const timelines = from.clip.timelines;
     const count = timelines.length;
     const mix = Number(SHARED[MIX]);
@@ -226,7 +226,7 @@ function mixOutTimelines(player: LegacyPlayer, from: LegacyEntry, blend: number,
 }
 
 /** The timelines of an entry that is mixing out with blend `add`, at the alpha in `SHARED`. Part of `applyMixingFrom`. */
-function addOutTimelines(player: LegacyPlayer, from: LegacyEntry, fired: EventKey[] | null): void {
+function addOutTimelines(player: LegacyPlayer, from: LegacyEntry, fired: Fired | null): void {
     const timelines = from.clip.timelines;
 
     for (let i = 0; i < timelines.length; i++) {
@@ -289,7 +289,7 @@ function applyMixingFrom(player: LegacyPlayer, to: LegacyEntry, from: LegacyEntr
     } else mixOutTimelines(player, from, blend, fired);
     player.mixingOut = false;
     if (to.mixDuration > 0) queueEvents(player, from);
-    else if (player.fired.length > 0) player.fired.length = 0;
+    else player.fired.count = 0;
     from.nextAnimationLast = Number(SHARED[ANIMATION_TIME]);
     from.nextTrackLast = from.trackTime;
 }
@@ -298,7 +298,7 @@ function applyMixingFrom(player: LegacyPlayer, to: LegacyEntry, from: LegacyEntr
 function plainTimelines(
     player: LegacyPlayer,
     current: LegacyEntry,
-    fired: EventKey[] | null,
+    fired: Fired | null,
     blend: number,
     attachments: boolean,
 ): void {
@@ -317,7 +317,7 @@ function plainTimelines(
 function mixInTimelines(
     player: LegacyPlayer,
     current: LegacyEntry,
-    fired: EventKey[] | null,
+    fired: Fired | null,
     blend: number,
     attachments: boolean,
 ): void {

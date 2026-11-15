@@ -1,5 +1,5 @@
-import { MarrowError } from '../../base/errors';
 import type { TrackEntry, TrackFields } from '../engine';
+import { checkFields, type FieldKind, type FieldRules } from '../shared/configure';
 import { type Clip, MIX_BLENDS, REPLACE } from './timelines';
 
 /** Timeline mode of an entry that never had its modes computed. The official array holds nothing there. */
@@ -124,54 +124,38 @@ const NUMBERS_42: ReadonlyMap<string, NumberField> = new Map<string, NumberField
     ['mixDrawOrderThreshold', 'mixDrawOrderThreshold'],
 ]);
 
-type Write = (entry: LegacyEntry) => void;
-
-function wrongType(name: string, expected: string, value: unknown): MarrowError {
-    return new MarrowError('invalid-data', `The track entry field "${name}" was set to ${String(value)}.`, {
-        fix: `Pass ${expected}.`,
-    });
+/** The fields of a track entry of one version, and what the version has in the place of the fields of the others. */
+function rulesOf(
+    version: string,
+    numbers: ReadonlyMap<string, NumberField>,
+    instead: Record<string, string>,
+): FieldRules {
+    return {
+        version,
+        kinds: new Map<string, FieldKind>([
+            ...[...numbers.keys()].map((name): [string, FieldKind] => [name, 'number']),
+            ...[...BOOLEANS].map((name): [string, FieldKind] => [name, 'boolean']),
+            ['mixBlend', MIX_BLENDS],
+        ]),
+        instead: {
+            ...instead,
+            additive: 'Set "mixBlend" to "add".',
+        },
+    };
 }
+
+const RULES_41: FieldRules = rulesOf('4.1', NUMBERS_41, {
+    mixAttachmentThreshold: 'Set "attachmentThreshold".',
+    mixDrawOrderThreshold: 'Set "drawOrderThreshold".',
+    alphaAttachmentThreshold: 'Spine 4.1 has no threshold for the alpha of attachments. Leave the field out.',
+});
+const RULES_42: FieldRules = rulesOf('4.2', NUMBERS_42, {
+    attachmentThreshold: 'Set "mixAttachmentThreshold".',
+    drawOrderThreshold: 'Set "mixDrawOrderThreshold".',
+});
 
 function isBooleanField(name: string): name is BooleanField {
     return BOOLEANS.has(name);
-}
-
-/** Checks one field and returns the write that sets it. */
-function fieldWrite(name: string, value: unknown, v41: boolean): Write {
-    const numberField = (v41 ? NUMBERS_41 : NUMBERS_42).get(name);
-
-    if (numberField !== undefined) {
-        if (typeof value !== 'number') throw wrongType(name, 'a number', value);
-
-        return (entry) => {
-            entry[numberField] = value;
-            // the official setAnimationLast: the plain field would be lost on the next update
-            if (numberField === 'animationLast') entry.nextAnimationLast = value;
-        };
-    }
-    if (isBooleanField(name)) {
-        if (typeof value !== 'boolean') throw wrongType(name, 'true or false', value);
-
-        return (entry) => {
-            entry[name] = value;
-        };
-    }
-    if (name === 'mixBlend') {
-        const blend = typeof value === 'string' ? MIX_BLENDS.indexOf(value) : -1;
-
-        if (blend < 0) throw wrongType(name, `one of ${MIX_BLENDS.join(', ')}`, value);
-
-        return (entry) => {
-            entry.mixBlend = blend;
-        };
-    }
-    const version = v41 ? '4.1' : '4.2';
-    const validNames = [...(v41 ? NUMBERS_41 : NUMBERS_42).keys(), ...BOOLEANS, 'mixBlend'];
-
-    throw new MarrowError('unsupported-feature', `A track entry of Spine ${version} has no field "${name}".`, {
-        fix: `Set one of the fields of that version: ${validNames.join(', ')}.`,
-        validNames,
-    });
 }
 
 /**
@@ -180,7 +164,16 @@ function fieldWrite(name: string, value: unknown, v41: boolean): Write {
  * checked before the first one is written, so a call that throws changes nothing.
  */
 export function configureEntry(entry: LegacyEntry, fields: TrackFields, v41: boolean): void {
-    const writes = Object.entries(fields).map(([name, value]) => fieldWrite(name, value, v41));
+    const numbers = v41 ? NUMBERS_41 : NUMBERS_42;
 
-    for (const write of writes) write(entry);
+    for (const [name, value] of checkFields(fields, v41 ? RULES_41 : RULES_42)) {
+        const numberField = numbers.get(name);
+
+        if (typeof value === 'number' && numberField !== undefined) {
+            entry[numberField] = value;
+            // the official setAnimationLast: the plain field would be lost on the next update
+            if (numberField === 'animationLast') entry.nextAnimationLast = value;
+        } else if (typeof value === 'boolean' && isBooleanField(name)) entry[name] = value;
+        else if (typeof value === 'string') entry.mixBlend = MIX_BLENDS.indexOf(value);
+    }
 }

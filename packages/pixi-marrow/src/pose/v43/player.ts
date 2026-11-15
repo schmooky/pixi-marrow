@@ -1,5 +1,6 @@
 import type { EventKey } from '../../model/timelines';
 import type { PoseEvent, PoseEventType } from '../engine';
+import { createFired, type Fired } from '../shared/fired';
 import { Entry } from './entry';
 import type { Pose43 } from './types';
 
@@ -25,27 +26,33 @@ export interface Player43 {
     /** The official `attachmentState` of each slot. */
     readonly attachmentStates: Float64Array;
     /** The events the timelines of one entry fired, until they are queued. */
-    readonly fired: EventKey[];
+    readonly fired: Fired;
     /** True when entries started or ended since the timeline modes were computed. */
     animationsChanged: boolean;
     /** Entries that ended, for reuse. The official `trackEntryPool`. */
     readonly pool: Entry[];
-    /** The official `EventQueue`, as three lists of the same length. */
+    /**
+     * The official `EventQueue`, as three lists. Only the first `queueCount` places are queued. The
+     * lists keep their room when the queue is emptied: see `Fired`.
+     */
     readonly queueTypes: number[];
     readonly queueEntries: Entry[];
     readonly queueKeys: (EventKey | null)[];
+    queueCount: number;
     drainDisabled: boolean;
     /** The listener calls since the last `takeEvents`. */
     listened: PoseEvent[];
     /**
-     * The entry of track 0 when the last apply was that entry alone, replacing the setup pose.
-     * Applied again at the same time it writes the same pose, so the apply can be left out.
+     * True when the next apply cannot be the one before again: a call changed an entry or the
+     * animated pose, or an update started, ended or advanced an entry. See repeat.ts.
      */
-    rested: Entry | null;
-    /** The official `applyTime` of the entry that was applied last. */
-    restedTime: number;
-    /** The track time of that entry at that apply. */
-    restedTrack: number;
+    stirred: boolean;
+    /** True when the last apply left every number of the pose as it was. Then the same apply need not run again. */
+    settled: boolean;
+    /** How many applies to wait before the next one is checked for leaving the pose as it is. */
+    patience: number;
+    /** How long that wait was the last time. It doubles while the pose keeps changing. */
+    waited: number;
 }
 
 /** Creates the player of an engine, with no tracks. */
@@ -58,17 +65,19 @@ export function createPlayer(pose: Pose43): Player43 {
         mixes: new Map(),
         unkeyedState: 0,
         attachmentStates: new Float64Array(pose.rig.model.slots.count),
-        fired: [],
+        fired: createFired(),
         animationsChanged: false,
         pool: [],
         queueTypes: [],
         queueEntries: [],
         queueKeys: [],
+        queueCount: 0,
         drainDisabled: false,
         listened: [],
-        rested: null,
-        restedTime: Number.NaN,
-        restedTrack: Number.NaN,
+        stirred: true,
+        settled: false,
+        patience: 0,
+        waited: 0,
     };
 }
 
@@ -78,9 +87,13 @@ export function obtainEntry(player: Player43): Entry {
 }
 
 function push(player: Player43, type: number, entry: Entry, key: EventKey | null): void {
-    player.queueTypes.push(type);
-    player.queueEntries.push(entry);
-    player.queueKeys.push(key);
+    const at = player.queueCount++;
+
+    // an entry started, ended or was interrupted. `complete` and `event` come from the apply itself
+    if (type !== COMPLETE && type !== EVENT) player.stirred = true;
+    player.queueTypes[at] = type;
+    player.queueEntries[at] = entry;
+    player.queueKeys[at] = key;
 }
 
 /** Queues the `start` call of an entry. */
@@ -125,8 +138,6 @@ function listen(player: Player43, type: PoseEventType, entry: Entry): void {
 
 function free(player: Player43, entry: Entry): void {
     entry.reset();
-    // the object can stand for a later entry, which has not been applied
-    if (player.rested === entry) player.rested = null;
     player.pool.push(entry);
 }
 
@@ -172,14 +183,12 @@ export function drain(player: Player43): void {
     const { queueTypes, queueEntries, queueKeys } = player;
 
     // most updates queue nothing: setting the length of an empty list is not free
-    if (player.drainDisabled || queueTypes.length === 0) return;
+    if (player.drainDisabled || player.queueCount === 0) return;
 
-    for (let i = 0; i < queueTypes.length; i++) {
+    for (let i = 0; i < player.queueCount; i++) {
         const entry = queueEntries[i];
 
         if (entry !== undefined) report(player, queueTypes[i] ?? EVENT, entry, queueKeys[i] ?? null);
     }
-    queueTypes.length = 0;
-    queueEntries.length = 0;
-    queueKeys.length = 0;
+    player.queueCount = 0;
 }

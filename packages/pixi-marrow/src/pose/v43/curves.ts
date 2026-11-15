@@ -1,3 +1,4 @@
+import { LONG_KEYS, searchLong } from '../shared/search';
 import { FIRST, SETUP, type Timeline43 } from './types';
 
 const LINEAR = 0;
@@ -61,6 +62,7 @@ export function search(frames: Float32Array, step: number): number {
     const time = Number(SHARED[TIME]);
     const n = frames.length;
 
+    if (n > LONG_KEYS * step) return searchLong(frames, step, SHARED, TIME);
     for (let i = step; i < n; i += step) {
         if (Number(frames[i]) > time) return i - step;
     }
@@ -125,10 +127,13 @@ export function curveValue(frames: Float32Array, curves: Float32Array): void {
     const time = Number(SHARED[TIME]);
     let i = frames.length - 2;
 
-    for (let ii = 2; ii <= i; ii += 2) {
-        if (Number(frames[ii]) > time) {
-            i = ii - 2;
-            break;
+    if (i >= LONG_KEYS * 2) i = searchLong(frames, 2, SHARED, TIME);
+    else {
+        for (let ii = 2; ii <= i; ii += 2) {
+            if (Number(frames[ii]) > time) {
+                i = ii - 2;
+                break;
+            }
         }
     }
     const curveType = Number(curves[i >> 1]);
@@ -153,10 +158,13 @@ export function sampleValues(timeline: Timeline43, count: number): number {
     const n = frames.length;
     let i = n - entries;
 
-    for (let ii = entries; ii < n; ii += entries) {
-        if (Number(frames[ii]) > time) {
-            i = ii - entries;
-            break;
+    if (n > LONG_KEYS * entries) i = searchLong(frames, entries, SHARED, TIME);
+    else {
+        for (let ii = entries; ii < n; ii += entries) {
+            if (Number(frames[ii]) > time) {
+                i = ii - entries;
+                break;
+            }
         }
     }
     const curveType = Number(curves[i / entries]);

@@ -180,8 +180,8 @@ export interface AttachmentInfo {
 /** Working memory that every engine of one model shares. No call keeps it across a return. */
 export interface Scratch43 {
     /** Per property id: the track that set the property first. It counts while `stamps` holds `generation`. */
-    readonly owners: Int32Array;
-    readonly stamps: Float64Array;
+    owners: Int32Array;
+    stamps: Float64Array;
     /** Counts the times the timeline modes were computed. A new count makes every owner stale. */
     generation: number;
 }
@@ -190,7 +190,8 @@ export interface Scratch43 {
 export interface Rig43 {
     readonly model: SkeletonModel;
     readonly lookup: AttachmentLookup;
-    readonly clips: readonly Clip43[];
+    /** The animations by their index in the model. One that was never played is undefined: see `clipOf` of rig.ts. */
+    readonly clips: (Clip43 | undefined)[];
     /** The official `AnimationState.emptyAnimation`. */
     readonly empty: Clip43;
     readonly info: ReadonlyMap<AttachmentData, AttachmentInfo>;

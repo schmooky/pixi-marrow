@@ -1,4 +1,4 @@
-import type { EventKey } from '../../model/timelines';
+import type { Fired } from '../shared/fired';
 import { ANIMATION_TIME, SHARED, VALUES } from './curves';
 import type { Entry } from './entry';
 import { type Player43, queueComplete, queueEvent } from './player';
@@ -29,7 +29,7 @@ function completed(entry: Entry): boolean {
 export function queueEvents(player: Player43, entry: Entry): void {
     const { animationStart, animationEnd, reverse } = entry;
     const events = player.fired;
-    const n = events.length;
+    const n = events.count;
     let i = 0;
 
     if (n > 0) {
@@ -38,7 +38,7 @@ export function queueEvents(player: Player43, entry: Entry): void {
 
         // the events before the animation completed
         for (; i < n; i++) {
-            const event = events[i];
+            const event = events.keys[i];
 
             if (event === undefined || event.time < split !== reverse) break;
             if (event.time >= animationStart && event.time <= animationEnd) queueEvent(player, entry, event);
@@ -47,26 +47,26 @@ export function queueEvents(player: Player43, entry: Entry): void {
     if (completed(entry)) queueComplete(player, entry);
     // the events after it
     for (; i < n; i++) {
-        const event = events[i];
+        const event = events.keys[i];
 
         if (event !== undefined && event.time >= animationStart && event.time <= animationEnd) {
             queueEvent(player, entry, event);
         }
     }
-    if (n > 0) events.length = 0;
+    events.count = 0;
 }
 
-function pushEvent(events: EventKey[], timeline: Timeline43, index: number): void {
+function pushEvent(events: Fired, timeline: Timeline43, index: number): void {
     const event = timeline.events[index];
 
-    if (event !== undefined) events.push(event);
+    if (event !== undefined) events.keys[events.count++] = event;
 }
 
 /**
  * The events of one event timeline that a reversed entry passed between two applies. The two
  * times are read from `SHARED`: the time of the last apply at `VALUES`, the time of this one after it.
  */
-function reversedEvents(events: EventKey[], timeline: Timeline43): void {
+function reversedEvents(events: Fired, timeline: Timeline43): void {
     const frames = timeline.frames;
     const frameCount = frames.length;
     const from = Number(SHARED[VALUES]);
