@@ -82,6 +82,9 @@ export interface PackSource {
      */
     packedFrom: number;
     packedTo: number;
+    /** The same for the static words the last {@link writeEntries} wrote. */
+    staticFrom: number;
+    staticTo: number;
 }
 
 /**
@@ -117,7 +120,8 @@ export function flagWord(source: PackSource, entry: number, slot: number): numbe
  *
  * `words` and `bytes` are the static buffer of the batch, as 32-bit floats and as 32-bit
  * integers. `base` is the word of that buffer the first vertex of the skeleton starts at.
- * Returns how many entries were written.
+ * Returns how many entries were written. The words that were written are noted in `staticFrom`
+ * and `staticTo` of the source.
  *
  * @example
  * const written = writeEntries(source, home.statics, home.staticBytes, firstVertex * STATIC_WORDS, count, false);
@@ -135,6 +139,8 @@ export function writeEntries(
     const slotAt = source.layout.at;
     const stride = source.staticWords;
     let written = 0;
+    let low = words.length;
+    let high = 0;
 
     for (let i = 0; i < count; i++) {
         const entry = Number(visible[i]);
@@ -156,6 +162,8 @@ export function writeEntries(
         let to = base + Number(slotAt[slot]) * stride;
         const end = from + Number(counts[entry]) * STATIC_STRIDE;
 
+        if (end === from) continue;
+        if (to < low) low = to;
         for (; from < end; from += STATIC_STRIDE, to += stride) {
             words[to] = Number(statics[from]);
             words[to + 1] = Number(statics[from + 1]);
@@ -164,7 +172,10 @@ export function writeEntries(
             bytes[to + 4] = flags;
             if (stride > STATIC_WORDS) bytes[to + 5] = darkColor;
         }
+        if (to > high) high = to;
     }
+    source.staticFrom = Math.min(low, high);
+    source.staticTo = high;
 
     return written;
 }

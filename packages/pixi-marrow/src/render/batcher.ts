@@ -12,14 +12,13 @@ import {
     type InstructionSet,
     type Renderer,
     type Shader,
-    VERSION,
 } from 'pixi.js';
 import { MarrowError } from '../base/errors';
 import { BATCHER, BatchElement, type BatchHome, type BatchPart, DARK_BATCHER, PIPE_ID } from './batch-element';
 import type { ImageElement } from './batch-image';
 import { GROUP_PAGES, POSITION_WORDS, STATIC_WORDS } from './batch-layout';
 import { createBatchShader } from './batch-shader';
-import { PendingUpload, uploadsStretch } from './batch-upload';
+import { PendingUpload, type UploadMode } from './batch-upload';
 
 /*
  * The batcher of the batched mode. Pixi creates one per render group when the first skeleton of
@@ -121,9 +120,9 @@ export class MarrowBatcher extends Batcher implements BatchHome {
     private readonly pool: Batch[] = [];
     private used = 0;
     /** What the positions, the static vertex data and the index data must upload before the next draw. */
-    private readonly positionsPending: PendingUpload;
-    private readonly staticsPending: PendingUpload;
-    private readonly indicesPending: PendingUpload;
+    private readonly positionsPending = new PendingUpload();
+    private readonly staticsPending = new PendingUpload();
+    private readonly indicesPending = new PendingUpload();
 
     constructor(options?: BatcherOptions, dark: boolean = false) {
         super({ ...options, maxTextures: options?.maxTextures ?? MarrowBatcher.textures });
@@ -134,11 +133,6 @@ export class MarrowBatcher extends Batcher implements BatchHome {
         this.staticBuffer = vertexBuffer(this.statics, 'marrow-batch-statics');
         this.geometry = createGeometry(this.staticBuffer, dark);
         this.shader = createBatchShader(this.maxTextures, dark);
-        const ranged = uploadsStretch(this.staticBuffer.update, VERSION);
-
-        this.positionsPending = new PendingUpload(ranged);
-        this.staticsPending = new PendingUpload(ranged);
-        this.indicesPending = new PendingUpload(ranged);
     }
 
     /** Whether elements wait for the next break: the batch that is being built is one of this batcher. */
@@ -305,13 +299,16 @@ export class MarrowBatcher extends Batcher implements BatchHome {
      * The pipe calls it before a batch draws. Every buffer uploads the stretches its skeletons
      * noted, or its used part when that is less work: a batch of 200 skeletons of which one
      * moved uploads the vertices of that one.
+     *
+     * @param mode How the buffers of the renderer upload, see `uploadMode`.
      */
-    flush(): void {
+    flush(mode: UploadMode): void {
         const [positions] = this.geometry.buffers;
+        const statics = (this.attributeSize / POSITION_WORDS) * this.staticWords;
 
-        if (positions !== undefined) this.positionsPending.flush(positions, 4, this.attributeSize);
-        this.staticsPending.flush(this.staticBuffer, 4, (this.attributeSize / POSITION_WORDS) * this.staticWords);
-        this.indicesPending.flush(this.geometry.indexBuffer, this.indexBuffer.BYTES_PER_ELEMENT, this.indexSize);
+        if (positions !== undefined) this.positionsPending.flush(positions, 4, this.attributeSize, mode);
+        this.staticsPending.flush(this.staticBuffer, 4, statics, mode);
+        this.indicesPending.flush(this.geometry.indexBuffer, this.indexBuffer.BYTES_PER_ELEMENT, this.indexSize, mode);
     }
 
     /**

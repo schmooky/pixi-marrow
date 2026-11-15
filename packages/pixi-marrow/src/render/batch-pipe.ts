@@ -10,7 +10,7 @@ import {
 import type { BatchBody } from './batch-body';
 import { BatchElement, PIPE_ID } from './batch-element';
 import type { ImageBody } from './batch-image';
-import { uploadsStretch } from './batch-upload';
+import { type UploadMode, uploadMode, uploadsStretch } from './batch-upload';
 import { MarrowBatcher } from './batcher';
 import { contextLost, watchContext } from './context-watch';
 import { MarrowDarkBatcher } from './dark-batcher';
@@ -58,9 +58,12 @@ export class MarrowPipe {
     private renderer: Renderer | null;
     /** The batcher the last skeleton was added to. */
     private last: MarrowBatcher | null = null;
+    /** How the buffers of the renderer upload a stretch. */
+    private readonly mode: UploadMode;
 
     constructor(renderer: Renderer) {
         this.renderer = renderer;
+        this.mode = uploadMode(Buffer.prototype.update, VERSION, 'gpu' in renderer);
     }
 
     /**
@@ -136,8 +139,10 @@ export class MarrowPipe {
                 element.gate.beforeDraw(bends);
                 // only what the look at the draw changed: Pixi has asked for the rest before
                 if (element.dirty) element.sync();
+                // once per frame, also for a skeleton of several runs
+                if (element.counted !== 0 && element._batch === batch) element.endFrame();
             }
-            batcher.flush();
+            batcher.flush(this.mode);
             // a later batch of a batcher finds its geometry bound, and an older Pixi uploaded when it bound it
             if (!AT_ONCE && batch.action === 'renderBatch') batcher.push(renderer);
         }

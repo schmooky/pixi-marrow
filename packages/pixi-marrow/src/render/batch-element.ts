@@ -1,18 +1,8 @@
-import type {
-    Batch,
-    BatchableElement,
-    Batcher,
-    BLEND_MODES,
-    IndexBufferArray,
-    Matrix,
-    Texture,
-    TextureSource,
-    Topology,
-    ViewableBuffer,
-} from 'pixi.js';
+import type { Batch, BatchableElement, Batcher, BLEND_MODES, Texture, TextureSource, Topology } from 'pixi.js';
 import type { SkeletonModel } from '../model/model';
 import type { PoseState } from '../pose/state';
 import { noteTransform, spreadRuns } from './batch-cut';
+import type { BatchElementOptions, BatchHome, BatchPlace } from './batch-home';
 import {
     GROUP_PAGES,
     holdsLayout,
@@ -24,9 +14,8 @@ import {
 } from './batch-layout';
 import { type PackSource, placeEntries, planRuns, STATICS_CHANGED, writeEntries, writeIndices } from './batch-pack';
 import { clipCode } from './clip-code';
-import type { CoverTest } from './cover';
 import type { DrawGate } from './gate';
-import type { ViewStats } from './stats';
+import { restBytes, type ViewStats } from './stats';
 import type { Template } from './template';
 import type { VisibleList } from './visible';
 
@@ -48,6 +37,8 @@ import type { VisibleList } from './visible';
  * `batch-clip.ts`. The instructions are built again when a pose needs more of it.
  */
 
+export type { BatchElementOptions, BatchHome, BatchPart, BatchPlace } from './batch-home';
+
 /** The name of the render pipe that runs the batches. See `batch-pipe.ts`. */
 export const PIPE_ID = 'marrow';
 
@@ -63,57 +54,6 @@ let planned = new Uint8Array(4);
 /** The visible entry each of those runs starts with. */
 let plannedFirsts = new Int32Array(4);
 
-/** What an element reads and marks of the batcher that holds it. */
-export interface BatchHome {
-    /** Counts the builds of the instructions. An element that carries the number is in the batch. */
-    readonly serial: number;
-    /** Says that a stretch of the positions changed: `words` words from word `from` on. */
-    touchPositions(from: number, words: number): void;
-    /** Says that a stretch of the static vertex data changed: `words` words from word `from` on. */
-    touchStatics(from: number, words: number): void;
-    /** Says that a stretch of the index data changed: `count` indices from index `from` on. */
-    touchIndices(from: number, count: number): void;
-    /** The positions of all vertices: x, y. Pixi keeps this buffer for every batcher. */
-    readonly attributeBuffer: ViewableBuffer;
-    /** What a pose does not move of all vertices, as 32-bit floats and as 32-bit integers. */
-    readonly statics: Float32Array;
-    readonly staticBytes: Uint32Array;
-    readonly indexBuffer: IndexBufferArray;
-}
-
-/** The display object of a skeleton in a batch, as its element reads it. */
-export interface BatchPlace {
-    /** The transform, the tint and the blend mode inside the render group, as Pixi computed them last. */
-    readonly groupTransform: Matrix;
-    readonly groupColorAlpha: number;
-    readonly groupBlendMode: BLEND_MODES;
-    /** Tells Pixi that the skeleton changed, so that it asks the pipe about it in the next frame. */
-    touch(): void;
-}
-
-/** What an element is created with. */
-export interface BatchElementOptions {
-    /** The display object of the skeleton: its transform, tint and blend mode inside the render group. */
-    readonly place: BatchPlace;
-    /** The view of the skeleton, which is asked before every draw. */
-    readonly gate: DrawGate;
-    /** The texture source of every atlas page, in page order. */
-    readonly pages: readonly TextureSource[];
-    /** A texture of the skeleton. Pixi asks every batch element for one. */
-    readonly texture: Texture;
-    /** The visible slots of the skeleton, which the view keeps up to date. */
-    readonly seen: VisibleList;
-    /** The covered slots of the skeleton, which the view keeps up to date. */
-    readonly cover: CoverTest;
-    /** The skeleton: its version, the blend modes and the bones of its slots. */
-    readonly model: SkeletonModel;
-    /** The counters of the view. The element keeps the count of drawn indices of a clipped skeleton. */
-    readonly stats: ViewStats;
-    readonly template: Template;
-    /** Where the slots of the template keep their vertices in a batch. */
-    readonly layout: SlotLayout;
-}
-
 /**
  * A skeleton instance as an element of a Pixi batch. The view marks what a pose changed, and
  * {@link sync} writes it into the buffers of the batch.
@@ -123,18 +63,6 @@ export interface BatchElementOptions {
  * element.prepare(false, template.hasDark);
  * renderer.renderPipes.batch.addToBatch(element, instructionSet);
  */
-/**
- * The runs of a skeleton behind a container that is attached between two slots. Pixi collects
- * the container between the skeleton and this part, so the part is added to the batcher on its
- * own, after the skeleton. It has no room of its own: its runs are in the room of the skeleton.
- */
-export interface BatchPart {
-    /** The element of the skeleton. */
-    readonly owner: BatchElement;
-    /** Which attached container the part follows: an index into {@link BatchElement.partRuns}. */
-    readonly index: number;
-}
-
 export class BatchElement implements BatchableElement, PackSource {
     /**
      * The batcher that draws the element. It is the one with dark colors for a skeleton that
@@ -186,6 +114,10 @@ export class BatchElement implements BatchableElement, PackSource {
     round = false;
     packedFrom = 0;
     packedTo = 0;
+    staticFrom = 0;
+    staticTo = 0;
+    /** 1 while the bytes of a frame are counted, 2 when that frame was drawn, 0 when the bytes of the frame are 0. */
+    counted = 0;
 
     /** The texture source of every atlas page, in page order. */
     readonly pages: readonly TextureSource[];
@@ -402,6 +334,36 @@ export class BatchElement implements BatchableElement, PackSource {
         this.clipFresh = false;
         this.clipPlaced = false;
         this.write(home, false);
+        // Pixi uploads the buffers whole after a build: the skeleton counts all its room
+        this.stats.instructionBuilds++;
+        this.count(this.attributeSize * POSITION_WORDS, this.attributeSize * this.staticWords, this.indexSize);
+    }
+
+    /**
+     * Counts what the element wrote for an upload in the stats of the view.
+     *
+     * @param positions Words of the position buffer.
+     * @param statics Words of the static buffer.
+     * @param indices Indices.
+     */
+    count(positions: number, statics: number, indices: number): void {
+        const { uploadBytes: total, frameBytes: frame } = this.stats;
+        const indexBytes = indices * (this.home?.indexBuffer.BYTES_PER_ELEMENT ?? 2);
+
+        if (this.counted !== 1) restBytes(frame);
+        this.counted = 1;
+        total.positions += positions * 4;
+        frame.positions += positions * 4;
+        total.statics += statics * 4;
+        frame.statics += statics * 4;
+        total.indices += indexBytes;
+        frame.indices += indexBytes;
+    }
+
+    /** Ends a frame for the bytes of the stats. The pipe calls it after the element wrote, while {@link counted} is not 0. */
+    endFrame(): void {
+        if (this.counted === 2) restBytes(this.stats.frameBytes);
+        this.counted = this.counted === 1 ? 2 : 0;
     }
 
     /**
@@ -451,38 +413,57 @@ export class BatchElement implements BatchableElement, PackSource {
      */
     private write(home: BatchHome, mark: boolean): void {
         const count = this.seen.count;
-        const tint = this.place.groupColorAlpha;
         const vertex = this._attributeStart / POSITION_WORDS;
-        const words = this.staticWords;
-        // every vertex carries the tint of the display object
-        const fresh = this.stale || tint !== this.tint;
-        // an entry shows other colors, another frame or another attachment only now and then
-        const statics = fresh || this.marked || this.listDirty;
-
-        // a new place in the batch holds no entry of any slot
-        if (this.stale) this.state.fill(-1, 0, this.changedAt);
-        this.tint = tint;
-        if (statics) {
-            const written = writeEntries(this, home.statics, home.staticBytes, vertex * words, count, fresh);
-
-            this.marked = false;
-            if (written > 0 && mark) home.touchStatics(vertex * words, this.attributeSize * words);
-        }
-        const positions = home.attributeBuffer.float32View;
+        // what the batch holds of the skeleton, and has to change for a display object above it
+        const kept = mark && !this.stale;
+        const statics = this.writeStatics(home, mark, kept);
+        const staticWords = this.staticTo - this.staticFrom;
         const transform = this.place.groupTransform;
+        const moved = noteTransform(this.placedWith, transform);
         // every vertex is placed again where the batch holds none of them, and after a move of the display object
-        const all = noteTransform(this.placedWith, transform) || this.stale;
+        const all = moved || this.stale;
+        let indices = 0;
 
-        placeEntries(this, positions, this._attributeStart, count, transform, all);
-        if (mark && all) home.touchPositions(this._attributeStart, this.attributeSize * POSITION_WORDS);
-        else if (mark) home.touchPositions(this.packedFrom, this.packedTo - this.packedFrom);
+        if (kept && moved) this.stats.transformReplaces++;
+        placeEntries(this, home.attributeBuffer.float32View, this._attributeStart, count, transform, all);
+        const positionWords = all ? this.attributeSize * POSITION_WORDS : this.packedTo - this.packedFrom;
+
+        if (mark) home.touchPositions(all ? this._attributeStart : this.packedFrom, positionWords);
         if (this.seen.clipped > 0) clipCode()?.write(this, home, mark, all, statics);
         else if (this.listDirty || this.stale) {
             this.drawn = writeIndices(this, home.indexBuffer, this._indexStart, this.indexSize, vertex, count);
-            if (mark) home.touchIndices(this._indexStart, this.indexSize);
+            indices = this.indexSize;
+            if (mark) home.touchIndices(this._indexStart, indices);
         }
+        if (mark && positionWords + staticWords + indices > 0) this.count(positionWords, staticWords, indices);
         this.stale = false;
         this.listDirty = false;
         this.dirty = false;
+    }
+
+    /**
+     * Writes the static data of the entries that changed, or of all visible ones for another tint
+     * of the display object, which every vertex carries. Returns whether it looked at the entries.
+     */
+    private writeStatics(home: BatchHome, mark: boolean, kept: boolean): boolean {
+        const tint = this.place.groupColorAlpha;
+        const fresh = this.stale || tint !== this.tint;
+        // an entry shows other colors, another frame or another attachment only now and then
+        const statics = fresh || this.marked || this.listDirty;
+        const base = (this._attributeStart / POSITION_WORDS) * this.staticWords;
+
+        // a new place in the batch holds no entry of any slot
+        if (this.stale) this.state.fill(-1, 0, this.changedAt);
+        if (kept && tint !== this.tint) this.stats.tintRewrites++;
+        this.tint = tint;
+        this.staticTo = this.staticFrom;
+        if (statics) {
+            writeEntries(this, home.statics, home.staticBytes, base, this.seen.count, fresh);
+            this.marked = false;
+            // only the vertices of the entries that were written upload
+            if (mark) home.touchStatics(this.staticFrom, this.staticTo - this.staticFrom);
+        }
+
+        return statics;
     }
 }

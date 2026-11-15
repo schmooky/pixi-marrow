@@ -18,6 +18,8 @@ import { NO_CLIP, type VisibleList } from './visible';
  * - The vertices of a slot are placed again when the slot is newer, or a bone that moves them.
  *   A region and a mesh without weights hang on the bone of the slot. A weighted mesh hangs on
  *   the bones of its vertices, which the layout lists once per mesh.
+ * - A region that is newer and was in the list before stays where it is when no bone moved it
+ *   and its sequence shows the same region. Only a color changed then. A mesh can have a deform.
  * - The colors of a slot are written again when the slot is newer.
  * - The list of visible slots is made again when the draw order is newer, and when a slot that
  *   is newer shows another attachment or has an alpha that reached 0 or left it.
@@ -36,6 +38,8 @@ export interface PosePass {
     skipped: boolean;
     /** True when every entry is placed and colored, whatever the stamps say: a first pose, a new layout, another mode. */
     all: boolean;
+    /** True when the list of visible entries was made again for the pose, or {@link all} is set: an entry can be new. */
+    listed: boolean;
     /** Entries whose vertices were placed on the CPU and go to the GPU. */
     placed: number;
     /** Bones whose world transform went to the GPU, for a vertex shader that places vertices. 0 elsewhere. */
@@ -72,6 +76,7 @@ export function createPosePass(): PosePass {
         before: 0,
         skipped: false,
         all: true,
+        listed: true,
         placed: 0,
         skinned: 0,
         from: 0,
@@ -144,6 +149,7 @@ export function clipsMoved(state: PoseState, visible: VisibleList, bones: Int16A
 /**
  * Shows the region of a sequence the slot of an entry is at, and notes it in the pass. It runs
  * before the vertices of the entry are placed: every region of a sequence has offsets of its own.
+ * Returns whether the entry shows another region now.
  *
  * @example
  * if (newer) frameEntry(pass, template, state, entry, slot, undefined);
@@ -155,13 +161,15 @@ export function frameEntry(
     entry: number,
     slot: number,
     element: BatchElement | undefined,
-): void {
+): boolean {
     const shown = i32(template.frameCounts, entry) > 1 ? showSequence(template, state, entry, slot) : 0;
 
-    if (shown === 0) return;
+    if (shown === 0) return false;
     pass.framed++;
     element?.mark(entry);
     if (shown > 1) pass.regrouped = true;
+
+    return true;
 }
 
 /**
@@ -195,6 +203,28 @@ export function colorEntry(
 }
 
 /**
+ * Writes the colors of a newer entry whose vertices stay: a region that shows the same region
+ * of its sequence. Returns false for any other entry, which is placed.
+ *
+ * @example
+ * if (!moved && recolorEntry(pass, template, state, model.slots.hasDark, entry, slot, undefined)) continue;
+ */
+export function recolorEntry(
+    pass: PosePass,
+    template: Template,
+    state: PoseState,
+    hasDark: Uint8Array,
+    entry: number,
+    slot: number,
+    element: BatchElement | undefined,
+): boolean {
+    if (template.sources[entry] != null || frameEntry(pass, template, state, entry, slot, element)) return false;
+    colorEntry(pass, template, state, hasDark, entry, slot, element);
+
+    return true;
+}
+
+/**
  * Brings the vertex data of the visible entries in line with a pose: positions, colors and the
  * regions of sequences. Only what the stamps of the pose call newer than `pass.seen` is done,
  * and everything with `pass.all`. The pass says what was done.
@@ -224,6 +254,8 @@ export function poseEntries(
     const { slotStamps } = state;
     const { seen, all } = pass;
     const { first, counts, slots, weights } = template;
+    // a newer slot that keeps its vertices: a region that the last pass placed too
+    const keeps = !pass.listed;
     // an element packs the entries whose positions are marked: the mark is written here, without a call
     const marks = element === undefined ? NO_MARKS : element.state;
     const marksAt = element === undefined ? 0 : element.changedAt;
@@ -249,13 +281,18 @@ export function poseEntries(
 
         // a hollow entry has no vertex to place or to color
         if (vertices === 0) continue;
-        if (!newer && !bonesMoved(state, weights[entry] ?? null, i16(bones, slot), seen)) continue;
+        const moved = bonesMoved(state, weights[entry] ?? null, i16(bones, slot), seen);
+
+        // nothing to do, or a region that only changed its color and keeps its vertices
+        if (!moved && (!newer || (keeps && recolorEntry(pass, template, state, hasDark, entry, slot, element)))) {
+            continue;
+        }
         if (newer) frameEntry(pass, template, state, entry, slot, element);
         placeEntry(template, state, bones, entry, slot);
         placed++;
         from = Math.min(from, start);
         to = Math.max(to, start + vertices);
-        if (i16(clips, i) !== NO_CLIP) cut = true;
+        cut ||= i16(clips, i) !== NO_CLIP;
         if (element !== undefined) marks[marksAt + entry] = Number(marks[marksAt + entry]) | POSITIONS_CHANGED;
         if (newer) colorEntry(pass, template, state, hasDark, entry, slot, element);
     }

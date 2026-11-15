@@ -1,6 +1,26 @@
 /** How a view draws: with meshes of its own, or as a part of the batches of its render group. */
 export type DrawMode = 'mesh' | 'batched';
 
+/**
+ * Bytes a view handed to the GPU, by what they hold.
+ *
+ * In the batched mode they are the bytes the view wrote into the buffers of its batch. The batch
+ * can upload more: it joins stretches that lie near each other, and pixi.js before 8.23 uploads
+ * one stretch per buffer on WebGL. A view that draws instanced counts nothing: its pool uploads.
+ */
+export interface UploadBytes {
+    /** Vertex positions. */
+    positions: number;
+    /** What a pose does not move: texture coordinates, colors, the tint and the flags of the batched mode. */
+    statics: number;
+    /** Indices. */
+    indices: number;
+    /** The texels of bones and of the palette, with `skinning: 'gpu'`. */
+    bones: number;
+    /** The polygons and the triangles of clip masks, in the mesh mode. */
+    masks: number;
+}
+
 /** Counters a view keeps, for the perf report and for tests. Where not said otherwise they only grow. */
 export interface ViewStats {
     /**
@@ -85,6 +105,41 @@ export interface ViewStats {
     placedSlots: number;
     /** Visible slots whose colors that update wrote: the ones whose color changed. */
     coloredSlots: number;
+    /**
+     * Frames of the batched mode that placed every vertex again because a display object above
+     * the skeleton moved. The pose can be at rest in such a frame. A parent that is a render
+     * group moves on the GPU and counts nothing.
+     */
+    transformReplaces: number;
+    /**
+     * Frames of the batched mode that wrote the static data of every vertex again because the
+     * tint or the alpha of a display object above the skeleton changed.
+     */
+    tintRewrites: number;
+    /**
+     * How often Pixi built the instructions of the render group with the skeleton in a batch.
+     * Each build writes the whole skeleton again, and the batch uploads its buffers whole.
+     */
+    instructionBuilds: number;
+    /** The bytes the view handed to the GPU so far. */
+    uploadBytes: UploadBytes;
+    /**
+     * The bytes of the last frame. In the batched mode that is the last frame that drew the
+     * skeleton. In the mesh mode it is the last update, and all 0 after an update that skipped.
+     */
+    frameBytes: UploadBytes;
+}
+
+const noBytes = (): UploadBytes => ({ positions: 0, statics: 0, indices: 0, bones: 0, masks: 0 });
+
+/**
+ * Sets the bytes of a frame to 0.
+ *
+ * @example
+ * restBytes(view.stats.frameBytes);
+ */
+export function restBytes(frame: UploadBytes): void {
+    frame.positions = frame.statics = frame.indices = frame.bones = frame.masks = 0;
 }
 
 /**
@@ -116,5 +171,10 @@ export function createViewStats(vertices: number, bufferBytes: number, renderMod
         skips: 0,
         placedSlots: 0,
         coloredSlots: 0,
+        transformReplaces: 0,
+        tintRewrites: 0,
+        instructionBuilds: 0,
+        uploadBytes: noBytes(),
+        frameBytes: noBytes(),
     };
 }

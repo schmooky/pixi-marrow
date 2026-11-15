@@ -397,6 +397,7 @@ export class SkeletonView implements DrawGate {
         this.choose();
         const { mesh, element } = this.paints;
 
+        pass.listed = listed || pass.all;
         if (element === undefined && mesh !== undefined) mesh.pose(pass, template, state, seen);
         else poseEntries(pass, template, state, bones, hasDark, seen, element);
         notePass(stats, pass, element === undefined && mesh?.instanced !== undefined);

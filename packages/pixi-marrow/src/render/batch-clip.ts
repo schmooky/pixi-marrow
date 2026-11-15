@@ -312,6 +312,7 @@ function writeElement(element: BatchElement, home: BatchHome, mark: boolean): vo
     if (!mark) return;
     home.touchStatics((vertex + layout.vertices) * element.staticWords, element.clipUsed * element.staticWords);
     home.touchIndices(element._indexStart, element.indexSize);
+    element.count(0, element.clipUsed * element.staticWords, element.indexSize);
 }
 
 /**
@@ -383,7 +384,10 @@ function writeClip(element: BatchElement, home: BatchHome, mark: boolean, all: b
     }
     element.stats.indices = element.drawn;
     placeMoved(home.attributeBuffer.float32View, at, element.clipUsed, element.place.groupTransform);
-    if (mark && !all) home.touchPositions(at, element.clipUsed * POSITION_WORDS);
+    if (mark && !all) {
+        home.touchPositions(at, element.clipUsed * POSITION_WORDS);
+        element.count(element.clipUsed * POSITION_WORDS, 0, 0);
+    }
     // they are where the display object is now, and cannot be moved again
     element.clipFresh = false;
     element.clipPlaced = true;
