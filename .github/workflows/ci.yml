@@ -79,11 +79,6 @@ jobs:
     # The peer range starts at pixi.js 8.21.0 and pixi-silk 1.0.1, but the dev dependencies resolve
     # newer versions. This job installs the lowest ones into the package on the runner, where the
     # changed manifest and lockfile stay, and runs the typecheck and the unit tests on them.
-    #
-    # Not a gate yet. On 2026-11-15 the typecheck failed in src/render, where TextureSource.update
-    # takes a stretch only from pixi.js 8.23, and 11 unit tests expected what 8.23 does. Remove
-    # continue-on-error once the job passes.
-    continue-on-error: true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

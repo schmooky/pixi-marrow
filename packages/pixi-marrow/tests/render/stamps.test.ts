@@ -8,6 +8,7 @@ import { expectBatch, loadFamily, populate } from './batch-check';
 import { expectClippedBatch } from './batch-clip-check';
 import { batcherOf, createStage, elementOf, watchUploads } from './batch-stage';
 import { type CoverSlot, coverRig, moveSlot } from './cover-rig';
+import { RANGED_UPLOADS } from './pixi-version';
 import { expectKernel, loadRig, meshes, play, type Rig, slotIndex, step, visibleSlots } from './rig';
 
 /*
@@ -133,7 +134,8 @@ describe('a pose that did not change', () => {
         stage.render();
         // Pixi asked the pipe, which packed this skeleton alone: one stretch of the positions
         expect(uploads).toMatchObject({ positions: 1, statics: 0, indices: 0 });
-        expect(uploads.positionBytes).toBe(element.attributeSize * 8);
+        // before pixi.js 8.23 the position buffer uploads whole
+        if (RANGED_UPLOADS) expect(uploads.positionBytes).toBe(element.attributeSize * 8);
         expect(rig.view.stats).toMatchObject({ positionUploads, placedSlots });
         expect(rig.view.parts.template.positions).toEqual(inSkeleton);
         for (const item of rigs) expectBatch(item);
@@ -400,7 +402,7 @@ describe('a pose of which a part changed', () => {
         stage.render();
         // one upload, of the vertices between the first and the last slot that moved
         expect(uploads).toMatchObject({ positions: 1, statics: 0, indices: 0 });
-        expect(uploads.positionBytes).toBeLessThan(element.attributeSize * 8);
+        if (RANGED_UPLOADS) expect(uploads.positionBytes).toBeLessThan(element.attributeSize * 8);
         expect(uploads.positionBytes).toBeGreaterThan(0);
         expect(rig.view.stats.placedSlots).toBeLessThan(visibleSlots(rig).length);
         expect(stage.counts.builds).toBe(1);

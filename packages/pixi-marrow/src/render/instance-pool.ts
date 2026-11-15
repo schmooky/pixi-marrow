@@ -2,7 +2,7 @@ import type { BufferImageSource } from 'pixi.js';
 import { f32, i32 } from '../geometry/read';
 import { WORLD_STRIDE } from '../pose/state';
 import { u8 } from './read';
-import { dataRoom, dataTexture } from './skin-layout';
+import { dataRoom, dataTexture, uploadTexels } from './skin-layout';
 import type { SkinStore } from './skin-store';
 import { STATIC_STRIDE, type Template } from './template';
 
@@ -149,11 +149,11 @@ export class InstancePool {
         let uploads = 0;
 
         if (this.poseLow < this.poseHigh) {
-            this.pose.update(this.poseLow, this.poseHigh);
+            uploadTexels(this.pose, this.poseLow, this.poseHigh);
             uploads++;
         }
         if (this.paletteLow < this.paletteHigh) {
-            this.palette.update(this.paletteLow, this.paletteHigh);
+            uploadTexels(this.palette, this.paletteLow, this.paletteHigh);
             uploads++;
         }
         this.poseLow = this.paletteLow = Number.POSITIVE_INFINITY;

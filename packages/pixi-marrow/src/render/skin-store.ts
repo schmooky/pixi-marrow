@@ -1,7 +1,7 @@
 import type { BufferImageSource } from 'pixi.js';
 import type { SkeletonModel } from '../model/model';
 import { WORLD_STRIDE } from '../pose/state';
-import { dataRoom, dataTexture } from './skin-layout';
+import { dataRoom, dataTexture, uploadTexels } from './skin-layout';
 import type { Template } from './template';
 
 /*
@@ -68,11 +68,11 @@ export class TextureStore implements SkinStore {
 
     bonesWritten(low: number, high: number): void {
         // 6 numbers a bone are 1.5 texels: the stretch starts and ends at a whole texel
-        this.boneTexture.update(Math.floor((low * 3) / 2), Math.ceil(((high + 1) * 3) / 2));
+        uploadTexels(this.boneTexture, Math.floor((low * 3) / 2), Math.ceil(((high + 1) * 3) / 2));
     }
 
     colorsWritten(low: number, high: number): void {
-        this.palette.update(low * 2, high * 2 + 2);
+        uploadTexels(this.palette, low * 2, high * 2 + 2);
     }
 
     /** Frees the two textures. */

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { createViewShader } from '../../src/render/shader';
 import { createSkinShader } from '../../src/render/skin-shader';
 import { MAX_PAGES } from '../../src/render/template';
+import { outputMask, STATES_OUTPUTS } from './pixi-version';
 
 /*
  * Shaders do not compile in Node. These tests hold the contract with Pixi that can be read from
@@ -52,8 +53,9 @@ describe('createViewShader', () => {
             expect(glProgram.vertex).toContain(name);
             expect(gpuProgram.vertex?.source).toContain(name);
         }
-        expect(gpuProgram.fragmentOutputMask).toBe(1);
-        expect(glProgram.fragmentOutputMask).toBe(1);
+        // pixi.js 8.23 and later read which outputs the fragment shader writes
+        expect(outputMask(gpuProgram)).toBe(STATES_OUTPUTS ? 1 : undefined);
+        expect(outputMask(glProgram)).toBe(STATES_OUTPUTS ? 1 : undefined);
     });
 
     it('shades with the two color tint of the official runtime only when asked', () => {
