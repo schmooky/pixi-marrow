@@ -168,7 +168,7 @@ console.log(boss.stats.renderMode);
 
 ## Skeletons at rest
 
-A skeleton whose animation ended, or that never played one, costs close to nothing. The runtime runs no timeline and places no vertex for it. It wakes with the next `play`. Physics is the exception: a skeleton with physics constraints keeps simulating, as in the official runtime.
+A skeleton whose animation ended, or that never played one, costs close to nothing. The runtime runs no timeline and places no vertex for it. It wakes with the next `play`. Physics is the exception: a skeleton with physics constraints simulates until a step changes nothing in its physics.
 
 One case costs more, in the batched mode. When a display object above the skeleton moves, the runtime places every vertex of the skeleton again and uploads it. When the alpha or the tint above it changes, the runtime writes its colors again. A reel that spins and a layer that fades do that to each symbol.
 

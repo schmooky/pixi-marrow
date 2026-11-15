@@ -14,7 +14,7 @@ import source from '../snippets/good-to-know.ts?raw';
 - **A skeleton at rest costs close to nothing.** When its animation ended, or it never played one, no timeline runs and the runtime uploads nothing. It wakes with the next `play`. This holds for skeletons of Spine 4.1, 4.2 and 4.3, on one track or on several.
 - **Less overdraw, once you pass outlines.** Outlines are off by default. Write the outlines of an atlas at build time with `pixi-marrow outlines`, and pass the file as `outlines`. The runtime then skips a region without a visible pixel, and a slot behind the opaque part of a later slot. The picture stays the same. [Performance](/performance/#less-overdraw-with-outlines) shows the steps.
 
-Two things end the rest of a skeleton. A skeleton with physics constraints keeps simulating. In the batched mode, a parent that moves or fades makes the runtime write the vertices of a resting skeleton again. [Performance caveats](/performance/caveats/#a-parent-that-moves-or-fades) shows the fix.
+Two things end the rest of a skeleton. A skeleton with physics constraints simulates until a step changes nothing in its physics. In the batched mode, a parent that moves or fades makes the runtime write the vertices of a resting skeleton again. [Performance caveats](/performance/caveats/#a-parent-that-moves-or-fades) shows the fix.
 
 ## Render mode
 
@@ -28,7 +28,7 @@ In both modes the CPU places the vertices. Only `skinning: 'gpu'` moves that wor
 
 <Snippet source={source} regions="physics" />
 
-`physics` is the official mode: `update`, `pose`, `reset` or `none`. Physics does not follow the Pixi position by itself. Tell it with `physicsTranslate` and `physicsRotate`. A skeleton with physics constraints keeps simulating at rest. An update of more than 10 seconds starts the physics again, as `resetPhysics` does.
+`physics` is the official mode: `update`, `pose`, `reset` or `none`. Physics does not follow the Pixi position by itself. Tell it with `physicsTranslate` and `physicsRotate`. A skeleton with physics constraints simulates until a step changes nothing in its physics. An update of more than 10 seconds starts the physics again, as `resetPhysics` does.
 
 ## Why is it slow
 
