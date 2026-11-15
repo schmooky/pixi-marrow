@@ -49,9 +49,13 @@ export interface Seen extends Shown {
 }
 
 /**
- * True when Pixi draws nothing of a display object. It or a parent has `visible` or `renderable`
- * false or an alpha of 0. Pixi still calls `onRender` for such an object, and `getBounds` looks
- * at no parent. The check reads no bounds.
+ * True when a display object shows no pixel. It or a parent has `visible` or `renderable` false
+ * or an alpha of 0. Pixi still calls `onRender` for such an object, and `getBounds` looks at no
+ * parent. The check reads no bounds.
+ *
+ * At an alpha of 0 Pixi leaves out meshes and render groups. It still draws a batched skeleton,
+ * with triangles that show nothing. So the pose of such a skeleton can wait: the render that
+ * shows it again poses it first.
  *
  * Outside of a render the object also counts when no render ever started from the top of its
  * tree: a container without a parent that is no stage.
@@ -138,7 +142,8 @@ export class Pacer {
 
     /**
      * True while the skeleton is off the screen or hidden in the `pause` mode. Its updates then
-     * pass the time and fire the events, and pose and draw nothing.
+     * pass the time and fire the events, and leave the vertex work out. An animation that plays
+     * alone on track 0 is not posed. A mix, and animations on more tracks, still pose the bones.
      */
     get paused(): boolean {
         return this.settings.offscreen === 'pause' && this.hidden;

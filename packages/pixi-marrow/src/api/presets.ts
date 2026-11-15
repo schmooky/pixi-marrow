@@ -53,10 +53,13 @@ export interface PerfSettings {
     idleCache: 'off' | 'auto';
     /**
      * `update` (the `exact` default) updates a skeleton off the screen as one on it. `throttle`
-     * updates it 4 times a second, with the time that passed, so events fire late. `pause` does
-     * not pose or draw it. Its tracks, its events and `Track.finished` go on, and the picture
-     * stands still until it is on the screen again. A skeleton that is hidden, or under a parent
-     * that is, counts as off the screen: `visible` or `renderable` false, or an alpha of 0.
+     * updates it 4 times a second, with the time that passed, so events fire late. `pause`
+     * leaves the vertex work out, and does not pose an animation that plays alone on track 0. A
+     * mix, and animations on more tracks, still pose the bones. The tracks, the events and
+     * `Track.finished` go on, and the picture stands still until it is on the screen again.
+     *
+     * A skeleton that shows no pixel counts as off the screen. It or a parent has `visible` or
+     * `renderable` false, or an alpha of 0.
      */
     offscreen: OffscreenMode;
     /**
