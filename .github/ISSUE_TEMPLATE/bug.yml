@@ -1,0 +1,49 @@
+name: Bug
+description: The runtime does something wrong, or differs from the official Spine runtime.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happens, and what did you expect
+      description: A difference from the official runtime is a bug. Say which animation and which frame shows it.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps that show it
+      description: The smallest code that shows it. Attach the skeleton and the atlas if you can share them.
+      render: ts
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: pixi-marrow, pixi.js and the Spine editor that exported the skeleton.
+      placeholder: pixi-marrow 0.1.0-next.1, pixi.js 8.23.0, Spine 4.2.43
+    validations:
+      required: true
+  - type: dropdown
+    id: renderer
+    attributes:
+      label: Renderer
+      options:
+        - WebGL2
+        - WebGPU
+        - Both
+        - No renderer, pixi-marrow/core in Node
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Browser and device
+      placeholder: Chrome 142 on a Pixel 8
+  - type: textarea
+    id: error
+    attributes:
+      label: Error message
+      description: The whole text of a MarrowError, with its code and its fix.
+      render: text

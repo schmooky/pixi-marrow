@@ -1,0 +1,24 @@
+name: Feature
+description: Something the runtime does not do yet.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What do you need to do
+      description: Describe the game or the tool, not the API. A good answer can be another API than the one you thought of.
+    validations:
+      required: true
+  - type: textarea
+    id: today
+    attributes:
+      label: What do you do today
+      description: The code you write now, or how the official runtime does it.
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope
+      description: Canvas 2D, WebGL1, Spine 3.8 and Spine 4.0 are out of scope. See section 2 of AGENTS.md.
+      options:
+        - label: This is not one of them.
+          required: true

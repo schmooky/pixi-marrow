@@ -31,5 +31,29 @@
   },
   "bake (bakeAnimation)": {
     "gzip": 3591
+  },
+  "on demand (reader of 4.1 and 4.2 JSON)": {
+    "gzip": 8564
+  },
+  "on demand (reader of 4.1 and 4.2 binary)": {
+    "gzip": 8681
+  },
+  "on demand (reader of 4.3 JSON)": {
+    "gzip": 8221
+  },
+  "on demand (reader of 4.3 binary)": {
+    "gzip": 8032
+  },
+  "on demand (pose engine of 4.1 and 4.2)": {
+    "gzip": 31497
+  },
+  "on demand (pose engine of 4.3)": {
+    "gzip": 32730
+  },
+  "on demand (mesh mode)": {
+    "gzip": 17545
+  },
+  "on demand (clipping)": {
+    "gzip": 7491
   }
 }

@@ -1,0 +1,166 @@
+name: Release
+
+# Publishes packages/pixi-marrow to npm from a runner, with provenance, and makes the GitHub
+# Release. It starts by hand only: Actions, Release, Run workflow. No push starts it.
+#
+# Before the first use, the owner sets this up once:
+#
+# 1. On npmjs.com open the package pixi-marrow, Settings, Trusted Publisher, GitHub Actions.
+#    Organization or user: schmooky. Repository: pixi-marrow. Workflow filename: release.yml.
+#    Environment name: npm.
+# 2. In the settings of this repository, Environments, make the environment `npm`. Add yourself
+#    as a required reviewer, and limit it to the branch main. Then each run waits for your approval.
+# 3. Keep the second factor of the npm account. Trusted publishing needs no token, so there is no
+#    secret to store. Once it works, set "Require two-factor authentication and disallow tokens"
+#    in the publishing access of the package.
+#
+# How a release goes, with section 8 of AGENTS.md:
+#
+# 1. Merge the release pull request, which holds the new version and the changelog.
+# 2. Wait for the CI run of the merge commit on main.
+# 3. Run this workflow on main with the version as `version`. Leave `dry-run` set for a rehearsal:
+#    it runs every gate and packs the tarball, and publishes nothing.
+# 4. Run it again with `dry-run` off. It publishes with the tag of .changeset/pre.json, which is
+#    `next`, then makes the git tag and the GitHub Release.
+# 5. Until 1.0, move `latest` by hand: npm dist-tag add pixi-marrow@<version> latest. Trusted
+#    publishing covers `npm publish` only, so this step needs your login.
+#
+# A run that failed after the publish can run again: it sees the version on npm, skips the
+# publish and makes the tag and the Release.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: The version to publish. It must equal `version` of packages/pixi-marrow/package.json.
+        required: true
+        type: string
+      dry-run:
+        description: Run every gate and pack the tarball, but publish nothing.
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: npm
+    permissions:
+      # the git tag and the GitHub Release
+      contents: write
+      # the identity that npm trusts in place of a token, and that signs the provenance
+      id-token: write
+    steps:
+      - name: Only from main of this repository
+        if: github.ref != 'refs/heads/main' || github.repository != 'schmooky/pixi-marrow'
+        run: |
+          echo "::error::A release runs on main of schmooky/pixi-marrow. This run is on $GITHUB_REF of $GITHUB_REPOSITORY."
+          exit 1
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          # no cache: a poisoned cache must not reach a tarball that carries a provenance
+      - run: pnpm install --frozen-lockfile
+
+      - name: Read the version and the tag
+        id: meta
+        env:
+          WANTED: ${{ inputs.version }}
+        run: |
+          version=$(node -p "require('./packages/pixi-marrow/package.json').version")
+          if [ "$version" != "$WANTED" ]; then
+            echo "::error::packages/pixi-marrow/package.json is at $version, and this run was asked for $WANTED."
+            exit 1
+          fi
+          # in pre mode the dist-tag is the tag of the pre mode. Out of it, the tag is latest
+          tag=$(node -p "try { const pre = require('./.changeset/pre.json'); pre.mode === 'pre' ? pre.tag : 'latest' } catch { 'latest' }")
+          if [ "$tag" = "latest" ] && [ "${version#*-}" != "$version" ]; then
+            echo "::error::$version is a pre-release and would get the dist-tag latest."
+            exit 1
+          fi
+          if [ -n "$(npm view "pixi-marrow@$version" version 2>/dev/null)" ]; then published=true; else published=false; fi
+          {
+            echo "version=$version"
+            echo "tag=$tag"
+            echo "published=$published"
+          } >> "$GITHUB_OUTPUT"
+          echo "pixi-marrow $version, dist-tag $tag, on npm already: $published"
+
+      - name: The changelog has this version
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          awk -v version="$VERSION" '
+            /^## / { on = ($2 == version) ; next }
+            on { print }
+          ' packages/pixi-marrow/CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+          if ! grep -q '[^[:space:]]' "$RUNNER_TEMP/notes.md"; then
+            echo "::error::packages/pixi-marrow/CHANGELOG.md has no section for $VERSION. Run pnpm version-packages first."
+            exit 1
+          fi
+
+      - name: Fixture cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: fixtures/.cache
+          key: fixtures-${{ hashFiles('fixtures/manifest.json') }}
+
+      - name: Every gate
+        run: pnpm check
+
+      - name: npm can publish as a trusted publisher
+        # trusted publishing came with npm 11.5.1
+        run: |
+          npm --version
+          node -e "
+            const [major, minor, patch] = require('child_process').execSync('npm --version', { encoding: 'utf8' }).trim().split('.').map(Number);
+            if (major < 11 || (major === 11 && (minor < 5 || (minor === 5 && patch < 1)))) {
+              console.error('npm is older than 11.5.1. Raise node-version of this job.');
+              process.exit(1);
+            }
+          "
+
+      - name: Pack, and publish nothing
+        # npm refuses a version that is on the registry, in a rehearsal too
+        if: ${{ inputs.dry-run && steps.meta.outputs.published == 'false' }}
+        working-directory: packages/pixi-marrow
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: npm publish --dry-run --access public --tag "$TAG"
+
+      - name: Publish to npm
+        # `prepublishOnly` builds the package again and `prepack` stages README and LICENSE
+        if: ${{ !inputs.dry-run && steps.meta.outputs.published == 'false' }}
+        working-directory: packages/pixi-marrow
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: npm publish --provenance --access public --tag "$TAG"
+
+      - name: Tag and GitHub Release
+        if: ${{ !inputs.dry-run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          name="pixi-marrow@$VERSION"
+          if gh release view "$name" > /dev/null 2>&1; then
+            echo "The release $name exists."
+            exit 0
+          fi
+          flags=""
+          if [ "${VERSION#*-}" != "$VERSION" ]; then flags="--prerelease"; fi
+          # makes the tag at this commit when it does not exist
+          gh release create "$name" --target "$GITHUB_SHA" --title "$name" --notes-file "$RUNNER_TEMP/notes.md" $flags
