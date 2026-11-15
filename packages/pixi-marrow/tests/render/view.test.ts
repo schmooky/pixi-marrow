@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MarrowError } from '../../src/base/errors';
 import type { TimelineKind } from '../../src/model/timelines';
+import { ViewBox } from '../../src/render/bounds';
 import { u8, u16 } from '../../src/render/read';
 import { listFixtures } from '../parity/fixtures';
 import {
@@ -228,5 +229,31 @@ describe('SkeletonView', () => {
         const other = await loadRig('4.2/raptor-pro.skel');
 
         expect(() => drawPose(rig.view, other.engine.state)).toThrow(MarrowError);
+    });
+});
+
+describe('the box of a view', () => {
+    it('is measured for an exact reader after every move, and for a coarse one in 8 reads or after a new list', () => {
+        const box = new ViewBox();
+        const coarse = (): boolean => {
+            box.coarse = true;
+            const due = box.due();
+
+            box.coarse = false;
+
+            return due;
+        };
+
+        // a new box was never measured: both readers measure it
+        expect(coarse()).toBe(true);
+        expect([box.due(), coarse()]).toEqual([false, false]);
+        box.moved(false);
+        expect(Array.from({ length: 8 }, coarse)).toEqual([false, false, false, false, false, false, false, true]);
+        box.moved(false);
+        expect(coarse()).toBe(false);
+        // the exact reader never gets the older box
+        expect(box.due()).toBe(true);
+        box.moved(true);
+        expect(coarse()).toBe(true);
     });
 });

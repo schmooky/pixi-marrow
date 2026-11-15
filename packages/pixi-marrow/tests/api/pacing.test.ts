@@ -205,6 +205,49 @@ describe('a display object with pacing', () => {
         spine.destroy();
     });
 
+    it('sees a first frame, a new scale and a new skin at once, and reads an older box of a pose', async () => {
+        const asset = await fixtureAsset('4.2/spineboy-pro.skel');
+        const spine = new MarrowSpine(asset, { autoUpdate: false, offscreen: 'pause' });
+        const exact = new MarrowSpine(asset, { autoUpdate: false });
+        const size = (): number => spine.pacingStatus().size;
+        const across = (of: MarrowSpine): number => Math.max(of.getBounds().width, of.getBounds().height);
+        const both = (run: (of: MarrowSpine) => void): void => [spine, exact].forEach(run);
+
+        expect(size()).toBe(Number.POSITIVE_INFINITY);
+        // a first frame: the setup pose is measured
+        rendered(spine);
+        expect(size()).toBe(across(exact));
+        // a resize moves the box by the transform of the render, with no update between
+        both((of) => of.scale.set(0.25));
+        rendered(spine);
+        expect(size()).toBeCloseTo(across(exact), 9);
+        both((of) => of.scale.set(1));
+        // a pose alone: the pacing reads the box it has, for at most 8 renders
+        both((of) => of.play('walk', { loop: true }));
+        const sizes: boolean[] = [];
+
+        for (let frame = 0; frame < 9; frame++) {
+            both((of) => of.update(1 / 30));
+            rendered(spine);
+            sizes.push(size() === across(exact));
+        }
+        expect(across(exact)).not.toBe(across(new MarrowSpine(asset, { autoUpdate: false })));
+        expect(sizes).toEqual([false, false, false, false, false, false, false, true, false]);
+        // the bounds the game asks for are exact all the while
+        expect(across(spine)).toBe(across(exact));
+        both((of) => of.update(1 / 30));
+        expect(spine.getBounds().height).toBe(exact.getBounds().height);
+        // what the slots show changed: measured at once
+        both((of) => {
+            of.slot('gun').attachment = null;
+            of.slot('head').attachment = null;
+            of.update(0);
+        });
+        rendered(spine);
+        expect(size()).toBe(across(exact));
+        both((of) => of.destroy());
+    });
+
     it('leaves a deform switch the game turned off as it is, with lod', async () => {
         const spine = new MarrowSpine(await fixtureAsset('4.2/alien-pro.skel'), { autoUpdate: false, lod: 'auto' });
 

@@ -1,5 +1,6 @@
 import { Bounds, type Renderer } from 'pixi.js';
 import type { ResolvedPerf } from './presets';
+import { viewOf } from './view-of';
 
 /** How long a skeleton off the screen waits between two updates in the `throttle` mode, in seconds. */
 const THROTTLE = 0.25;
@@ -148,6 +149,10 @@ export class Pacer {
      * hidden parent, counts as off the screen and keeps its size. A skeleton that shows
      * nothing else has an empty box: it counts as on the screen with the size it had, so that
      * it shows when a slot does again.
+     *
+     * The box of the skeleton in its own space can be up to 8 renders old, see `ViewBox`. Pixi
+     * moves it by the transform of this render. So a skeleton that moves or changes its scale is
+     * seen at once, and a pose that grows the skeleton within 8 renders.
      */
     seen(owner: Seen, renderer: Renderer): void {
         if (!this.watching) return;
@@ -158,7 +163,13 @@ export class Pacer {
 
             return;
         }
+        const view = viewOf(owner)?.box;
+
+        // the exact box would place every vertex of a skeleton with GPU skinning on the CPU
+        if (view !== undefined) view.coarse = true;
         const box = owner.getBounds(false, this.box.clear());
+
+        if (view !== undefined) view.coarse = false;
         const { screen } = renderer;
 
         if (box.width <= 0 && box.height <= 0) {
