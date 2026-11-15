@@ -125,27 +125,28 @@ describe('MarrowSpine.autoUpdate', () => {
         expect(secondUpdate).not.toHaveBeenCalled();
     });
 
-    it('stops updating once its asset was destroyed, and takes its callback off the ticker', async () => {
+    it('keeps updating when its asset is let go, and the asset ends with the display object', async () => {
         const { model, atlas } = await importRig('4.2/spineboy-pro.skel');
         const textures = atlas.pages.map(() => blankTexture());
         const own = await MarrowAsset.from({ model, atlas, textures });
         const spine = new MarrowSpine(own);
         const walk = spine.play('walk', { loop: true });
 
-        made.push(spine);
         tick(16);
         expect(walk.time).toBeCloseTo(0.016, 10);
 
-        // what a load of the asset does when it is destroyed: the page textures go with it
+        // the display object holds the asset: a destroy call of its owner does not take the textures away
         own.destroy();
-        for (const texture of textures) texture.destroy(true);
+        expect(own.destroyed).toBe(false);
         expect(() => tick(16)).not.toThrow();
+        expect(walk.time).toBeCloseTo(0.032, 10);
+        expect(spine.autoUpdate).toBe(true);
 
-        expect(walk.time).toBeCloseTo(0.016, 10);
-        expect(spine.autoUpdate).toBe(false);
+        spine.destroy();
+        expect(own.destroyed).toBe(true);
         expect(ticker.count).toBe(listeners);
         expect(() => spine.update(0.25)).not.toThrow();
-        expect(walk.time).toBeCloseTo(0.016, 10);
+        expect(() => new MarrowSpine(own)).toThrow('The asset was destroyed.');
     });
 
     it('takes its callback off the ticker when it is destroyed', () => {

@@ -1,5 +1,6 @@
 import { MarrowError } from '../../base/errors';
 import type { SkeletonModel } from '../../model/model';
+import { checkModel } from '../shared/checks';
 import { readAnimations } from './animations';
 import { readConstraints } from './constraints';
 import type { Json42Version, SkeletonRefs } from './context';
@@ -32,7 +33,7 @@ function readModel(root: JsonRoot, version: Json42Version): SkeletonModel {
         eventData: events,
     });
 
-    return {
+    return checkModel({
         version,
         ...info,
         bones: bones.table,
@@ -41,7 +42,7 @@ function readModel(root: JsonRoot, version: Json42Version): SkeletonModel {
         constraints: constraints.list,
         skins: skins.list,
         animations,
-    };
+    });
 }
 
 /**

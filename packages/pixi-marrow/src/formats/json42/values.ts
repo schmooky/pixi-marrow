@@ -27,18 +27,6 @@ export function requireNumber(value: number | undefined, what: string): number {
     return value;
 }
 
-/**
- * Checks a count against what the integer arrays of the model can hold.
- * Throws `unsupported-feature` when it is over the limit.
- */
-export function requireAtMost(count: number, limit: number, what: string): void {
-    if (count > limit) {
-        throw new MarrowError('unsupported-feature', `${what}: ${count}. The model holds at most ${limit}.`, {
-            fix: 'Split the skeleton or the mesh into smaller parts.',
-        });
-    }
-}
-
 /** A list from the file, or an empty list when the file has none. */
 export function list<T>(value: readonly T[] | null | undefined, what: string): readonly T[] {
     if (value === undefined || value === null) return [];

@@ -7,6 +7,7 @@ import { type AtlasOutlines, MarrowAsset, MarrowError, MarrowSpine } from '../..
 import type { PageReader } from '../../src/render/page-alpha';
 import { fixtureFiles, importRig } from './helpers';
 import { boyAsset, pixelPages } from './pages';
+import { useLocalUrls } from './urls';
 
 async function rejection(promise: Promise<unknown>): Promise<MarrowError> {
     const error = await promise.then(
@@ -209,6 +210,9 @@ describe('scanOutlines', () => {
             .join('\n'),
     );
 
+    /** Lets the promises between two slices settle. */
+    const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
     /** A scan with a reader that notes what it is asked, and idle time that the test hands out. */
     function fakeScan(textures: Texture[], answer: (page: number) => PagePixels | null = () => clearPixels(8, 8)) {
         const calls: string[] = [];
@@ -226,10 +230,13 @@ describe('scanOutlines', () => {
             },
         };
         const scan = scanOutlines(ATLAS, textures, { reader, idle: (run) => slices.push(run) });
-        const runSlice = (): boolean => {
+        /** Runs the slice that waits, if one does, and says whether one did. */
+        const runSlice = async (): Promise<boolean> => {
+            await settle();
             const slice = slices.shift();
 
             slice?.();
+            await settle();
 
             return slice !== undefined;
         };
@@ -242,17 +249,16 @@ describe('scanOutlines', () => {
         const { scan, calls, runSlice, slices } = fakeScan(textures);
 
         expect(calls).toEqual([]);
+        await settle();
+        // one page waits for idle time: the next one starts when it is done
         expect(slices).toHaveLength(1);
-        runSlice();
+        await runSlice();
         expect(calls).toEqual(['page 0 premultiplied']);
-        runSlice();
+        await runSlice();
         expect(calls).toEqual(['page 0 premultiplied', 'page 1']);
-        runSlice();
-        expect(calls).toHaveLength(3);
-        // the last slice has no page left
-        expect(runSlice()).toBe(true);
-        expect(runSlice()).toBe(false);
+        await runSlice();
         expect(calls).toEqual(['page 0 premultiplied', 'page 1', 'page 2', 'release']);
+        expect(await runSlice()).toBe(false);
         const outlines = await scan.done;
 
         // a clear page: no region shows a pixel
@@ -269,30 +275,36 @@ describe('scanOutlines', () => {
         mipmapped.source.autoGenerateMipmaps = true;
         const { scan, calls, runSlice } = fakeScan(textures);
 
-        while (runSlice());
+        while (await runSlice());
         expect(calls).toEqual(['page 2', 'release']);
         expect((await scan.done)?.regions.map((region) => region?.polygon ?? null)).toEqual([null, null, []]);
         // pixels of another size than the page, a reader that gives up and one that throws
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
         const failing = fakeScan([imagePage(8, 8), imagePage(8, 8), imagePage(8, 8)], (page) => {
             if (page === 2) throw new Error('context lost');
 
             return page === 0 ? clearPixels(4, 4) : null;
         });
 
-        while (failing.runSlice());
+        while (await failing.runSlice());
         expect(failing.calls).toEqual(['page 0 premultiplied', 'page 1', 'page 2', 'release']);
         // no page was read: there are no outlines
         await expect(failing.scan.done).resolves.toBeUndefined();
+        // a page that the reader cannot read is no error. One that throws warns, with the cause
+        expect(warn).toHaveBeenCalledOnce();
+        expect(warn.mock.calls[0]?.[0]).toContain('could not scan the page "c.png"');
+        expect(warn.mock.calls[0]?.[0]).toContain('context lost');
+        warn.mockRestore();
     });
 
     it('stops before its next page', async () => {
         const { scan, calls, runSlice } = fakeScan([imagePage(8, 8), imagePage(8, 8), imagePage(8, 8)]);
 
-        runSlice();
+        await runSlice();
         scan.stop();
-        while (runSlice());
-        expect(calls).toEqual(['page 0 premultiplied', 'release']);
         await expect(scan.done).resolves.toBeUndefined();
+        while (await runSlice());
+        expect(calls).toEqual(['page 0 premultiplied', 'release']);
     });
 });
 
@@ -311,7 +323,7 @@ describe('MarrowAsset.load with outlines', () => {
             ? new Response('', { status: 404 })
             : new Response(typeof body === 'string' ? body : body.slice());
     });
-    const pixiAssets: { load(asset: unknown): Promise<unknown>; unload(url: unknown): Promise<void> } = Assets;
+    const pixiAssets: { load(asset: unknown): Promise<unknown>; unload(url: unknown): Promise<void> } = Assets.loader;
     const loadImage = vi.spyOn(pixiAssets, 'load');
     const unloadImage = vi.spyOn(pixiAssets, 'unload');
     const assets: MarrowAsset[] = [];
@@ -321,10 +333,13 @@ describe('MarrowAsset.load with outlines', () => {
     async function load(options: Parameters<typeof MarrowAsset.load>[0]): Promise<MarrowAsset> {
         const asset = await MarrowAsset.load(options);
 
-        if (!assets.includes(asset)) assets.push(asset);
+        // each load is an owner: the asset is let go once per load
+        assets.push(asset);
 
         return asset;
     }
+
+    useLocalUrls();
 
     beforeEach(async () => {
         const boy = await pixelPages('4.2/spineboy.atlas');

@@ -1,6 +1,7 @@
 import type { Texture } from 'pixi.js';
 import type { AtlasModel } from '../model/atlas';
 import type { SkeletonModel } from '../model/model';
+import type { AtlasOutlines } from '../model/outlines';
 import type { PoseEngineFactory } from '../pose/engine';
 import type { MarrowAsset } from './asset';
 import type { MarrowAssetsOptions } from './assets';
@@ -16,13 +17,17 @@ export interface CachedAssetParts {
     model: SkeletonModel;
     atlas: AtlasModel;
     textures: readonly Texture[];
-    outlines: 'auto' | undefined;
+    /** A promise gives the outlines once they were checked and the code that cuts with them is loaded. */
+    outlines: Promise<AtlasOutlines> | 'auto' | undefined;
 }
 
-/** Makes the asset of a skeleton and an atlas in Pixi `Assets`, with the private constructor of `MarrowAsset`. */
+/**
+ * Makes the asset of a skeleton and an atlas in Pixi `Assets`, with the private constructor of
+ * `MarrowAsset`. `release` runs when the asset ends.
+ */
 export type CacheReader = (
     options: MarrowAssetsOptions,
-    make: (parts: CachedAssetParts, createEngine: PoseEngineFactory) => MarrowAsset,
+    make: (parts: CachedAssetParts, createEngine: PoseEngineFactory, release: () => void) => MarrowAsset,
 ) => MarrowAsset;
 
 let reader: CacheReader | undefined;

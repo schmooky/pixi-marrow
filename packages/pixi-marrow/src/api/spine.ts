@@ -6,6 +6,7 @@ import type { PoseEngine } from '../pose/engine';
 import { SkeletonView } from '../render/skeleton-view';
 import type { ViewStats } from '../render/stats';
 import { MarrowAsset, type MarrowLoadOptions } from './asset';
+import { dropAsset, handOver, holdAsset } from './asset-holds';
 import type { MarrowAssetsOptions } from './assets';
 import { bakingEngine } from './baking';
 import { namedIndex, renderMode, warnWithoutOutlines } from './checks';
@@ -114,6 +115,8 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
         }
         this.idle = createIdleCache(this, this.skeletonView, this.engine.state, settings.idleCache, asset.textures);
         this.autoUpdate = options.autoUpdate ?? true;
+        // the asset keeps its textures while this object is alive
+        holdAsset(asset);
     }
 
     /**
@@ -127,7 +130,8 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
     static async load<N extends MarrowNames = MarrowNames>(
         options: MarrowLoadOptions & MarrowSpineOptions,
     ): Promise<MarrowSpine<N>> {
-        return new MarrowSpine<N>(await MarrowAsset.load(options), options);
+        // the display object takes the place of the load as the holder of the asset
+        return handOver(await MarrowAsset.load(options), (asset) => new MarrowSpine<N>(asset, options));
     }
 
     /**
@@ -382,6 +386,8 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
         this.idle?.destroy();
         this.skeletonView.destroy();
         super.destroy(options);
+        // the last holder ends the asset, which unloads its page images
+        dropAsset(this.asset);
     }
 
     /**

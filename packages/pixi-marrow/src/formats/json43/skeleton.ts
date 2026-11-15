@@ -7,12 +7,15 @@ import {
     type SlotTable,
 } from '../../model/model';
 import { writeHexColor } from '../shared/color';
+import { MAX_INDEX, requireAtMost } from '../shared/limits';
 import { enumIndex, type ImportContext, requireName } from './context';
 import type { JsonBone, JsonEvent, JsonSlot } from './schema';
 
 /** Reads `bones`. A bone can name only a parent that comes before it. */
 export function readBones(maps: readonly JsonBone[], ctx: ImportContext): BoneTable {
     const count = maps.length;
+
+    requireAtMost(count, MAX_INDEX, 'The number of bones');
     const table: BoneTable = {
         count,
         names: [],
@@ -52,6 +55,8 @@ export function readBones(maps: readonly JsonBone[], ctx: ImportContext): BoneTa
 /** Reads `slots`. */
 export function readSlots(maps: readonly JsonSlot[], ctx: ImportContext): SlotTable {
     const count = maps.length;
+
+    requireAtMost(count, MAX_INDEX, 'The number of slots');
     const table: SlotTable = {
         count,
         names: [],

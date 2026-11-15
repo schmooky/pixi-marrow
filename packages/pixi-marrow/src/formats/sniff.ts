@@ -11,7 +11,10 @@ export interface SkeletonSniff {
     editorVersion: string;
 }
 
-/** A skeleton file: JSON text, parsed JSON, or the bytes of a `.skel` file. */
+/**
+ * A skeleton file: JSON text, parsed JSON, or the bytes of a file. Bytes are a `.skel` file or
+ * JSON text. The content decides which, not a file name.
+ */
 export type SkeletonSource = string | Uint8Array | ArrayBuffer | object;
 
 const EXPORT_FIX = 'Export the skeleton from Spine 4.1, 4.2 or 4.3 as JSON or binary.';
@@ -65,6 +68,52 @@ function binaryVersion(bytes: Uint8Array): string {
     return version;
 }
 
+/** The first byte that is not white space or part of a byte order mark, or -1 when there is none. */
+function firstByte(bytes: Uint8Array): number {
+    for (const byte of bytes) {
+        if (byte > 0x20 && byte !== 0xef && byte !== 0xbb && byte !== 0xbf) return byte;
+    }
+
+    return -1;
+}
+
+/**
+ * The text that bytes hold, as UTF-8 without a byte order mark.
+ *
+ * @example
+ * const root = JSON.parse(textOfBytes(bytes));
+ */
+export function textOfBytes(bytes: Uint8Array): string {
+    return new TextDecoder().decode(bytes);
+}
+
+/** The error for a web page where a skeleton was expected. A server answers a wrong URL with one. */
+const page = (): MarrowError =>
+    new MarrowError('invalid-data', 'The data is an HTML or XML page, not a skeleton: it starts with "<".', {
+        fix: 'Check the URL of the skeleton. A server that does not find a file can answer with its index page.',
+    });
+
+/**
+ * Bytes are a binary skeleton when a version string is where Spine 4 keeps it. If not, bytes that
+ * start with `{` are JSON text. The hash of a binary file can start with any byte, so the
+ * version string is looked for first.
+ */
+function sniffBytes(bytes: Uint8Array): SkeletonSniff {
+    let version: string;
+
+    try {
+        version = binaryVersion(bytes);
+    } catch (error) {
+        const first = firstByte(bytes);
+
+        if (first === 0x7b) return supported('json', jsonTextVersion(textOfBytes(bytes)));
+        if (first === 0x3c) throw page();
+        throw error;
+    }
+
+    return supported('binary', version);
+}
+
 function supported(format: SkeletonSniff['format'], editorVersion: string): SkeletonSniff {
     const line = /^(\d+\.\d+)/.exec(editorVersion)?.[1];
     const version = SPINE_VERSIONS.find((candidate) => candidate === line);
@@ -80,7 +129,8 @@ function supported(format: SkeletonSniff['format'], editorVersion: string): Skel
 }
 
 /**
- * Reads the format and the Spine version of a skeleton file without importing it.
+ * Reads the format and the Spine version of a skeleton file without importing it. Bytes that
+ * hold JSON text count as JSON: the content decides, not a file name.
  * Throws a {@link MarrowError} when the data is not a skeleton or the version is not supported.
  *
  * @example
@@ -88,9 +138,13 @@ function supported(format: SkeletonSniff['format'], editorVersion: string): Skel
  * const { format, version } = sniffSkeleton(bytes); // 'binary', '4.2'
  */
 export function sniffSkeleton(source: SkeletonSource): SkeletonSniff {
-    if (typeof source === 'string') return supported('json', jsonTextVersion(source));
-    if (source instanceof Uint8Array) return supported('binary', binaryVersion(source));
-    if (source instanceof ArrayBuffer) return supported('binary', binaryVersion(new Uint8Array(source)));
+    if (typeof source === 'string') {
+        if (source.trimStart().startsWith('<')) throw page();
+
+        return supported('json', jsonTextVersion(source));
+    }
+    if (source instanceof Uint8Array) return sniffBytes(source);
+    if (source instanceof ArrayBuffer) return sniffBytes(new Uint8Array(source));
 
     return supported('json', jsonObjectVersion(source));
 }

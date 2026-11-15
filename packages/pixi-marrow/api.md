@@ -57,14 +57,16 @@ export declare class MarrowAsset {
   readonly atlas: AtlasModel;
   readonly textures: readonly Texture[];
   readonly createEngine: PoseEngineFactory;
-  private readonly loaded;
+  private readonly release;
   private readonly key;
+  private readonly held;
   private description;
   private gone;
   private found;
   private scan;
   private work;
   private readonly scans;
+  private readonly given;
   private constructor();
   get info(): SkeletonInfo;
   get destroyed(): boolean;
@@ -74,8 +76,8 @@ export declare class MarrowAsset {
   static load(options: MarrowLoadOptions): Promise<MarrowAsset>;
   static from(data: MarrowAssetData): Promise<MarrowAsset>;
   static get(options: MarrowAssetsOptions): MarrowAsset;
-  private static fetch;
   destroy(): void;
+  private free;
   private startScan;
   private onPageUpdate;
 }
@@ -89,7 +91,7 @@ export interface MarrowAssetData {
 export interface MarrowAssetsOptions {
   skeleton: string;
   atlas: string;
-  outlines?: "auto" | "off";
+  outlines?: "auto" | "off" | string | AtlasOutlines;
   renderMode?: "auto" | "mesh" | "batched";
 }
 export declare class MarrowError extends Error {

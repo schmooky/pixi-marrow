@@ -181,13 +181,42 @@ describe('Pixi Assets', () => {
         await Assets.load(['art/boy.skel', 'art/boy.atlas']);
         const hero = MarrowSpine.from({ skeleton: 'art/boy.skel', atlas: 'art/boy.atlas' });
 
-        hero.play('walk', { loop: true });
+        const walk = hero.play('walk', { loop: true });
+
         await Assets.unload('art/boy.atlas');
+        // the display object still draws with the pages: they stay until it is destroyed
+        expect(hero.asset.destroyed).toBe(false);
+        expect(unloaded).toEqual([]);
+        expect(() => ticker.update(ticker.lastTime + 16)).not.toThrow();
+        expect(walk.time).toBeGreaterThan(0);
+        hero.destroy();
         expect(hero.asset.destroyed).toBe(true);
         expect(unloaded).toEqual(['art/spineboy.png']);
-        expect(() => ticker.update(ticker.lastTime + 16)).not.toThrow();
-        expect(hero.autoUpdate).toBe(false);
-        hero.destroy();
+    });
+
+    it('ends an asset without a display object at once when Pixi unloads its atlas or its skeleton', async () => {
+        await Assets.load(['art/boy.skel', 'art/boy.atlas']);
+        const options = { skeleton: 'art/boy.skel', atlas: 'art/boy.atlas' };
+        const byAtlas = MarrowAsset.get(options);
+
+        await Assets.unload('art/boy.atlas');
+        expect(byAtlas.destroyed).toBe(true);
+        expect(unloaded).toEqual(['art/spineboy.png']);
+
+        await Assets.load('art/boy.atlas');
+        const bySkeleton = MarrowAsset.get(options);
+
+        expect(bySkeleton).not.toBe(byAtlas);
+        // a skeleton that is loaded again is another model: the asset of the old one does not stay
+        await Assets.unload('art/boy.skel');
+        expect(bySkeleton.destroyed).toBe(true);
+        await Assets.load('art/boy.skel');
+        const again = MarrowAsset.get(options);
+
+        expect(again).not.toBe(bySkeleton);
+        expect(again.destroyed).toBe(false);
+        // the atlas still holds its page: the asset that ended gave back only its own hold
+        expect(unloaded).toEqual(['art/spineboy.png']);
     });
 
     it('picks the resolution and the format of an atlas from its name', () => {
@@ -221,10 +250,11 @@ describe('Pixi Assets', () => {
         Assets.cache.remove('raw-atlas');
         await Assets.load('art/boy.atlas');
         const outlines = await rejection(() =>
-            MarrowAsset.get({ skeleton: 'art/boy.skel', atlas: 'art/boy.atlas', outlines: 'file.json' as 'off' }),
+            MarrowAsset.get({ skeleton: 'art/boy.skel', atlas: 'art/boy.atlas', outlines: 'file.json' }),
         );
 
-        expect(outlines.fix).toContain('MarrowAsset.load');
+        expect(outlines.message).toContain('Pixi Assets holds no outlines file under "file.json".');
+        expect(outlines.fix).toContain("await Assets.load('file.json')");
     });
 
     it('takes a page as a texture source, and one image alone as the first page', async () => {

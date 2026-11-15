@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { describeSkeleton, importAtlas } from '../../src/core';
 import { MarrowAsset, MarrowError, MarrowSpine } from '../../src/index';
 import { blankTexture, fixtureFiles, importRig } from './helpers';
+import { useLocalUrls } from './urls';
 
 const BOY = fixtureFiles('4.2/spineboy-pro.skel');
 const BOY_JSON = fixtureFiles('4.2/spineboy-pro.json');
@@ -192,18 +193,21 @@ describe('MarrowAsset.load', () => {
 
         return response;
     });
-    /** Pixi `Assets`, typed as loosely as the stubs below answer. */
-    const pixiAssets: { load(asset: unknown): Promise<unknown>; unload(url: unknown): Promise<void> } = Assets;
+    /** The loader of Pixi `Assets`, typed as loosely as the stubs below answer. */
+    const pixiAssets: { load(asset: unknown): Promise<unknown>; unload(url: unknown): Promise<void> } = Assets.loader;
     const loadImage = vi.spyOn(pixiAssets, 'load');
     const unloadImage = vi.spyOn(pixiAssets, 'unload');
 
+    /** Loads an asset that the test file lets go after the test: once per load, as each load is an owner. */
     async function load(options: Parameters<typeof MarrowAsset.load>[0]): Promise<MarrowAsset> {
         const asset = await MarrowAsset.load(options);
 
-        if (!assets.includes(asset)) assets.push(asset);
+        assets.push(asset);
 
         return asset;
     }
+
+    useLocalUrls();
 
     /** What Pixi `Assets` was asked to load. */
     const requests = (): unknown[] => loadImage.mock.calls.map(([asset]) => asset);
@@ -233,10 +237,11 @@ describe('MarrowAsset.load', () => {
         expect(asset.textures[0]?.source.style.minFilter).toBe('linear');
     });
 
-    it('fetches a .json URL as text, and keeps the query of the atlas URL for the image', async () => {
+    it('fetches a .json URL as bytes too, and keeps the query of the atlas URL for the image', async () => {
         const asset = await load({ skeleton: 'art/boy.json?v=2', atlas: 'art/boy.atlas?v=2' });
 
-        expect(reads.sort()).toEqual(['art/boy.atlas?v=2 text', 'art/boy.json?v=2 text']);
+        // the content says that it is JSON, not the name
+        expect(reads.sort()).toEqual(['art/boy.atlas?v=2 text', 'art/boy.json?v=2 bytes']);
         expect(asset.info.animations.map((animation) => animation.name)).toContain('walk');
         expect(requests()).toMatchObject([{ src: 'art/spineboy.png?v=2' }]);
     });
@@ -380,7 +385,7 @@ describe('MarrowAsset.load', () => {
         const error = await rejection(MarrowAsset.load({ skeleton: 'dragon.skel', atlas: 'dragon.atlas' }));
 
         expect(error.code).toBe('invalid-data');
-        expect(error.message).toContain('The page image "dragon_3.png" did not load: decode failed');
+        expect(error.message).toContain('The page image "dragon_3.png" at dragon_3.png did not load: decode failed');
         expect(unloadImage.mock.calls.map(([url]) => url).sort()).toEqual([
             'dragon.png',
             'dragon_2.png',

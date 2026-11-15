@@ -29,6 +29,20 @@ export const shorts = (values: ArrayLike<number>): Int16Array => Int16Array.from
 /** 0 where the official loader left a number undefined or null. */
 export const orZero = (value: number | null | undefined): number => value ?? 0;
 
+/**
+ * The official hash in the one form the model keeps: the 8 bytes of the editor hash as 16 hex
+ * digits. The official binary reader joins two signed integers, and the official JSON reader
+ * keeps base64 text, so the two exports of one skeleton get two strings there.
+ */
+export function modelHash(official: string | null | undefined, skeleton: string | Uint8Array): string | null {
+    if (official === null || official === undefined || official === '') return null;
+    if (typeof skeleton !== 'string') return Buffer.from(skeleton.subarray(0, 8)).toString('hex');
+    // 11 characters of the plain base64 alphabet hold 8 bytes. Other text is kept as it is
+    if (!/^[A-Za-z0-9+/]{11}$/.test(official)) return official;
+
+    return Buffer.from(official, 'base64').toString('hex');
+}
+
 /** Maps the objects of an official list to their position in it. An object from elsewhere throws. */
 export function indexer<T extends object>(list: readonly T[], what: string): (item: T) => number {
     const positions = new Map<T, number>();

@@ -11,7 +11,7 @@ import type {
     TransformTo,
 } from '../../model/constraints';
 import type { BinaryInput } from '../shared/binary-input';
-import { type ImportState, invalid, pick, readIndex, readName } from './reader';
+import { type ImportState, invalid, pick, readCount, readIndex, readName } from './reader';
 
 const CONSTRAINT_IK = 0;
 const CONSTRAINT_PATH = 1;
@@ -26,7 +26,7 @@ const SPACING_MODES: readonly PathConstraintData['spacingMode'][] = ['length', '
 const ROTATE_MODES: readonly PathConstraintData['rotateMode'][] = ['tangent', 'chain', 'chainScale'];
 
 function readBoneList(input: BinaryInput, boneCount: number): Int16Array {
-    const bones = new Int16Array(input.readInt(true));
+    const bones = new Int16Array(readCount(input, 'indices'));
 
     for (let i = 0; i < bones.length; i++) bones[i] = readIndex(input, boneCount, 'bone');
 
@@ -290,7 +290,7 @@ function readConstraint(state: ImportState): ConstraintData {
 export function readConstraints(state: ImportState): ConstraintData[] {
     const constraints: ConstraintData[] = [];
 
-    for (let i = 0, n = state.input.readInt(true); i < n; i++) constraints.push(readConstraint(state));
+    for (let i = 0, n = readCount(state.input, 'entries'); i < n; i++) constraints.push(readConstraint(state));
 
     return constraints;
 }

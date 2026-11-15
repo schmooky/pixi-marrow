@@ -1,7 +1,7 @@
 import type { EventKey, TimelineData } from '../../model/timelines';
 import type { BinaryInput } from '../shared/binary-input';
 import { TimelineWriter } from '../shared/timeline-writer';
-import { type ImportState, invalid, readIndex } from './reader';
+import { type ImportState, invalid, readCount, readIndex } from './reader';
 import { pushTimeline, readFrameCount, type TimelineSink } from './timelines-curve';
 
 /**
@@ -10,7 +10,7 @@ import { pushTimeline, readFrameCount, type TimelineSink } from './timelines-cur
  * their relative order and fill the places that are left.
  */
 function readDrawOrder(input: BinaryInput, count: number): Int16Array | null {
-    const changeCount = input.readInt(true);
+    const changeCount = readCount(input, 'draw order changes');
 
     if (changeCount === 0) return null;
     if (changeCount > count) throw invalid(`A draw order key moves ${changeCount} slots, but only ${count} can move.`);
@@ -58,7 +58,7 @@ function readDrawOrderKeys(
 
 function readFolderTimeline(state: ImportState): TimelineData {
     const input = state.input;
-    const folderSlots = new Int16Array(input.readInt(true));
+    const folderSlots = new Int16Array(readCount(input, 'indices'));
 
     for (let i = 0; i < folderSlots.length; i++) folderSlots[i] = readIndex(input, state.slotCount, 'slot');
     const keys = readDrawOrderKeys(input, readFrameCount(input), folderSlots.length);
@@ -76,7 +76,7 @@ function readFolderTimeline(state: ImportState): TimelineData {
 /** Reads the draw order timeline of an animation, when it has one, and then its draw order folder timelines. */
 export function readDrawOrderTimelines(state: ImportState, sink: TimelineSink): void {
     const input = state.input;
-    const frameCount = input.readInt(true);
+    const frameCount = readCount(input, 'timeline keys');
 
     if (frameCount > 0) {
         const keys = readDrawOrderKeys(input, frameCount, state.slotCount);
@@ -87,7 +87,7 @@ export function readDrawOrderTimelines(state: ImportState, sink: TimelineSink): 
             1,
         );
     }
-    for (let i = 0, n = input.readInt(true); i < n; i++) pushTimeline(sink, readFolderTimeline(state), 1);
+    for (let i = 0, n = readCount(input, 'entries'); i < n; i++) pushTimeline(sink, readFolderTimeline(state), 1);
 }
 
 function readEventKey(state: ImportState): EventKey {
@@ -112,7 +112,7 @@ function readEventKey(state: ImportState): EventKey {
 
 /** Reads the event timeline of an animation, when it has one. */
 export function readEventTimeline(state: ImportState, sink: TimelineSink): void {
-    const frameCount = state.input.readInt(true);
+    const frameCount = readCount(state.input, 'timeline keys');
 
     if (frameCount <= 0) return;
     const writer = new TimelineWriter(frameCount, 1, null);

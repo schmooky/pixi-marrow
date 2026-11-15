@@ -7,23 +7,11 @@ import {
     type SlotTable,
 } from '../../model/model';
 import { writeHexColor } from '../shared/color';
+import { hashOfText } from '../shared/hash';
+import { MAX_INDEX, requireAtMost } from '../shared/limits';
 import type { Json42Version } from './context';
 import type { JsonRoot } from './schema';
-import {
-    entries,
-    enumIndex,
-    invalid,
-    list,
-    lowerFirst,
-    type NameIndex,
-    pick,
-    requireAtMost,
-    requireName,
-    resolve,
-} from './values';
-
-/** The most bones or slots a skeleton can have. The model stores their indices as 16-bit integers. */
-const MAX_INDEX = 0x7fff;
+import { entries, enumIndex, invalid, list, lowerFirst, type NameIndex, pick, requireName, resolve } from './values';
 
 /** The values of the `skeleton` entry the model keeps. */
 export interface SkeletonInfo {
@@ -44,7 +32,7 @@ export function readSkeletonInfo(root: JsonRoot, version: Json42Version): Skelet
 
     return {
         editorVersion: skeleton.spine,
-        hash: pick<string | null>(skeleton.hash, null),
+        hash: hashOfText(skeleton.hash),
         x: pick(skeleton.x, 0),
         y: pick(skeleton.y, 0),
         width: pick(skeleton.width, 0),
