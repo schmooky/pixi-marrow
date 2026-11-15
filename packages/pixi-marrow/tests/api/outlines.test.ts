@@ -149,6 +149,39 @@ describe('a display object and the outlines of its asset', () => {
         for (const hero of [quads, tight, plain]) hero.destroy();
         asset.destroy();
     });
+
+    it('warns once per asset when options set by name need outlines that the asset lacks', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+        try {
+            const { asset: off } = await boyAsset({ outlines: 'off' });
+            const { asset: other } = await boyAsset({ outlines: 'off' });
+            const { asset: scanning } = await boyAsset();
+            const heroes = [
+                // the defaults ask for nothing by name, and off needs no outlines
+                new MarrowSpine(off, { autoUpdate: false }),
+                new MarrowSpine(off, { autoUpdate: false, tightMesh: 'off', occlusion: 'off' }),
+                // outlines that are on their way
+                new MarrowSpine(scanning, { autoUpdate: false, tightMesh: 'on' }),
+            ];
+
+            expect(warn).not.toHaveBeenCalled();
+            heroes.push(new MarrowSpine(off, { autoUpdate: false, tightMesh: 'on', occlusion: 'auto' }));
+            expect(warn).toHaveBeenCalledTimes(1);
+            expect(String(warn.mock.calls[0]?.[0])).toMatch(
+                /these options do nothing: tightMesh: 'on', occlusion: 'auto'\./,
+            );
+            heroes.push(new MarrowSpine(off, { autoUpdate: false, perf: { tightMesh: 'auto' } }));
+            expect(warn).toHaveBeenCalledTimes(1);
+            heroes.push(new MarrowSpine(other, { autoUpdate: false, occlusion: 'auto' }));
+            expect(warn).toHaveBeenCalledTimes(2);
+            expect(String(warn.mock.calls[1]?.[0])).toMatch(/do nothing: occlusion: 'auto'\./);
+            for (const hero of heroes) hero.destroy();
+            for (const asset of [off, other, scanning]) asset.destroy();
+        } finally {
+            warn.mockRestore();
+        }
+    });
 });
 
 describe('scanOutlines', () => {

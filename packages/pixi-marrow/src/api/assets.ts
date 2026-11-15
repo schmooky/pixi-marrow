@@ -260,7 +260,10 @@ export interface MarrowAssetsOptions {
     skeleton: string;
     /** The alias of the `.atlas` file that Pixi `Assets` loaded. */
     atlas: string;
-    /** `auto` (the default) reads the page images in idle time, `off` uses no outlines. See `MarrowLoadOptions.outlines`. */
+    /**
+     * `off` (the default) uses no outlines. `auto` reads the page images in idle time, which takes
+     * 32 MB for a moment for a page of 2048 by 2048. See `MarrowLoadOptions.outlines`.
+     */
     outlines?: 'auto' | 'off';
     /** The render mode the display objects will ask for, see `MarrowLoadOptions.renderMode`. Default `auto`. */
     renderMode?: 'auto' | 'mesh' | 'batched';
@@ -298,7 +301,7 @@ function sharedFromCache(
     const load = typeof atlas === 'object' && atlas !== null ? atlasLoads.get(atlas) : undefined;
 
     if (atlas === undefined || load === undefined) throw notLoaded(options.atlas, 'atlas');
-    const outlines = options.outlines ?? 'auto';
+    const outlines = options.outlines ?? 'off';
     const mode = renderMode(options.renderMode ?? 'auto');
 
     if (outlines !== 'auto' && outlines !== 'off') {

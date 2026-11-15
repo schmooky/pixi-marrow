@@ -2,6 +2,7 @@ import { MarrowError } from '../base/errors';
 import { closestName, unknownName } from '../base/names';
 import type { PhysicsMode } from '../pose/engine';
 import type { RenderMode } from '../render/mode';
+import type { ResolvedPerf } from './presets';
 
 /** The physics modes, as the official `Physics` names them. */
 const PHYSICS_MODES: readonly PhysicsMode[] = ['none', 'reset', 'update', 'pose'];
@@ -81,4 +82,33 @@ export function finiteArgument(method: string, name: string, value: unknown): nu
     }
 
     return value;
+}
+
+/** The assets that warned of options without outlines. Each one warns once. */
+const warned = new WeakSet<object>();
+
+/**
+ * Warns once per asset when options that need the outlines of the atlas regions were set by name
+ * and the asset has none: `tightMesh` other than `off`, and `occlusion: 'auto'`. They do nothing
+ * then. An asset loaded with `outlines: 'off'`, the default, has none.
+ *
+ * @example
+ * warnWithoutOutlines(asset, settings, options.occlusion);
+ */
+export function warnWithoutOutlines(
+    asset: { readonly outlinesState: string },
+    settings: ResolvedPerf,
+    occlusion: string | undefined,
+): void {
+    if (asset.outlinesState !== 'off' || warned.has(asset)) return;
+    const tight = settings.given.has('tightMesh') && settings.tightMesh !== 'off';
+    const asked = [tight ? `tightMesh: '${settings.tightMesh}'` : '', occlusion === 'auto' ? "occlusion: 'auto'" : ''];
+    const named = asked.filter((option) => option !== '');
+
+    if (named.length === 0) return;
+    warned.add(asset);
+    console.warn(
+        `pixi-marrow: the asset has no outlines of the atlas regions, so these options do nothing: ${named.join(', ')}. ` +
+            "Load the asset with outlines: 'auto', or with the file of pixi-marrow outlines.",
+    );
 }
