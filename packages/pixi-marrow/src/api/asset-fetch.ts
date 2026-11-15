@@ -11,6 +11,7 @@ import { loadMeshCode } from '../render/mesh-code';
 import { hasClip, type RenderMode, startsWithMeshes } from '../render/mode';
 import type { MarrowLoadOptions } from './asset-options';
 import { renderMode } from './checks';
+import { wrongValue } from './values';
 
 /*
  * What `MarrowAsset.load` does before there is an asset: it fetches the files, reads them and
@@ -24,6 +25,28 @@ export interface AssetParts {
     textures: readonly Texture[];
     /** A promise gives the outlines later: once they were checked and the code that cuts with them is loaded. */
     outlines: AtlasOutlines | Promise<AtlasOutlines> | 'auto' | undefined;
+    /** The name of the asset, see `MarrowAsset.name`. */
+    name: string;
+}
+
+/**
+ * The name of an asset: the `name` option, else the file name of the skeleton URL without its
+ * extension, its query and its hash. It is the empty string for a skeleton that is no URL, and
+ * for a `blob:` or `data:` URL.
+ *
+ * @example
+ * assetName(undefined, 'https://cdn.example/rigs/hero.skel?v=3'); // 'hero'
+ */
+export function assetName(name: unknown, skeleton: unknown): string {
+    if (name !== undefined) {
+        if (typeof name !== 'string') throw wrongValue('name', name, 'a string');
+
+        return name;
+    }
+    if (typeof skeleton !== 'string' || /^(blob|data):/i.test(skeleton)) return '';
+    const file = skeleton.replace(/[?#].*$/, '').replace(/^.*\//, '');
+
+    return file.replace(/\.[^.]*$/, '');
 }
 
 /**
@@ -73,12 +96,12 @@ async function fetchFile(url: string, what: string): Promise<Response> {
     } catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
 
-        throw new MarrowError('invalid-data', `The ${what} at ${url} did not load: ${reason}`, {
+        throw new MarrowError('not-found', `The ${what} at ${url} did not load: ${reason}`, {
             fix: 'Check the URL and that the server allows the request.',
         });
     }
     if (!response.ok) {
-        throw new MarrowError('invalid-data', `The ${what} at ${url} did not load: status ${response.status}.`, {
+        throw new MarrowError('not-found', `The ${what} at ${url} did not load: status ${response.status}.`, {
             fix: 'Check the URL.',
         });
     }
@@ -121,6 +144,9 @@ async function readOutlines(outlines: MarrowLoadOptions['outlines']): Promise<un
 export async function checkOutlines(outlines: unknown, atlas: AtlasModel): Promise<AtlasOutlines | 'auto' | undefined> {
     if (outlines === undefined || outlines === 'off') return undefined;
     if (outlines === 'auto') return 'auto';
+    if (typeof outlines !== 'object' || outlines === null) {
+        throw wrongValue('outlines', outlines, "'auto', 'off', the URL of an outlines file or its parsed content");
+    }
     const [{ readAtlasOutlines }] = await Promise.all([import('../geometry/outlines'), loadCutCode()]);
 
     return readAtlasOutlines(outlines, atlas);
@@ -162,6 +188,8 @@ export interface FetchedAsset {
  * const { parts, createEngine, release } = await fetchAsset({ skeleton: 'hero.skel', atlas: 'hero.atlas' });
  */
 export async function fetchAsset(options: MarrowLoadOptions): Promise<FetchedAsset> {
+    // before a request, so that a name that is no string costs none
+    const name = assetName(options.name, options.skeleton);
     const skeleton = typeof options.skeleton === 'string' ? resolveUrl(options.skeleton) : undefined;
     const atlasUrl = resolveUrl(options.atlas);
     // the code that reads the files loads next to them
@@ -184,5 +212,5 @@ export async function fetchAsset(options: MarrowLoadOptions): Promise<FetchedAss
         for (const url of loaded) code.releasePage(url);
     };
 
-    return { parts: { model, atlas, textures, outlines }, createEngine, release };
+    return { parts: { model, atlas, textures, outlines, name }, createEngine, release };
 }

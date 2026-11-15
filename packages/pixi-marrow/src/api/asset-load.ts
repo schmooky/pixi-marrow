@@ -138,11 +138,9 @@ async function loadPage(
         texture = await loader.load({ src: url, data: { ...metadata, alphaMode: alphaModeOf(page) } });
     } catch (error) {
         letGo(url, loader);
-        throw new MarrowError(
-            'invalid-data',
-            `The page image "${page.name}" at ${url} did not load: ${reasonOf(error)}`,
-            { fix: `Put the image at ${url}, or pass it in "textures" under the page name.` },
-        );
+        throw new MarrowError('not-found', `The page image "${page.name}" at ${url} did not load: ${reasonOf(error)}`, {
+            fix: `Put the image at ${url}, or pass it in "textures" under the page name.`,
+        });
     }
     if (!(texture instanceof Texture)) {
         releasePage(url, loader);

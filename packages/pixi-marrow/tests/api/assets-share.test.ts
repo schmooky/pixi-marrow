@@ -200,7 +200,7 @@ describe('the parsers of Pixi Assets', () => {
         const atlas = await failure(Assets.load('art/none.atlas'));
 
         expect(skeleton).toContain(
-            `[pixi-marrow:invalid-data] The skeleton at ${ROOT}art/none.skel did not load: status 404.`,
+            `[pixi-marrow:not-found] The skeleton at ${ROOT}art/none.skel did not load: status 404.`,
         );
         expect(atlas).toContain(`The atlas at ${ROOT}art/none.atlas did not load: status 404.`);
     });

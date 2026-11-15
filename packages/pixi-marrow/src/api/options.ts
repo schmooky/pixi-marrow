@@ -56,8 +56,9 @@ export interface MarrowSpineOptions {
      */
     ticker?: SpineTicker;
     /**
-     * The Pixi `label` of the object. Default `MarrowSpine`, so that a dump of the scene tree
-     * names the skeletons in a minified build.
+     * The Pixi `label` of the object, so that a dump of the scene tree names the skeletons in a
+     * minified build. Default `MarrowSpine:<asset.name>`, such as `MarrowSpine:hero`, and
+     * `MarrowSpine` for an asset without a name.
      */
     label?: string;
     /**
