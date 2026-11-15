@@ -24,7 +24,8 @@ export interface PerfSettings {
     /**
      * `auto` draws the instances that follow each other in Pixi's render order and share a layout
      * as one instanced draw, where the vertex shader places their vertices: the mesh mode with
-     * `skinning: 'gpu'`. The picture is the same to the bit. It pays for many copies of one rig
+     * `skinning: 'gpu'`. The pixel check found the picture the same to the bit, on an Apple M4 in
+     * Chrome. Another GPU may round it apart. It pays for many copies of one rig
      * next to each other, and not for a grid of different skeletons. An instanced draw runs every
      * attachment of every slot, so `auto` leaves a layout alone whose attachments have more than
      * twice the vertices of what the setup pose shows. `on` draws that one instanced too. No
