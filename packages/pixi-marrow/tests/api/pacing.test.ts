@@ -15,7 +15,10 @@ const SCREEN = { screen: { x: 0, y: 0, width: 800, height: 600 } } as unknown as
 const at = (x: number, y: number, width: number, height = width) => ({
     visible: true,
     renderable: true,
+    alpha: 1,
     parent: null,
+    // what Pixi gives the top of a tree it renders
+    renderGroup: {},
     getBounds: () => ({ x, y, width, height }),
 });
 
@@ -93,22 +96,29 @@ describe('the pacing of updates', () => {
         expect(meshes.take(1 / 60, false)).toBe(1 / 60);
     });
 
-    it('pauses a skeleton off the screen and loses the time, and resumes it on the screen', () => {
-        const pacer = new Pacer(resolvePerf(undefined, { offscreen: 'pause' }));
+    it('pauses a skeleton off the screen: its time passes in every update, and it says that it is paused', () => {
+        const pacer = new Pacer(resolvePerf(undefined, { offscreen: 'pause', updateRate: 20 }));
 
         pacer.take(1 / 60, false);
+        expect(pacer.paused).toBe(false);
         pacer.seen(at(900, 0, 50), SCREEN);
-        expect(pacer.take(1 / 60, false)).toBe(-1);
-        expect(pacer.take(1 / 60, false)).toBe(-1);
-        pacer.seen(at(100, 100, 50), SCREEN);
+        // the rate does not hold the time of a paused skeleton back: its events stay on time
+        expect(pacer.take(1 / 60, false)).toBeCloseTo(2 / 60, 12);
+        expect(pacer.paused).toBe(true);
         expect(pacer.take(1 / 60, false)).toBe(1 / 60);
+        pacer.seen(at(100, 100, 50), SCREEN);
+        expect(pacer.paused).toBe(false);
     });
 
     it('counts a skeleton that no render reaches for a while as off the screen', () => {
         const pacer = new Pacer(resolvePerf(undefined, { offscreen: 'pause' }));
-        const steps = Array.from({ length: 5 }, () => pacer.take(1 / 20, false));
+        const paused = Array.from({ length: 5 }, () => {
+            pacer.take(1 / 20, false);
 
-        expect(steps.map((seconds) => seconds > 0)).toEqual([true, true, false, false, false]);
+            return pacer.paused;
+        });
+
+        expect(paused).toEqual([false, false, true, true, true]);
     });
 
     it('keeps a skeleton on the screen that updates several times a render', () => {
@@ -303,7 +313,8 @@ describe('pacing and hidden skeletons', () => {
     /** A skeleton on the screen of a stage, inside a popup, that updates by hand. */
     async function inPopup(offscreen: 'pause' | 'throttle'): Promise<{ spine: MarrowSpine; popup: Container }> {
         const spine = new MarrowSpine(await fixtureAsset('4.2/spineboy-pro.skel'), { autoUpdate: false, offscreen });
-        const stage = new Container();
+        // the stage of an app is a render group from its first render on
+        const stage = new Container({ isRenderGroup: true });
         const popup = new Container();
 
         stage.addChild(popup);

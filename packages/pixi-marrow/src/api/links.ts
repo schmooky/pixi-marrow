@@ -71,7 +71,7 @@ export class Links {
         this.check(container);
         if (taken) {
             throw new MarrowError(
-                'invalid-data',
+                'invalid-option',
                 `A container is attached to the slot "${model.slots.names[slot]}" already.`,
                 {
                     fix: 'Detach that container first, or put both into one container: a slot holds one.',
@@ -184,7 +184,7 @@ export class Links {
             ? `attached to the slot "${model.slots.names[held.slot]}"`
             : `following the bone "${model.bones.names[held.bone]}"`;
 
-        throw new MarrowError('invalid-data', `The container is ${where} already.`, {
+        throw new MarrowError('invalid-option', `The container is ${where} already.`, {
             fix: attached ? 'Call detach with the container first.' : 'Call unfollow with the container first.',
         });
     }

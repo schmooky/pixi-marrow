@@ -1,6 +1,13 @@
 import type { EventKey } from '../model/timelines';
 import type { PoseEvent, PoseEventType, TrackEntry } from '../pose/engine';
-import type { TrackHandle } from './track';
+import type { TrackEnd, TrackHandle } from './track';
+
+/** What says whether somebody listens for an event: the display object. */
+export interface EventSink {
+    readonly destroyed: boolean;
+    emit(event: string, ...args: unknown[]): boolean;
+    listenerCount(event: string): number;
+}
 
 /**
  * Engine events with the handle each belongs to, waiting to be emitted. Three lists of one length.
@@ -46,6 +53,11 @@ export class TrackBook {
     /** Per track: the handle of the entry the track got last. It is the current or the last queued one. */
     private readonly lasts: (TrackHandle | undefined)[] = [];
 
+    /** How many entries have a handle: the playing, the queued and the ones that mix out. */
+    get live(): number {
+        return this.handles.size;
+    }
+
     /** How many tracks were used so far. */
     get size(): number {
         return this.lasts.length;
@@ -74,25 +86,41 @@ export class TrackBook {
      * Finds the handle of each engine event by its entry, in order, and appends both to `out`.
      * Events of the empty animation are left out. So are events of entries without a handle,
      * which were made on the engine directly.
+     *
+     * @param cause Why the entries end that the command before this call ended: `stopped` or
+     * `destroyed`. Without it an entry that was interrupted ends as `interrupted`.
+     * @param sink Who listens, in an update that emits at once. An event nobody listens for is
+     * then left out. Without it every event waits for the next update.
      */
-    absorb(events: readonly PoseEvent[], out: EventList): void {
+    absorb(events: readonly PoseEvent[], out: EventList, cause?: TrackEnd, sink?: EventSink): void {
         // by index: a loop over the values of an array makes an iterator, in every update
         for (let i = 0; i < events.length; i++) {
             const event = events[i];
             const handle = event === undefined ? undefined : this.handles.get(event.entry);
 
             if (event === undefined || handle === undefined) continue;
-            if (event.type === 'dispose') this.forget(event.entry, handle);
-            else if (event.type === 'end' || (event.type === 'complete' && !handle.loop)) handle.settle();
-            if (!handle.hidden) out.push(event.type, handle, event.key);
+            const { type } = event;
+
+            if (type === 'dispose') this.forget(event.entry, handle, cause);
+            else note(handle, type, cause);
+            if (!handle.hidden && (sink === undefined || sink.listenerCount(type) > 0)) {
+                out.push(type, handle, event.key);
+            }
         }
     }
 
     /** Lets go of a disposed entry. From here on the engine may use the object for another entry. */
-    private forget(entry: TrackEntry, handle: TrackHandle): void {
+    private forget(entry: TrackEntry, handle: TrackHandle, cause: TrackEnd | undefined): void {
         this.handles.delete(entry);
         // no newer entry took its place: the track holds nothing now
         if (this.lasts[handle.track] === handle) this.lasts[handle.track] = undefined;
-        handle.release();
+        handle.release(handle.cause ?? cause ?? 'interrupted');
     }
+}
+
+/** Notes what an event says of the end of an entry: why it will end, or that it has. */
+function note(handle: TrackHandle, type: PoseEventType, cause: TrackEnd | undefined): void {
+    if (type === 'interrupt') handle.cause ??= cause ?? 'interrupted';
+    else if (type === 'end') handle.settle(handle.cause ?? cause ?? 'complete');
+    else if (type === 'complete' && !handle.loop) handle.settle('complete');
 }

@@ -13,6 +13,15 @@ export interface MarrowNames {
     events: string;
 }
 
+/**
+ * A Pixi `Ticker`, as far as a display object uses it: `app.ticker` and `Ticker.shared` are one.
+ * The callback gets the ticker, and reads the milliseconds since the last frame from `deltaMS`.
+ */
+export interface SpineTicker {
+    add(callback: (ticker: { deltaMS: number }) => void, context?: unknown): unknown;
+    remove(callback: (ticker: { deltaMS: number }) => void, context?: unknown): unknown;
+}
+
 /** How a container that is attached to a slot follows that slot. See `MarrowSpine.attach`. */
 export interface AttachOptions {
     /**
@@ -25,18 +34,38 @@ export interface AttachOptions {
     followColor?: boolean;
 }
 
-/** Options for creating a display object. */
+/**
+ * Options for creating a display object. A key that is no option throws a `MarrowError` with the
+ * code `invalid-option` and the closest option.
+ */
 export interface MarrowSpineOptions {
     /**
-     * True when the object updates itself from Pixi's shared ticker. Default true. Pass false
-     * where there are no animation frames, as in Node, and call `update` yourself.
+     * True when the object updates itself from a Pixi ticker. Default true. Pass false where
+     * there are no animation frames, as in Node, and call `update` yourself.
+     *
+     * An update from the ticker does not pose or draw an object that Pixi does not draw. That is
+     * an object without a parent, and one with `visible` or `renderable` false or an alpha of 0,
+     * on itself or on a parent. Its tracks, its events and `Track.finished` go on. The render
+     * that shows it again poses it first. `bone(name)` reads the pose of its last posed update
+     * until then. An update you call yourself always poses.
      */
     autoUpdate?: boolean;
+    /**
+     * The ticker that updates the object while `autoUpdate` is true. Default `Ticker.shared`.
+     * Pass `app.ticker` so that its `speed`, `maxFPS` and `stop()` reach the skeleton.
+     */
+    ticker?: SpineTicker;
+    /**
+     * The Pixi `label` of the object. Default `MarrowSpine`, so that a dump of the scene tree
+     * names the skeletons in a minified build.
+     */
+    label?: string;
     /**
      * How the skeleton reaches the GPU.
      *
      * - `mesh` gives it meshes of its own: one draw call per instance, more where slots multiply,
-     *   screen or are clipped. The GPU places the vertices, and a clip is a stencil mask.
+     *   screen or are clipped. The CPU places the vertices, or the vertex shader with
+     *   `skinning: 'gpu'`. A clip is a stencil mask.
      * - `batched` writes it into the batch of its render group: skeletons that follow each other
      *   in the display list share one draw call, as sprites do. The CPU places the vertices that
      *   moved and copies them, and it cuts the triangles of clipped slots.
@@ -86,26 +115,39 @@ export interface MarrowSpineOptions {
      * depends on the device and the scene, so each one is set by its own name.
      */
     perf?: PerfPreset | PerfOptions;
-    /** See {@link PerfSettings.skinning}. */
+    /**
+     * Where the vertices of the mesh mode are placed. `gpu` places them in the vertex shader from
+     * the bone matrices, meshes with weights too. `cpu` and `auto` (the default) place them on
+     * the CPU.
+     *
+     * With `gpu` the CPU still places a mesh while a deform is on it, and a region with a
+     * sequence. The batched mode always places on the CPU: the option has no effect there, and
+     * the object warns once. See {@link PerfSettings.skinning}.
+     */
     skinning?: PerfSettings['skinning'];
     /**
-     * See {@link PerfSettings.instancing}. It acts on a skeleton in the mesh mode with
-     * `skinning: 'gpu'` and leaves every other one as it is. A run ends where Pixi draws anything
+     * `auto` and `on` draw instances of one rig that follow each other as one instanced draw.
+     * Default `off`. See {@link PerfSettings.instancing} for when `auto` leaves a rig alone.
+     *
+     * It acts on a skeleton in the mesh mode with `skinning: 'gpu'`. On any other skeleton it
+     * has no effect, and the object warns once. A run ends where Pixi draws anything
      * else, and where the next instance has another skin, cuts, draw order, pages or blend mode.
      * An instance whose clipping attachment cuts a visible slot, or with an attached container in
      * view, draws alone while that lasts. `perf.report()` says which it is, and why.
      */
     instancing?: PerfSettings['instancing'];
     /**
-     * See {@link PerfSettings.bake}. With `auto` an animation is baked the first time it plays
-     * alone on track 0, at 60 frames per second. The bake runs in idle time, a frame of the
+     * Which animations play from baked frames: `off` (the default), `auto` or a list of names.
+     * With `auto` an animation is baked the first time it plays alone on track 0, at 60 frames
+     * per second. The bake runs in idle time, a frame of the
      * animation or more per slice, and the object plays live until the clip is there. A list
      * bakes the animations it names, and a name the skeleton lacks throws a `MarrowError`. Clips
      * from `addBakedClips` of `pixi-marrow/bake` play in place of baking.
      *
-     * The clips are shared by the instances of the asset, per skin. They stay for the life of
-     * the asset, and those of a combined skin until the skin is freed. They grow with the
-     * duration of the animations and with the number of skins that play them.
+     * The clips are shared by the instances of the asset, per skin. They grow with the duration
+     * of the animations and with the number of skins that play them. Clips baked in the game hold
+     * at most 4 MB per skeleton: the clip that played longest ago goes first. `setBakeBudget` of
+     * `pixi-marrow/bake` sets another limit, and `perf.memory()` reports both numbers.
      *
      * An update plays baked when one entry plays alone on track 0 at alpha 1, with no mix, and
      * the update before it played that entry too. An entry with another one queued after it, as
@@ -120,13 +162,28 @@ export interface MarrowSpineOptions {
      * values of the last update the engine posed. Its world values are those of the frame.
      */
     bake?: PerfSettings['bake'];
-    /** See {@link PerfSettings.idleCache}. */
+    /**
+     * `auto` draws a skeleton that rests as one image until it changes. Default `off`. Each
+     * image is a texture of its own, so many images take memory and can split a batch. At most 4
+     * images are drawn per frame. See {@link PerfSettings.idleCache}.
+     */
     idleCache?: PerfSettings['idleCache'];
-    /** See {@link PerfSettings.offscreen}. */
+    /**
+     * What a skeleton does while it is off the screen or hidden. `update` (the default) updates
+     * it as one on the screen. `throttle` updates it 4 times a second. `pause` does not pose or
+     * draw it, and its tracks, events and `Track.finished` go on. See {@link PerfSettings.offscreen}.
+     */
     offscreen?: PerfSettings['offscreen'];
-    /** See {@link PerfSettings.updateRate}. */
+    /**
+     * How often the pose is updated. `display` (the default) is every frame. A number is that
+     * many updates a second, in an even rhythm, with the time that passed. See
+     * {@link PerfSettings.updateRate}.
+     */
     updateRate?: PerfSettings['updateRate'];
-    /** See {@link PerfSettings.lod}. */
+    /**
+     * `auto` leaves physics and deform out while the skeleton is drawn smaller than 96 pixels
+     * across. Default `off`. Both come back at 120 pixels. See {@link PerfSettings.lod}.
+     */
     lod?: PerfSettings['lod'];
 }
 
@@ -230,8 +287,11 @@ export interface UpdateProbe {
 export interface MarrowEvent<N extends MarrowNames = MarrowNames> {
     /** The name of the event. */
     name: N['events'];
+    /** The integer of the event key: the Integer field of the event in the Spine editor. */
     int: number;
+    /** The float of the event key: the Float field of the event in the Spine editor. */
     float: number;
+    /** The string of the event key: the String field of the event in the Spine editor. */
     string: string;
     /** The volume of the event's audio, from 0 to 1. */
     volume: number;

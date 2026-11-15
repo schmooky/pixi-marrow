@@ -42,7 +42,7 @@ describe.each(VERSIONS)('Track.finished of a Spine %s skeleton', (version) => {
         expect(await settled(shoot.finished)).toBe(false);
         steps(spine, 10);
         expect(await settled(shoot.finished)).toBe(true);
-        await expect(shoot.finished).resolves.toBeUndefined();
+        await expect(shoot.finished).resolves.toBe('complete');
     });
 
     it('is one promise, also when it is first read after the end', async () => {

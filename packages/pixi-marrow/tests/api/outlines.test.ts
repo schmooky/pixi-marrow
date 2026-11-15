@@ -154,7 +154,7 @@ describe('a display object and the outlines of its asset', () => {
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
         // the code that warns loads on demand: the warning comes once it is there
         const warned = async (): Promise<void> => {
-            await import('../../src/api/outline-warning');
+            await import('../../src/api/no-effect');
             await new Promise((resolve) => setTimeout(resolve, 0));
         };
 
@@ -176,7 +176,7 @@ describe('a display object and the outlines of its asset', () => {
             await warned();
             expect(warn).toHaveBeenCalledTimes(1);
             expect(String(warn.mock.calls[0]?.[0])).toMatch(
-                /these options do nothing: tightMesh: 'on', occlusion: 'auto'\./,
+                /tightMesh: 'on' and occlusion: 'auto' have no effect, because the asset has no outlines/,
             );
             heroes.push(new MarrowSpine(off, { autoUpdate: false, perf: { tightMesh: 'auto' } }));
             await warned();
@@ -184,7 +184,7 @@ describe('a display object and the outlines of its asset', () => {
             heroes.push(new MarrowSpine(other, { autoUpdate: false, occlusion: 'auto' }));
             await warned();
             expect(warn).toHaveBeenCalledTimes(2);
-            expect(String(warn.mock.calls[1]?.[0])).toMatch(/do nothing: occlusion: 'auto'\./);
+            expect(String(warn.mock.calls[1]?.[0])).toMatch(/occlusion: 'auto' has no effect, because/);
             for (const hero of heroes) hero.destroy();
             for (const asset of [off, other, scanning]) asset.destroy();
         } finally {

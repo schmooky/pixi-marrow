@@ -1,8 +1,9 @@
+import type { ContainerChild, ContainerEvents } from 'pixi.js';
 import type { EventData } from '../model/model';
 import type { EventKey } from '../model/timelines';
 import type { MarrowEvent, MarrowNames } from './options';
 import type { Track } from './track';
-import { EventList } from './track-book';
+import { EventList, type EventSink } from './track-book';
 
 /**
  * The events a `MarrowSpine` emits, each with the arguments its listeners get. They are
@@ -26,12 +27,26 @@ export interface MarrowSpineEvents<N extends MarrowNames = MarrowNames> {
     event: [event: MarrowEvent<N>, track: Track<N>];
 }
 
-/** What the events are emitted on: the display object. */
-export interface EventSink {
-    readonly destroyed: boolean;
-    emit(event: string, ...args: unknown[]): boolean;
-    listenerCount(event: string): number;
-}
+/** The events a display object emits: those of the skeleton and those of every Pixi container. */
+type Emitted<N extends MarrowNames> = MarrowSpineEvents<N> & ContainerEvents<ContainerChild>;
+
+/**
+ * The name of an event as `on`, `once` and `off` of a `MarrowSpine` take it. A name written out
+ * that is no event is `never`, so the call does not compile. A name of the wide type `string`
+ * or `symbol` passes.
+ */
+export type SpineEventName<N extends MarrowNames, K> = K extends keyof Emitted<N>
+    ? K
+    : string extends K
+      ? K
+      : symbol extends K
+        ? K
+        : never;
+
+/** The listener of an event of a `MarrowSpine`, with the arguments of that event. */
+export type SpineListener<N extends MarrowNames, K> = (
+    ...args: K extends keyof Emitted<N> ? Emitted<N>[K] : unknown[]
+) => void;
 
 /** An event key as the plain data a listener gets. */
 function eventOf(events: readonly EventData[], key: EventKey): MarrowEvent {
