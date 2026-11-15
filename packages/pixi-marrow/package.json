@@ -45,7 +45,7 @@
     "CHANGELOG.md"
   ],
   "scripts": {
-    "build": "tsdown",
+    "build": "tsdown --config-loader native",
     "test": "node ../../scripts/fixtures.mjs && vitest run",
     "test:watch": "vitest",
     "test:coverage": "node ../../scripts/fixtures.mjs && vitest run --coverage",

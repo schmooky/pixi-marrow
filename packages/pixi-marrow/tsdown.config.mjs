@@ -1,13 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { defineConfig } from 'tsdown';
 
-interface ExportTarget {
-    default: string;
-}
+/*
+ * Plain JavaScript, and `build` passes `--config-loader native`: Node imports this file as it
+ * is. A TypeScript config needs a Node that strips types, 22.18 or later, or the package
+ * `unrun`. The root `engines` start at Node 22.12, which has neither.
+ */
 
-const pkg: { exports: Record<string, string | ExportTarget> } = JSON.parse(
-    readFileSync(new URL('./package.json', import.meta.url), 'utf8'),
-);
+/** @type {{ exports: Record<string, string | { default: string }> }} */
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'));
 
 // one build entry per subpath export: ./dist/core.js is built from src/core.ts
 const entry = Object.values(pkg.exports).flatMap((target) =>
