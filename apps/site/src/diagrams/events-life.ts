@@ -29,6 +29,8 @@ export default defineDiagram({
         const show = say;
         const xOf = (seconds: number): number => 20 + (seconds / SPAN) * 680;
         let time = 0;
+        /** The marks shown in this pass, so that each appears once, the one at 0 seconds too. */
+        const shown = new Set<number>();
 
         line.draw([
             { from: 0, to: REPLACE + MIX, color: COLORS.first, label: 'idle, loops' },
@@ -38,9 +40,13 @@ export default defineDiagram({
             const before = time;
 
             time = (time + seconds) % SPAN;
-            if (time < before) marks.replaceChildren();
+            if (time < before) {
+                marks.replaceChildren();
+                shown.clear();
+            }
             for (const [index, mark] of MARKS.entries()) {
-                if (!(before < mark.at && mark.at <= time) && !(mark.at === 0 && time < before)) continue;
+                if (mark.at > time || shown.has(index)) continue;
+                shown.add(index);
                 const x = xOf(mark.at);
                 const y = 30 + (index % 4) * 26;
                 const group = svgElement('g', { opacity: 0 }, marks);
@@ -63,7 +69,9 @@ export default defineDiagram({
                     group,
                 ).textContent = `${mark.name} (${mark.of})`;
                 animate(group, { opacity: [0, 1], duration: 250 });
-                show(`${mark.name} of ${mark.of} at ${mark.at.toFixed(1)} s`);
+                show(
+                    `At ${mark.at.toFixed(1)} s the {${mark.of === 'idle' ? 'first' : 'second'}:${mark.of}} reports ${mark.name}.`,
+                );
             }
             line.show(time);
         });

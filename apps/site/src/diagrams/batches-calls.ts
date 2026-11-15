@@ -25,6 +25,8 @@ export default defineDiagram({
         const options = { text: false, multiply: false };
         let timeline = createTimeline({ loop: true, autoplay: false });
         let rate = 1;
+        /** Where the walk has reached the end of the list, which a paused diagram shows. */
+        let walked = 0;
         /** The display list for the switches. */
         const list = (): Item[] => {
             const items: Item[] = ['A', 'B', 'C', 'D', 'E', 'F'].map((name) => ({
@@ -90,6 +92,8 @@ export default defineDiagram({
             }
             const calls = batch + 1;
 
+            walked = items.length * 600 + 100;
+
             timeline.call(
                 () => show(`${calls} draw ${calls === 1 ? 'call' : 'calls'} for ${items.length} objects`),
                 items.length * 600,
@@ -100,12 +104,16 @@ export default defineDiagram({
                 },
                 items.length * 600 + 2200,
             );
-            timeline.play();
         };
 
+        // the runtime plays the timeline while the diagram plays
         own({
             play: () => timeline.play(),
             pause: () => timeline.pause(),
+            seek: (milliseconds) => timeline.seek(milliseconds),
+            get still() {
+                return walked;
+            },
             get speed() {
                 return rate;
             },

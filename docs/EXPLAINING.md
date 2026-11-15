@@ -32,7 +32,7 @@ Every idea starts with something the reader can see move, and the words come aft
 - **Labels sit on the drawing**, next to what they name, and the paragraph that explains a diagram comes right after it.
 - **Colors mean the same everywhere.** Blue is the first track or animation, orange the second, white the result. Grey dashes mark the setup pose.
 - **Motion has a purpose.** Nothing moves for decoration. A diagram that shows a sequence steps through it, and the reader can pause it and slow it down to a half or a quarter.
-- **The line under the drawing says what happens now**, as subtitles do. It is a sentence, not a value dump: "Mix from A into B, 30 percent of the way. B keys no position, so the square slides home." It changes when the phase changes, not in every frame, and the names in it take the colors of the drawing.
+- **The line under the drawing says what happens now**, as subtitles do. It is a sentence, not a value dump: "Mix from A into B, 30 percent of the way. B keys no position, so the square slides home." Its words change when the phase changes. A number in it may follow the drawing, as the share of a mix or the value of a curve does, when that number is what to watch. The names in it take the colors of the drawing.
 - **The picture comes before the code** in every section. A section that opens with a call has the order upside down.
 
 ## Words
@@ -46,9 +46,11 @@ Every idea starts with something the reader can see move, and the words come aft
 ## How the diagrams are built
 
 - `apps/site/src/diagrams/` holds one module per diagram, mounted by `Diagram.astro`. A diagram runs only while it is in view.
-- Sequences, such as a frame from time to pixels, are timelines of anime.js that the reader can play, pause and step.
+- Sequences, such as a frame from time to pixels, are timelines of anime.js that the reader can play, pause and slow down. A diagram hands them to the runtime with `own`, which plays them only while the diagram plays.
 - Every diagram gets a line under its drawing, with a button that pauses it and one that slows it down. `say` writes the line, and a part written `{first:A}`, `{second:B}` or `{result:what you see}` takes that color. The panel under the line holds what the reader picks, and readouts only for numbers that do not fit the sentence. The `rows` of `Diagram` counts the panel rows, so that the page does not jump, and 0 leaves the panel out.
-- A diagram that changes only when the reader picks something hides the buttons. A reader who asks for less motion sees the first frame, and presses play when they want it to move.
+- A diagram that changes only when the reader picks something hides the buttons. A reader who asks for less motion sees a still frame, and presses play when they want it to move. In the still frame each step of `onFrame` runs once with no time. Each animation given to `own` stands at the end of its first pass, or at the moment it names with `still`. A still frame must show the idea, so a diagram whose content comes in late names a moment where it shows.
+- A pick does not start a paused diagram. It stays paused and shows what was picked as a still frame.
+- On a phone a row of lanes stands one under the other. When the screen crosses that width, the runtime builds the diagram again from nothing.
 - Text on a drawing is 12 units or more. A label inside a small shape, such as a bar of a time line, may go down to 10.5.
 - Where the numbers matter, such as how a mix blends, a diagram computes them with `mixing.ts` and the other models of the folder, which follow the rules of the official runtime. A diagram never fakes a result that the runtime would compute differently.
 - The live previews of `src/previews/` show the real runtime on real rigs, and come after the diagram that explains the idea.

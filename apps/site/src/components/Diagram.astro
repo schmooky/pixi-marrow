@@ -19,11 +19,14 @@ interface Props {
 const { name, caption, width = 720, height = 250, rows = 1, lanes, timeline = false } = Astro.props;
 const phone = lanes === undefined ? undefined : phoneSize(lanes, timeline);
 const style = phone === undefined ? undefined : `--phone-ratio: ${phone[0]} / ${phone[1]}`;
+// the drawing takes its name from the caption under it, so that the text lives in one place
+const captionId = `diagram-${name}-caption`;
 ---
 
 <figure class="preview diagram">
     <div class="preview-frame" data-diagram={name}>
-        <svg class="diagram-svg" viewBox={`0 0 ${width} ${height}`} style={style} data-phone={phone === undefined ? undefined : ''} role="img" aria-label={caption}></svg>
+        {/* biome-ignore lint/a11y/noSvgWithoutTitle: the figcaption names the drawing through aria-labelledby, which the rule does not follow out of the svg */}
+        <svg class="diagram-svg" viewBox={`0 0 ${width} ${height}`} style={style} data-phone={phone === undefined ? undefined : ''} role="img" aria-labelledby={captionId}></svg>
         <div class="diagram-strip" data-diagram-strip>
             <p class="diagram-say" data-diagram-say></p>
             <button type="button" class="diagram-button" data-diagram-pause aria-label="Pause" aria-pressed="false">
@@ -34,7 +37,7 @@ const style = phone === undefined ? undefined : `--phone-ratio: ${phone[0]} / ${
         </div>
         <div class="preview-panel" id={`diagram-${name}-panel`} data-diagram-bar style={`--rows:${rows}`}></div>
     </div>
-    <figcaption>{caption}</figcaption>
+    <figcaption id={captionId}>{caption}</figcaption>
 </figure>
 <script>
     import { mountDiagrams } from '../diagrams/runtime';

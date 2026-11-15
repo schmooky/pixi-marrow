@@ -58,7 +58,7 @@ hero.resetPhysics();
 hero.physicsTranslate(dx, dy);
 ```
 
-`entry` and `track.configure` take any field of the official `TrackEntry` by its official name. `physics` is the official mode: `update`, `pose`, `reset` or `none`. Physics does not follow the Pixi position by itself: tell it with `physicsTranslate` and `physicsRotate`.
+`entry` and `track.configure` take any field of the official `TrackEntry` by its official name, which depends on the Spine version. A 4.1 skeleton takes `attachmentThreshold` and `drawOrderThreshold`, and 4.2 and 4.3 take `mixAttachmentThreshold` and `mixDrawOrderThreshold`. A name the version lacks throws a `MarrowError` that lists the names it has. `physics` is the official mode: `update`, `pose`, `reset` or `none`. Physics does not follow the Pixi position by itself: tell it with `physicsTranslate` and `physicsRotate`.
 
 ## Bones and placeholders
 
@@ -119,12 +119,13 @@ const fan = await MarrowSpine.load({ skeleton: 'fan.skel', atlas: 'fan.atlas', p
 
 Everything that costs memory, vertices or draw calls is in no preset, because what it costs depends on the device and the scene. Set it by name where it pays:
 
-- `bake: 'auto'` plays an animation from frames baked the first time it plays alone. A clip keeps 23 KB to 0.9 MB per animation and skin for the life of the asset.
+- `bake: 'auto'` bakes an animation in idle time the first time it plays alone on track 0, and plays it live until the clip is ready. An animation with another one queued after it is not baked. A clip keeps 23 KB to 0.9 MB per animation and skin while the asset holds that skin.
 - `tightMesh: 'on'` draws regions as tight polygons, see below. It adds vertices, which a phone whose CPU is the limit pays for.
-
 - `idleCache: 'auto'` draws a skeleton at rest as one image. Each image is a texture of its own, so many of them take memory and split batches. On a low-end phone small resting symbols drew slower with it.
 - `lod: 'auto'` leaves physics and deform out of a skeleton drawn smaller than 96 pixels. Its meshes then show their setup shape.
-- `instancing: 'auto'` with `skinning: 'gpu'` draws copies of one rig that follow each other in the display list in one instanced call. It pays for many copies of one rig, and not for a grid of different symbols, which the batched mode draws in fewer calls. `bakeAnimations` of `pixi-marrow/bake` bakes at build time. The first two rows of `perf.report()` say which settings are in effect and how often the skeleton updates.
+- `instancing: 'auto'` with `skinning: 'gpu'` draws copies of one rig that follow each other in the display list in one instanced call. It pays for many copies of one rig, and not for a grid of different symbols, which the batched mode draws in fewer calls.
+
+`bakeAnimations` of `pixi-marrow/bake` bakes at build time. The first two rows of `perf.report()` say which settings are in effect and how often the skeleton updates.
 
 ## Why is it slow
 
@@ -148,7 +149,7 @@ const hero = await MarrowSpine.load({
 });
 ```
 
-`tightMesh: 'on'` also draws every region as the polygon around its visible pixels. On the example rigs that shades 3 to 19 percent less triangle area. The picture is the same to the eye and not to the bit: some pixels move by 1 of 255 levels.
+`tightMesh: 'on'` also draws every region as the polygon around its visible pixels. On five rigs of the bench that shades 2.6 to 12.9 percent less triangle area, and a scene bound by fill rendered 3 to 12 percent faster on one desktop GPU. The picture is the same to the eye and not to the bit: some pixels move by 1 of 255 levels.
 
 `pixi-marrow outlines hero.atlas` writes the outlines to `hero.outlines.json` at build time. Pass that URL as `outlines` in the load options, and nothing is read at load time. `outlines: 'auto'` reads the page images in idle time after the load instead. That draws each page into a canvas, 32 MB for a page of 2048 by 2048 for a moment, which a phone with little memory can fail on.
 
@@ -169,7 +170,7 @@ debug.layers.bones = false;
 pnpm site:dev
 ```
 
-The site in `apps/site`, served at [pixi-marrow.schmooky.dev](https://pixi-marrow.schmooky.dev), has two live previews. It shows the bee of the slot game Bzzz, whose symbol rigs are in `fixtures/bzzz`.
+The site in `apps/site`, served at [pixi-marrow.schmooky.dev](https://pixi-marrow.schmooky.dev), holds the guide, the pages of How it works with their diagrams and live previews, a lab and a playground. The previews show the symbols of the slot game Bzzz, whose rigs are in `fixtures/bzzz`.
 
 ## Goals
 

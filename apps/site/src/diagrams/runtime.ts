@@ -1,4 +1,4 @@
-import { type Controls, panel } from '../previews/panel';
+import { type Controls, type Panel, panel } from '../previews/panel';
 import { PHONE_QUERY } from './layout';
 
 /*
@@ -11,14 +11,23 @@ import { PHONE_QUERY } from './layout';
  * hidden. Under the drawing is a line that says what happens now, as subtitles do, with a button
  * that pauses the diagram and one that slows it down. Its other controls are the rows of the panel
  * of the previews, under that line.
+ *
+ * A paused diagram stays paused when the reader picks something, and shows the result as a still
+ * frame. When the screen crosses the width of a phone, the diagram is built again for it.
  */
 
-/** Something that plays over time and can stop, such as a timeline of anime.js. */
+/** Something that plays over time and can stop, such as an animation or a timeline of anime.js. */
 interface Playable {
     play(): unknown;
     pause(): unknown;
     /** The rate it plays at, 1 for its own pace. The runtime sets it when the reader slows the diagram down. */
     speed?: number;
+    /** Moves it to a time in milliseconds and draws that moment, as `seek` of anime.js does. */
+    seek?(milliseconds: number): unknown;
+    /** The milliseconds of one pass, as anime.js gives it. A still frame shows the end of the first pass. */
+    iterationDuration?: number;
+    /** The time in milliseconds a still frame shows, where the end of the first pass is not the moment to show. */
+    still?: number;
 }
 
 /** What a diagram builds itself with: its drawing, its clock and the controls under it. */
@@ -31,7 +40,11 @@ interface DiagramContext extends Controls {
      * seconds since the frame before, times the speed the reader picked.
      */
     onFrame(step: (seconds: number) => void): void;
-    /** Plays an animation while the diagram is in view and plays, and pauses it otherwise. */
+    /**
+     * Plays an animation while the diagram is in view and plays, and pauses it otherwise. A
+     * diagram that starts paused shows it at the moment it names with `still`, or at the end of
+     * its first pass, so that its content shows before it plays.
+     */
     own(playable: Playable): void;
     /**
      * Says what happens now, in the line under the drawing. A part written `{first:A}`,
@@ -112,12 +125,15 @@ const SPEEDS: readonly number[] = [1, 0.5, 0.25];
 /** The colors `say` gives to its marked parts, the same as the colors of the drawings. */
 const TONES = new Set(['first', 'second', 'result']);
 
+/** A line that starts with code: a name followed by `=`, `(` or `[`, such as `skins = [...]` or `play(`. */
+const CODE_START = /^[\w$.]+\s*[=([]/;
+
 /**
  * Writes `text` into `line` as a sentence, with each part marked `{tone:words}` in a span of that
  * tone. A line that starts with code, such as `skins = [...]`, keeps its case.
  */
 function subtitle(line: HTMLElement, said: string): void {
-    const text = /^[a-z]+(?![\w ]*[=.([])/.test(said) ? said.charAt(0).toUpperCase() + said.slice(1) : said;
+    const text = /^[a-z]/.test(said) && !CODE_START.test(said) ? said.charAt(0).toUpperCase() + said.slice(1) : said;
     const parts: (string | HTMLElement)[] = [];
     let at = 0;
 
@@ -141,22 +157,29 @@ function subtitle(line: HTMLElement, said: string): void {
 /** The line under a drawing: what happens now, and the buttons that pause it and slow it down. */
 interface Transport {
     say(text: string): void;
+    /** Empties the line, for a diagram that is built again. */
+    clear(): void;
     playing(): boolean;
     speed(): number;
 }
 
-/** Makes the line under a drawing. `change` runs when the reader pauses, plays or picks a speed. */
+/**
+ * Makes the line under a drawing. `change` runs when the reader pauses, plays or picks a speed.
+ *
+ * The line has no `aria-live`: it changes many times a second while a diagram plays, which a
+ * screen reader would read without end. The caption under the figure names the drawing instead.
+ */
 function transport(bar: HTMLElement, change: () => void): Transport {
     const line = bar.querySelector<HTMLElement>('[data-diagram-say]');
     const pause = bar.querySelector<HTMLButtonElement>('[data-diagram-pause]');
     const slow = bar.querySelector<HTMLButtonElement>('[data-diagram-speed]');
-    // a reader who asked for less motion sees the first frame, and plays it when they want to
+    // a reader who asked for less motion sees a still frame, and plays it when they want to
     let playing = !matchMedia('(prefers-reduced-motion: reduce)').matches;
     let speed = 1;
     let said = '';
     const label = (): void => {
+        // the label stays "Pause", and aria-pressed says whether it is pressed: a reader hears "Pause, pressed"
         pause?.setAttribute('aria-pressed', String(!playing));
-        pause?.setAttribute('aria-label', playing ? 'Pause' : 'Play');
         if (slow !== null) {
             slow.textContent = speed === 1 ? '1x' : speed === 0.5 ? '½x' : '¼x';
             slow.setAttribute('aria-label', `Speed: ${slow.textContent}`);
@@ -182,8 +205,47 @@ function transport(bar: HTMLElement, change: () => void): Transport {
             said = text;
             subtitle(line, text);
         },
+        clear: () => {
+            said = '';
+            line?.replaceChildren();
+        },
         playing: () => playing,
         speed: () => speed,
+    };
+}
+
+/** The controls of a panel, with `after` run after every pick the reader makes. */
+function settling(controls: Controls, after: () => void): Controls {
+    return {
+        pick<T extends string>(label: string, options: readonly T[], choose: (option: T) => void, picked?: T | null) {
+            return controls.pick(
+                label,
+                options,
+                (option) => {
+                    choose(option);
+                    after();
+                },
+                picked,
+            );
+        },
+        chips<T extends string>(label: string, options: readonly T[], choose: (option: T) => void, picked?: T | null) {
+            return controls.chips(
+                label,
+                options,
+                (option) => {
+                    choose(option);
+                    after();
+                },
+                picked,
+            );
+        },
+        toggle(label, name, on, change) {
+            controls.toggle(label, name, on, (next) => {
+                change(next);
+                after();
+            });
+        },
+        readout: (label, width) => controls.readout(label, width),
     };
 }
 
@@ -196,6 +258,10 @@ async function start(frame: HTMLElement, svg: SVGSVGElement, bar: HTMLElement): 
     const steps: ((seconds: number) => void)[] = [];
     const owned: Playable[] = [];
     const diagram = (await load()).default;
+    const phone = matchMedia(PHONE_QUERY);
+    // the view box of the wide drawing, which the drawing of a phone replaces
+    const wide = svg.getAttribute('viewBox') ?? '';
+    let rows: Panel | null = null;
     let visible = false;
     let last = 0;
     let running = false;
@@ -207,6 +273,20 @@ async function start(frame: HTMLElement, svg: SVGSVGElement, bar: HTMLElement): 
             if (live()) playable.play();
             else playable.pause();
         }
+    };
+    /** Draws a still frame: each owned animation at the moment it shows, then each step with no time. */
+    const still = (): void => {
+        for (const playable of owned) {
+            const at = playable.still ?? playable.iterationDuration;
+
+            if (at !== undefined && Number.isFinite(at)) playable.seek?.(at);
+        }
+        for (const step of steps) step(0);
+    };
+    /** After a pick: a paused diagram stays paused, and shows what was picked. */
+    const settle = (): void => {
+        sync();
+        if (!live()) still();
     };
     const tick = (now: number): void => {
         if (!live()) {
@@ -229,19 +309,40 @@ async function start(frame: HTMLElement, svg: SVGSVGElement, bar: HTMLElement): 
         requestAnimationFrame(tick);
     };
     const controls = transport(strip, run);
+    /**
+     * Builds the diagram for the width of the screen, and builds it again from nothing when the
+     * screen crosses the width of a phone: its drawing, its clock and its panel rows.
+     */
+    const build = (): void => {
+        for (const playable of owned) playable.pause();
+        steps.length = 0;
+        owned.length = 0;
+        // the controls of the drawing before reach no page from here on
+        rows?.close();
+        bar.replaceChildren();
+        svg.replaceChildren();
+        svg.setAttribute('viewBox', wide);
+        controls.clear();
+        rows = panel(bar);
+        diagram.setup({
+            svg,
+            narrow: phone.matches,
+            ...settling(rows, settle),
+            onFrame: (step) => steps.push(step),
+            own: (playable) => owned.push(playable),
+            say: controls.say,
+        });
+        // a diagram that changes only when the reader picks something has nothing to pause
+        if (steps.length === 0 && owned.length === 0) strip.dataset.still = 'true';
+        else delete strip.dataset.still;
+        // the first frame is drawn even while the diagram waits, and a paused one shows its content
+        if (controls.playing()) for (const step of steps) step(0);
+        else still();
+        run();
+    };
 
-    diagram.setup({
-        svg,
-        narrow: matchMedia(PHONE_QUERY).matches,
-        ...panel(bar),
-        onFrame: (step) => steps.push(step),
-        own: (playable) => owned.push(playable),
-        say: controls.say,
-    });
-    // the first frame is drawn even while the diagram waits, so that a paused one shows something
-    for (const step of steps) step(0);
-    // a diagram that changes only when the reader picks something has nothing to pause
-    if (steps.length === 0 && owned.length === 0) strip.dataset.still = 'true';
+    build();
+    phone.addEventListener('change', build);
     new IntersectionObserver((entries) => {
         visible = entries.some((entry) => entry.isIntersecting);
         run();

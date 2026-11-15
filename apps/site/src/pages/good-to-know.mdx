@@ -11,7 +11,7 @@ import source from '../snippets/good-to-know.ts?raw';
 
 - **Skeletons share draw calls.** Skeletons of up to 1024 vertices are batched: 200 instances of a small rig draw in one call. A Pixi object between two skeletons in the draw order ends a batch, so keep skeletons next to each other in the display list.
 - **A skeleton at rest costs close to nothing.** When its animation ended, or it never played one, no timeline runs and nothing is uploaded. It wakes with the next `play`.
-- **Less overdraw, with outlines.** Write the outlines of an atlas at build time with `pixi-marrow outlines` and pass the file as `outlines`. A region without a visible pixel is then not drawn, and a slot behind the opaque part of a later slot is skipped. The picture stays the same. Outlines are off by default.
+- **Less overdraw, once you pass outlines.** Outlines are off by default. Write the outlines of an atlas at build time with `pixi-marrow outlines` and pass the file as `outlines`. A region without a visible pixel is then not drawn, and a slot behind the opaque part of a later slot is skipped. The picture stays the same.
 
 ## Render mode
 
@@ -46,5 +46,5 @@ Every constraint is solved: IK, transform, path, physics and sliders. Clipping w
 - No Canvas 2D and no WebGL1.
 - No Spine 3.8 and no Spine 4.0.
 - The runtime plays skeletons. Editing them stays in the Spine editor.
-- The speed was measured on one desktop machine. There are no numbers for phones yet.
+- The speed was measured on one desktop machine. The only phone measured so far is a Galaxy A05, for the idle cache, see [Performance](/performance/).
 - The licence is the Spine Runtimes License, as for the official runtimes. Each user of a product built on it needs a Spine Editor licence of their own.

@@ -29,8 +29,6 @@ export default defineDiagram({
             svg,
         );
         const joints = [0, 1].map(() => svgElement('circle', { r: 7, fill: COLORS.result }, svg));
-        const showUpper = readout('Upper bone', 60);
-        const showLower = readout('Lower bone', 60);
         let mode: Mode = 'lower bone holds 30';
         let time = 0;
 
@@ -57,6 +55,10 @@ export default defineDiagram({
             },
             'lower bone holds 30',
         );
+        // the readouts have names of their own: a row is named by its label, and the pick above is "Lower bone"
+        const showUpper = readout('Upper rotation', 60);
+        const showLower = readout('Lower rotation', 60);
+
         say(
             'The {second:lower bone} keeps its own 30 degrees, yet it turns on screen: the {first:upper bone} carries it along.',
         );

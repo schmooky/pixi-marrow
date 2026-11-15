@@ -281,9 +281,25 @@ export default defineDiagram({
         let mode: 'slow' | 'as a game does' = 'slow';
         let time = 0;
 
+        /** Lights the stage that the slow mode shows at a time of its pass, in milliseconds. */
+        const stageAt = (milliseconds: number): void => {
+            const index = Math.min(Math.floor(milliseconds / STAGE_MS), STEPS.length * STAGES.length - 1);
+            const frame = compute(STEPS[Math.floor(index / STAGES.length)] ?? 0);
+
+            draw(frame);
+            light(index % STAGES.length, frame);
+        };
+
+        // the runtime plays the timeline while the diagram plays, in the slow mode only
         own({
             play: () => (mode === 'slow' ? timeline.play() : undefined),
             pause: () => timeline.pause(),
+            // a paused diagram shows the first stage of the slow mode
+            seek: (milliseconds) => {
+                timeline.seek(milliseconds);
+                if (mode === 'slow') stageAt(milliseconds);
+            },
+            still: 0,
             get speed() {
                 return timeline.speed;
             },
@@ -296,8 +312,7 @@ export default defineDiagram({
             ['slow', 'as a game does'] as const,
             (next) => {
                 mode = next;
-                if (next === 'slow') timeline.play();
-                else timeline.pause();
+                if (next !== 'slow') timeline.pause();
             },
             'slow',
         );

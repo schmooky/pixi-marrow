@@ -34,9 +34,11 @@ Each animation goes through these, in order:
 
 - `start` when it begins to play.
 - `complete` each time it reaches its end. A loop completes once per loop.
-- `interrupt` when another animation replaces it, before its mix out.
+- `interrupt` when another animation replaces it, or `stop` with a mix fades it out, before its mix out.
 - `end` when it leaves the track, after its mix out.
 - `dispose` when the runtime drops it, after `end`.
+
+`stop()` without a mix ends an animation at once, so it reports `end` with no `interrupt`. `destroy` reports nothing at all.
 
 The idle above reports `complete` at 1 and 2 seconds, once per loop. At 2.4 seconds it reports `interrupt` and the win reports `start`. The idle still shows during the mix, so its `end` comes at 2.8 seconds, when the mix is over.
 
@@ -46,7 +48,9 @@ The idle above reports `complete` at 1 and 2 seconds, once per loop. At 2.4 seco
 
 <Snippet source={source} regions="cut" />
 
-`finished` resolves when an animation that does not loop has played to its end, or when it leaves the track for any other reason. To know which it was, listen for `interrupt` and compare its `Track` with the one `play` returned. That keeps a sequence from going on after something else took over the skeleton.
+`finished` resolves when an animation that does not loop has played to its end, or when it leaves the track for any other reason. To know which it was, listen for `complete` and compare its `Track` with the one `play` returned. `complete` comes before `finished` resolves, and only when the animation reached its end.
+
+A stop without a mix and `destroy` report no `complete`, so the sequence stops there. One case needs `interrupt` as well. An animation that another one replaces still plays while it mixes out, and can reach its end then. A `complete` after an `interrupt` does not count. That keeps a sequence from going on after something else took over the skeleton.
 
 ## Cost
 
