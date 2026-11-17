@@ -38,3 +38,6 @@ apps/site/public/rigs/
 
 # Results that phones sent to the dev server of the site from the lab pages
 apps/site/lab-results/
+
+# The frames, stills and videos of the promo tour, written by promo/tour/capture.mjs
+promo/tour/out/
