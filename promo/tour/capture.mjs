@@ -4,7 +4,8 @@
 //                                                contact sheets and the cover, in promo/tour/out
 //   node promo/tour/capture.mjs --stills=3,12    JPEG stills at those seconds, in out/stills
 //   node promo/tour/capture.mjs --sheet=0,20,0.5 a contact sheet of live frames: from, to, step
-//   node promo/tour/capture.mjs --cover=10.4     out/cover.png, the frame at that second
+//   node promo/tour/capture.mjs --sheets         the contact sheets again, from the video in out
+//   node promo/tour/capture.mjs --cover=10.4     out/cover-portrait.png, the frame at that second
 //   node promo/tour/capture.mjs --from=20 --to=30 --name=part.mp4
 //
 // Needs `pnpm build` first: the page imports packages/pixi-marrow/dist.
@@ -16,7 +17,7 @@ import { chromium } from 'playwright-core';
 import { serve } from './serve.mjs';
 
 /** The second of the tour that the cover shows. */
-const COVER_AT = 15.6;
+const COVER_AT = 12.4;
 const BREW = '/opt/homebrew/bin/ffmpeg';
 const FFMPEG = process.env.FFMPEG ?? (existsSync(BREW) ? BREW : 'ffmpeg');
 const CHROME = process.env.CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
@@ -31,7 +32,7 @@ const browser = await chromium.launch({
     headless: true,
     args: ['--ignore-gpu-blocklist', '--enable-gpu'],
 });
-const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+const page = await browser.newPage({ viewport: { width: 1080, height: 1350 } });
 
 page.on('console', (message) => {
     if ((message.type() === 'error' || message.type() === 'warning') && !message.text().includes('404')) {
@@ -73,29 +74,32 @@ const ffmpeg = (args) => {
     if (done.status !== 0) throw new Error(`ffmpeg ${args.join(' ')} failed`);
 };
 
-/** Writes contact sheets: 4 columns, 16 stills on a sheet, each with its time. `shots` is a list of [seconds, data URL]. */
+/** Writes contact sheets: 4 columns, 12 stills on a sheet, each with its time. `shots` is a list of [seconds, data URL]. */
 async function sheets(shots, name) {
-    const sheet = await browser.newPage({ viewport: { width: 1920, height: 1160 } });
+    const sheet = await browser.newPage({ viewport: { width: 1920, height: 1860 } });
     const files = [];
 
-    for (let i = 0; i * 16 < shots.length; i++) {
+    for (let i = 0; i * 12 < shots.length; i++) {
         const cells = shots
-            .slice(i * 16, i * 16 + 16)
+            .slice(i * 12, i * 12 + 12)
             .map(([t, url]) => `<figure><img src="${url}"><figcaption>${t.toFixed(1)} s</figcaption></figure>`);
 
         await sheet.setContent(`<style>
-            body { margin: 0; background: #000; display: grid; grid-template-columns: repeat(4, 480px); }
-            figure { margin: 0; position: relative; height: 290px; }
-            img { display: block; width: 480px; height: 270px; }
+            body { margin: 0; background: #000; display: grid; grid-template-columns: repeat(4, 480px); grid-auto-rows: 620px; align-content: start; }
+            figure { margin: 0; position: relative; height: 620px; }
+            img { display: block; width: 480px; height: 600px; }
             figcaption { font: 600 15px Menlo, monospace; color: #fff; height: 20px; line-height: 20px; padding-left: 6px; }
         </style>${cells.join('')}`);
+        await sheet.waitForFunction(() =>
+            [...document.images].every((image) => image.complete && image.naturalWidth > 0),
+        );
         const file = join(out, 'stills', `${name}${i + 1}.jpg`);
 
         await sheet.screenshot({
             path: file,
             type: 'jpeg',
             quality: 88,
-            clip: { x: 0, y: 0, width: 1920, height: Math.ceil(cells.length / 4) * 290 },
+            clip: { x: 0, y: 0, width: 1920, height: Math.ceil(cells.length / 4) * 620 },
         });
         files.push(file);
     }
@@ -118,8 +122,8 @@ function frameOf(video, t) {
 
 async function cover(t) {
     await page.evaluate((at) => window.tour.renderAt(at), t);
-    await page.locator('canvas').screenshot({ path: join(out, 'cover.png') });
-    console.log(`wrote ${join(out, 'cover.png')} (the frame at ${t} s)`);
+    await page.locator('canvas').screenshot({ path: join(out, 'cover-portrait.png') });
+    console.log(`wrote ${join(out, 'cover-portrait.png')} (the frame at ${t} s)`);
 }
 
 async function video(from, to, file) {
@@ -172,6 +176,14 @@ async function video(from, to, file) {
     console.log(`wrote ${file} (${frames} frames, ${((Date.now() - start) / 1000).toFixed(0)} s)`);
 }
 
+/** Contact sheets of the frames of the finished video: one every 1.5 seconds. */
+async function videoSheets(file) {
+    const shots = [];
+
+    for (let t = 0; t < TOTAL; t += 1.5) shots.push([t, frameOf(file, t)]);
+    console.log((await sheets(shots, 'portrait-sheet')).join('\n'));
+}
+
 if (arg('stills')) {
     for (const s of arg('stills').split(',')) {
         writeFileSync(join(out, 'stills', `t${s}.jpg`), bytes(await grab(Number(s))));
@@ -183,6 +195,8 @@ if (arg('stills')) {
 
     for (let t = from; t <= Math.min(to, TOTAL) + 1e-6; t += by) shots.push([t, await grab(t, 0.8)]);
     console.log((await sheets(shots, arg('name') ?? 'live')).join('\n'));
+} else if (process.argv.includes('--sheets')) {
+    await videoSheets(join(out, 'pixi-marrow-tour-portrait.mp4'));
 } else if (arg('cover')) {
     await cover(Number(arg('cover')));
 } else if (arg('from') || arg('to')) {
@@ -192,8 +206,8 @@ if (arg('stills')) {
         join(out, arg('name') ?? 'part.mp4'),
     );
 } else {
-    const full = join(out, 'pixi-marrow-tour.mp4');
-    const small = join(out, 'pixi-marrow-tour-small.mp4');
+    const full = join(out, 'pixi-marrow-tour-portrait.mp4');
+    const small = join(out, 'pixi-marrow-tour-portrait-small.mp4');
 
     await video(0, TOTAL, full);
     ffmpeg([
@@ -214,10 +228,7 @@ if (arg('stills')) {
         small,
     ]);
     console.log(`wrote ${small}`);
-    const shots = [];
-
-    for (let t = 0; t < TOTAL; t += 2) shots.push([t, frameOf(full, t)]);
-    console.log((await sheets(shots, 'sheet')).join('\n'));
+    await videoSheets(full);
     await cover(COVER_AT);
 }
 await browser.close();

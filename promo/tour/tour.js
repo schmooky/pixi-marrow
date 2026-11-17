@@ -7,18 +7,17 @@
 // screen is the number of that frame.
 //
 // Open http://127.0.0.1:<port>/promo/tour/?t=12 to see one moment. window.tour.renderAt(t).
-import { Application, Container } from 'pixi.js';
+import { Application, Assets, Container, Sprite } from 'pixi.js';
 import { MarrowAsset } from 'pixi-marrow';
 import { SilkGraphics } from 'pixi-silk';
-import { enableWebGPU } from 'pixi-silk/webgpu';
-import { C, FPS, H, K, makeStyles, prog, STEP, Texts, W } from './kit.js';
+import { C, FPS, H, K, makeStyles, measureRigs, STEP, Texts, W } from './kit.js';
 import { gridScene, titleScene } from './scenes-a.js';
-import { benchScene, debugScene, diagnoseScene, outroScene } from './scenes-b.js';
+import { benchScene, diagnoseScene, outroScene } from './scenes-b.js';
 
 /** The rigs of the tour. Each is a skeleton file next to one shared atlas. */
 const RIGS = ['a', 'j', 'k', 'q', 'blue_flower', 'purple_flower', 'rose_flower', 'bee', 'wild', 'coin', 'boost'];
 const RIG_DIR = '/fixtures/bzzz';
-const SCENES = [titleScene, gridScene, benchScene, diagnoseScene, debugScene, outroScene];
+const SCENES = [titleScene, gridScene, benchScene, diagnoseScene, outroScene];
 const DRAWS = ['drawElements', 'drawArrays', 'drawElementsInstanced', 'drawArraysInstanced'];
 
 let app;
@@ -62,7 +61,7 @@ function drawBackground(scene, t) {
 
     g.clear();
     g.rect(0, 0, W, H).fill(C.BG);
-    for (let x = 48; x < W; x += 96) for (let y = 60; y < H; y += 96) g.circle(x, y, 1.6).fill(0x1d1d22);
+    for (let x = 60; x < W; x += 96) for (let y = 51; y < H; y += 96) g.circle(x, y, 1.6).fill(0x1d1d22);
     scene.back?.(t);
 }
 
@@ -89,22 +88,15 @@ function step(n) {
     K.frameDraws = K.draws.count;
     K.hud.g.clear();
     K.hud.tx.begin();
+    K.mark.visible = false;
     scene.front(t);
-    // the name stays in a corner of every scene that has a headline, for a viewer who joins late
-    if (scene.brand !== false) {
-        const a = Math.min(prog(t, 0.3, 0.6), 1 - prog(t, scene.dur - 0.45, 0.45));
+    // in from the background colour, with the first frame already faintly there, and out to black
+    const first = 0.82 * (1 - n / 16);
+    const last = (n - (total - 36)) / 36;
 
-        K.hud.tx.put('brand', 'pixi-marrow', K.style.brand, W - 100, 60, { alpha: a });
-    }
-    // in from black and out to black
-    const fade = Math.max(1 - n / 14, (n - (total - 36)) / 36);
-
-    if (fade > 0)
-        K.hud.g2
-            .clear()
-            .rect(0, 0, W, H)
-            .fill({ color: 0x000000, alpha: Math.min(1, fade) });
-    else K.hud.g2.clear();
+    K.hud.g2.clear();
+    if (first > 0) K.hud.g2.rect(0, 0, W, H).fill({ color: C.BG, alpha: first });
+    if (last > 0) K.hud.g2.rect(0, 0, W, H).fill({ color: 0x000000, alpha: Math.min(1, last) });
     renderer.render({ container: K.front, clear: false });
 }
 
@@ -157,9 +149,6 @@ async function loadAssets() {
 
 async function boot() {
     await loadFonts();
-    // MarrowDebug calls this too: it must run before the first pixi-silk object, or the objects
-    // made before it and after it do not share a shader layout
-    enableWebGPU();
     makeStyles();
     app = new Application();
     await app.init({
@@ -178,10 +167,17 @@ async function boot() {
     K.renderer = app.renderer;
     K.draws = countDraws(app.renderer.gl);
     K.frameDraws = 0;
-    [K.assets, K.bench] = await Promise.all([
+    const [assets, bench, mark] = await Promise.all([
         loadAssets(),
         fetch('/apps/site/public/benchmarks.json').then((response) => response.json()),
+        Assets.load('/promo/tour/winspinity-s.png'),
     ]);
+
+    Object.assign(K, { assets, bench });
+    K.extent = measureRigs();
+    // the red block of the Winspinity logo, 60 pixels high
+    K.mark = new Sprite(mark);
+    K.mark.scale.set(60 / mark.height);
     // pass 1: the background
     K.back = new Container();
     K.bg = new SilkGraphics();
@@ -193,12 +189,12 @@ async function boot() {
     K.hud = { g: new SilkGraphics(), g2: new SilkGraphics() };
     const texts = new Container();
 
-    K.front.addChild(K.hud.g, texts, K.hud.g2);
+    K.front.addChild(K.hud.g, texts, K.mark, K.hud.g2);
     K.hud.tx = new Texts(texts);
     total = schedule();
     const scenes = SCENES.map((s) => ({ id: s.id, from: s.startFrame / FPS, to: (s.startFrame + s.frameCount) / FPS }));
 
-    window.tour = { renderAt, TOTAL: total / FPS, FPS, W, H, scenes, live: () => K.live };
+    window.tour = { renderAt, TOTAL: total / FPS, FPS, W, H, scenes, live: () => K.live, extent: K.extent };
     const query = new URLSearchParams(location.search);
 
     renderAt(Number(query.get('t') ?? 1));

@@ -1,11 +1,13 @@
 // Shared by the tour and its scenes: the frame, the palette, easing, text styles and the helpers
 // that every scene draws with. K is filled by tour.js at boot.
+import { Container, RenderTexture } from 'pixi.js';
 import { MarrowSpine } from 'pixi-marrow';
 import { horizontal } from 'pixi-silk';
 import { SdfAtlas, SilkText } from 'pixi-silk/text';
 
-export const W = 1920;
-export const H = 1080;
+// The frame: 4:5, the portrait format of the LinkedIn feed.
+export const W = 1080;
+export const H = 1350;
 export const FPS = 60;
 /** One step of the simulation, in seconds. */
 export const STEP = 1 / FPS;
@@ -53,36 +55,24 @@ export function makeStyles() {
     const sans = { fontFamily: SANS, atlas: big };
     const mono = { fontFamily: MONO, tabularNumbers: true };
 
+    const brand = horizontal([C.GOLD, C.MARROW_TEXT, C.MARROW]);
+
     Object.assign(K.style, {
-        kick: { ...mono, fontSize: 26, fontWeight: 700, fill: C.MARROW_TEXT, letterSpacing: 4 },
-        head: { ...sans, fontSize: 92, fontWeight: 800, fill: C.TEXT, letterSpacing: -3 },
+        head: { ...sans, fontSize: 98, fontWeight: 800, fill: C.TEXT, letterSpacing: -3.4, lineHeight: 104 },
         sub: { ...sans, fontSize: 40, fontWeight: 500, fill: C.MUTED, letterSpacing: -0.5 },
-        title: {
-            ...sans,
-            anchor: 0.5,
-            fontSize: 220,
-            fontWeight: 900,
-            letterSpacing: -9,
-            fill: horizontal([C.GOLD, C.MARROW_TEXT, C.MARROW]),
-        },
-        brand: {
-            ...sans,
-            anchor: { x: 1, y: 0 },
-            fontSize: 40,
-            fontWeight: 800,
-            letterSpacing: -1.2,
-            fill: horizontal([C.GOLD, C.MARROW_TEXT, C.MARROW]),
-        },
-        tagline: { ...sans, anchor: 0.5, fontSize: 58, fontWeight: 600, fill: C.TEXT, letterSpacing: -1 },
-        label: { ...mono, fontSize: 26, fontWeight: 700, fill: C.MUTED, letterSpacing: 3 },
-        huge: { ...mono, atlas: big, fontSize: 250, fontWeight: 800, fill: C.MARROW, letterSpacing: -8 },
-        stat: { ...mono, atlas: big, fontSize: 84, fontWeight: 700, fill: C.TEXT, letterSpacing: -2 },
-        unit: { ...sans, fontSize: 40, fontWeight: 600, fill: C.MUTED },
-        count: { ...sans, fontSize: 260, fontWeight: 800, fill: C.GREEN, letterSpacing: -8 },
-        code: { ...mono, fontSize: 28, fontWeight: 500, fill: C.TEXT },
-        body: { ...sans, atlas: undefined, fontSize: 32, fontWeight: 500, fill: C.TEXT, lineHeight: 44 },
-        value: { ...mono, fontSize: 30, fontWeight: 700, fill: C.TEXT },
-        note: { ...mono, fontSize: 23, fontWeight: 500, fill: C.DIM },
+        title: { ...sans, anchor: 0.5, fontSize: 172, fontWeight: 900, letterSpacing: -7, fill: brand },
+        tagline: { ...sans, anchor: 0.5, fontSize: 60, fontWeight: 600, fill: C.TEXT, letterSpacing: -1 },
+        label: { ...mono, fontSize: 32, fontWeight: 700, fill: C.MUTED, letterSpacing: 3 },
+        huge: { ...mono, atlas: big, fontSize: 230, fontWeight: 800, fill: C.MARROW, letterSpacing: -8 },
+        stat: { ...mono, atlas: big, fontSize: 96, fontWeight: 700, fill: C.TEXT, letterSpacing: -2 },
+        count: { ...sans, fontSize: 230, fontWeight: 800, fill: C.GREEN, letterSpacing: -8 },
+        code: { ...mono, fontSize: 44, fontWeight: 600, fill: C.TEXT },
+        body: { ...sans, fontSize: 44, fontWeight: 600, fill: C.TEXT, letterSpacing: -0.5 },
+        value: { ...mono, atlas: big, fontSize: 52, fontWeight: 700, fill: C.TEXT, letterSpacing: -1 },
+        name: { ...mono, fontSize: 30, fontWeight: 600, fill: C.MUTED },
+        note: { ...sans, fontSize: 30, fontWeight: 500, fill: C.MUTED },
+        credit: { ...sans, fontSize: 30, fontWeight: 500, fill: C.MUTED },
+        maker: { ...sans, fontSize: 40, fontWeight: 800, fill: 0xffffff, letterSpacing: 7 },
     });
 }
 
@@ -115,17 +105,32 @@ export class Texts {
     }
 }
 
-export const LEFT = 100;
+export const LEFT = 60;
 
-/** The kicker, the headline and the line under it, at the top left. `a` is the alpha of all three. */
-export function heading(key, kick, title, sub, t, a = 1) {
+/** The headline at the top left, on one or two lines, and one short line under it. `a` is the alpha of both. */
+export function heading(key, title, sub, t, a = 1) {
     const { tx } = K.hud;
-    const rise = (delay) => outCubic(prog(t, delay, 0.7));
-    const [k, h, s] = [rise(0.05), rise(0.15), rise(0.3)];
+    const [h, s] = [outCubic(prog(t, 0.1, 0.7)), outCubic(prog(t, 0.3, 0.7))];
+    const lines = title.split('\n').length;
 
-    tx.put(`${key}-kick`, kick, K.style.kick, LEFT + 2, 64 + (1 - k) * 14, { alpha: k * a });
-    tx.put(`${key}-head`, title, K.style.head, LEFT - 4, 104 + (1 - h) * 24, { alpha: h * a });
-    if (sub) tx.put(`${key}-sub`, sub, K.style.sub, LEFT, 226 + (1 - s) * 18, { alpha: s * a });
+    tx.put(`${key}-head`, title, K.style.head, LEFT - 4, 64 + (1 - h) * 24, { alpha: h * a });
+    if (sub) tx.put(`${key}-sub`, sub, K.style.sub, LEFT, 84 + lines * 104 + (1 - s) * 18, { alpha: s * a });
+}
+
+/**
+ * The credit of the rigs: the red block with the S of the Winspinity logo, the name beside it, and
+ * a line above. `x` is the left edge and `y` the top of the line.
+ */
+export function credit(x, y, alpha, site = false) {
+    const { tx } = K.hud;
+    const mark = K.mark;
+
+    tx.put('cr-by', 'Spine animations by', K.style.credit, x, y, { alpha });
+    mark.visible = alpha > 0.002;
+    mark.alpha = alpha;
+    mark.position.set(x, y + 48);
+    tx.put('cr-name', 'WINSPINITY', K.style.maker, x + mark.width + 18, y + 52, { alpha });
+    if (site) tx.put('cr-site', 'winspinity.com', K.style.credit, x, y + 118, { alpha });
 }
 
 /** A card: a rectangle with small corners, an edge and a soft shadow. */
@@ -145,6 +150,7 @@ export function spawn(name, parent, x = 0, y = 0, scale = 1) {
 
     hero.position.set(x, y);
     hero.scale.set(scale);
+    hero.label = name;
     parent.addChild(hero);
 
     return hero;
@@ -155,4 +161,48 @@ export function cover(t, dur, a = 0.38, b = 0.34) {
     const c = Math.max(1 - prog(t, 0, a), prog(t, dur - b, b));
 
     if (c > 0.002) K.hud.g.rect(0, 0, W, H).fill({ color: C.BG, alpha: c });
+}
+
+/** The scale at which a rig, with the glow of its win animation, stays inside a square of `size`. */
+export const fitOf = (name, size) => size / K.extent[name];
+
+/**
+ * The size of the square around the origin that each rig stays in while it plays `win` and
+ * `idle`. It is measured in pixels: every third frame of both animations is drawn into a
+ * texture, and a pixel counts when its alpha is above 16 percent in one of them. So a symbol
+ * that is scaled to its cell with `fitOf` never draws over the symbol of the next cell.
+ */
+export function measureRigs() {
+    const size = 512;
+    const texture = RenderTexture.create({ width: size, height: size });
+    const root = new Container();
+    const extent = {};
+
+    for (const name of Object.keys(K.assets)) {
+        const hero = spawn(name, root, size / 2, size / 2);
+        const seen = new Uint8Array(size * size);
+
+        for (const animation of ['win', 'idle']) {
+            hero.play(animation);
+            for (let i = 0; i < 84; i++) {
+                hero.update(STEP);
+                if (i % 3 !== 0) continue;
+                K.renderer.render({ container: root, target: texture, clear: true, clearColor: [0, 0, 0, 0] });
+                const { pixels } = K.renderer.extract.pixels(texture);
+
+                for (let p = 0; p < seen.length; p++) if (pixels[p * 4 + 3] > 40) seen[p] = 1;
+            }
+        }
+        let far = 0;
+
+        for (let p = 0; p < seen.length; p++) {
+            if (seen[p] === 1)
+                far = Math.max(far, Math.abs((p % size) - size / 2), Math.abs(Math.floor(p / size) - size / 2));
+        }
+        extent[name] = far * 2 + 2;
+        hero.destroy();
+    }
+    texture.destroy(true);
+
+    return extent;
 }
