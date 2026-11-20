@@ -50,7 +50,8 @@ Entry points:
 
 | Out of scope | Where it belongs |
 |---|---|
-| Canvas 2D or WebGL1 | Not supported. No skeleton draws, and the console warns once: `pixi-marrow: this renderer draws no skeleton. Use WebGL2 or WebGPU.` The rest of the app goes on. |
+| Canvas 2D | Not supported. No skeleton draws, and the console warns once: `pixi-marrow: this renderer draws no skeleton. Use WebGL2 or WebGPU.` The rest of the app goes on. |
+| `skinning: 'gpu'` and instancing on WebGL1 | Not supported. These views draw nothing on WebGL1, and the console warns once. The batched mode and the mesh mode with `skinning: 'cpu'` draw on WebGL1. |
 | Spine 3.8 and 4.0 | Not planned |
 | A runtime dependency on `spine-core` | The official cores are dev dependencies for the parity suite |
 | Editing skeletons | The Spine editor |
@@ -153,7 +154,7 @@ A change to `src/render`, `src/api` or the shaders also needs the pixel check. I
 pnpm check:render
 ```
 
-It draws rigs with pixi-marrow and with the official Pixi runtime in headless Chrome, on WebGL2 and WebGPU, and compares the pixels. It also compares pixi-marrow with its overdraw cuts on and off. Images of failing cases land in `.shots/render/`. CI does not run it, because its runners have no GPU. Run it on your own machine.
+It draws rigs with pixi-marrow and with the official Pixi runtime in headless Chrome, on WebGL2, WebGL1 and WebGPU, and compares the pixels. `--renderer=webgl1` asks Pixi for a WebGL1 context. It also compares pixi-marrow with its overdraw cuts on and off. Images of failing cases land in `.shots/render/`. CI does not run it, because its runners have no GPU. Run it on your own machine.
 
 When a frame fails against the official runtime, the check draws it again, moved by a fraction of a pixel. The frame fails only when it fails at both places. The two runtimes place vertices in different code, so a vertex on a subpixel boundary can round two ways. A defect stays wrong after the move.
 

@@ -203,7 +203,7 @@ function summary(): string {
         `- Install: \`${INSTALL}\``,
         '- Spine versions: 4.1, 4.2 and 4.3, as JSON or binary exports. Spine 3.8 and 4.0 do not load.',
         '- PixiJS: version 8, from 8.23. `pixi.js` is the one required peer dependency.',
-        '- Renderers: WebGL2 and WebGPU. Canvas 2D and WebGL1 do not work.',
+        "- Renderers: WebGL2, WebGPU and WebGL1. On WebGL1, skinning: 'gpu' and instancing do not draw. Canvas 2D does not work.",
         '- Entry points: `pixi-marrow` (the display object `MarrowSpine`), `pixi-marrow/core` (import and pose without Pixi, runs in Node), `pixi-marrow/optimize`, `pixi-marrow/debug`, `pixi-marrow/bake` and `pixi-marrow/perf`.',
         '- Licence: the Spine Runtimes License. Each user needs their own Spine Editor licence, as for the official runtimes.',
         `- Repository: ${SITE.repository}`,

@@ -26,7 +26,7 @@ A skeleton is the bones, slots, skins and animations of one Spine export. A draw
 | PixiJS versions | 8.23 or later | 8.16 or later | v5 to v7 |
 | WebGL2 | Yes | Yes | Not checked |
 | WebGPU | Yes | Yes | No. PixiJS v7 has no WebGPU renderer |
-| WebGL1 | No. It warns once and draws no skeleton | Not checked | Not checked |
+| WebGL1 | Yes, without `skinning: 'gpu'` and instancing | Yes | Not checked |
 | Canvas | No. It warns once and draws no skeleton | Yes, through `spine-canvas` | Not checked |
 | Draw calls, 200 instances of a rig without a clip | 1 | 1 | Not measured |
 | Draw calls, 200 instances of coin-pro | 1 | 400 | Not measured |

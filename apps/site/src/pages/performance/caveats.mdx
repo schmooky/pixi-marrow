@@ -318,11 +318,11 @@ Rule: [MARROW024](/performance/rules/#marrow024).
 
 ## WebGL1 and Canvas
 
-**What you see.** No skeleton draws, and the rest of the game goes on.
+**What you see.** On WebGL1, a skeleton with `skinning: 'gpu'` or instancing does not draw. On Canvas, no skeleton draws. The rest of the game goes on.
 
-**Why.** Every shader of pixi-marrow needs WebGL2 or WebGPU. Pixi uses WebGL1 where a browser has no WebGL2. The runtime then draws no skeleton and warns once: `pixi-marrow: this renderer draws no skeleton. Use WebGL2 or WebGPU.` The Canvas renderer of Pixi gives the same result.
+**Why.** Pixi uses WebGL1 where a browser has no WebGL2. The batched mode and the mesh mode with `skinning: 'cpu'` draw there with programs of GLSL 1.00. The shaders of `skinning: 'gpu'` and instancing need WebGL2 or WebGPU. On WebGL1 the runtime warns once about them. The Canvas renderer of Pixi draws no skeleton and warns once: `pixi-marrow: this renderer draws no skeleton. Use WebGL2 or WebGPU.`
 
-**Fix.** Check `app.renderer` after `app.init`, and show a message to a player whose browser has no WebGL2.
+**Fix.** On WebGL1, set `skinning: 'cpu'`. Check `app.renderer.context.webGLVersion` after `app.init`. On Canvas, show a message to a player whose browser has no WebGL.
 
 ## Context loss
 

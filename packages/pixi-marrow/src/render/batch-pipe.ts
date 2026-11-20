@@ -150,7 +150,7 @@ export function linkRenderer(renderer: Renderer): MarrowPipe {
     const found: unknown = Reflect.get(renderer.renderPipes, PIPE_ID);
 
     if (found instanceof MarrowPipe) return found;
-    // first: a renderer of WebGL1 counts as lost, so its skeletons draw nothing
+    // first: the watch says whether the context is lost and whether the renderer is one of WebGL1
     watchContext(renderer);
     if (!registered) {
         registered = true;

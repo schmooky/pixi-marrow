@@ -410,7 +410,10 @@ function describe(PIXI, renderer) {
  */
 export async function start({ PIXI, loadOurs, loadOfficial, loadReference, loadCore }) {
     const params = new URLSearchParams(location.search);
-    const preference = params.get('renderer') === 'webgpu' ? 'webgpu' : 'webgl';
+    const asked = params.get('renderer');
+    const preference = asked === 'webgpu' ? 'webgpu' : 'webgl';
+    // webgl1 asks Pixi for the context it falls back to where a browser has no WebGL2
+    const preferWebGLVersion = asked === 'webgl1' ? 1 : 2;
     const version = params.get('official');
     const draws = countDraws();
     // which step failed: a runtime that does not load is a finding, a missing renderer is not
@@ -422,7 +425,14 @@ export async function start({ PIXI, loadOurs, loadOfficial, loadReference, loadC
         const reference = officialLib && loadReference ? await loadReference(version) : null;
         const lib = params.get('ours') === 'yes' ? await loadOurs() : null;
         const create = (pixi) =>
-            pixi.autoDetectRenderer({ preference, width: 16, height: 16, antialias: false, backgroundAlpha: 0 });
+            pixi.autoDetectRenderer({
+                preference,
+                preferWebGLVersion,
+                width: 16,
+                height: 16,
+                antialias: false,
+                backgroundAlpha: 0,
+            });
 
         step = 'renderer';
         const renderer = await create(PIXI);
@@ -453,7 +463,7 @@ export async function start({ PIXI, loadOurs, loadOfficial, loadReference, loadC
         const onPage = (type) => (type ? type.prototype instanceof PIXI.Container : null);
 
         window.renderCheck = {
-            renderer: renderer.name,
+            renderer: renderer.name === 'webgl' && renderer.context.webGLVersion === 1 ? 'webgl1' : renderer.name,
             skinning: params.get('skinning'),
             gpu: describe(PIXI, renderer),
             // The pixi.js of the page, and whether each runtime runs on that copy. Null: not loaded.

@@ -1,5 +1,5 @@
 import { type Instruction, type InstructionSet, type Renderer, State } from 'pixi.js';
-import { contextLost, watchContext } from './context-watch';
+import { contextLost, watchContext, webGL1 } from './context-watch';
 import { bendsEdges } from './gate';
 import { INSTANCE_PIPE } from './instance-id';
 import type { InstanceBody } from './instance-paint';
@@ -177,12 +177,15 @@ export class InstancePipe {
     /** A body keeps nothing in the pipe. */
     destroyRenderable(): void {}
 
-    /** Draws a run, in as few instanced draws as its members allow. Draws nothing while the context is lost. */
+    /**
+     * Draws a run, in as few instanced draws as its members allow. Draws nothing while the context
+     * is lost, and nothing on WebGL1: the instance shader is GLSL 3.00 alone, see `glsl100.ts`.
+     */
     execute(run: InstanceRun): void {
         const { renderer } = this;
         const { members } = run;
 
-        if (renderer === null || contextLost()) return;
+        if (renderer === null || contextLost() || webGL1()) return;
         const bends = bendsEdges(renderer);
         let parts = 0;
 
@@ -324,7 +327,7 @@ export function linkInstancePipe(renderer: Renderer): InstancePipe {
     const found: unknown = Reflect.get(renderer.renderPipes, INSTANCE_PIPE);
 
     if (found instanceof InstancePipe) return found;
-    // first: a renderer of WebGL1 counts as lost, so its skeletons draw nothing
+    // first: the watch says whether the context is lost and whether the renderer is one of WebGL1
     watchContext(renderer);
     const pipe = new InstancePipe(renderer);
 

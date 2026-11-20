@@ -1,10 +1,10 @@
 import { type Bounds, type Buffer, type Container, RenderContainer, type Renderer, type TextureSource } from 'pixi.js';
-import { MarrowError } from '../base/errors';
+import { DOCS_SITE, MarrowError } from '../base/errors';
 import { i16, i32 } from '../geometry/read';
 import type { SkeletonModel } from '../model/model';
 import { isNewer, type PoseState } from '../pose/state';
 import { clipCode, clipCodeMissing } from './clip-code';
-import { drawsNothing } from './context-watch';
+import { drawsNothing, isWebGL1 } from './context-watch';
 import { bendsEdges, type DrawGate } from './gate';
 import { instanceBlock, instanceLayout, setupVertices, unionSpread } from './instance-layout';
 import { InstancePaint, type InstanceWhy } from './instance-paint';
@@ -47,6 +47,21 @@ export interface MeshPaintOptions extends Omit<DrawRangesOptions, 'buffers' | 'b
     readonly gate: DrawGate;
     /** The counters of the view. The paint counts the bytes it uploads. */
     readonly stats: ViewStats;
+}
+
+/** Whether the warning of {@link warnGpuOnWebGL1} was given. */
+let warnedGpu = false;
+
+/** Says once that `skinning: 'gpu'` draws nothing on WebGL1, and returns true. */
+function warnGpuOnWebGL1(): boolean {
+    if (!warnedGpu) {
+        warnedGpu = true;
+        console.warn(
+            `pixi-marrow: skinning: 'gpu' and instancing draw no skeleton on WebGL1. Set skinning: 'cpu' where WebGL2 is missing. ${DOCS_SITE}good-to-know/#limits`,
+        );
+    }
+
+    return true;
 }
 
 /**
@@ -119,7 +134,8 @@ export class MeshPaint {
             if (renderer === this.linked) return;
             linkMeshPipe(renderer);
             this.linked = renderer;
-            this.blind = drawsNothing(renderer);
+            // the shaders of skinning: 'gpu' are GLSL 3.00 alone, see `glsl100.ts`
+            this.blind = drawsNothing(renderer) || (gpu && isWebGL1(renderer) && warnGpuOnWebGL1());
         };
         this.positions = vertexBuffer(template.positions, 'marrow-positions');
         this.statics = vertexBuffer(template.statics, 'marrow-uvs');
