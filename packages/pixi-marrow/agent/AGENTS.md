@@ -4,7 +4,7 @@ This file ships in the npm package `pixi-marrow`. It tells a coding agent how to
 
 ## What the package is
 
-pixi-marrow is a Spine runtime for PixiJS v8. It plays skeletons that the Spine editor exported as 4.1, 4.2 or 4.3, on WebGL2 and WebGPU. `MarrowSpine` is a Pixi `Container`. The package needs `pixi.js` 8.23 or later and has no other dependency.
+pixi-marrow is a Spine runtime for PixiJS v8. It plays skeletons that the Spine editor exported as 4.1, 4.2 or 4.3, on WebGL2, WebGPU and WebGL1. On WebGL1, `skinning: 'gpu'` and instancing draw nothing. `MarrowSpine` is a Pixi `Container`. The package needs `pixi.js` 8.23 or later and has no other dependency.
 
 ```bash
 npm install pixi-marrow pixi.js

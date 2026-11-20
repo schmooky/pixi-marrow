@@ -42,9 +42,9 @@ The pixel check of the repo compares both renderers with the official runtime. [
 
 ## Does pixi-marrow work on WebGL1 or the Canvas renderer?
 
-No. On WebGL1 and on the Canvas renderer, pixi-marrow draws no skeleton and warns once in the console.
+WebGL1: yes. Pixi uses WebGL1 where a browser has no WebGL2. The batched mode and the mesh mode with `skinning: 'cpu'` draw there. The default options draw there. `skinning: 'gpu'` and instancing need WebGL2 or WebGPU: on WebGL1 they draw no skeleton and warn once.
 
-The rest of the app goes on. The official runtime has a Canvas renderer. So a game that must run without WebGL2 needs the official runtime.
+Canvas: no. On the Canvas renderer, pixi-marrow draws no skeleton and warns once in the console. The rest of the app goes on. The official runtime has a Canvas renderer. So a game that must run on Canvas needs the official runtime.
 
 ## How many draw calls does a Spine skeleton take in PixiJS?
 

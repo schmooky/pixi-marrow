@@ -20,6 +20,8 @@ export function countDraws() {
             globalThis.WebGL2RenderingContext,
             ['drawElements', 'drawElementsInstanced', 'drawArrays', 'drawArraysInstanced', 'drawRangeElements'],
         ],
+        // the context Pixi falls back to without WebGL2
+        [globalThis.WebGLRenderingContext, ['drawElements', 'drawArrays']],
     ];
 
     for (const [type, names] of counted) {
@@ -39,7 +41,7 @@ export function countDraws() {
 }
 
 /**
- * Counts the buffer and texture uploads of the page, on WebGL2 and on WebGPU, for every runtime
+ * Counts the buffer and texture uploads of the page, on WebGL2, WebGL1 and WebGPU, for every runtime
  * alike. Read `calls` and `bytes`, reset both to 0.
  *
  * An upload is a call of `bufferData` or `bufferSubData` with data, or of `GPUQueue.writeBuffer`.
@@ -75,12 +77,17 @@ export function countUploads() {
 
     wrap(globalThis.WebGL2RenderingContext, 'bufferData', (args) => bytesOf(args[1], args[3], args[4]));
     wrap(globalThis.WebGL2RenderingContext, 'bufferSubData', (args) => bytesOf(args[2], args[3], args[4]));
+    // WebGL1 has no offset and no length: the whole view uploads
+    wrap(globalThis.WebGLRenderingContext, 'bufferData', (args) => bytesOf(args[1]));
+    wrap(globalThis.WebGLRenderingContext, 'bufferSubData', (args) => bytesOf(args[2]));
     wrap(globalThis.GPUQueue, 'writeBuffer', (args) => bytesOf(args[2], args[3], args[4]));
     // the pixels are the last argument but one where a source offset follows them
     const texels = (args, at) => (ArrayBuffer.isView(args[at]) ? args[at].byteLength : 0);
 
     wrap(globalThis.WebGL2RenderingContext, 'texImage2D', (args) => (args.length >= 9 ? texels(args, 8) : 0));
     wrap(globalThis.WebGL2RenderingContext, 'texSubImage2D', (args) => (args.length >= 9 ? texels(args, 8) : 0));
+    wrap(globalThis.WebGLRenderingContext, 'texImage2D', (args) => (args.length >= 9 ? texels(args, 8) : 0));
+    wrap(globalThis.WebGLRenderingContext, 'texSubImage2D', (args) => (args.length >= 9 ? texels(args, 8) : 0));
     wrap(globalThis.GPUQueue, 'writeTexture', ([, , layout, size]) => {
         const rows = size?.height ?? size?.[1] ?? 1;
 
