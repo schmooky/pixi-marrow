@@ -101,7 +101,9 @@ A warning starts with `pixi-marrow:`. Each one shows once: once per page load, o
 
 | Warning | Shows | Cause | Fix |
 |---|---|---|---|
-| `pixi-marrow: this renderer draws no skeleton. Use WebGL2 or WebGPU.` | Once per renderer | The renderer is WebGL1 or Canvas. No skeleton draws, and the rest of the game goes on. | Use a browser with WebGL2, or `preference: 'webgpu'`. |
+| `pixi-marrow: this renderer draws no skeleton. Use WebGL2 or WebGPU.` | Once per renderer | The renderer is Canvas. No skeleton draws, and the rest of the game goes on. | Use a browser with WebGL, or `preference: 'webgpu'`. |
+| `pixi-marrow: skinning: 'gpu' and instancing need WebGL2. Set skinning: 'cpu' for WebGL1.` | Once per page | A skeleton with `skinning: 'gpu'` draws on WebGL1. It draws nothing there, its clip masks included. | Set `skinning: 'cpu'` when `app.renderer.context.webGLVersion` is 1. |
+| `pixi-marrow: this WebGL1 device has no 32-bit indices. A batch or a mesh of more than 65535 vertices draws nothing.` | Once per renderer | The renderer is WebGL1, and the device has no `OES_element_index_uint`. | Keep a batch under 65535 vertices: fewer skeletons on screen at once, or `renderMode: 'mesh'` for large rigs. |
 | `pixi-marrow: tightMesh: 'on' has no effect, because the asset has no outlines of the atlas regions.` | Once per asset | `tightMesh` or `occlusion: 'auto'` was set by name on an asset without outlines. | Load the asset with an outlines file, or with `outlines: 'auto'`. |
 | `pixi-marrow: instancing: 'auto' has no effect, because it acts on the mesh mode with skinning: 'gpu'.` | Once per asset | `instancing` without `skinning: 'gpu'`. | Set `skinning: 'gpu'` with it. |
 | `pixi-marrow: skinning: 'gpu' has no effect, because renderMode auto batches a skeleton of this size, and the batched mode places every vertex on the CPU.` | Once per asset | `skinning: 'gpu'` or `instancing` on a skeleton that draws in a batch. The text names `renderMode is batched` when the option forces the batch. | Set `renderMode: 'mesh'` with it. |

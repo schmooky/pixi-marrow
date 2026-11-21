@@ -1,5 +1,6 @@
 import { type Bounds, Buffer, BufferUsage, type Container, Mesh, type Shader } from 'pixi.js';
-import { contextLost } from './context-watch';
+import { contextLost, webGL1 } from './context-watch';
+import { drawsHere } from './glsl100';
 import { MeasuredGeometry } from './measured-geometry';
 import { STATIC_STRIDE } from './template';
 
@@ -25,16 +26,21 @@ export interface VertexBuffers {
 /**
  * A Pixi mesh of the mesh mode: a draw range or a clip mask. Pixi asks a mesh right before it
  * draws it whether it can be drawn. This one says no while the WebGL context of the renderer is
- * lost, see `context-watch.ts`.
+ * lost, see `context-watch.ts`, and on WebGL1 when its shader has no program for it, see
+ * `glsl100.ts`. A mask of a view that draws on WebGL2 alone says no on WebGL1 too: its shader
+ * compiles there, but nothing it clips draws.
  *
  * @example
  * const mesh = new RangeMesh({ geometry, shader: createMaskShader() });
  * console.log(mesh.isRenderable); // true, unless the browser took the context
  */
 export class RangeMesh extends Mesh<MeasuredGeometry, Shader> {
-    /** Whether Pixi draws the mesh: it is visible, and the renderer has its context. */
+    /** True for a mesh that draws nothing on WebGL1: a clip mask of a view with `skinning: 'gpu'`. */
+    modern = false;
+
+    /** Whether Pixi draws the mesh: it is visible, the renderer has its context, and the shader compiles there. */
     override get isRenderable(): boolean {
-        return !contextLost() && super.isRenderable;
+        return !contextLost() && drawsHere(this.shader) && !(this.modern && webGL1()) && super.isRenderable;
     }
 
     /**

@@ -1,7 +1,9 @@
 import { GlProgram, GpuProgram, Shader, type TextureSource, type TextureStyle } from 'pixi.js';
+import { serveWebGL1 } from './glsl100';
 
 /*
- * The one shader of the render path, as GLSL for WebGL2 and as WGSL for WebGPU. Both do the same:
+ * The one shader of the render path, as GLSL for WebGL2 and as WGSL for WebGPU. WebGL1 compiles the
+ * same GLSL without `flat`, see `glsl100.ts`. All do the same:
  *
  * - The vertex stage places a vertex in two steps. The transform of the mesh gives the position
  *   the official runtime computes on the CPU. The statements of Pixi's batch shader then give the
@@ -288,8 +290,8 @@ export function releaseShader(shader: Shader): void {
 }
 
 /**
- * The shader that draws one range of a skeleton: a WebGL2 program and a WebGPU program with the
- * same output. `sources` are the pages the range samples, 1 to `MAX_PAGES`. Vertex
+ * The shader that draws one range of a skeleton: a WebGL2 program, its WebGL1 twin and a WebGPU
+ * program with the same output. `sources` are the pages the range samples, 1 to `MAX_PAGES`. Vertex
  * attribute `aFlags.x` selects one of them. `dark` adds the dark color attribute and the two color
  * tint of the official runtime.
  *
@@ -318,8 +320,10 @@ export function createViewShader(sources: readonly TextureSource[], dark: boolea
         resources[`uTexture${i}`] = page;
         resources[`uSampler${i}`] = page.style;
     });
+    const vertex = glVertex(dark, pages);
+    const fragment = glFragment(dark, pages);
     const shader = new Shader({
-        glProgram: GlProgram.from({ name, vertex: glVertex(dark, pages), fragment: glFragment(dark, pages) }),
+        glProgram: GlProgram.from({ name, vertex, fragment }),
         gpuProgram: GpuProgram.from({
             name,
             vertex: { source, entryPoint: 'mainVertex' },
@@ -328,6 +332,7 @@ export function createViewShader(sources: readonly TextureSource[], dark: boolea
         resources,
     });
 
+    serveWebGL1(shader, name, vertex, fragment);
     if (first !== undefined) {
         if (shared === undefined) viewShaders.set(first, new Map([[key, shader]]));
         else shared.set(key, shader);
@@ -437,6 +442,7 @@ export function createMaskShader(): Shader {
         }),
         resources: {},
     });
+    serveWebGL1(maskShader, name, GL_MASK_VERTEX, GL_MASK_FRAGMENT);
 
     return retain(maskShader);
 }

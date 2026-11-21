@@ -69,7 +69,27 @@ Goals, in priority order:
 
 Non-goals:
 
-- Canvas 2D or WebGL1. Every program is GLSL 3.00. Pixi uses WebGL1 where a browser has no WebGL2. On such a renderer no skeleton draws, and `console.warn` says so once. The rest of the app continues, because an error thrown in a render would stop Pixi's ticker.
+- Canvas 2D. On the Canvas renderer no skeleton draws, and `console.warn` says so once. The rest of the app continues, because an error thrown in a render would stop Pixi's ticker.
+- `skinning: 'gpu'` and instancing on WebGL1. Their shaders read data textures with `texelFetch` and integer math, which GLSL 1.00 does not have. On WebGL1 these views draw nothing, and `console.warn` says so once.
+
+WebGL1 draws the batched mode, the mesh mode with `skinning: 'cpu'` and clip masks. Pixi uses WebGL1 where a browser has no WebGL2: old machines, old phones and some blocked drivers. Every program is GLSL 3.00. A shader of these three also has a program of GLSL 1.00, made from the same sources, see `src/render/glsl100.ts`:
+
+- Pixi completes a source without `#version 300 es`. Its defines turn `in`, `out`, `texture` and `finalColor` into the names of GLSL 1.00. The library removes the version and the `flat` qualifier.
+- Without `flat`, the page of a triangle is interpolated between three equal values. The fragment stage compares it with the middle between two pages, so the error never selects another page. The batch shader of Pixi 7 did the same.
+- The shader puts an accessor on `glProgram`. In a render of a WebGL1 renderer it returns the program of GLSL 1.00. In all other renders it returns the program of GLSL 3.00. So WebGL2 compiles the same source as before, and its picture keeps every bit.
+- `pnpm check:render --renderer=webgl1` compares the picture on WebGL1 with the official runtime on WebGL1. The restore check also runs on WebGL1. With `--skinning=gpu` WebGL1 leaves the run, because those views draw nothing there by design.
+- The answers of `context-watch.ts`, lost and WebGL1, are for the render that is under way. A render of another renderer can start inside a render, from a callback. So `prerender` keeps the answers it found on a stack, and `postrender` gives them back. The outer render goes on with its own answers.
+- A view with `skinning: 'gpu'` on WebGL1 is blind for that renderer: its ranges, its clip masks and its instanced draws draw nothing. It uploads nothing, and its stats say 0 draw calls. What waits to upload stays noted, so a later renderer of WebGL2 gets all of it.
+- WebGL1 has 32-bit indices only with `OES_element_index_uint`. A renderer of WebGL1 without it warns once at the first skeleton. A batch or a mesh of more than 65535 vertices then draws nothing.
+
+Caveats of the WebGL1 path, which are known and accepted:
+
+- The program a shader hands Pixi depends on one answer of the module, not on the renderer that reads it. It is right inside every render. Outside a render it is the answer from before the last render. So code that reads `shader.glProgram` there, as a devtool can, sees the program of WebGL2. A render that throws never calls `postrender`, so its answers stay until the next render starts.
+- `skinning: 'gpu'` does not fall back to the CPU by itself. The view is made for the GPU before a renderer is known. A game that wants WebGL1 sets `skinning: 'cpu'` when `renderer.context.webGLVersion` is 1.
+- Without `OES_element_index_uint` the library warns and does not split a batch. Pixi itself relies on that extension for its batches of more than 65535 indices.
+- The accessor gives the shaders of the library an own property where a Pixi shader has a data property. The places in Pixi that read `glProgram` then see two shapes of object. A subclass of `Shader` has a shape of its own too, so it would not remove that. The cost is not measured.
+- The pixel check of WebGL1 runs in headless Chrome on the author's machine, through ANGLE. It does not run in CI. It does not run on the old GPUs that use WebGL1 in the field either, where `mediump` is a 16-bit float.
+- A new shader that uses GLSL 3.00 alone, as `texelFetch` or integer math, must not call `serveWebGL1`. `tests/render/webgl-check.test.ts` scans the programs of WebGL1 for words of GLSL 3.00.
 - Spine 3.8 and 4.0. The model can take more importers later.
 - Editing or authoring skeletons.
 - A runtime dependency on `spine-core`.
@@ -903,7 +923,7 @@ The first budget was 60 KB gzipped for the root import with one importer. No che
 
 The fixes of the audit of 2026-11-15 took the root import to 32.17 kB. The new code must run at once:
 
-- the check for WebGL1
+- the check for WebGL1, which now selects the programs of GLSL 1.00
 - pacing that sees a hidden parent
 - a skin set again as a no-op
 
@@ -994,7 +1014,7 @@ The pose core is only as good as its proof. The project builds the parity suite 
 | Random play parity | Node | Seeded random sequences of play, queue, skin and time-scale calls on both engines. Any divergence prints the seed. |
 | Optimization parity | Node | Every item in 8.1 produces the same pose with the item on and off |
 | Geometry parity | Node | Positions, UVs and colors per slot equal the official `computeWorldVertices` output |
-| Pixel parity | Headless Chrome, WebGL2 and WebGPU, on the author's machine | Our frame equals the official `spine-pixi-v8` frame for 4.2 and 4.3. For 4.1 the reference is our CPU path. |
+| Pixel parity | Headless Chrome, WebGL2, WebGL1 and WebGPU, on the author's machine | Our frame equals the official `spine-pixi-v8` frame for 4.2 and 4.3. For 4.1 the reference is our CPU path. |
 | Cut parity | Headless Chrome | Our frame with the exact overdraw cuts equals our frame without them, in every pixel. With tight meshes it stays within stated bounds. At most 0.25 percent of pixels are off by more than 1 level, and 0.01 percent by more than 8. |
 | Premultiplied parity | Headless Chrome | Straight and premultiplied exports of one rig match |
 | Plan stability | Node | Attachment and draw-order keys cause zero template rebuilds |

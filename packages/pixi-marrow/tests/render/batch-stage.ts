@@ -67,8 +67,9 @@ export interface Stage {
      * Renders one frame, as `renderer.render(root)` does.
      *
      * @param note False notes no draw call, so that the stage itself allocates nothing.
+     * @param during Runs at the end of the render, before the listeners of `postrender` hear of it.
      */
-    render(note?: boolean): void;
+    render(note?: boolean, during?: () => void): void;
     /** Renders another container that is a render group, as `renderer.render({ container })` does. */
     draw(container: Container): void;
 }
@@ -83,7 +84,8 @@ export interface StageOptions {
     maxTextures?: number;
     /**
      * Gives the renderer a WebGL context that is lost while `lost` is true. The stage then tells
-     * the listeners of `prerender` before every frame, as a renderer of Pixi does.
+     * the listeners of `prerender` before every frame and of `postrender` after it, as a renderer
+     * of Pixi does.
      */
     context?: { lost: boolean };
 }
@@ -109,6 +111,8 @@ export function createStage(options: StageOptions = {}): Stage {
     const { context } = options;
     /** What asked to hear of every render. Kept for a stage with a context only. */
     const before: { prerender(): void }[] = [];
+    /** What asked to hear of the end of every render. */
+    const after: { postrender(): void }[] = [];
     const fake = {
         roundPixels: options.roundPixels ?? false,
         renderPipes: pipes,
@@ -119,6 +123,11 @@ export function createStage(options: StageOptions = {}): Stage {
             prerender: {
                 add(item: { prerender(): void }): void {
                     if (context !== undefined) before.push(item);
+                },
+            },
+            postrender: {
+                add(item: { postrender(): void }): void {
+                    if (context !== undefined) after.push(item);
                 },
             },
         },
@@ -234,11 +243,13 @@ export function createStage(options: StageOptions = {}): Stage {
         root,
         renderer,
         counts,
-        render(note = true): void {
+        render(note = true, during?: () => void): void {
             noting = note;
             counts.draws.length = 0;
             for (let i = 0; i < before.length; i++) before[i]?.prerender();
             system.draw(frame);
+            during?.();
+            for (let i = 0; i < after.length; i++) after[i]?.postrender();
         },
         draw(container: Container): void {
             system.draw({ container, transform: undefined as never });

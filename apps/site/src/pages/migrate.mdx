@@ -19,7 +19,7 @@ Check these four points first:
 
 1. **The Spine version of your files.** pixi-marrow plays exports of Spine 4.1, 4.2 and 4.3. An export of 4.0 or earlier does not load. Export such a project again from a newer Spine editor.
 2. **The PixiJS version.** pixi-marrow needs PixiJS 8.23 or later. A game on pixi-spine is on PixiJS v7 or earlier, so it must move to v8 first.
-3. **The renderer.** pixi-marrow draws on WebGL2 and WebGPU. On the Canvas renderer and on WebGL1 it draws no skeleton.
+3. **The renderer.** pixi-marrow draws on WebGL2, WebGPU and WebGL1. On WebGL1, `skinning: 'gpu'` and instancing draw no skeleton. On the Canvas renderer it draws no skeleton.
 4. **What your code uses.** Read [what is not there](#what-is-not-there). When your game needs one of those, stay with the official runtime.
 
 ## Install
@@ -240,7 +240,7 @@ pixi-marrow has no call for these today:
 - Bounds providers and `skeletonBounds`, for hit tests against bounding box attachments.
 - `allowMissingRegions`.
 - The hooks `beforeUpdateWorldTransforms` and `afterUpdateWorldTransforms`.
-- The Canvas renderer and WebGL1.
+- The Canvas renderer. On WebGL1, `skinning: 'gpu'` and instancing.
 - Spine 4.0 and earlier.
 - A single-file build. The package is ES modules that load on demand.
 
@@ -256,4 +256,4 @@ pixi-spine is for PixiJS v5 to v7 and Spine 3.7 to 4.1, as its README says. So a
 
 1. Run the game with the browser console open. An option or a name that did not migrate throws a `MarrowError` with its fix.
 2. Read `hero.stats.drawCalls` and `await hero.perf.report()` in your scene.
-3. Compare the picture with the old build. The pixel check of the repo compares pixi-marrow with the official runtime on the official example rigs, on WebGL2 and WebGPU.
+3. Compare the picture with the old build. The pixel check of the repo compares pixi-marrow with the official runtime on the official example rigs, on WebGL2, WebGL1 and WebGPU.

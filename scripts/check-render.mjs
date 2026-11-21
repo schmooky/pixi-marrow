@@ -4,7 +4,7 @@
  * compares the pixels. Unit tests run in Node without a GPU, so this is where the picture itself
  * is measured.
  *
- * usage: pnpm check:render [--renderer=webgl|webgpu|both] [--only=4.3/spineboy] [--animations=3|all]
+ * usage: pnpm check:render [--renderer=webgl|webgl1|webgpu|both] [--only=4.3/spineboy] [--animations=3|all]
  *                          [--render-mode=both|mesh|batched] [--strict-rebuilds] [--trust-mode]
  *                          [--strict-clipping] [--self-test] [--verbose] [--shots=4]
  *                          [--out=.shots/render] [--size=512] [--dist=<folder>] [--pixi=<version>]
@@ -326,11 +326,17 @@ const RIG_TIMEOUT = 180_000;
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const args = parseArgs();
-const wanted = ['webgl', 'webgpu'].includes(args.renderer) ? [args.renderer] : ['webgl', 'webgpu'];
+/** WebGL1 is the context Pixi falls back to where a browser has no WebGL2, asked for with `preferWebGLVersion: 1`. */
+const asked = ['webgl', 'webgl1', 'webgpu'].includes(args.renderer) ? [args.renderer] : ['webgl', 'webgl1', 'webgpu'];
 const outDir = resolve(root, args.out ?? '.shots/render');
 const selfTest = args['self-test'] === 'true';
 /** The `skinning` option of every instance of ours, or null for the default. */
 const skinning = ['cpu', 'gpu', 'auto'].includes(args.skinning) ? args.skinning : null;
+/**
+ * The renderers that run. `skinning: 'gpu'` draws nothing on WebGL1 by design, so no case of
+ * WebGL1 could pass with it: WebGL1 leaves the run, and says so in `main`.
+ */
+const wanted = skinning === 'gpu' ? asked.filter((name) => name !== 'webgl1') : asked;
 /** What a page draws of ours and how it judges, the same for every rig and scene. */
 const pageOptions = {
     tolerance: TOLERANCE,
@@ -465,6 +471,9 @@ async function main() {
     let server;
     let browser;
 
+    if (wanted.length < asked.length)
+        console.log("check-render: skinning: 'gpu' draws nothing on WebGL1 by design, so webgl1 does not run");
+
     try {
         const jobs = await planJobs(bundle.made, pkg);
 
@@ -535,27 +544,33 @@ async function main() {
         server?.close();
         bundle.remove();
     }
-    if (!selfTest)
+    // the game bundle runs on the renderers a game asks for by default, not on WebGL1
+    const gameRenderers = wanted.filter((name) => name !== 'webgl1');
+
+    if (!selfTest && gameRenderers.length > 0)
         failed += await checkGame({
             root,
             pkg,
             pixi,
-            renderers: wanted,
+            renderers: gameRenderers,
             outDir: join(outDir, 'game'),
             only: args.only ?? null,
             skinning,
         });
-    // a context is lost and restored with an extension of WebGL
-    if (!selfTest && wanted.includes('webgl'))
+    // a context is lost and restored with an extension of WebGL, on WebGL2 and on WebGL1
+    for (const renderer of wanted.filter((name) => name === 'webgl' || name === 'webgl1')) {
+        if (selfTest) break;
         failed += await checkRestore({
             root,
             pkg,
             pixi,
             modes: pageOptions.renderMode === 'both' ? ['batched', 'mesh'] : [pageOptions.renderMode],
-            outDir: join(outDir, 'restore'),
+            outDir: join(outDir, renderer === 'webgl' ? 'restore' : 'restore-webgl1'),
             only: args.only ?? null,
             skinning,
+            renderer,
         });
+    }
     // the files of AssetPack through a Pixi manifest, drawn on WebGL
     if (!selfTest && wanted.includes('webgl'))
         failed += await checkAssets({

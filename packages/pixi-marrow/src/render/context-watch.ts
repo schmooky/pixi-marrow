@@ -25,12 +25,18 @@ import { DOCS_SITE } from '../base/errors';
  * The context is asked once per render of a renderer, not per skeleton. A WebGPU device that is
  * lost is another event, and nothing here watches it.
  *
- * A renderer of WebGL1 counts as lost for good, and says so once with `console.warn`. Every
- * program of this library is GLSL 3.00, which WebGL1 cannot compile, and Pixi falls back to
- * WebGL1 where a browser has no WebGL2. The same holds for a renderer that is neither WebGL nor
- * WebGPU, as the Canvas renderer of Pixi. The skeletons draw nothing there, and the rest of the
- * app goes on. An error thrown in a render would stop the ticker of Pixi, and with it the whole
- * app. The words of the warning are short: this is in the root import, which is near its limit.
+ * The watch also notes whether the renderer of the render is one of WebGL1. The shaders then
+ * hand Pixi their programs of GLSL 1.00, see `glsl100.ts`.
+ *
+ * The two answers are for the render that is under way. A render can start inside the render of
+ * another renderer, from a callback. So each render keeps the answers it found and gives them
+ * back when it ends, and the outer render goes on with its own.
+ *
+ * A renderer that is neither WebGL nor WebGPU, as the Canvas renderer of Pixi, counts as lost for
+ * good, and says so once with `console.warn`. The skeletons draw nothing there, and the rest of
+ * the app goes on. An error thrown in a render would stop the ticker of Pixi, and with it the
+ * whole app. The words of the warning are short: this is in the root import, which is near its
+ * limit.
  */
 
 /** The renderers that tell this module before each of their renders. */
@@ -38,6 +44,12 @@ const watched = new WeakSet<Renderer>();
 
 /** True while the renderer that renders at the moment has lost its context. */
 let lost = false;
+
+/** True while the renderer that renders at the moment is one of WebGL1. */
+let old = false;
+
+/** The answers of the renders that are under way around the current one: bit 1 lost, bit 2 old. */
+const outer: number[] = [];
 
 /**
  * Whether the renderer that draws at the moment has lost its WebGL context. What draws a
@@ -51,15 +63,36 @@ export function contextLost(): boolean {
 }
 
 /**
- * Whether a renderer can draw no skeleton at all: one of WebGL1, or one that is neither WebGL
- * nor WebGPU, as the Canvas renderer of Pixi.
+ * Whether the renderer that draws at the moment is one of WebGL1. The shaders ask it for the
+ * program they hand Pixi, see `glsl100.ts`.
+ *
+ * @example
+ * const program = webGL1() ? programOf100 : programOf300;
+ */
+export function webGL1(): boolean {
+    return old;
+}
+
+/**
+ * Whether a renderer is one of WebGL1. Pixi falls back to WebGL1 where a browser has no WebGL2.
+ *
+ * @example
+ * if (isWebGL1(renderer)) console.log('GLSL 1.00');
+ */
+export function isWebGL1(renderer: Renderer): boolean {
+    return 'gl' in renderer && renderer.context?.webGLVersion === 1;
+}
+
+/**
+ * Whether a renderer can draw no skeleton at all: one that is neither WebGL nor WebGPU, as the
+ * Canvas renderer of Pixi.
  *
  * @example
  * if (drawsNothing(renderer)) stats.drawCalls = 0;
  */
 export function drawsNothing(renderer: Renderer): boolean {
     // the types of Pixi are bits: 1 is WebGL and 2 is WebGPU. A renderer of a test has none
-    return ('gl' in renderer && renderer.context?.webGLVersion === 1) || renderer.type > 2;
+    return renderer.type > 2;
 }
 
 /**
@@ -67,9 +100,9 @@ export function drawsNothing(renderer: Renderer): boolean {
  * call for a renderer adds one listener to it, later calls do nothing. Call it before the
  * renderer first draws a skeleton: the answer for the render that is under way is set at once.
  *
- * A renderer without a WebGL context, as the one of WebGPU, never counts as lost. A renderer of
- * WebGL1 always counts as lost, and warns once. So does a renderer whose `type` names neither
- * WebGL nor WebGPU.
+ * A renderer without a WebGL context, as the one of WebGPU, never counts as lost. A renderer
+ * whose `type` names neither WebGL nor WebGPU always counts as lost, and warns once. A renderer
+ * of WebGL1 without 32-bit indices warns once too.
  *
  * @example
  * watchContext(renderer);
@@ -78,19 +111,37 @@ export function drawsNothing(renderer: Renderer): boolean {
 export function watchContext(renderer: Renderer): void {
     if (watched.has(renderer)) return;
     watched.add(renderer);
-    const old = drawsNothing(renderer);
+    const none = drawsNothing(renderer);
+    const one = isWebGL1(renderer);
 
-    if (old)
+    if (none)
         console.warn(
             `pixi-marrow: this renderer draws no skeleton. Use WebGL2 or WebGPU. ${DOCS_SITE}good-to-know/#limits`,
+        );
+    // WebGL1 has 32-bit indices only with OES_element_index_uint, and Pixi draws nothing without it
+    if (one && 'gl' in renderer && !renderer.context.supports.uint32Indices)
+        console.warn(
+            `pixi-marrow: this WebGL1 device has no 32-bit indices. A batch or a mesh of more than 65535 vertices draws nothing. ${DOCS_SITE}good-to-know/#limits`,
         );
     // every renderer that draws skeletons answers, so the answer of another one never stays
     const watch = {
         prerender(): void {
-            lost = old || ('gl' in renderer && renderer.gl.isContextLost());
+            outer.push((lost ? 1 : 0) | (old ? 2 : 0));
+            lost = none || ('gl' in renderer && renderer.gl.isContextLost());
+            old = one;
+        },
+        postrender(): void {
+            const was = outer.pop();
+
+            // a render that threw ended without this call: its answers stay until the next render
+            if (was === undefined) return;
+            lost = (was & 1) !== 0;
+            old = (was & 2) !== 0;
         },
     };
 
     renderer.runners.prerender.add(watch);
+    renderer.runners.postrender.add(watch);
+    // the render that is under way, if one is, ends with the call of postrender
     watch.prerender();
 }

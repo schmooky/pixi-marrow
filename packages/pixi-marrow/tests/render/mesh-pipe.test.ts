@@ -51,7 +51,11 @@ function fakeRenderer(
     const fake = {
         renderPipes: pipes,
         config: { renderPipeAdaptors: adaptors },
-        runners: { destroy: { add: (item: unknown) => destroyed.push(item) }, prerender: { add: () => undefined } },
+        runners: {
+            destroy: { add: (item: unknown) => destroyed.push(item) },
+            prerender: { add: () => undefined },
+            postrender: { add: () => undefined },
+        },
     };
 
     return { renderer: fake as unknown as Renderer, destroyed };
@@ -127,7 +131,11 @@ describe('the link of the mesh pipe', () => {
         }
         const bare = {
             renderPipes: {},
-            runners: { destroy: { add: () => undefined }, prerender: { add: () => undefined } },
+            runners: {
+                destroy: { add: () => undefined },
+                prerender: { add: () => undefined },
+                postrender: { add: () => undefined },
+            },
         };
 
         expect(() => linkMeshPipe(bare as unknown as Renderer)).not.toThrow();
@@ -147,6 +155,7 @@ describe('a view in the mesh mode below a renderer that has no mesh pipe', () =>
         Reflect.set(stage.renderer, 'runners', {
             destroy: { add: (item: unknown) => destroyed.push(item) },
             prerender: { add: () => undefined },
+            postrender: { add: () => undefined },
         });
         await loadMeshCode();
         const family = await loadFamily('4.2/speedy-ess.skel');

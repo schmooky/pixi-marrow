@@ -1,10 +1,10 @@
 import { type Bounds, type Buffer, type Container, RenderContainer, type Renderer, type TextureSource } from 'pixi.js';
-import { MarrowError } from '../base/errors';
+import { DOCS_SITE, MarrowError } from '../base/errors';
 import { i16, i32 } from '../geometry/read';
 import type { SkeletonModel } from '../model/model';
 import { isNewer, type PoseState } from '../pose/state';
 import { clipCode, clipCodeMissing } from './clip-code';
-import { drawsNothing } from './context-watch';
+import { drawsNothing, isWebGL1 } from './context-watch';
 import { bendsEdges, type DrawGate } from './gate';
 import { instanceBlock, instanceLayout, setupVertices, unionSpread } from './instance-layout';
 import { InstancePaint, type InstanceWhy } from './instance-paint';
@@ -47,6 +47,21 @@ export interface MeshPaintOptions extends Omit<DrawRangesOptions, 'buffers' | 'b
     readonly gate: DrawGate;
     /** The counters of the view. The paint counts the bytes it uploads. */
     readonly stats: ViewStats;
+}
+
+/** Whether the warning of {@link warnGpuOnWebGL1} was given. */
+let warnedGpu = false;
+
+/** Says once that `skinning: 'gpu'` draws nothing on WebGL1, and returns true. */
+function warnGpuOnWebGL1(): boolean {
+    if (!warnedGpu) {
+        warnedGpu = true;
+        console.warn(
+            `pixi-marrow: skinning: 'gpu' and instancing need WebGL2. Set skinning: 'cpu' for WebGL1. ${DOCS_SITE}good-to-know/#limits`,
+        );
+    }
+
+    return true;
 }
 
 /**
@@ -115,11 +130,14 @@ export class MeshPaint {
         // a renderer that was created before this code loaded may have no pipe for meshes
         this.stats = stats;
         this.container.onRender = (renderer): void => {
+            if (renderer !== this.linked) {
+                linkMeshPipe(renderer);
+                this.linked = renderer;
+                // the shaders of skinning: 'gpu' are GLSL 3.00 alone, see `glsl100.ts`
+                this.blind = drawsNothing(renderer) || (gpu && isWebGL1(renderer) && warnGpuOnWebGL1());
+                if (this.blind) stats.drawCalls = stats.maskDraws = stats.indices = 0;
+            }
             this.flush();
-            if (renderer === this.linked) return;
-            linkMeshPipe(renderer);
-            this.linked = renderer;
-            this.blind = drawsNothing(renderer);
         };
         this.positions = vertexBuffer(template.positions, 'marrow-positions');
         this.statics = vertexBuffer(template.statics, 'marrow-uvs');
@@ -241,7 +259,8 @@ export class MeshPaint {
     flush(): void {
         const { positions, colors, waiting } = this;
 
-        if (!shown(this.container)) return;
+        // a view that draws nothing on this renderer uploads nothing. What waits stays noted
+        if (this.blind || !shown(this.container)) return;
         if (this.skin !== undefined) this.note('bones', this.skin.flush());
         this.note('positions', uploadWaiting(positions, waiting, 0, 8));
         if (colors !== undefined) this.note('statics', uploadWaiting(colors, waiting, 2, this.colorBytes));
@@ -300,8 +319,8 @@ export class MeshPaint {
             instance.show(template, seen, skipped);
             // the view is a part of one instanced draw, which it shares
             stats.maskDraws = 0;
-            stats.drawCalls = seen.count > 0 ? 1 : 0;
-            stats.indices = indices;
+            stats.drawCalls = seen.count > 0 && !this.blind ? 1 : 0;
+            stats.indices = this.blind ? 0 : indices;
             stats.bufferBytes = templateBytes(template) + ranges.bytes + instance.bytes;
 
             return;

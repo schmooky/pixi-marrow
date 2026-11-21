@@ -1,7 +1,9 @@
 import { GlProgram, GpuProgram, getBatchSamplersUniformGroup, Shader } from 'pixi.js';
+import { serveWebGL1 } from './glsl100';
 
 /*
- * The shader of the batched mode, as GLSL for WebGL2 and as WGSL for WebGPU. It writes the colors
+ * The shader of the batched mode, as GLSL for WebGL2 and as WGSL for WebGPU. WebGL1 compiles the
+ * same GLSL without `flat`, see `glsl100.ts`. It writes the colors
  * of the mesh mode, see `shader.ts`, and differs from that shader in three points:
  *
  * - A vertex arrives placed. The batch holds positions in the space of the render group, so the
@@ -191,8 +193,8 @@ return ${color};
 const shaders = new Map<string, Shader>();
 
 /**
- * The shader that draws the batches of skeletons: a WebGL2 program and a WebGPU program with the
- * same output. A batch samples up to `textures` textures, and attribute `aFlags.x` selects one of
+ * The shader that draws the batches of skeletons: a WebGL2 program, its WebGL1 twin and a WebGPU
+ * program with the same output. A batch samples up to `textures` textures, and attribute `aFlags.x` selects one of
  * them. `dark` adds the dark color attribute and the two color tint of the official runtime.
  *
  * The output is premultiplied, and so must the textures be on the GPU. Every call with the same
@@ -208,9 +210,11 @@ export function createBatchShader(textures: number, dark: boolean): Shader {
 
     if (shader === undefined) {
         const source = wgsl(dark, textures);
+        const vertex = glVertex(dark);
+        const fragment = glFragment(dark, textures);
 
         shader = new Shader({
-            glProgram: GlProgram.from({ name, vertex: glVertex(dark), fragment: glFragment(dark, textures) }),
+            glProgram: GlProgram.from({ name, vertex, fragment }),
             gpuProgram: GpuProgram.from({
                 name,
                 vertex: { source, entryPoint: 'mainVertex' },
@@ -219,6 +223,7 @@ export function createBatchShader(textures: number, dark: boolean): Shader {
             // WebGL2 reads the texture units of the batch from this group
             resources: { batchSamplers: getBatchSamplersUniformGroup(textures) },
         });
+        serveWebGL1(shader, name, vertex, fragment);
         shaders.set(name, shader);
     }
 

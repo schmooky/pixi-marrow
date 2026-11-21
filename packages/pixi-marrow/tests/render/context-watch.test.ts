@@ -43,6 +43,7 @@ function fakeRenderer(context?: FakeContext): { renderer: Renderer; listeners: u
         runners: {
             destroy: { add: () => undefined },
             prerender: { add: (item: { prerender(): void }) => listeners.push(item) },
+            postrender: { add: () => undefined },
         },
     };
 
@@ -194,13 +195,22 @@ describe('a skeleton while the WebGL context is lost', () => {
         stage.root.addChild(late.view.container);
         play(late, 'run');
         for (const item of [rig, late]) step(item, 0.05);
-        stage.render();
+        // a mesh answers for the render that is under way
+        const renderable = (): boolean[] =>
+            [...meshes(rig.view), ...meshes(late.view)].map((mesh) => mesh.isRenderable);
+        let seen: boolean[] = [];
+
+        stage.render(true, () => {
+            seen = renderable();
+        });
         expect(stage.counts.draws).toEqual([]);
-        for (const mesh of [...meshes(rig.view), ...meshes(late.view)]) expect(mesh.isRenderable).toBe(false);
+        expect(seen.every((one) => !one)).toBe(true);
         context.lost = false;
-        stage.render();
+        stage.render(true, () => {
+            seen = renderable();
+        });
         expect(stage.counts.draws).toHaveLength(meshes(rig.view).length + meshes(late.view).length);
-        for (const mesh of [...meshes(rig.view), ...meshes(late.view)]) expect(mesh.isRenderable).toBe(true);
+        expect(seen.every((one) => one)).toBe(true);
         // the loss and the restore built the instructions for the new skeleton alone
         expect(stage.counts.builds).toBe(2);
     });
