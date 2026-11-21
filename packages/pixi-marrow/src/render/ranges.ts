@@ -1,17 +1,8 @@
-import {
-    type BLEND_MODES,
-    type Bounds,
-    type Buffer,
-    Container,
-    type Mesh,
-    type Shader,
-    type TextureSource,
-} from 'pixi.js';
+import { type BLEND_MODES, type Bounds, type Buffer, Container, type Shader, type TextureSource } from 'pixi.js';
 import { i16, i32 } from '../geometry/read';
 import { ClipMask } from './clip-mask';
 import type { ClipShape } from './clip-shape';
-import type { MeasuredGeometry } from './measured-geometry';
-import { CLIP_LABEL, createRangeMesh, followSkin, type VertexBuffers } from './range-mesh';
+import { CLIP_LABEL, createRangeMesh, followSkin, type RangeMesh, type VertexBuffers } from './range-mesh';
 import { u8, u16 } from './read';
 import { sent } from './sent';
 import { createMaskShader, createViewShader, releaseShader } from './shader';
@@ -69,7 +60,7 @@ const EMPTY_RANGE = 3;
 
 /** One draw call: a mesh, its index buffer and what it was set up for. */
 interface DrawRange {
-    readonly mesh: Mesh<MeasuredGeometry, Shader>;
+    readonly mesh: RangeMesh;
     readonly buffer: Buffer;
     indices: Uint16Array | Uint32Array;
     /** Indices the range draws. The rest of the index array is zero: triangles without area. */
@@ -447,6 +438,9 @@ export class DrawRanges {
 
         this.maskShader ??= createMaskShader();
         const mask = new ClipMask(this.maskShader, measure);
+
+        // the ranges of skinning: 'gpu' draw nothing on WebGL1, so neither does their mask
+        mask.mesh.modern = this.options.shade !== undefined;
         const group: ClipGroup = { container, mask, ranges: [], used: 0, slot: NO_CLIP, inverse: false, build: 0 };
 
         container.addChild(mask.mesh);

@@ -28,6 +28,10 @@ import { DOCS_SITE } from '../base/errors';
  * The watch also notes whether the renderer of the render is one of WebGL1. The shaders then
  * hand Pixi their programs of GLSL 1.00, see `glsl100.ts`.
  *
+ * The two answers are for the render that is under way. A render can start inside the render of
+ * another renderer, from a callback. So each render keeps the answers it found and gives them
+ * back when it ends, and the outer render goes on with its own.
+ *
  * A renderer that is neither WebGL nor WebGPU, as the Canvas renderer of Pixi, counts as lost for
  * good, and says so once with `console.warn`. The skeletons draw nothing there, and the rest of
  * the app goes on. An error thrown in a render would stop the ticker of Pixi, and with it the
@@ -43,6 +47,9 @@ let lost = false;
 
 /** True while the renderer that renders at the moment is one of WebGL1. */
 let old = false;
+
+/** The answers of the renders that are under way around the current one: bit 1 lost, bit 2 old. */
+const outer: number[] = [];
 
 /**
  * Whether the renderer that draws at the moment has lost its WebGL context. What draws a
@@ -94,7 +101,8 @@ export function drawsNothing(renderer: Renderer): boolean {
  * renderer first draws a skeleton: the answer for the render that is under way is set at once.
  *
  * A renderer without a WebGL context, as the one of WebGPU, never counts as lost. A renderer
- * whose `type` names neither WebGL nor WebGPU always counts as lost, and warns once.
+ * whose `type` names neither WebGL nor WebGPU always counts as lost, and warns once. A renderer
+ * of WebGL1 without 32-bit indices warns once too.
  *
  * @example
  * watchContext(renderer);
@@ -110,14 +118,30 @@ export function watchContext(renderer: Renderer): void {
         console.warn(
             `pixi-marrow: this renderer draws no skeleton. Use WebGL2 or WebGPU. ${DOCS_SITE}good-to-know/#limits`,
         );
+    // WebGL1 has 32-bit indices only with OES_element_index_uint, and Pixi draws nothing without it
+    if (one && 'gl' in renderer && !renderer.context.supports.uint32Indices)
+        console.warn(
+            `pixi-marrow: this WebGL1 device has no 32-bit indices. A batch or a mesh of more than 65535 vertices draws nothing. ${DOCS_SITE}good-to-know/#limits`,
+        );
     // every renderer that draws skeletons answers, so the answer of another one never stays
     const watch = {
         prerender(): void {
+            outer.push((lost ? 1 : 0) | (old ? 2 : 0));
             lost = none || ('gl' in renderer && renderer.gl.isContextLost());
             old = one;
+        },
+        postrender(): void {
+            const was = outer.pop();
+
+            // a render that threw ended without this call: its answers stay until the next render
+            if (was === undefined) return;
+            lost = (was & 1) !== 0;
+            old = (was & 2) !== 0;
         },
     };
 
     renderer.runners.prerender.add(watch);
+    renderer.runners.postrender.add(watch);
+    // the render that is under way, if one is, ends with the call of postrender
     watch.prerender();
 }

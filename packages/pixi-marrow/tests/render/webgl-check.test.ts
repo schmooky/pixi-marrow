@@ -1,4 +1,4 @@
-import type { Renderer, Shader } from 'pixi.js';
+import { type Container, Mesh, type Renderer, type Shader, TextureSource } from 'pixi.js';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { linkRenderer } from '../../src/render/batch-pipe';
 import { createBatchShader } from '../../src/render/batch-shader';
@@ -31,13 +31,21 @@ afterEach(() => {
 });
 
 /** A renderer as far as the first draw of a skeleton reads one, with a WebGL context of a version, or WebGPU. */
-function fakeRenderer(webGLVersion: 1 | 2 | 'gpu' | 'canvas'): Renderer {
-    const context = { gl: { isContextLost: () => false }, context: { webGLVersion }, type: 1 };
+function fakeRenderer(webGLVersion: 1 | 2 | 'gpu' | 'canvas', uint32Indices = true): Renderer {
+    const context = {
+        gl: { isContextLost: () => false },
+        context: { webGLVersion, supports: { uint32Indices } },
+        type: 1,
+    };
     const other = webGLVersion === 'gpu' ? { gpu: {}, type: 2 } : { type: 4 };
     const fake = {
         ...(typeof webGLVersion === 'number' ? context : other),
         renderPipes: {},
-        runners: { destroy: { add: () => undefined }, prerender: { add: () => undefined } },
+        runners: {
+            destroy: { add: () => undefined },
+            prerender: { add: () => undefined },
+            postrender: { add: () => undefined },
+        },
     };
 
     return fake as unknown as Renderer;
@@ -54,11 +62,41 @@ function thrown(call: () => void): unknown {
     return undefined;
 }
 
+/** A renderer that tells its listeners of the start and the end of a render, as Pixi does. */
+function listenedRenderer(webGLVersion: 1 | 2): { renderer: Renderer; render(inner?: () => void): void } {
+    const before: { prerender(): void }[] = [];
+    const after: { postrender(): void }[] = [];
+    const fake = {
+        gl: { isContextLost: () => false },
+        context: { webGLVersion, supports: { uint32Indices: true } },
+        type: 1,
+        renderPipes: {},
+        runners: {
+            destroy: { add: () => undefined },
+            prerender: { add: (item: { prerender(): void }) => before.push(item) },
+            postrender: { add: (item: { postrender(): void }) => after.push(item) },
+        },
+    };
+
+    return {
+        renderer: fake as unknown as Renderer,
+        render(inner?: () => void): void {
+            for (const item of before) item.prerender();
+            inner?.();
+            for (const item of after) item.postrender();
+        },
+    };
+}
+
+/** Words of GLSL 3.00 that GLSL 1.00 does not have, and that the defines of Pixi do not turn into GLSL 1.00. */
+const GLSL300_ONLY =
+    /#version|\b(flat|smooth|centroid|layout|uint|uvec[234]|texelFetch|textureSize|textureLod|textureGrad|inverse|transpose|round|trunc|isnan|isinf|switch)\b|<<|>>|[^&]&[^&]|[^|]\|[^|]|%/;
+
 /** A stage whose renderer is one of WebGL1, with a context that stays. */
 function stageOfWebGL1(): Stage {
     const stage = createStage({ context: { lost: false } });
 
-    Reflect.set(stage.renderer, 'context', { webGLVersion: 1 });
+    Reflect.set(stage.renderer, 'context', { webGLVersion: 1, supports: { uint32Indices: true } });
 
     return stage;
 }
@@ -108,6 +146,63 @@ describe('the GLSL of WebGL1', () => {
         releaseShader(mask);
     });
 
+    it('holds no word of GLSL 3.00 in any program of WebGL1, and no output but finalColor', () => {
+        const old = fakeRenderer(1);
+        const shaders: Shader[] = [createMaskShader()];
+        const batched = new Set<Shader>();
+
+        for (const dark of [false, true]) {
+            for (const textures of [1, 2, 8, 16]) batched.add(createBatchShader(textures, dark));
+            for (const pages of [1, 2, 8])
+                shaders.push(
+                    createViewShader(
+                        Array.from({ length: pages }, () => new TextureSource()),
+                        dark,
+                    ),
+                );
+        }
+        shaders.push(...batched);
+        watchContext(old);
+        for (const shader of shaders) {
+            const { vertex, fragment } = shader.glProgram;
+
+            expect(`${vertex}\n${fragment}`).not.toMatch(GLSL300_ONLY);
+            // Pixi took out the one output of the fragment stage and defined it as gl_FragColor
+            expect(fragment).not.toMatch(/\bout\b/);
+            expect(fragment).toContain('#define finalColor gl_FragColor');
+        }
+        // the shaders of the batched mode stay for the batchers, the others go back
+        for (const shader of shaders) if (!batched.has(shader)) releaseShader(shader);
+    });
+
+    it('gives the outer render its answer back when a render of another renderer ends inside it', () => {
+        const old = listenedRenderer(1);
+        const modern = listenedRenderer(2);
+
+        watchContext(old.renderer);
+        watchContext(modern.renderer);
+        let inside: boolean[] = [];
+
+        old.render(() => {
+            inside.push(webGL1());
+            modern.render(() => inside.push(webGL1()));
+            inside.push(webGL1());
+        });
+        expect(inside).toEqual([true, false, true]);
+        expect(webGL1()).toBe(false);
+        inside = [];
+        modern.render(() => {
+            inside.push(webGL1());
+            old.render(() => inside.push(webGL1()));
+            inside.push(webGL1());
+        });
+        expect(inside).toEqual([false, true, false]);
+        // two renderers one after the other in a frame: each render has its own answer
+        old.render(() => inside.push(webGL1()));
+        modern.render(() => inside.push(webGL1()));
+        expect(inside.slice(3)).toEqual([true, false]);
+    });
+
     it('leaves a destroyed shader without a program on both versions', () => {
         const shader = createViewShader([], false);
 
@@ -140,6 +235,19 @@ describe('a renderer of WebGL1', () => {
         expect(contextLost()).toBe(true);
     });
 
+    it('warns once when it has no 32-bit indices', () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+        linkRenderer(fakeRenderer(1));
+        linkRenderer(fakeRenderer(2, false));
+        expect(warnings(warn, /32-bit indices/)).toBe(0);
+        const old = fakeRenderer(1, false);
+
+        linkRenderer(old);
+        linkMeshPipe(old);
+        expect(warnings(warn, /32-bit indices/)).toBe(1);
+    });
+
     it('draws the batches of WebGL2 in the batched mode', async () => {
         const speedy = await loadFamily('4.2/speedy-ess.skel');
         const modern = createStage({ context: { lost: false } });
@@ -149,7 +257,14 @@ describe('a renderer of WebGL1', () => {
         const old = stageOfWebGL1();
 
         await populate(old, speedy, 3);
-        old.render();
+        watchContext(fakeRenderer(2));
+        let during = '';
+
+        old.render(true, () => {
+            const shader = old.counts.draws[0]?.batcher?.shader;
+
+            during = shader === undefined ? '' : sources(shader);
+        });
         expect(old.counts.draws.length).toBeGreaterThan(0);
         expect(old.counts.draws.map(({ start, size }) => [start, size])).toEqual(
             modern.counts.draws.map(({ start, size }) => [start, size]),
@@ -157,7 +272,11 @@ describe('a renderer of WebGL1', () => {
         const shader = old.counts.draws[0]?.batcher?.shader;
 
         if (shader === undefined) throw new Error('no batcher');
-        expect(sources(shader)).not.toContain('#version 300 es');
+        expect(during).toContain('#define finalColor gl_FragColor');
+        expect(during).not.toContain('#version 300 es');
+        // the render is over: the answer is again the one from before it, and the program that of WebGL2
+        expect(webGL1()).toBe(false);
+        expect(sources(shader)).toContain('#version 300 es');
     });
 
     it('draws every mesh of the mesh mode with skinning cpu', async () => {
@@ -168,10 +287,15 @@ describe('a renderer of WebGL1', () => {
         stage.root.addChild(rig.view.container);
         play(rig, 'run');
         step(rig, 0.05);
-        stage.render();
+        let during: string[] = [];
+
+        stage.render(true, () => {
+            during = meshes(rig.view).map((mesh) => (mesh.shader === null ? '' : sources(mesh.shader)));
+        });
         expect(stage.counts.draws.length).toBe(meshes(rig.view).length);
         expect(stage.counts.draws.length).toBeGreaterThan(0);
-        for (const mesh of meshes(rig.view)) expect(sources(mesh.shader as Shader)).not.toContain('#version 300 es');
+        expect(during).toHaveLength(meshes(rig.view).length);
+        for (const text of during) expect(text).toContain('#define finalColor gl_FragColor');
     });
 
     it('draws nothing with skinning gpu or instancing, warns once, and throws nothing', async () => {
@@ -186,5 +310,47 @@ describe('a renderer of WebGL1', () => {
             expect(stage.counts.draws).toEqual([]);
         }
         expect(warnings(warn, /skinning: 'gpu'/)).toBe(1);
+        for (const rig of rigs) expect(rig.view.stats).toMatchObject({ drawCalls: 0, maskDraws: 0, indices: 0 });
+    });
+
+    it('draws no clip mask of a view with skinning gpu, and the masks of skinning cpu', async () => {
+        vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        const stage = stageOfWebGL1();
+        const coin = await loadFamily('4.2/coin-pro.skel');
+        const gpu = await coin.create({ renderMode: 'mesh', skinning: 'gpu' });
+        const cpu = await coin.create({ renderMode: 'mesh', skinning: 'cpu' });
+        let drawn: boolean[][] = [];
+
+        for (const rig of [gpu, cpu]) {
+            stage.root.addChild(rig.view.container);
+            play(rig, 'animation');
+            step(rig, 0.05);
+        }
+        for (let frame = 0; frame < 2; frame++) {
+            for (const rig of [gpu, cpu]) step(rig, 0.05);
+            stage.render(true, () => {
+                drawn = [gpu, cpu].map((rig) => masksOf(rig.view.container).map((mask) => mask.isRenderable));
+            });
+        }
+        const [ofGpu = [], ofCpu = []] = drawn;
+
+        expect(ofGpu.length).toBeGreaterThan(0);
+        expect(ofGpu.every((one) => !one)).toBe(true);
+        expect(ofCpu.length).toBeGreaterThan(0);
+        expect(ofCpu.every((one) => one)).toBe(true);
+        expect(gpu.view.stats).toMatchObject({ drawCalls: 0, maskDraws: 0 });
+        expect(cpu.view.stats.maskDraws).toBeGreaterThan(0);
     });
 });
+
+/** The clip masks below a container. */
+function masksOf(container: Container): Mesh[] {
+    const found: Mesh[] = [];
+
+    for (const child of container.children) {
+        if (child instanceof Mesh && child.label === 'marrow-clip-mask') found.push(child);
+        else found.push(...masksOf(child));
+    }
+
+    return found;
+}

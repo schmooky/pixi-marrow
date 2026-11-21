@@ -47,6 +47,7 @@ export function fakeRenderer(spine: MarrowSpine, resolution = 1, antialias = fal
             contextChange: { add: (item: { contextChange(): void }) => listeners.push(item) },
             destroy: { add: () => {} },
             prerender: { add: () => {} },
+            postrender: { add: () => {} },
         },
         render(options: { container: Container; target: RenderTexture; transform: Matrix; clear?: boolean }): void {
             const { container, target, transform, clear } = options;

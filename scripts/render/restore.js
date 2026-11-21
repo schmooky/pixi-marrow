@@ -421,18 +421,22 @@ async function runCase({ Application, Graphics, MarrowSpine, pixi }, id, mode, l
 
         if (!stage) throw new Error(`there is no case ${id}`);
         const app = new Application();
+        // ?renderer=webgl1 asks Pixi for the context it falls back to where a browser has no WebGL2
+        const webgl1 = new URLSearchParams(location.search).get('renderer') === 'webgl1';
 
         await app.init({
             width: RESTORE_SIZE,
             height: RESTORE_SIZE,
             preference: 'webgl',
+            preferWebGLVersion: webgl1 ? 1 : 2,
             background: BACKGROUND,
             antialias: false,
             resolution: 1,
             autoStart: false,
         });
         document.body.appendChild(app.canvas);
-        report.renderer = app.renderer.name;
+        report.renderer =
+            app.renderer.name === 'webgl' && app.renderer.context.webGLVersion === 1 ? 'webgl1' : app.renderer.name;
         report.meshPipeAtInit = app.renderer.renderPipes.mesh !== undefined;
         const { hero, spines, late = [], placed = null } = await stage({ MarrowSpine, Graphics, app }, mode);
 

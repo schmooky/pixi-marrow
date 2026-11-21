@@ -77,7 +77,19 @@ WebGL1 draws the batched mode, the mesh mode with `skinning: 'cpu'` and clip mas
 - Pixi completes a source without `#version 300 es`. Its defines turn `in`, `out`, `texture` and `finalColor` into the names of GLSL 1.00. The library removes the version and the `flat` qualifier.
 - Without `flat`, the page of a triangle is interpolated between three equal values. The fragment stage compares it with the middle between two pages, so the error never selects another page. The batch shader of Pixi 7 did the same.
 - The shader puts an accessor on `glProgram`. In a render of a WebGL1 renderer it returns the program of GLSL 1.00. In all other renders it returns the program of GLSL 3.00. So WebGL2 compiles the same source as before, and its picture keeps every bit.
-- `pnpm check:render --renderer=webgl1` compares the picture on WebGL1 with the official runtime on WebGL1.
+- `pnpm check:render --renderer=webgl1` compares the picture on WebGL1 with the official runtime on WebGL1. The restore check also runs on WebGL1. With `--skinning=gpu` WebGL1 leaves the run, because those views draw nothing there by design.
+- The answers of `context-watch.ts`, lost and WebGL1, are for the render that is under way. A render of another renderer can start inside a render, from a callback. So `prerender` keeps the answers it found on a stack, and `postrender` gives them back. The outer render goes on with its own answers.
+- A view with `skinning: 'gpu'` on WebGL1 is blind for that renderer: its ranges, its clip masks and its instanced draws draw nothing. It uploads nothing, and its stats say 0 draw calls. What waits to upload stays noted, so a later renderer of WebGL2 gets all of it.
+- WebGL1 has 32-bit indices only with `OES_element_index_uint`. A renderer of WebGL1 without it warns once at the first skeleton. A batch or a mesh of more than 65535 vertices then draws nothing.
+
+Caveats of the WebGL1 path, which are known and accepted:
+
+- The program a shader hands Pixi depends on one answer of the module, not on the renderer that reads it. It is right inside every render. Outside a render it is the answer from before the last render. So code that reads `shader.glProgram` there, as a devtool can, sees the program of WebGL2. A render that throws never calls `postrender`, so its answers stay until the next render starts.
+- `skinning: 'gpu'` does not fall back to the CPU by itself. The view is made for the GPU before a renderer is known. A game that wants WebGL1 sets `skinning: 'cpu'` when `renderer.context.webGLVersion` is 1.
+- Without `OES_element_index_uint` the library warns and does not split a batch. Pixi itself relies on that extension for its batches of more than 65535 indices.
+- The accessor gives the shaders of the library an own property where a Pixi shader has a data property. The places in Pixi that read `glProgram` then see two shapes of object. A subclass of `Shader` has a shape of its own too, so it would not remove that. The cost is not measured.
+- The pixel check of WebGL1 runs in headless Chrome on the author's machine, through ANGLE. It does not run in CI. It does not run on the old GPUs that use WebGL1 in the field either, where `mediump` is a 16-bit float.
+- A new shader that uses GLSL 3.00 alone, as `texelFetch` or integer math, must not call `serveWebGL1`. `tests/render/webgl-check.test.ts` scans the programs of WebGL1 for words of GLSL 3.00.
 - Spine 3.8 and 4.0. The model can take more importers later.
 - Editing or authoring skeletons.
 - A runtime dependency on `spine-core`.

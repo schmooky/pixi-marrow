@@ -115,7 +115,7 @@ async function bundleRestore(root, { pkg, pixi }) {
  *
  * @param lose True to lose the context and get it back, false to keep it, `forever` to lose it for good.
  */
-async function runPage(browser, origin, id, mode, lose, skinning) {
+async function runPage(browser, origin, id, mode, lose, skinning, renderer) {
     const page = await browser.newPage();
     const errors = [];
 
@@ -130,7 +130,11 @@ async function runPage(browser, origin, id, mode, lose, skinning) {
         if (entry.type() === 'error' || /CONTEXT_LOST|GL_INVALID|INVALID_|shader/i.test(text)) errors.push(text);
     });
     try {
-        await page.goto(`${origin}/${skinning ? `?skinning=${skinning}` : ''}`);
+        const query = new URLSearchParams();
+
+        if (skinning) query.set('skinning', skinning);
+        if (renderer !== 'webgl') query.set('renderer', renderer);
+        await page.goto(`${origin}/${query.size > 0 ? `?${query}` : ''}`);
         await page.waitForFunction(() => window.restoreCheck, null, { timeout: 30_000 });
         const report = await inTime(
             page.evaluate(([name, how, lost]) => window.restoreCheck.run(name, how, lost), [id, mode, lose]),
@@ -295,6 +299,7 @@ function keepPictures(root, dir, id, frame, lost, kept) {
  * @param options.only The text of `--only`, or null. With a text that no case id holds, nothing runs and nothing fails.
  * @param options.keep True to write the pictures of the cases that pass too.
  * @param options.skinning The `skinning` option every instance gets, or null for none.
+ * @param options.renderer `webgl` for a context of WebGL2, `webgl1` for the one Pixi falls back to.
  * @example
  * failed += await checkRestore({ root, pkg, pixi, modes: ['mesh', 'batched'], outDir: join(outDir, 'restore') });
  */
@@ -307,6 +312,7 @@ export async function checkRestore({
     only = null,
     keep = false,
     skinning = null,
+    renderer = 'webgl',
 }) {
     const jobs = modes
         .flatMap((mode) => RESTORE_CASES.map((plan) => ({ plan, mode, id: `restore/${mode}/${plan.id}` })))
@@ -322,21 +328,21 @@ export async function checkRestore({
     try {
         server = await serve(root, bundle.dir);
         browser = await launchChrome();
-        const run = (job, lose) => runPage(browser, server.origin, job.plan.id, job.mode, lose, skinning);
+        const run = (job, lose) => runPage(browser, server.origin, job.plan.id, job.mode, lose, skinning, renderer);
         // the tooling proof: a context that stays lost leaves another picture on the canvas
         const [first] = jobs;
         const proof = { lost: await run(first, 'forever'), kept: await run(first, false) };
-        const given = [proof.lost, proof.kept].map((side) => side.report.renderer).find((name) => name !== 'webgl');
+        const given = [proof.lost, proof.kept].map((side) => side.report.renderer).find((name) => name !== renderer);
 
         if (given !== undefined) {
             console.log(
-                `restore-check: webgl is not available here (the browser gave ${given}), so nothing was checked`,
+                `restore-check: ${renderer} is not available here (the browser gave ${given}), so nothing was checked`,
             );
 
             return 1;
         }
         console.log(
-            `restore-check: webgl, pixi.js ${proof.kept.report.pixi}. A run loses its context for ${RESTORE_AWAY} frames and gets it back. ` +
+            `restore-check: ${renderer}, pixi.js ${proof.kept.report.pixi}. A run loses its context for ${RESTORE_AWAY} frames and gets it back. ` +
                 `Compared with a run that kept its context: the frames ${RESTORE_FRAMES.join(', ')} after the restore. ` +
                 `The renderer of the page starts ${proof.kept.report.meshPipeAtInit ? 'with' : 'without'} Pixi's mesh pipe` +
                 (skinning ? `. Every instance has skinning: '${skinning}'` : ''),
@@ -393,6 +399,7 @@ async function main() {
         only: args.only ?? null,
         keep: args.keep === 'true',
         skinning: args.skinning ?? null,
+        renderer: args.renderer === 'webgl1' ? 'webgl1' : 'webgl',
     });
 
     console.log(failed ? `restore-check: ${failed} failures` : 'restore-check: ok');

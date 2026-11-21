@@ -69,7 +69,10 @@ describe('the docs address of a warning', () => {
     });
 
     it('ends the warning of a renderer that draws no skeleton', () => {
-        const renderer = { type: 4, runners: { prerender: { add: () => undefined } } };
+        const renderer = {
+            type: 4,
+            runners: { prerender: { add: () => undefined }, postrender: { add: () => undefined } },
+        };
         const [text] = warnings(() => watchContext(renderer as never));
 
         expect(text).toBe(

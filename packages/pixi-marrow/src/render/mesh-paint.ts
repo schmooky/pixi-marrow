@@ -57,7 +57,7 @@ function warnGpuOnWebGL1(): boolean {
     if (!warnedGpu) {
         warnedGpu = true;
         console.warn(
-            `pixi-marrow: skinning: 'gpu' and instancing draw no skeleton on WebGL1. Set skinning: 'cpu' where WebGL2 is missing. ${DOCS_SITE}good-to-know/#limits`,
+            `pixi-marrow: skinning: 'gpu' and instancing need WebGL2. Set skinning: 'cpu' for WebGL1. ${DOCS_SITE}good-to-know/#limits`,
         );
     }
 
@@ -130,12 +130,14 @@ export class MeshPaint {
         // a renderer that was created before this code loaded may have no pipe for meshes
         this.stats = stats;
         this.container.onRender = (renderer): void => {
+            if (renderer !== this.linked) {
+                linkMeshPipe(renderer);
+                this.linked = renderer;
+                // the shaders of skinning: 'gpu' are GLSL 3.00 alone, see `glsl100.ts`
+                this.blind = drawsNothing(renderer) || (gpu && isWebGL1(renderer) && warnGpuOnWebGL1());
+                if (this.blind) stats.drawCalls = stats.maskDraws = stats.indices = 0;
+            }
             this.flush();
-            if (renderer === this.linked) return;
-            linkMeshPipe(renderer);
-            this.linked = renderer;
-            // the shaders of skinning: 'gpu' are GLSL 3.00 alone, see `glsl100.ts`
-            this.blind = drawsNothing(renderer) || (gpu && isWebGL1(renderer) && warnGpuOnWebGL1());
         };
         this.positions = vertexBuffer(template.positions, 'marrow-positions');
         this.statics = vertexBuffer(template.statics, 'marrow-uvs');
@@ -257,7 +259,8 @@ export class MeshPaint {
     flush(): void {
         const { positions, colors, waiting } = this;
 
-        if (!shown(this.container)) return;
+        // a view that draws nothing on this renderer uploads nothing. What waits stays noted
+        if (this.blind || !shown(this.container)) return;
         if (this.skin !== undefined) this.note('bones', this.skin.flush());
         this.note('positions', uploadWaiting(positions, waiting, 0, 8));
         if (colors !== undefined) this.note('statics', uploadWaiting(colors, waiting, 2, this.colorBytes));
@@ -316,8 +319,8 @@ export class MeshPaint {
             instance.show(template, seen, skipped);
             // the view is a part of one instanced draw, which it shares
             stats.maskDraws = 0;
-            stats.drawCalls = seen.count > 0 ? 1 : 0;
-            stats.indices = indices;
+            stats.drawCalls = seen.count > 0 && !this.blind ? 1 : 0;
+            stats.indices = this.blind ? 0 : indices;
             stats.bufferBytes = templateBytes(template) + ranges.bytes + instance.bytes;
 
             return;
