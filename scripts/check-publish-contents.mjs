@@ -73,6 +73,10 @@ for (const target of targets(pkg.exports)) wanted.add(clean(target));
 const bins = typeof pkg.bin === 'string' ? [pkg.bin] : Object.values(pkg.bin ?? {});
 
 for (const target of bins) wanted.add(clean(target));
+// npm publish removes a bin whose path starts with ./, so the command would be missing from the package
+for (const target of bins.filter((path) => path.startsWith('./'))) {
+    errors.push(`bin ${target} starts with ./, and npm publish removes it. Write ${clean(target)}.`);
+}
 
 const missing = [...wanted].filter((p) => !files.has(p));
 
