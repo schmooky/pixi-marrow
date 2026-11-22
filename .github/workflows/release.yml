@@ -22,8 +22,10 @@ name: Release
 #    it runs every gate and packs the tarball, and publishes nothing.
 # 4. Run it again with `dry-run` off. It publishes with the tag latest, or in pre mode with the tag of .changeset/pre.json, which is
 #    `next`, then makes the git tag and the GitHub Release.
-# 5. Until 1.0, move `latest` by hand: npm dist-tag add pixi-marrow@<version> latest. Trusted
-#    publishing covers `npm publish` only, so this step needs your login.
+#
+# A publish that fails with `E404 Not Found - PUT https://registry.npmjs.org/pixi-marrow` means
+# that npm does not trust this run: the Trusted Publisher of step 1 is missing, or one of its
+# fields differs from this repository, this file name or the environment `npm`.
 #
 # A run that failed after the publish can run again: it sees the version on npm, skips the
 # publish and makes the tag and the Release.
