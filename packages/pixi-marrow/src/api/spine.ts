@@ -300,9 +300,9 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
      * then emits the events. Call it once per frame when {@link autoUpdate} is false. Once the
      * asset was destroyed it does nothing, and {@link autoUpdate} turns off.
      *
-     * The `updateRate` and `offscreen` settings apply here: an update that is not due gathers its
-     * seconds for the next one. In the `pause` mode off the screen the time passes and the events
-     * fire, and nothing is posed or drawn.
+     * `updateRate` leaves out an update shorter than one step and gathers its seconds for the next.
+     * In the `pause` mode off the screen the time passes, the events fire, and nothing is drawn.
+     * `update(0)` is never left out: it poses and draws now, for example after `setupPose()`.
      *
      * `seconds` that are no finite number throw a `MarrowError`. More than 10 seconds in one
      * update advance the animations by all of them and start the physics again, as
@@ -324,7 +324,7 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
         const due = this.pacer.take(seconds, this.skeletonView.stats.renderMode === 'batched');
 
         if (due < 0) return;
-        if (this.dozes || this.pacer.paused) {
+        if (seconds > 0 && (this.dozes || this.pacer.paused)) {
             this.rest(due);
 
             return;
@@ -341,6 +341,7 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
             this.idle?.update();
             this.pump.flush(this, this.asset.model.events);
         }
+        this.pacer.drew();
     }
 
     /**
@@ -448,6 +449,7 @@ export class MarrowSpine<N extends MarrowNames = MarrowNames> extends SpinePhysi
         this.absorb();
         this.links?.move(this.engine.state);
         this.draw();
+        this.pacer.drew();
     }
 
     /** The index of an animation. Throws for a destroyed object, and for a name the skeleton lacks. */

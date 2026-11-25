@@ -98,6 +98,10 @@ export class Pacer {
     private onScreen = true;
     private size = Number.POSITIVE_INFINITY;
     private shrunk = false;
+    /** False until an update drew a pose. Before that the box shows the setup pose, not the game's. */
+    private drawn = false;
+    /** True when the next render reads the exact box: the first one after the first drawn update. */
+    private exact = false;
     private readonly box = new Bounds();
 
     constructor(settings: ResolvedPerf) {
@@ -115,11 +119,15 @@ export class Pacer {
      * and with timestamps that jitter. After a long frame at most half a step stays, so the
      * updates never come in a burst.
      *
+     * An update of 0 seconds is due at once with the time that was gathered. It leaves the phase
+     * of the rate and the count of updates as they are: it is how a game applies a pose now.
+     *
      * @param small True when the skeleton draws in the batched mode: a rate the `fast` preset set applies to such only.
      */
     take(seconds: number, small: boolean): number {
         const { settings } = this;
 
+        if (seconds === 0) return this.drain();
         this.updates++;
         this.since += seconds;
         const hidden = this.hidden;
@@ -170,11 +178,13 @@ export class Pacer {
         }
         const view = viewOf(owner)?.box;
 
-        // the exact box would place every vertex of a skeleton with GPU skinning on the CPU
-        if (view !== undefined) view.coarse = true;
+        // the exact box would place every vertex of a skeleton with GPU skinning on the CPU. The
+        // first render after the first drawn update reads it all the same: an older box shows the setup pose
+        if (view !== undefined) view.coarse = !this.exact;
         const box = owner.getBounds(false, this.box.clear());
 
         if (view !== undefined) view.coarse = false;
+        if (this.drawn) this.exact = false;
         const { screen } = renderer;
 
         if (box.width <= 0 && box.height <= 0) {
@@ -184,11 +194,13 @@ export class Pacer {
         }
         this.size = Math.max(box.width, box.height);
         this.shrunk = this.settings.lod === 'auto' && this.size < (this.shrunk ? LOD_BACK : LOD_SIZE);
+        // a paused skeleton is not drawn, so a box of the setup pose would hold it paused for good
         this.onScreen =
-            box.x < screen.x + screen.width &&
-            box.y < screen.y + screen.height &&
-            box.x + box.width > screen.x &&
-            box.y + box.height > screen.y;
+            !this.drawn ||
+            (box.x < screen.x + screen.width &&
+                box.y < screen.y + screen.height &&
+                box.x + box.width > screen.x &&
+                box.y + box.height > screen.y);
     }
 
     /**
@@ -229,6 +241,18 @@ export class Pacer {
         this.carried = 0;
 
         return due;
+    }
+
+    /**
+     * Notes that an update posed and drew the skeleton. Until the first one a render counts the
+     * skeleton as on the screen wherever its box is: the box shows the setup pose, which can lie
+     * elsewhere than the animation. A hidden skeleton and one that no render reaches still count
+     * as off the screen.
+     */
+    drew(): void {
+        if (this.drawn) return;
+        this.drawn = true;
+        this.exact = true;
     }
 
     /** True when the last renders found the skeleton off the screen or hidden, or no render reached it for a while. */

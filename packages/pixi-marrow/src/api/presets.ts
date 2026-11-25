@@ -59,13 +59,16 @@ export interface PerfSettings {
      * `Track.finished` go on, and the picture stands still until it is on the screen again.
      *
      * A skeleton that shows no pixel counts as off the screen. It or a parent has `visible` or
-     * `renderable` false, or an alpha of 0.
+     * `renderable` false, or an alpha of 0. A skeleton that no update drew yet counts as on the
+     * screen, and `update(0)` poses and draws in every mode.
      */
     offscreen: OffscreenMode;
     /**
      * `display` (the `exact` default) updates the pose every frame. A number updates it that
      * many times a second, with the time that passed: motion steps at low rates. The updates
      * keep an even rhythm on a display of any rate, and never come more often than its frames.
+     * A rate below the display leaves out the updates that are shorter than one step, and their
+     * time goes to the next pose. `update(0)` is never left out: it poses and draws at once.
      */
     updateRate: UpdateRate;
     /**

@@ -60,6 +60,8 @@ Each setting is an option of `MarrowSpine.load`, of `MarrowSpine.from` and of `n
 
 A skeleton is off the screen when its bounds lie outside the screen. It also counts when no render reached it for a tenth of a second, or when Pixi does not draw it. Pixi does not draw a skeleton with `visible` or `renderable` false or an alpha of 0, on itself or on a parent.
 
+A skeleton that no update drew yet counts as on the screen. Its bounds show the setup pose, and the first animation can lie elsewhere.
+
 Cost: `throttle` and `pause` read the bounds of the skeleton in each render. They pay in a scene that keeps many playing skeletons outside the screen, such as a long map.
 
 ### updateRate
@@ -68,6 +70,8 @@ Cost: `throttle` and `pause` read the bounds of the skeleton in each render. The
 - With a number, the runtime poses the skeleton that many times a second, in an even rhythm, with the time that passed.
 
 The rhythm is even on displays of 60, 90, 120 and 144 Hz, and a pose never comes more often than a frame. Motion steps at low rates. The rate of the `fast` preset applies to batched skeletons only. A rate that you set by name applies in both modes.
+
+A rate below the display leaves out the updates that are shorter than one step. Their time goes to the next pose. `update(0)` is never left out: it poses and draws at once, also off the screen. Use it to apply a pose now, for example after `setupPose()`, after you set a bone by hand, or before you read the bounds.
 
 Cost: none in memory. It pays for small skeletons in the background, where nobody sees the steps.
 
