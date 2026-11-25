@@ -1,5 +1,11 @@
 # pixi-marrow
 
+## 0.3.1
+
+### Patch Changes
+
+- [#50](https://github.com/schmooky/pixi-marrow/pull/50) [`0b9424f`](https://github.com/schmooky/pixi-marrow/commit/0b9424f6a4e0b448f1ccce1d3b8c1b42d70aeefa) Thanks [@igaming-bulochka](https://github.com/igaming-bulochka)! - `update(0)` poses and draws at once under every `updateRate` and `offscreen` mode, and leaves the phase of the rate as it is. Before, a rate below the display, as in the `fast` preset, left `update(0)` out. A skeleton that no update drew yet counts as on the screen wherever the box of its setup pose is. So the `pause` mode no longer holds it paused for good. The first render after its first drawn update reads the exact box.
+
 ## 0.3.0
 
 ### Minor Changes
