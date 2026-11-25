@@ -114,6 +114,8 @@ export interface MarrowSpineOptions {
      * - `exact` (the default): nothing that changes timing, memory or the picture to the bit.
      * - `balanced`: `offscreen: 'throttle'`.
      * - `fast`: `offscreen: 'pause'`, and `updateRate: 30` for a skeleton that the batched mode draws.
+     *   A rate below the display leaves out the updates that are shorter than one step. `update(0)`
+     *   is not left out: it poses and draws at once.
      *
      * The presets set when a skeleton updates, and nothing else. `tightMesh: 'on'`, `bake`,
      * `idleCache`, `lod` and `instancing` each cost memory, vertices or draw calls. What they cost

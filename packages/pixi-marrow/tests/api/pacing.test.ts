@@ -99,6 +99,7 @@ describe('the pacing of updates', () => {
     it('pauses a skeleton off the screen: its time passes in every update, and it says that it is paused', () => {
         const pacer = new Pacer(resolvePerf(undefined, { offscreen: 'pause', updateRate: 20 }));
 
+        pacer.drew();
         pacer.take(1 / 60, false);
         expect(pacer.paused).toBe(false);
         pacer.seen(at(900, 0, 50), SCREEN);
@@ -145,6 +146,7 @@ describe('the pacing of updates', () => {
     it('throttles a skeleton off the screen to four updates a second with the time that passed', () => {
         const pacer = new Pacer(resolvePerf('balanced'));
 
+        pacer.drew();
         pacer.seen(at(-500, -500, 100), SCREEN);
         const steps = Array.from({ length: 30 }, () => pacer.take(1 / 60, false)).filter((seconds) => seconds >= 0);
 
@@ -232,7 +234,8 @@ describe('a display object with pacing', () => {
             sizes.push(size() === across(exact));
         }
         expect(across(exact)).not.toBe(across(new MarrowSpine(asset, { autoUpdate: false })));
-        expect(sizes).toEqual([false, false, false, false, false, false, false, true, false]);
+        // the first render after the first drawn update reads the exact box: an older one shows the setup pose
+        expect(sizes).toEqual([true, false, false, false, false, false, false, false, true]);
         // the bounds the game asks for are exact all the while
         expect(across(spine)).toBe(across(exact));
         both((of) => of.update(1 / 30));
